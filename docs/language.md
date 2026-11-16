@@ -176,8 +176,10 @@ Useful static facts include:
 - scoped `Self` in type aliases and named colon-method annotations;
 - trailing default and optional parameters such as `duration: number = 0.3`
   and `easing?: string`;
-- inferred returns for simple unannotated functions;
-- multiple returns where known Lua or LOVE functions provide them;
+- inferred returns for simple unannotated functions and calls between methods
+  of the same non-generic class, including methods with unannotated parameters;
+- multiple return positions where known Lua or LOVE functions or inferred class
+  methods provide them; alternative branches form a union within each position;
 - table-shape fields and optional fields;
 - `T[]` arrays, including class fields initialized with `{}`, array-like table
   literals, string-key table indexing, and simple loop variables from numeric

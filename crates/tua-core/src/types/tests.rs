@@ -1294,6 +1294,60 @@ end
 }
 
 #[test]
+fn infers_returns_through_unannotated_class_method_calls_by_slot() {
+    let parsed = parse_tua_source(
+        "src/writer.tua",
+        r#"final class Writer {
+  getLineWidth(index) {
+    local width = 0
+    if index > 0 then width += 2 end
+    return width
+  }
+
+  getDimensions() {
+    return self:getLineWidth(1), 8
+  }
+
+  pair(flag: boolean) {
+    if flag then return 3, "ready" end
+    return nil, "missing"
+  }
+
+  forward(flag: boolean) {
+    return self:pair(flag)
+  }
+}
+
+final class OtherWriter {
+  pair(flag: boolean) {
+    return "other", flag
+  }
+  forward(flag: boolean) {
+    return self:pair(flag)
+  }
+}
+"#,
+    )
+    .expect("class source should parse");
+    let environment = build_type_environment(&parsed).expect("class returns should infer");
+    for (name, expected) in [
+        ("Writer_getLineWidth", vec![Type::number()]),
+        ("Writer_getDimensions", vec![Type::number(), Type::number()]),
+        (
+            "Writer_forward",
+            vec![Type::union([Type::number(), Type::nil()]), Type::string()],
+        ),
+        ("OtherWriter_forward", vec![Type::string(), Type::boolean()]),
+    ] {
+        assert_eq!(
+            environment.function(name).unwrap().return_types,
+            expected,
+            "{name} should infer each return slot"
+        );
+    }
+}
+
+#[test]
 fn infers_rawget_array_results_as_optional() {
     let parsed = parse_tua_source(
         "src/safe_index.tua",

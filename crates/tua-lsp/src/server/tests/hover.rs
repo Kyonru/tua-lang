@@ -913,7 +913,12 @@ fn imported_class_instance_field_methods_hover_complete_and_show_signatures() {
         r#"open class Writer {
   --- Appends a word.
   append(word: string) {}
-  getDimensions(): number { return 42 }
+  getLineWidth(index) {
+    local width = 0
+    if index > 0 then width += 2 end
+    return width
+  }
+  getDimensions() { return self:getLineWidth(1), 8 }
 }
 export type WriterInstance = Writer
 return Writer
@@ -940,7 +945,11 @@ open class Dialogue {
     assert_hover_contains(server.output(), 3, "(method) append: (word: string) -> nil");
     assert_hover_contains(server.output(), 3, "Appends a word.");
     server.send(hover_request(4, &uri, source, "getDimensions()"));
-    assert_hover_contains(server.output(), 4, "(method) getDimensions: () -> number");
+    assert_hover_contains(
+        server.output(),
+        4,
+        "(method) getDimensions: () -> (number, number)",
+    );
     server.send(signature_help_request(5, &uri, source, "append("));
     assert!(
         response_with_id(server.output(), 5)["result"]["signatures"][0]["label"]

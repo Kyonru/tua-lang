@@ -4465,6 +4465,7 @@ fn runtime_import_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
 struct FunctionInferenceTypes {
     by_name: BTreeMap<String, Type>,
     by_declaration: BTreeMap<(usize, usize), Type>,
+    class_method_returns: BTreeMap<String, Vec<Type>>,
 }
 
 impl FunctionInferenceTypes {
@@ -4495,6 +4496,43 @@ fn function_types_by_name(
     inferred_returns: &BTreeMap<FunctionInferenceKey, InferredReturns>,
 ) -> FunctionInferenceTypes {
     let origins = function_origins(parsed, functions);
+    // Class aliases receive inferred method signatures after this fixed point.
+    // Keep nongeneric method returns available during it, even when a parameter
+    // is unannotated and the method cannot yet be represented as a full type.
+    let class_method_names = parsed
+        .class_declarations
+        .iter()
+        .filter(|class| class.generic_parameters.is_empty())
+        .flat_map(|class| {
+            class
+                .methods
+                .iter()
+                .map(|method| format!("{}_{}", class.name, method.name))
+        })
+        .collect::<BTreeSet<_>>();
+    let mut result = FunctionInferenceTypes::default();
+    for (index, function) in functions.iter().enumerate() {
+        let Some(name) = function.name.as_ref() else {
+            continue;
+        };
+        if !class_method_names.contains(name) || !function.generic_parameters.is_empty() {
+            continue;
+        }
+        let inferred = inferred_returns.get(&function_inference_key(
+            name,
+            origins.get(index).and_then(|origin| origin.body_span),
+        ));
+        let returns = if !function.return_types.is_empty() {
+            Some(&function.return_types)
+        } else {
+            inferred.map(|returns| &returns.types)
+        };
+        if let Some(returns) = returns {
+            result
+                .class_method_returns
+                .insert(name.clone(), returns.clone());
+        }
+    }
     let entries = functions
         .iter()
         .enumerate()
@@ -4550,7 +4588,6 @@ fn function_types_by_name(
             ))
         })
         .collect::<Vec<_>>();
-    let mut result = FunctionInferenceTypes::default();
     for (name, span, ty) in entries {
         result.by_name.insert(name, ty.clone());
         if let Some(span) = span {
@@ -5790,6 +5827,11 @@ fn infer_first_function_call_return_types(
                 if !returns.is_empty() {
                     return returns;
                 }
+
+                if let Some(returns) = inferred_class_method_returns(query, &receiver_type, method)
+                {
+                    return returns;
+                }
             }
         }
     }
@@ -5811,6 +5853,34 @@ fn infer_first_function_call_return_types(
             .map(|item| return_types_from_lua_function_detail(item.detail))
     })
     .unwrap_or_default()
+}
+
+fn inferred_class_method_returns(
+    query: ExpressionInferenceQuery<'_, '_>,
+    receiver_type: &Type,
+    method: &str,
+) -> Option<Vec<Type>> {
+    let Type::Table(table) = resolve_aliases_from_map(query.context.aliases, receiver_type, 0)
+    else {
+        return None;
+    };
+    let class_name = table.nominal_name()?;
+    if table.nominal_identity()?
+        != crate::classes::nominal_class_identity(&query.context.parsed.path, class_name)
+    {
+        return None;
+    }
+    let owner = crate::classes::class_method_owner(
+        &query.context.parsed.class_declarations,
+        class_name,
+        method,
+    )?;
+    query
+        .context
+        .function_types
+        .class_method_returns
+        .get(&format!("{owner}_{method}"))
+        .cloned()
 }
 
 fn instantiated_call_return_types(

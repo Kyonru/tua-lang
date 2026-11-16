@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Infer each return position through calls to methods of a locally declared
+  non-generic class, including methods with unannotated parameters.
 - Resolve imported instance types used in class fields for method completion,
   hover, and signature help, consistent with Go to Definition.
 - Keep completion and formatting responsive when a large file is edited while
