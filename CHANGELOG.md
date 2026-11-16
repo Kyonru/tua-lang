@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep Go to Definition, references, and rename on the correct lexical binding
+  when a local is shadowed, including anonymous callback parameters.
 - Skip preview inspection requests for unrelated hovers in files containing
   sprite, state-machine, or behavior-tree declarations while retaining preview
   links on declarations and same-file references.

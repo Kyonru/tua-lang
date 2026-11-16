@@ -594,6 +594,93 @@ fn assert_definition(needle: &str, offset: usize, kind: DefinitionKind, expected
     assert_eq!(source_text(definition.span), expected_text);
 }
 
+#[test]
+fn outer_local_definition_is_not_captured_by_later_nested_shadow() {
+    let source = r#"local value = { outer = 1 }
+local function use_inner()
+  local value = { inner = "ok" }
+  return value.inner
+end
+local outside = value.outer
+"#;
+    let inner = definition_tua_source("src/main.tua", source, position_at(source, "value.inner"))
+        .expect("source should parse")
+        .expect("inner local should have a definition");
+    let outer = definition_tua_source("src/main.tua", source, position_at(source, "value.outer"))
+        .expect("source should parse")
+        .expect("outer local should have a definition");
+    assert_eq!(inner.kind, DefinitionKind::Local);
+    assert_eq!(inner.span.start.line, 3);
+    assert_eq!(outer.kind, DefinitionKind::Local);
+    assert_eq!(outer.span.start.line, 1);
+}
+
+#[test]
+fn anonymous_callback_parameter_definition_uses_its_lexical_binding() {
+    let source = r#"type Box<T> = { value: T }
+local function box<T>(value: T): Box<T> return { value = value } end
+local function map(value: number, callback: (n: number) -> number): number return callback(value) end
+local result = map(box(3).value, function(n) return n + 1 end)
+"#;
+    let use_position = position_at(source, "return n + 1");
+    let use_position = SourcePosition {
+        column: use_position.column + "return ".len(),
+        ..use_position
+    };
+    let definition = definition_tua_source("src/main.tua", source, use_position)
+        .expect("source should parse")
+        .expect("callback parameter should have a definition");
+    assert_eq!(definition.kind, DefinitionKind::Parameter);
+    assert_eq!(definition.span.start.line, 4);
+    assert_eq!(source_text_from(source, definition.span), "n");
+}
+
+#[test]
+fn inner_only_local_has_no_definition_after_its_scope_ends() {
+    let source = r#"local function inner()
+  local ghost = 3
+  return ghost
+end
+print(ghost)
+"#;
+    let mut position = position_at(source, "print(ghost)");
+    position.column += "print(".len();
+    let definition =
+        definition_tua_source("src/main.tua", source, position).expect("source should parse");
+    assert_eq!(
+        definition, None,
+        "an inner-only local must not leak into an outer use"
+    );
+}
+
+#[test]
+fn class_method_local_shadow_uses_original_source_span() {
+    let source = r#"open class Hero {
+  test() {
+    local value = 1
+    do
+      local value = 2
+      print(value)
+    end
+    print(value)
+  }
+}
+"#;
+    let definition = definition_tua_source(
+        "src/main.tua",
+        source,
+        SourcePosition {
+            line: 8,
+            column: 11,
+        },
+    )
+    .expect("source should parse")
+    .expect("outer method local should have a definition");
+    assert_eq!(definition.kind, DefinitionKind::Local);
+    assert_eq!(definition.span.start.line, 3);
+    assert_eq!(source_text_from(source, definition.span), "value");
+}
+
 fn assert_definition_in_source(
     source: &'static str,
     needle: &str,

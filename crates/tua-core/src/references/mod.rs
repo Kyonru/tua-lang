@@ -6,9 +6,9 @@ use full_moon::node::Node;
 use crate::hir::{HirExportValue, HirModule};
 use crate::source_text::{byte_for_column, line_at, source_identifiers, SourceIdentifier};
 use crate::{
-    definition_parsed_source, definition_parsed_source_with_hir, lower_parsed_source,
-    parse_tua_source, scope_map_parsed_source, Definition, DefinitionKind, Diagnostic,
-    ParsedSource, ScopeDeclarationKind, ScopeMap, SemanticIndex, SourcePosition, SourceSpan,
+    definition_parsed_source, lower_parsed_source, parse_tua_source, scope_map_parsed_source,
+    Definition, DefinitionKind, Diagnostic, ParsedSource, ScopeDeclarationKind, ScopeMap,
+    SemanticIndex, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -137,6 +137,8 @@ pub fn references_to_definition_parsed_source_with_artifacts(
         return Ok(references);
     }
 
+    let fallback_scope = scope.is_none().then(|| scope_map_parsed_source(parsed));
+    let scope = scope.or(fallback_scope.as_ref());
     if let Some(references) =
         scope_references_to_definition(parsed, target, include_declaration, hir, scope)
     {
@@ -146,7 +148,8 @@ pub fn references_to_definition_parsed_source_with_artifacts(
     let mut references = source_identifiers(&parsed.source)
         .into_iter()
         .filter_map(|identifier| {
-            reference_for_identifier(parsed, &identifier, target, hir, semantic_index).transpose()
+            reference_for_identifier(parsed, &identifier, target, hir, scope, semantic_index)
+                .transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -448,11 +451,12 @@ pub fn global_references_to_definition_parsed_source_with_hir(
     include_declaration: bool,
     hir: Option<&HirModule>,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    let scope = scope_map_parsed_source(parsed);
     let mut references = source_identifiers(&parsed.source)
         .into_iter()
         .filter(|identifier| identifier.text == name)
         .filter_map(|identifier| {
-            global_reference_for_identifier(parsed, &identifier, target, hir).transpose()
+            global_reference_for_identifier(parsed, &identifier, target, hir, &scope).transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -497,11 +501,13 @@ pub fn global_type_alias_references_to_definition_parsed_source_with_hir(
     include_declaration: bool,
     hir: Option<&HirModule>,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    let scope = scope_map_parsed_source(parsed);
     let mut references = source_identifiers(&parsed.source)
         .into_iter()
         .filter(|identifier| identifier.text == name)
         .filter_map(|identifier| {
-            global_type_alias_reference_for_identifier(parsed, &identifier, target, hir).transpose()
+            global_type_alias_reference_for_identifier(parsed, &identifier, target, hir, &scope)
+                .transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -529,6 +535,7 @@ fn reference_for_identifier(
     identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
+    scope: Option<&ScopeMap>,
     semantic_index: Option<&SemanticIndex>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let span = identifier.span;
@@ -536,7 +543,9 @@ fn reference_for_identifier(
     let definition = if definition.is_some() {
         definition
     } else {
-        definition_parsed_source_with_hir(parsed, hir, span.start)?
+        crate::definition::definition_parsed_source_with_hir_and_scope(
+            parsed, hir, scope, span.start,
+        )?
     };
     let Some(definition) = definition else {
         return Ok(None);
@@ -554,9 +563,15 @@ fn global_reference_for_identifier(
     identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
+    scope: &ScopeMap,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let span = identifier.span;
-    let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
+    let definition = crate::definition::definition_parsed_source_with_hir_and_scope(
+        parsed,
+        hir,
+        Some(scope),
+        span.start,
+    )?;
 
     if definition
         .as_ref()
@@ -577,9 +592,15 @@ fn global_type_alias_reference_for_identifier(
     identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
+    scope: &ScopeMap,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let span = identifier.span;
-    let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
+    let definition = crate::definition::definition_parsed_source_with_hir_and_scope(
+        parsed,
+        hir,
+        Some(scope),
+        span.start,
+    )?;
 
     if definition.as_ref().is_some_and(|definition| {
         definition.kind == DefinitionKind::TypeAlias && same_definition(definition, target)

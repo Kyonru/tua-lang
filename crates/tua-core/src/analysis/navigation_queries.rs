@@ -179,9 +179,9 @@ impl AnalysisSnapshot {
             file.scope()
                 .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))
         });
-        if let Some(definition) = scope.and_then(|scope| {
-            crate::definition::native_class_lexical_definition(parsed, scope, position)
-        }) {
+        if let Some(definition) = scope
+            .and_then(|scope| crate::definition::scope_lexical_definition(parsed, scope, position))
+        {
             return Some(definition);
         }
         if let Some(definition) = self
@@ -242,8 +242,15 @@ impl AnalysisSnapshot {
             return Some(definition);
         }
 
-        if let Some(definition) =
-            degraded_facts.and_then(|facts| facts.semantic_index.definition_at(position))
+        if let Some(definition) = degraded_facts
+            .and_then(|facts| facts.semantic_index.definition_at(position))
+            .filter(|definition| {
+                scope.is_none_or(|scope| {
+                    crate::definition::hir_definition_visible_in_scope(
+                        parsed, scope, position, definition,
+                    )
+                })
+            })
         {
             return Some(definition);
         }
@@ -253,12 +260,19 @@ impl AnalysisSnapshot {
                 .semantic_facts_for_parsed(parsed)
                 .semantic_index
                 .definition_at(position)
+                .filter(|definition| {
+                    scope.is_none_or(|scope| {
+                        crate::definition::hir_definition_visible_in_scope(
+                            parsed, scope, position, definition,
+                        )
+                    })
+                })
             {
                 return Some(definition);
             }
         }
 
-        definition_parsed_source_with_hir(parsed, hir, position)
+        crate::definition::definition_parsed_source_with_hir_and_scope(parsed, hir, scope, position)
             .ok()
             .flatten()
             .or_else(|| self.side_effect_global_definition(parsed, position))

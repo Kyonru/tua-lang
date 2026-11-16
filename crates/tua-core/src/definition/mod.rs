@@ -71,6 +71,18 @@ pub fn definition_parsed_source_with_hir(
     hir: Option<&HirModule>,
     position: SourcePosition,
 ) -> Result<Option<Definition>, Vec<Diagnostic>> {
+    let scope = crate::scope_map_parsed_source(parsed);
+    definition_parsed_source_with_hir_and_scope(parsed, hir, Some(&scope), position)
+}
+
+/// Query using an existing scope map when one is available. A missing scope
+/// means the caller has already checked lexical bindings or cannot build one.
+pub(crate) fn definition_parsed_source_with_hir_and_scope(
+    parsed: &ParsedSource,
+    hir: Option<&HirModule>,
+    scope: Option<&crate::ScopeMap>,
+    position: SourcePosition,
+) -> Result<Option<Definition>, Vec<Diagnostic>> {
     if let Some(parameter) = crate::analysis::generic_type_parameter_at_position(parsed, position) {
         return Ok(Some(Definition {
             path: parsed.path.clone(),
@@ -78,27 +90,23 @@ pub fn definition_parsed_source_with_hir(
             kind: DefinitionKind::TypeParameter,
         }));
     }
-    if !parsed.class_declarations.is_empty() {
-        let scope = crate::scope_map_parsed_source(parsed);
-        if let Some(definition) = native_class_lexical_definition(parsed, &scope, position) {
-            return Ok(Some(definition));
-        }
+    if let Some(definition) =
+        scope.and_then(|scope| scope_lexical_definition(parsed, scope, position))
+    {
+        return Ok(Some(definition));
     }
-    let resolver = DefinitionResolver { parsed, hir };
+    let resolver = DefinitionResolver { parsed, hir, scope };
 
     Ok(resolver.definition(position))
 }
 
-/// Resolve original class-body/header names through their lexical binding IDs.
-/// Generated constructor/self symbols deliberately have no source definition.
-pub(crate) fn native_class_lexical_definition(
+/// Resolve lexical bindings by scope identity, including names shadowed in nested blocks.
+/// Generated class constructor/self symbols deliberately have no source definition.
+pub(crate) fn scope_lexical_definition(
     parsed: &ParsedSource,
     scope: &crate::ScopeMap,
     position: SourcePosition,
 ) -> Option<Definition> {
-    if parsed.class_declarations.is_empty() {
-        return None;
-    }
     let position = parsed.raw.parser_position_for_source(position)?;
     let declaration = scope.declaration(scope.symbol_at_position(position)?)?;
     let kind = match declaration.kind {
@@ -124,9 +132,44 @@ pub(crate) fn source_backed_span(parsed: &ParsedSource, span: SourceSpan) -> Opt
     })
 }
 
+/// HIR records declaration order but not lexical visibility. Reject a lexical
+/// HIR candidate when the scope map binds this use to a different symbol (or
+/// leaves it unbound). Global functions have no scope declaration and remain
+/// available through the HIR fallback.
+pub(crate) fn hir_definition_visible_in_scope(
+    parsed: &ParsedSource,
+    scope: &crate::ScopeMap,
+    position: SourcePosition,
+    definition: &Definition,
+) -> bool {
+    if definition.path != parsed.path
+        || !matches!(
+            definition.kind,
+            DefinitionKind::Local | DefinitionKind::Function | DefinitionKind::Parameter
+        )
+    {
+        return true;
+    }
+    let declaration = scope.declaration_at_span(definition.span).or_else(|| {
+        let start = parsed
+            .raw
+            .parser_position_for_source(definition.span.start)?;
+        let end = parsed.raw.parser_position_for_source(definition.span.end)?;
+        scope.declaration_at_span(SourceSpan { start, end })
+    });
+    let Some(declaration) = declaration else {
+        return true;
+    };
+    let Some(parser_position) = parsed.raw.parser_position_for_source(position) else {
+        return false;
+    };
+    scope.symbol_at_position(parser_position) == Some(declaration.id)
+}
+
 struct DefinitionResolver<'a> {
     parsed: &'a ParsedSource,
     hir: Option<&'a HirModule>,
+    scope: Option<&'a crate::ScopeMap>,
 }
 
 impl<'a> DefinitionResolver<'a> {
@@ -200,6 +243,11 @@ impl<'a> DefinitionResolver<'a> {
     ) -> Option<Definition> {
         hir.definition_for_value(name, position)
             .and_then(|symbol| definition_from_hir_symbol(&self.parsed.path, symbol))
+            .filter(|definition| {
+                self.scope.is_none_or(|scope| {
+                    hir_definition_visible_in_scope(self.parsed, scope, position, definition)
+                })
+            })
     }
 
     fn alias_definition(&self, name: &str) -> Option<Definition> {

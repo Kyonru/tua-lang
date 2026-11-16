@@ -2,6 +2,172 @@ use super::*;
 use std::fmt::Write as _;
 
 #[test]
+fn outer_local_definition_survives_nested_shadow_and_unsaved_edit() {
+    let uri = "file:///tmp/shadowed-outer-local-definition.tua";
+    let source = r#"local value = { outer = 1 }
+local function use_inner()
+  local value = { inner = "ok" }
+  local inside = value.inner
+  return inside
+end
+local outside = value.outer
+"#;
+    let edited = source.replace("outer = 1", "outer = 2");
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "value.inner", 0),
+        definition_request(3, uri, source, "value.outer", 0),
+        hover_request(4, uri, source, "outside ="),
+        references_request(6, uri, source, "value.outer", 0, true),
+        rename_request(7, uri, source, "value.outer", 0, "renamed"),
+    ]);
+    assert_eq!(
+        response_with_id(&output, 2)["result"]["range"]["start"]["line"],
+        2
+    );
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["range"]["start"]["line"],
+        0,
+        "outer use should navigate to the outer declaration"
+    );
+    assert_hover_contains(&output, 4, "outside: number");
+    let references = response_with_id(&output, 6)["result"]
+        .as_array()
+        .expect("outer local references should be returned");
+    let mut lines = references
+        .iter()
+        .map(|reference| reference["range"]["start"]["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    lines.sort_unstable();
+    assert_eq!(lines, [0, 6], "outer references must exclude inner shadow");
+    let edits = response_with_id(&output, 7)["result"]["changes"][uri]
+        .as_array()
+        .expect("outer local rename edits should be returned");
+    let mut edit_lines = edits
+        .iter()
+        .map(|edit| edit["range"]["start"]["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    edit_lines.sort_unstable();
+    assert_eq!(edit_lines, [0, 6], "outer rename must exclude inner shadow");
+    let edited_output = run_messages(vec![
+        did_open(uri, source),
+        did_change(uri, &edited, 2),
+        definition_request(5, uri, &edited, "value.outer", 0),
+    ]);
+    assert_eq!(
+        response_with_id(&edited_output, 5)["result"]["range"]["start"]["line"],
+        0,
+        "outer definition should recover after unsaved edit"
+    );
+}
+
+#[test]
+fn anonymous_callback_parameter_definition_and_rename_use_scope_binding() {
+    let uri = "file:///tmp/anonymous-callback-navigation.tua";
+    let source = r#"type Box<T> = { value: T }
+local function box<T>(value: T): Box<T> return { value = value } end
+local function map(value: number, callback: (n: number) -> number): number return callback(value) end
+local result = map(box(3).value, function(n) return n + 1 end)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "return n + 1", "return ".len()),
+        prepare_rename_request(3, uri, source, "return n + 1", "return ".len()),
+        references_request(4, uri, source, "return n + 1", "return ".len(), true),
+        rename_request(5, uri, source, "return n + 1", "return ".len(), "item"),
+    ]);
+    let definition = &response_with_id(&output, 2)["result"]["range"];
+    assert_eq!(definition["start"]["line"], 3);
+    assert_eq!(definition["start"]["character"], 42);
+    assert_eq!(response_with_id(&output, 3)["result"]["placeholder"], "n");
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["range"]["start"]["character"],
+        52
+    );
+    let references = response_with_id(&output, 4)["result"]
+        .as_array()
+        .expect("callback references should be returned");
+    assert_eq!(references.len(), 2);
+    let edits = response_with_id(&output, 5)["result"]["changes"][uri]
+        .as_array()
+        .expect("callback rename edits should be returned");
+    assert_eq!(edits.len(), 2);
+    let mut edit_columns = edits
+        .iter()
+        .map(|edit| edit["range"]["start"]["character"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    edit_columns.sort_unstable();
+    assert_eq!(edit_columns, [42, 52]);
+}
+
+#[test]
+fn inner_only_local_does_not_navigate_or_rename_from_outer_scope() {
+    let uri = "file:///tmp/inner-only-local-navigation.tua";
+    let source = "local function inner()\n  local ghost = 3\n  return ghost\nend\nprint(ghost)\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "print(ghost)", "print(".len()),
+        prepare_rename_request(3, uri, source, "print(ghost)", "print(".len()),
+        rename_request(4, uri, source, "print(ghost)", "print(".len(), "renamed"),
+    ]);
+    assert!(response_with_id(&output, 2)["result"].is_null());
+    assert!(response_with_id(&output, 3)["result"].is_null());
+    assert!(response_with_id(&output, 4)["result"].is_null());
+}
+
+#[test]
+fn nested_anonymous_callback_parameters_rename_independently() {
+    let uri = "file:///tmp/nested-anonymous-callbacks.tua";
+    let source = r#"local outer = function(n)
+  local inner = function(n)
+    return n + 2
+  end
+  return n + inner(1)
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "return n + inner", "return ".len()),
+        definition_request(3, uri, source, "return n + 2", "return ".len()),
+        rename_request(
+            4,
+            uri,
+            source,
+            "return n + inner",
+            "return ".len(),
+            "outerParam",
+        ),
+        rename_request(
+            5,
+            uri,
+            source,
+            "return n + 2",
+            "return ".len(),
+            "innerParam",
+        ),
+    ]);
+    assert_eq!(
+        response_with_id(&output, 2)["result"]["range"]["start"]["line"],
+        0
+    );
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["range"]["start"]["line"],
+        1
+    );
+    for (id, expected_lines) in [(4, [0, 4]), (5, [1, 2])] {
+        let edits = response_with_id(&output, id)["result"]["changes"][uri]
+            .as_array()
+            .expect("nested callback rename edits should be returned");
+        let mut lines = edits
+            .iter()
+            .map(|edit| edit["range"]["start"]["line"].as_u64().unwrap())
+            .collect::<Vec<_>>();
+        lines.sort_unstable();
+        assert_eq!(lines, expected_lines);
+    }
+}
+
+#[test]
 fn definition_resolves_metatable_method_and_self_field_through_semantic_index() {
     let uri = "file:///tmp/metatable-definition.tua";
     let source = r#"type Account = {
