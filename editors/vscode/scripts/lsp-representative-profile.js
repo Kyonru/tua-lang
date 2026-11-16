@@ -47,6 +47,9 @@ const completionP95BudgetMs = numberEnv(
 );
 const warmCompletionP95BudgetMs = numberEnv("TUA_REPRESENTATIVE_WARM_COMPLETION_P95_BUDGET_MS", completionP95BudgetMs);
 const memoryBudgetMiB = numberEnv("TUA_REPRESENTATIVE_MEMORY_BUDGET_MIB", 2048);
+// Opt in to per-phase RSS summaries when investigating a peak. The default
+// report retains its existing compact memory shape.
+const memoryPhases = booleanEnv("TUA_REPRESENTATIVE_MEMORY_PHASES", false);
 const inlineServerP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_INLINE_SERVER_P95_BUDGET_MS",
   10000,
@@ -165,17 +168,32 @@ const minimumReturnedAtMostOneParseRate = 0.5;
 });
 
 function sampleMemory(pid) {
-  const result = { peakKiB: 0, samples: 0, stop: () => clearInterval(timer) };
+  const result = {
+    peakKiB: 0,
+    samples: 0,
+    phases: {},
+    phase: "open",
+    setPhase(phase) { this.phase = phase; },
+    stop: () => clearInterval(timer),
+  };
   let pending = false;
   const sample = () => {
     if (pending) return;
     pending = true;
+    const phase = result.phase;
     execFile("ps", ["-o", "rss=", "-p", String(pid)], { timeout: 1000 }, (error, stdout) => {
       pending = false;
       const value = Number(stdout.trim());
       if (!error && Number.isFinite(value) && value > 0) {
         result.samples += 1;
         result.peakKiB = Math.max(result.peakKiB, value);
+        if (memoryPhases) {
+          const entry = result.phases[phase] || { peakKiB: 0, firstKiB: value, lastKiB: value, samples: 0 };
+          entry.peakKiB = Math.max(entry.peakKiB, value);
+          entry.lastKiB = value;
+          entry.samples += 1;
+          result.phases[phase] = entry;
+        }
       }
     });
   };
@@ -219,14 +237,17 @@ async function profileFixture(root, fixture) {
   try {
     const plan = diagnosticsOnly ? [] : representativeRequestPlan(session.main);
 
+    memory.setPhase("prime");
     for (const request of plan) {
       const sample = await timedRequest(session.client, request);
 
       validationFailures[request.label] += Number(!validResult(request.label, sample.result));
     }
 
+    memory.setPhase("workspaceWarm");
     workspaceWarm = await waitForWorkspaceWarm(session.client);
 
+    memory.setPhase("warmRequests");
     for (let round = 0; round < warmRepeat; round += 1) {
       for (const request of plan) {
         const sample = await timedRequest(session.client, request);
@@ -236,7 +257,9 @@ async function profileFixture(root, fixture) {
       }
     }
 
+    memory.setPhase("contention");
     contention = await profileContention(session.client, session.main);
+    memory.setPhase("final");
     validationFailures.contentionCompletion += contention.validationFailures;
     cacheStats = await session.client.request("tua/cacheStats", null);
     health = baselineOnly ? null : await session.client.request("tua/health", null);
@@ -248,7 +271,18 @@ async function profileFixture(root, fixture) {
 
   return {
     name: fixture.name,
-    memory: { peakMiB: memory.peakKiB / 1024, samples: memory.samples },
+    memory: {
+      peakMiB: memory.peakKiB / 1024,
+      samples: memory.samples,
+      ...(memoryPhases ? { phases: Object.fromEntries(
+        Object.entries(memory.phases).map(([name, phase]) => [name, {
+          peakMiB: phase.peakKiB / 1024,
+          firstMiB: phase.firstKiB / 1024,
+          lastMiB: phase.lastKiB / 1024,
+          samples: phase.samples,
+        }]),
+      ) } : {}),
+    },
     kind: fixture.kind,
     ...(fixture.graphShape ? { graphShape: fixture.graphShape } : {}),
     sourceFileCount: fixture.sourceFileCount,
