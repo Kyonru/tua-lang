@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Avoid rescanning unrelated modules and repeated function declarations when
+  resolving a side-effect imported global on hover or navigation.
 - Preserve exported type-alias origins through Tua and Lua forwarding files,
   so declaration-file fields complete and navigate after unsaved edits.
 - Avoid attributing a side-effect imported global to its original definition

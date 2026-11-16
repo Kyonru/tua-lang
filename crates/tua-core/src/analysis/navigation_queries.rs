@@ -342,8 +342,16 @@ impl AnalysisSnapshot {
         {
             return None;
         }
-        let mut candidates = self.global_function_definitions().remove(name)?;
-        candidates.retain(|definition| reachable.contains(&definition.path));
+        let mut candidates = reachable
+            .iter()
+            .filter_map(|path| self.file(path))
+            .filter_map(|file| Some((file.parsed.as_ref().ok()?, file.hir()?)))
+            .flat_map(|(parsed, hir)| {
+                file_global_function_definitions(parsed, hir, Some(name))
+                    .into_iter()
+                    .map(|(_, definition)| definition)
+            })
+            .collect::<Vec<_>>();
         if candidates.len() != 1 {
             return None;
         }
@@ -1694,15 +1702,7 @@ impl AnalysisSnapshot {
                 continue;
             };
 
-            for symbol in hir.symbols() {
-                if symbol.kind != HirSymbolKind::Function {
-                    continue;
-                }
-                let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);
-                let Some(name) = global_function_name_for_definition(parsed, &definition) else {
-                    continue;
-                };
-
+            for (name, definition) in file_global_function_definitions(parsed, hir, None) {
                 definitions.entry(name).or_default().push(definition);
             }
         }
@@ -2398,4 +2398,49 @@ fn class_member_definition_in_parsed(
             ClassMemberKind::Method => DefinitionKind::Function,
         },
     })
+}
+
+/// Enumerate top-level free functions once per file. Matching HIR spans keeps
+/// generated and source declarations aligned without rescanning the AST for
+/// every function symbol.
+fn file_global_function_definitions(
+    parsed: &ParsedSource,
+    hir: &HirModule,
+    wanted_name: Option<&str>,
+) -> Vec<(String, Definition)> {
+    let function_spans = hir
+        .symbols()
+        .iter()
+        .filter(|symbol| symbol.kind == HirSymbolKind::Function)
+        .map(|symbol| symbol.name_span)
+        .collect::<std::collections::HashSet<_>>();
+
+    parsed
+        .ast
+        .nodes()
+        .stmts()
+        .filter_map(|stmt| {
+            let ast::Stmt::FunctionDeclaration(function) = stmt else {
+                return None;
+            };
+            let name = function.name().to_string().trim().to_owned();
+            if name.contains('.')
+                || name.contains(':')
+                || wanted_name.is_some_and(|wanted| wanted != name)
+            {
+                return None;
+            }
+            let span = node_span(function.name())?;
+            function_spans.contains(&span).then(|| {
+                (
+                    name,
+                    Definition {
+                        path: parsed.path.clone(),
+                        span,
+                        kind: DefinitionKind::Function,
+                    },
+                )
+            })
+        })
+        .collect()
 }

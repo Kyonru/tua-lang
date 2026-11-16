@@ -10436,6 +10436,25 @@ fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
 }
 
 #[test]
+fn global_function_index_contains_only_top_level_free_functions() {
+    let source = r#"local Helpers = {}
+local function localOnly() return 1 end
+function Helpers.member() return 2 end
+function globalOne() return 3 end
+function globalTwo() return 4 end
+"#;
+    let mut host = AnalysisHost::new();
+    host.set_file("src/functions.tua", source);
+    let definitions = host.snapshot().global_function_definitions();
+    assert_eq!(
+        definitions.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["globalOne", "globalTwo"]
+    );
+    assert_eq!(definitions["globalOne"].len(), 1);
+    assert_eq!(definitions["globalOne"][0].span.start.line, 4);
+}
+
+#[test]
 fn fluent_class_and_love_navigation_use_resolved_receivers() {
     let fixture = Fixture::parse(
         r#"-- file: fluent.tua
