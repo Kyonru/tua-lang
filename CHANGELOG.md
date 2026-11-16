@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep completion and formatting responsive when a large file is edited while
+  fast diagnostics and inlay hints are being refreshed.
 - Import the optional localization and save runtimes when their module values
   are forwarded, while leaving unrelated table properties out of the build.
 - Reject dotted localization catalog path components at configuration time,

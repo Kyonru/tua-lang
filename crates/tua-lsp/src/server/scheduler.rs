@@ -23,6 +23,7 @@ use super::{
 const REQUEST_CANCELLED: i64 = -32800;
 const CONTENT_MODIFIED: i64 = -32801;
 const INTERNAL_SLOW_DIAGNOSTICS: &str = "tua/internalSlowDiagnostics";
+const INTERNAL_FAST_DIAGNOSTICS: &str = "tua/internalFastDiagnostics";
 const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
 const INTERNAL_PATTERN_CORPUS: &str = "tua/internalPatternCorpus";
 const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
@@ -53,6 +54,8 @@ struct DeferredRequest {
 pub(super) struct RequestScheduler {
     deferred: VecDeque<DeferredRequest>,
     foreground_tx: Sender<WorkerJob>,
+    inlay_tx: Sender<WorkerJob>,
+    fast_diagnostic_tx: Sender<WorkerJob>,
     background_tx: Sender<WorkerJob>,
     speculative_lane: SpeculativeLane,
     jobs: BTreeMap<u64, InFlightJob>,
@@ -134,6 +137,7 @@ struct InFlightJob {
     newest_wins_key: Option<String>,
     waiters: Vec<RequestWaiter>,
     slow_diagnostics: Option<(String, PendingDiagnostics)>,
+    fast_diagnostics: Option<(String, PendingDiagnostics)>,
     warm_work: Option<WorkspaceWarmWork>,
     corpus_work: Option<(u64, Vec<std::path::PathBuf>)>,
 }
@@ -168,12 +172,16 @@ impl RequestScheduler {
         received_input: SharedReceivedInputState,
     ) -> Self {
         let foreground_tx = spawn_worker_lane("foreground", 2, event_tx.clone());
+        let inlay_tx = spawn_worker_lane("inlay", 1, event_tx.clone());
+        let fast_diagnostic_tx = spawn_worker_lane("fast-diagnostics", 1, event_tx.clone());
         let background_tx = spawn_worker_lane("background", 1, event_tx.clone());
         let speculative_lane = spawn_speculative_lane(event_tx);
 
         Self {
             deferred: VecDeque::new(),
             foreground_tx,
+            inlay_tx,
+            fast_diagnostic_tx,
             background_tx,
             speculative_lane,
             jobs: BTreeMap::new(),
@@ -207,6 +215,7 @@ impl RequestScheduler {
                 .and_then(|uri| server.document_versions.get(uri).copied())
         });
         let background = request_runs_in_background(&method);
+        let inlay = method == "textDocument/inlayHint";
         let speculative = matches!(
             method.as_str(),
             "tua/localInlineCompletion" | "textDocument/inlineCompletion"
@@ -218,8 +227,8 @@ impl RequestScheduler {
                 "inline completion requires a text document URI".to_owned(),
             )];
         }
-        let non_interactive = background || method == "textDocument/inlayHint" || speculative;
-        let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
+        let non_interactive = background || inlay || speculative;
+        let coalesce_key = ((background || inlay) && uri.is_some())
             .then(|| coalesce_key(&method, &message, generation));
         let newest_wins_key = speculative
             .then(|| uri.as_ref().map(|uri| format!("inline:{uri}")))
@@ -359,6 +368,7 @@ impl RequestScheduler {
                 cancelled: false,
             }],
             slow_diagnostics: None,
+            fast_diagnostics: None,
             warm_work: None,
             corpus_work: None,
         };
@@ -380,6 +390,8 @@ impl RequestScheduler {
                     debug_assert!(!self.jobs.contains_key(&replaced.job_id));
                 }
             })
+        } else if inlay {
+            self.inlay_tx.send(worker).map_err(|_| ())
         } else if background {
             self.background_tx.send(worker).map_err(|_| ())
         } else {
@@ -446,6 +458,7 @@ impl RequestScheduler {
                 newest_wins_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: Some((uri.clone(), pending)),
+                fast_diagnostics: None,
                 warm_work: None,
                 corpus_work: None,
             },
@@ -456,6 +469,57 @@ impl RequestScheduler {
             return false;
         }
 
+        true
+    }
+
+    pub(super) fn dispatch_due_fast_diagnostic(
+        &mut self,
+        server: &mut LspServer,
+        now: Instant,
+    ) -> bool {
+        if self.jobs.len() >= MAX_JOBS_WHILE_DISPATCHING_INTERNAL_BACKGROUND
+            || self.internal_background_job_count() >= MAX_INTERNAL_BACKGROUND_JOBS
+        {
+            return false;
+        }
+        let Some((uri, pending)) = server.take_next_due_fast_diagnostic(now) else {
+            return false;
+        };
+        self.next_job_id = self.next_job_id.saturating_add(1);
+        let job_id = self.next_job_id;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker = WorkerJob {
+            job_id,
+            server: Some(server.clone()),
+            local_inline: None,
+            queued_at: tua_core::profile::enabled().then(Instant::now),
+            message: json!({"jsonrpc":"2.0","id":Value::Null,"method":INTERNAL_FAST_DIAGNOSTICS,
+                "params":{"textDocument":{"uri":uri}}}),
+            method: INTERNAL_FAST_DIAGNOSTICS.to_owned(),
+            cancelled: Arc::clone(&cancelled),
+            warm_work: None,
+            corpus_work: None,
+        };
+        self.jobs.insert(
+            job_id,
+            InFlightJob {
+                non_interactive: true,
+                uri: Some(uri.clone()),
+                generation: Some(pending.generation),
+                cancelled,
+                coalesce_key: None,
+                newest_wins_key: None,
+                waiters: Vec::new(),
+                slow_diagnostics: None,
+                fast_diagnostics: Some((uri, pending)),
+                warm_work: None,
+                corpus_work: None,
+            },
+        );
+        if self.fast_diagnostic_tx.send(worker).is_err() {
+            self.remove_job(job_id);
+            return false;
+        }
         true
     }
 
@@ -493,6 +557,7 @@ impl RequestScheduler {
                 newest_wins_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: None,
+                fast_diagnostics: None,
                 warm_work: Some(work),
                 corpus_work: None,
             },
@@ -546,6 +611,7 @@ impl RequestScheduler {
                 newest_wins_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: None,
+                fast_diagnostics: None,
                 warm_work: None,
                 corpus_work: Some((generation, paths)),
             },
@@ -735,6 +801,8 @@ impl RequestScheduler {
             "patternCorpus"
         } else if job.slow_diagnostics.is_some() {
             "slowDiagnostics"
+        } else if job.fast_diagnostics.is_some() {
+            "fastDiagnostics"
         } else if job.newest_wins_key.is_some() {
             "inline"
         } else {
@@ -780,6 +848,25 @@ impl RequestScheduler {
                 outbound.push(publication);
             }
 
+            return outbound;
+        }
+
+        if let Some((uri, pending)) = job.fast_diagnostics {
+            if stale_generation
+                || self.received_document_version_is_stale(&uri, pending.version)
+                || result.response.get("error").is_some()
+            {
+                return outbound;
+            }
+            let diagnostics = result
+                .response
+                .get("result")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if let Some(publication) = server.finish_fast_diagnostics(&uri, pending, diagnostics) {
+                outbound.push(publication);
+            }
             return outbound;
         }
 
@@ -842,7 +929,11 @@ impl RequestScheduler {
     fn internal_background_job_count(&self) -> usize {
         self.jobs
             .values()
-            .filter(|job| job.slow_diagnostics.is_some() || job.warm_work.is_some())
+            .filter(|job| {
+                job.slow_diagnostics.is_some()
+                    || job.fast_diagnostics.is_some()
+                    || job.warm_work.is_some()
+            })
             .count()
     }
 
@@ -1202,6 +1293,13 @@ fn execute_worker_request(
     method: &str,
     cancelled: &AtomicBool,
 ) -> Value {
+    if method == INTERNAL_FAST_DIAGNOSTICS {
+        let id = message.get("id").cloned().unwrap_or(Value::Null);
+        let diagnostics = document_uri(&message)
+            .map(|uri| server.fast_diagnostics_for(uri))
+            .unwrap_or_default();
+        return json!({"jsonrpc":"2.0","id":id,"result":diagnostics});
+    }
     if method == INTERNAL_SLOW_DIAGNOSTICS {
         let id = message.get("id").cloned().unwrap_or(Value::Null);
         let diagnostics = document_uri(&message)

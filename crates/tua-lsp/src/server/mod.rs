@@ -36,6 +36,10 @@ const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
 const PATTERN_CORPUS_REBUILD_DEBOUNCE: Duration = Duration::from_millis(300);
 const PATTERN_CORPUS_BATCH_SIZE: usize = 16;
 const RECENT_REQUEST_LATENCY_LIMIT: usize = 4096;
+// Full fast diagnostics in a large source file can monopolize the input
+// coordinator before it can dispatch completion. Keep the same diagnostics,
+// but compute them on a separate worker for large documents.
+const ASYNC_FAST_DIAGNOSTICS_SOURCE_BYTES: usize = 64 * 1024;
 const EVENT_QUEUE_CAPACITY: usize = 16;
 
 #[derive(Default)]
@@ -197,8 +201,11 @@ fn run_with_shader_validator(
             if let Some(worker) = &shader_worker {
                 worker.dispatch_due(&mut server);
             }
-            let dispatched_warm = scheduler.dispatch_next_workspace_warm(&mut server);
-            if !dispatched_warm {
+            let dispatched_fast =
+                scheduler.dispatch_due_fast_diagnostic(&mut server, Instant::now());
+            let dispatched_warm =
+                !dispatched_fast && scheduler.dispatch_next_workspace_warm(&mut server);
+            if !dispatched_fast && !dispatched_warm {
                 scheduler.dispatch_due_pattern_corpus(&mut server, Instant::now());
             }
         }
@@ -243,6 +250,7 @@ fn run_with_shader_validator(
                                     worker.dispatch_due(&mut server);
                                 }
                                 let now = Instant::now();
+                                scheduler.dispatch_due_fast_diagnostic(&mut server, now);
                                 scheduler.dispatch_due_slow_diagnostic(&mut server, now);
                                 scheduler.dispatch_due_pattern_corpus(&mut server, now);
                                 if let Some(message) = server.drain_due_pull_diagnostic_refresh(now)
@@ -517,6 +525,7 @@ struct LspServer {
     workspace_folders: Vec<PathBuf>,
     settings: WorkspaceSettings,
     pending_slow_diagnostics: BTreeMap<String, PendingDiagnostics>,
+    pending_fast_diagnostics: BTreeMap<String, PendingDiagnostics>,
     pending_pull_fast_diagnostics: BTreeMap<String, PendingDiagnostics>,
     last_published_diagnostics: BTreeMap<String, Vec<serde_json::Value>>,
     document_generations: BTreeMap<String, u64>,

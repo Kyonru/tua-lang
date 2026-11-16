@@ -90,6 +90,10 @@ background worker without the typing debounce, keeping the coordinator available
 for further edits and requests. When imports or required modules can change a type
 answer, the fast pass defers type mismatches to that project-aware pass rather
 than briefly showing a stale red squiggle.
+For large open files, the fast pass also runs on a worker so parsing and checking
+cannot hold up new completion requests on the input coordinator. It still checks
+the latest document version before publishing. Inlay-hint requests use their own
+worker lane, leaving completion and formatting responsive during hint refreshes.
 
 Cross-file protocol conformance diagnostics include related information linking
 the implementation error to the required method declaration.

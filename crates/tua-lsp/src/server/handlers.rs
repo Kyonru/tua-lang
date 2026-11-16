@@ -739,11 +739,16 @@ impl LspServer {
             self.queue_pattern_corpus_path(path_from_uri(&uri), Instant::now());
         }
         self.clear_semantic_token_results(&uri);
+        self.pending_fast_diagnostics.remove(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
         let generation = self.bump_document_generation(&uri, version);
         self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
         if self.client_pull_diagnostics {
+            return None;
+        }
+
+        if self.queue_large_file_fast_diagnostics(&uri, generation, version) {
             return None;
         }
 
@@ -778,6 +783,10 @@ impl LspServer {
             return None;
         }
 
+        if self.queue_large_file_fast_diagnostics(&uri, generation, version) {
+            return None;
+        }
+
         let diagnostics = self.fast_diagnostics_for(&uri);
 
         Some(vec![self.publish_tracked_diagnostics(&uri, diagnostics)])
@@ -804,6 +813,7 @@ impl LspServer {
         }
 
         self.pending_slow_diagnostics.remove(&uri);
+        self.pending_fast_diagnostics.remove(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
 
         if self.client_pull_diagnostics {
@@ -835,6 +845,7 @@ impl LspServer {
         self.analysis.close_document(&uri);
         self.queue_pattern_corpus_path(path, Instant::now());
         self.pending_slow_diagnostics.remove(&uri);
+        self.pending_fast_diagnostics.remove(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
         self.last_published_diagnostics.remove(&uri);
         self.document_generations.remove(&uri);
@@ -1037,7 +1048,7 @@ impl LspServer {
             .collect()
     }
 
-    fn fast_diagnostics_for(&self, uri: &str) -> Vec<Value> {
+    pub(super) fn fast_diagnostics_for(&self, uri: &str) -> Vec<Value> {
         self.analysis
             .fast_diagnostics_for_uri(uri)
             .into_iter()
@@ -1071,6 +1082,31 @@ impl LspServer {
         );
     }
 
+    fn queue_large_file_fast_diagnostics(
+        &mut self,
+        uri: &str,
+        generation: u64,
+        version: Option<i64>,
+    ) -> bool {
+        if self.analysis.document_text(uri).unwrap_or("").len()
+            < super::ASYNC_FAST_DIAGNOSTICS_SOURCE_BYTES
+        {
+            self.pending_fast_diagnostics.remove(uri);
+            return false;
+        }
+
+        self.pending_fast_diagnostics.insert(
+            uri.to_owned(),
+            PendingDiagnostics {
+                generation,
+                version,
+                analysis_revision: self.analysis.revision(),
+                due_at: Instant::now(),
+            },
+        );
+        true
+    }
+
     fn queue_pull_fast_diagnostics(
         &mut self,
         uri: String,
@@ -1094,8 +1130,10 @@ impl LspServer {
     }
 
     pub(super) fn next_slow_diagnostics_due(&self) -> Option<Instant> {
-        self.pending_slow_diagnostics_due()
-            .into_iter()
+        self.pending_fast_diagnostics
+            .values()
+            .map(|pending| pending.due_at)
+            .chain(self.pending_slow_diagnostics_due())
             .chain(self.pending_pull_fast_diagnostics_due())
             .min()
     }
@@ -1152,6 +1190,48 @@ impl LspServer {
         pending.analysis_revision = self.analysis.revision();
 
         Some((uri, pending))
+    }
+
+    pub(super) fn take_next_due_fast_diagnostic(
+        &mut self,
+        now: Instant,
+    ) -> Option<(String, PendingDiagnostics)> {
+        let uri = self
+            .pending_fast_diagnostics
+            .iter()
+            .filter(|(_, pending)| pending.due_at <= now)
+            .min_by_key(|(_, pending)| pending.due_at)
+            .map(|(uri, _)| uri.clone())?;
+        let mut pending = self.pending_fast_diagnostics.remove(&uri)?;
+        pending.analysis_revision = self.analysis.revision();
+        Some((uri, pending))
+    }
+
+    pub(super) fn finish_fast_diagnostics(
+        &mut self,
+        uri: &str,
+        pending: PendingDiagnostics,
+        diagnostics: Vec<Value>,
+    ) -> Option<Value> {
+        if self.document_generations.get(uri).copied() != Some(pending.generation)
+            || pending.version.is_some()
+                && self.document_versions.get(uri).copied() != pending.version
+            || !self.analysis.contains_document(uri)
+        {
+            return None;
+        }
+        if self.analysis.revision() != pending.analysis_revision {
+            self.pending_fast_diagnostics.insert(
+                uri.to_owned(),
+                PendingDiagnostics {
+                    analysis_revision: self.analysis.revision(),
+                    due_at: Instant::now(),
+                    ..pending
+                },
+            );
+            return None;
+        }
+        self.publish_diagnostics_if_changed(uri, diagnostics)
     }
 
     pub(super) fn finish_slow_diagnostics(

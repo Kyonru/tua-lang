@@ -1,5 +1,112 @@
 use super::*;
 
+#[test]
+fn large_file_fast_diagnostics_publish_only_for_the_latest_document() {
+    let uri = "file:///tmp/large-fast-diagnostics.tua";
+    let filler = "-- representative source line\n".repeat(3_000);
+    let bad = format!("{filler}local value: number = \"bad\"\n");
+    let good = format!("{filler}local value: number = 1\n");
+    assert!(bad.len() >= ASYNC_FAST_DIAGNOSTICS_SOURCE_BYTES);
+    let mut server = LspServer::default();
+
+    assert!(server.handle_message(did_open(uri, &bad)).is_none());
+    let (pending_uri, old) = server
+        .take_next_due_fast_diagnostic(Instant::now())
+        .expect("large document should queue fast diagnostics");
+    assert_eq!(pending_uri, uri);
+    let old_diagnostics = server.fast_diagnostics_for(uri);
+    assert!(old_diagnostics.iter().any(|item| item["code"] == "TL1003"));
+
+    assert!(server.handle_message(did_change(uri, &good, 2)).is_none());
+    assert!(server
+        .finish_fast_diagnostics(uri, old, old_diagnostics)
+        .is_none());
+    let (_, current) = server
+        .take_next_due_fast_diagnostic(Instant::now())
+        .expect("latest edit should queue a replacement pass");
+    let current_diagnostics = server.fast_diagnostics_for(uri);
+    assert!(current_diagnostics
+        .iter()
+        .all(|item| item["code"] != "TL1003"));
+    let publication = server
+        .finish_fast_diagnostics(uri, current, current_diagnostics)
+        .expect("latest diagnostics should publish");
+    assert_eq!(publication["method"], "textDocument/publishDiagnostics");
+    assert!(publication["params"]["diagnostics"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn large_file_fast_diagnostics_worker_publishes_without_coordinator_checking() {
+    let uri = "file:///tmp/large-fast-worker.tua";
+    let source = format!(
+        "{}local value: number = \"bad\"\n",
+        "-- representative source line\n".repeat(3_000)
+    );
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let mut server = LspServer::default();
+
+    assert!(server.handle_message(did_open(uri, &source)).is_none());
+    assert!(scheduler.dispatch_due_fast_diagnostic(&mut server, Instant::now()));
+    let ServerEvent::RequestFinished(result) = event_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("fast diagnostic worker should finish")
+    else {
+        panic!("expected a completed fast diagnostic job");
+    };
+    let publications = scheduler.finish(&mut server, *result);
+    assert!(publications.iter().any(|message| {
+        message["method"] == "textDocument/publishDiagnostics"
+            && message["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item["code"] == "TL1003"))
+    }));
+}
+
+#[test]
+fn large_inlay_batch_does_not_queue_interactive_completion_behind_hints() {
+    let inlay_uri = "file:///tmp/large-inlay-batch.tua";
+    let completion_uri = "file:///tmp/inlay-interactive-completion.tua";
+    let large = (0..3_000)
+        .map(|index| format!("local value_{index:04}: number = {index}\n"))
+        .collect::<String>();
+    let small = "local player = { hp = 1 }\nplayer.\n";
+    let mut messages = vec![
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+        did_open(inlay_uri, &large),
+        did_open(completion_uri, small),
+    ];
+    for index in 0..2 {
+        messages.push(inlay_hint_request(
+            10 + index,
+            inlay_uri,
+            index as usize,
+            0,
+            3_000,
+            0,
+        ));
+    }
+    messages.push(invoked_completion_request(
+        30,
+        completion_uri,
+        small,
+        "player.",
+    ));
+    let output = run_messages(messages);
+    let completion_index = response_index_with_id(&output, 30);
+    assert!(
+        completion_index < response_index_with_id(&output, 10),
+        "completion should not wait behind a queued large-file inlay batch"
+    );
+    let completions = response_with_id(&output, 30)["result"]
+        .as_array()
+        .expect("completion should return items");
+    assert!(completions.iter().any(|item| item["label"] == "hp"));
+}
+
 fn enable_scheduled_local_inline_completion(server: &mut LspServer) {
     let _ = server.handle_message(did_change_configuration(json!({
         "completion": {"inline": {"enabled": true}}
