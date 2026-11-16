@@ -903,3 +903,53 @@ dialogue:insert("Quack")
         temp.uri_for("src/dialog.tua")
     );
 }
+
+#[test]
+fn imported_class_instance_field_methods_hover_complete_and_show_signatures() {
+    let temp = TempProject::new("imported-class-instance-field-methods");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/writer.tua",
+        r#"open class Writer {
+  --- Appends a word.
+  append(word: string) {}
+  getDimensions(): number { return 42 }
+}
+export type WriterInstance = Writer
+return Writer
+"#,
+    );
+    let source = r#"local Writer = require("writer")
+import type { WriterInstance } from "writer"
+open class Dialogue {
+  writer: WriterInstance
+  init() { self.writer = Writer.new() }
+  insert(word: string) {
+    self.writer:append(word)
+    local width = self.writer:getDimensions()
+  }
+}
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "self.writer:"));
+    assert_completion_labels(server.output(), 2, ["append", "getDimensions"]);
+    server.send(hover_request(3, &uri, source, "append(word)"));
+    assert_hover_contains(server.output(), 3, "(method) append: (word: string) -> nil");
+    assert_hover_contains(server.output(), 3, "Appends a word.");
+    server.send(hover_request(4, &uri, source, "getDimensions()"));
+    assert_hover_contains(server.output(), 4, "(method) getDimensions: () -> number");
+    server.send(signature_help_request(5, &uri, source, "append("));
+    assert!(
+        response_with_id(server.output(), 5)["result"]["signatures"][0]["label"]
+            .as_str()
+            .is_some_and(|label| label.contains("word: string"))
+    );
+    server.send(definition_request(6, &uri, source, "append(word)", 0));
+    assert_eq!(
+        response_with_id(server.output(), 6)["result"]["uri"],
+        temp.uri_for("src/writer.tua")
+    );
+}

@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Resolve imported instance types used in class fields for method completion,
+  hover, and signature help, consistent with Go to Definition.
 - Keep completion and formatting responsive when a large file is edited while
   fast diagnostics and inlay hints are being refreshed.
 - Import the optional localization and save runtimes when their module values

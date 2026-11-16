@@ -404,7 +404,8 @@ boundaries so the generated Lua passes the receiver explicitly.
 
 For a class field initialized from another module, annotate the field with the
 exported instance type too. A field declared `any` has no reliable member type,
-so completion and method navigation cannot identify its target.
+so completion and method navigation cannot identify its target. An imported
+instance type on a class field also supplies method hover and signature help.
 
 ## Documentation And Navigation
 

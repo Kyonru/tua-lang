@@ -1229,6 +1229,7 @@ fn typed_imported_class_field_navigates_to_its_method() {
         r#"-- file: src/enhanced.tua
 open class EnhancedWriter {
   append(value: string) {}
+  getDimensions(): number { return 42 }
 }
 export type EnhancedWriterInstance = EnhancedWriter
 return EnhancedWriter
@@ -1244,7 +1245,8 @@ open class Dialogue {
     self.writer = EnhancedWriter.new()
   }
   use() {
-    self.writer:<|call|>append("hello")
+    self.writer:<|members|><|call|>append(<|signature|>"hello")
+    self.writer:<|dimensions|>getDimensions()
   }
 }
 "#,
@@ -1260,6 +1262,23 @@ open class Dialogue {
         .expect("typed imported class member should resolve");
     assert_eq!(definition.path, PathBuf::from("src/enhanced.tua"));
     assert_eq!(definition.span.start.line, 2);
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/dialogue.tua", fixture.position("call"))
+        .expect("typed imported class method should hover");
+    assert!(hover.contents.contains("append") && hover.contents.contains("value: string"));
+    let dimensions = snapshot
+        .hover("src/dialogue.tua", fixture.position("dimensions"))
+        .expect("second imported class method should hover");
+    assert!(dimensions.contents.contains("getDimensions"));
+    assert!(dimensions.contents.contains("number"));
+    let completions = snapshot.completion("src/dialogue.tua", fixture.position("members"));
+    assert!(completions.iter().any(|item| item.label == "append"));
+    assert!(completions.iter().any(|item| item.label == "getDimensions"));
+    let signature = snapshot
+        .signature_help("src/dialogue.tua", fixture.position("signature"))
+        .expect("typed imported class method should provide signature help");
+    assert!(signature.signatures[0].label.contains("value: string"));
 }
 
 #[test]

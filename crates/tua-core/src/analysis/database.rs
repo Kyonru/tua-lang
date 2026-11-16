@@ -703,6 +703,14 @@ pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
     }
 
     for class in &parsed.class_declarations {
+        for field in &class.fields {
+            collect(&field.parsed_ty, &mut names);
+        }
+        if let Some(parent) = &class.parent_application {
+            for argument in &parent.arguments {
+                collect(&argument.ty, &mut names);
+            }
+        }
         names.extend(
             class
                 .implemented_protocols
