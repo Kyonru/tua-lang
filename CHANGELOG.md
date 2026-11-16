@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preserve exported type-alias origins through Tua and Lua forwarding files,
+  so declaration-file fields complete and navigate after unsaved edits.
 - Avoid attributing a side-effect imported global to its original definition
   after this file or a required module may reassign it.
 - Hide References and Implementations hover links for unknown dot/colon

@@ -1740,3 +1740,173 @@ fn warm_malformed_provider_uses_current_class_members_across_factory_and_service
     server.send(completion_request(6, &main_uri, main, "agent."));
     assert_completion_labels(server.output(), 6, ["takeDamage", "health"]);
 }
+
+#[test]
+fn imported_declaration_alias_fields_navigate_through_tua_and_lua_facades() {
+    let temp = TempProject::new("declaration-alias-field-provenance");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let contract = "export type Stats = { score: number, lives: number }\n";
+    let provider = "import type { Stats } from \"./contract\"\nlocal function make(): Stats\n  return { score = 3, lives = 2 }\nend\nreturn { make = make }\n";
+    let facade = "local Provider = require(\"provider\")\nreturn { make = Provider.make }\n";
+    let bridge = "local Facade = require(\"facade\")\nreturn { make = Facade.make }\n";
+    let main = "import type { Stats } from \"./contract\"\nfinal class Marker { init() {} }\nlocal F = require \"bridge\"\nlocal typed: Stats = F.make()\nlocal inferred = F.make()\nprint(typed.score, inferred.score)\n";
+    temp.write("src/contract.d.tua", contract);
+    temp.write("src/provider.tua", provider);
+    temp.write("src/facade.lua", facade);
+    temp.write("src/bridge.lua", bridge);
+    temp.write("src/main.tua", main);
+    let contract_uri = temp.uri_for("src/contract.d.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, main),
+        completion_request(2, &main_uri, main, "typed."),
+        completion_request(3, &main_uri, main, "inferred."),
+        definition_request(4, &main_uri, main, "typed.score", "typed.".len()),
+        definition_request(5, &main_uri, main, "inferred.score", "inferred.".len()),
+    ]);
+    assert_completion_labels(&output, 2, ["score", "lives"]);
+    assert_completion_labels(&output, 3, ["score", "lives"]);
+    assert_definition_text(&output, 4, &contract_uri, contract, "score");
+    assert_definition_text(&output, 5, &contract_uri, contract, "score");
+}
+
+#[test]
+fn imported_declaration_alias_field_definition_stays_in_own_workspace() {
+    let first = TempProject::new("declaration-alias-first");
+    let second = TempProject::new("declaration-alias-second");
+    for project in [&first, &second] {
+        project.write("tua.toml", "source = \"src\"\n");
+    }
+    let first_contract = "export type Stats = { score: number }\n";
+    let second_contract = "export type Stats = { mana: number }\n";
+    let first_main = "import type { Stats } from \"./contract\"\nlocal stats: Stats = { score = 1 }\nprint(stats.score)\n";
+    let second_main = "import type { Stats } from \"./contract\"\nlocal stats: Stats = { mana = 1 }\nprint(stats.mana)\n";
+    first.write("src/contract.d.tua", first_contract);
+    second.write("src/contract.d.tua", second_contract);
+    first.write("src/main.tua", first_main);
+    second.write("src/main.tua", second_main);
+    let first_main_uri = first.uri_for("src/main.tua");
+    let second_main_uri = second.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [first.uri(), second.uri()]),
+        did_open(&first_main_uri, first_main),
+        did_open(&second_main_uri, second_main),
+        definition_request(
+            2,
+            &first_main_uri,
+            first_main,
+            "stats.score",
+            "stats.".len(),
+        ),
+        definition_request(
+            3,
+            &second_main_uri,
+            second_main,
+            "stats.mana",
+            "stats.".len(),
+        ),
+    ]);
+    assert_definition_text(
+        &output,
+        2,
+        &first.uri_for("src/contract.d.tua"),
+        first_contract,
+        "score",
+    );
+    assert_definition_text(
+        &output,
+        3,
+        &second.uri_for("src/contract.d.tua"),
+        second_contract,
+        "mana",
+    );
+}
+
+#[test]
+fn forwarded_alias_field_definition_follows_facade_overlay_edits() {
+    let temp = TempProject::new("forwarded-alias-overlay");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let score_contract = "export type Stats = { score: number }\n";
+    let mana_contract = "export type Stats = { mana: number }\n";
+    let score_provider = "import type { Stats } from \"./score_contract\"\nlocal function make(): Stats\n  return { score = 1 }\nend\nreturn { make = make }\n";
+    let mana_provider = "import type { Stats } from \"./mana_contract\"\nlocal function make(): Stats\n  return { mana = 2 }\nend\nreturn { make = make }\n";
+    let facade = "local A = require(\"score_provider\")\nlocal B = require(\"mana_provider\")\nreturn { make = A.make }\n";
+    let edited_facade = "local A = require(\"score_provider\")\nlocal B = require(\"mana_provider\")\nreturn { make = B.make }\n";
+    let main = "local F = require \"facade\"\nlocal stats = F.make()\nprint(stats.score)\n";
+    let edited_main = "local F = require \"facade\"\nlocal stats = F.make()\nprint(stats.mana)\n";
+    temp.write("src/score_contract.d.tua", score_contract);
+    temp.write("src/mana_contract.d.tua", mana_contract);
+    temp.write("src/score_provider.tua", score_provider);
+    temp.write("src/mana_provider.tua", mana_provider);
+    temp.write("src/facade.lua", facade);
+    temp.write("src/main.tua", main);
+    let facade_uri = temp.uri_for("src/facade.lua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&facade_uri, facade));
+    server.send(did_open(&main_uri, main));
+    server.send(definition_request(
+        2,
+        &main_uri,
+        main,
+        "stats.score",
+        "stats.".len(),
+    ));
+    assert_definition_text(
+        server.output(),
+        2,
+        &temp.uri_for("src/score_contract.d.tua"),
+        score_contract,
+        "score",
+    );
+
+    server.send(did_change(&facade_uri, edited_facade, 2));
+    server.send(did_change(&main_uri, edited_main, 2));
+    server.send(completion_request(3, &main_uri, edited_main, "stats."));
+    assert_completion_labels(server.output(), 3, ["mana"]);
+    server.send(definition_request(
+        4,
+        &main_uri,
+        edited_main,
+        "stats.mana",
+        "stats.".len(),
+    ));
+    assert_definition_text(
+        server.output(),
+        4,
+        &temp.uri_for("src/mana_contract.d.tua"),
+        mana_contract,
+        "mana",
+    );
+}
+
+#[test]
+fn same_named_local_alias_export_does_not_inherit_forwarded_type_source() {
+    let temp = TempProject::new("local-alias-not-forwarded");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let provider_contract = "export type Stats = { score: number }\n";
+    let local_contract = "export type Stats = { mana: number }\n";
+    let provider = "import type { Stats } from \"./provider_contract\"\nlocal function make(): Stats\n  return { score = 1 }\nend\nreturn { make = make }\n";
+    let facade = "import type { Stats } from \"./local_contract\"\nlocal Provider = require \"provider\"\nlocal function make(): Stats\n  return { mana = 1 }\nend\nreturn { make = make }\n";
+    let main = "local F = require \"facade\"\nlocal stats = F.make()\nprint(stats.mana)\n";
+    temp.write("src/provider_contract.d.tua", provider_contract);
+    temp.write("src/local_contract.d.tua", local_contract);
+    temp.write("src/provider.tua", provider);
+    temp.write("src/facade.tua", facade);
+    temp.write("src/main.tua", main);
+    let main_uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, main),
+        definition_request(2, &main_uri, main, "stats.mana", "stats.".len()),
+    ]);
+    assert_definition_text(
+        &output,
+        2,
+        &temp.uri_for("src/local_contract.d.tua"),
+        local_contract,
+        "mana",
+    );
+}

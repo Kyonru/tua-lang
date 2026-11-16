@@ -1297,9 +1297,13 @@ impl AnalysisSnapshot {
         let entry = self
             .indexed_module_export_fields(module_path)?
             .remove(first)?;
+        let type_source_path = self
+            .module_graph
+            .export_type_source_path(module_path, first)
+            .unwrap_or(module_path);
         let mut current =
             self.type_database
-                .resolve_type(&self.module_graph, module_path, &entry.ty);
+                .resolve_type(&self.module_graph, type_source_path, &entry.ty);
 
         for field in rest {
             current = project_table_field_type(&current, field)?;
@@ -1415,8 +1419,13 @@ impl AnalysisSnapshot {
             return None;
         };
 
+        let type_source_path = self
+            .module_graph
+            .export_type_source_path(&module_path, export)
+            .map(Path::to_path_buf)
+            .unwrap_or(module_path);
         Some(ProjectAliasFieldOrigin {
-            module_path,
+            module_path: type_source_path,
             alias_name: alias_name.clone(),
         })
     }
@@ -1444,16 +1453,52 @@ impl AnalysisSnapshot {
             return None;
         };
 
-        if let Some(inference) = degraded_inference {
-            let origin = inference.field_origins.get(receiver)?;
-
-            return self.project_alias_field_definition(origin, field);
+        let inferred_origin = if let Some(inference) = degraded_inference {
+            inference.field_origins.get(receiver).cloned()
+        } else {
+            self.semantic_facts_for_parsed(parsed)
+                .project_inference
+                .field_origins
+                .get(receiver)
+                .cloned()
+        };
+        if let Some(definition) = inferred_origin
+            .as_ref()
+            .and_then(|origin| self.project_alias_field_definition(origin, field))
+        {
+            return Some(definition);
         }
 
-        let facts = self.semantic_facts_for_parsed(parsed);
-        let origin = facts.project_inference.field_origins.get(receiver)?;
-
-        self.project_alias_field_definition(origin, field)
+        // Explicitly annotated locals are intentionally absent from project
+        // inference. Match the annotation to the receiver's declaration so a
+        // same-named local in another scope cannot lend it the wrong type.
+        let file = self.file(&parsed.path)?;
+        let scope = file
+            .scope()
+            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))?;
+        let receiver_position = parsed
+            .raw
+            .parser_position_for_source(chain.parts[0].span.start)
+            .unwrap_or(chain.parts[0].span.start);
+        let symbol = scope.symbol_at_position(receiver_position)?;
+        let annotation = parsed.local_annotations.iter().find(|annotation| {
+            annotation.name == *receiver
+                && annotation
+                    .name_span
+                    .and_then(|span| scope.declaration_at_span(span))
+                    .is_some_and(|declaration| declaration.id == symbol)
+        })?;
+        let alias_name = match &annotation.ty {
+            TuaType::Named(name) | TuaType::Applied { name, .. } => name,
+            _ => return None,
+        };
+        self.project_alias_field_definition(
+            &ProjectAliasFieldOrigin {
+                module_path: parsed.path.clone(),
+                alias_name: alias_name.clone(),
+            },
+            field,
+        )
     }
 
     pub(super) fn project_alias_field_definition(
@@ -1461,12 +1506,17 @@ impl AnalysisSnapshot {
         origin: &ProjectAliasFieldOrigin,
         field: &str,
     ) -> Option<Definition> {
-        let file = self.file(&origin.module_path)?;
+        let binding = self.type_database.resolve_type_name(
+            &self.module_graph,
+            &origin.module_path,
+            &origin.alias_name,
+        )?;
+        let file = self.file(&binding.module_path)?;
         let parsed = file.parsed.as_ref().ok()?;
-        let span = project_alias_field_span(parsed, &origin.alias_name, field, 0)?;
+        let span = project_alias_field_span(parsed, &binding.name, field, 0)?;
 
         Some(Definition {
-            path: origin.module_path.clone(),
+            path: binding.module_path,
             span,
             kind: DefinitionKind::TableField,
         })

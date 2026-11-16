@@ -87,6 +87,8 @@ pub use inspection::{
 pub struct ModuleGraph {
     modules: BTreeMap<PathBuf, ModuleGraphModule>,
     export_index: BTreeMap<(PathBuf, String), ModuleExportEntry>,
+    // A forwarded alias is resolved in its source module's type namespace.
+    forwarded_export_type_sources: BTreeMap<(PathBuf, String), PathBuf>,
     exports_by_symbol: BTreeMap<(PathBuf, HirSymbolId), Vec<ModuleExportEntry>>,
     diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
     cycles: Vec<Vec<PathBuf>>,
@@ -416,6 +418,22 @@ impl ModuleGraph {
             .get(&(normalize_path(module_path), public_name.to_owned()))
     }
 
+    pub(crate) fn export_type_source_path(
+        &self,
+        module_path: impl AsRef<Path>,
+        public_name: &str,
+    ) -> Option<&Path> {
+        let key = (normalize_path(module_path), public_name.to_owned());
+        self.forwarded_export_type_sources
+            .get(&key)
+            .map(PathBuf::as_path)
+            .or_else(|| {
+                self.export_index
+                    .get(&key)
+                    .map(|entry| entry.module_path.as_path())
+            })
+    }
+
     pub fn exports_for_symbol(
         &self,
         module_path: impl AsRef<Path>,
@@ -474,10 +492,26 @@ impl ModuleGraph {
                     let Some(field) = self.forwarded_field(&target_path, &forward.fields) else {
                         continue;
                     };
+                    let type_source = forward
+                        .fields
+                        .first()
+                        .and_then(|name| self.export_type_source_path(&target_path, name))
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|| target_path.clone());
                     let should_replace = self
                         .export(&forward.source_path, public_name)
                         .is_none_or(|entry| entry.field.ty == crate::Type::Any);
                     if !should_replace {
+                        if self
+                            .export(&forward.source_path, public_name)
+                            .is_some_and(|entry| entry.field.ty == field.ty)
+                        {
+                            changed |= self.upsert_forwarded_type_source(
+                                &forward.source_path,
+                                public_name,
+                                type_source,
+                            );
+                        }
                         continue;
                     }
 
@@ -505,6 +539,11 @@ impl ModuleGraph {
                             .unwrap_or(ModuleExportOrigin::Tua),
                     };
                     changed |= self.upsert_forwarded_export(entry);
+                    changed |= self.upsert_forwarded_type_source(
+                        &forward.source_path,
+                        public_name,
+                        type_source,
+                    );
                 } else {
                     let target_exports = self
                         .modules
@@ -513,6 +552,10 @@ impl ModuleGraph {
                         .unwrap_or_default();
 
                     for target in target_exports {
+                        let type_source = self
+                            .export_type_source_path(&target_path, &target.public_name)
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|| target_path.clone());
                         let existing = self
                             .export(&forward.source_path, &target.public_name)
                             .cloned();
@@ -520,6 +563,16 @@ impl ModuleGraph {
                             .as_ref()
                             .is_none_or(|entry| entry.field.ty == crate::Type::Any);
                         if !should_replace {
+                            if existing
+                                .as_ref()
+                                .is_some_and(|entry| entry.field.ty == target.field.ty)
+                            {
+                                changed |= self.upsert_forwarded_type_source(
+                                    &forward.source_path,
+                                    &target.public_name,
+                                    type_source,
+                                );
+                            }
                             continue;
                         }
                         let entry = ModuleExportEntry {
@@ -544,7 +597,13 @@ impl ModuleGraph {
                                 .map(|module| export_origin(module.source_kind, None))
                                 .unwrap_or(ModuleExportOrigin::Tua),
                         };
+                        let public_name = entry.public_name.clone();
                         changed |= self.upsert_forwarded_export(entry);
+                        changed |= self.upsert_forwarded_type_source(
+                            &forward.source_path,
+                            &public_name,
+                            type_source,
+                        );
                     }
                 }
             }
@@ -561,6 +620,20 @@ impl ModuleGraph {
             | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
             RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => None,
         }
+    }
+
+    fn upsert_forwarded_type_source(
+        &mut self,
+        module_path: &Path,
+        public_name: &str,
+        type_source: PathBuf,
+    ) -> bool {
+        let key = (module_path.to_path_buf(), public_name.to_owned());
+        if self.forwarded_export_type_sources.get(&key) == Some(&type_source) {
+            return false;
+        }
+        self.forwarded_export_type_sources.insert(key, type_source);
+        true
     }
 
     fn forwarded_field(&self, target_path: &Path, fields: &[String]) -> Option<ModuleExportField> {
