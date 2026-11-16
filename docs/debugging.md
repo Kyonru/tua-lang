@@ -136,6 +136,62 @@ when Tua source uses `Log`. In a plain `.lua` file, write
 `local Log = require("tualog")` explicitly. For a real exception and traceback,
 use Lua's `error(...)` instead of `Log.error(...)`.
 
+### Write logs to a file
+
+Call `Log.configure` after LÖVE starts to append to a file in the game's
+[save directory](https://www.love2d.org/wiki/love.filesystem):
+
+```lua
+function love.load()
+  Log.configure({ file = { path = "logs/game.log", bufferBytes = 8192 } })
+end
+
+function love.quit()
+  Log.close()
+end
+```
+
+The console stays enabled unless `console = false`. The file uses LÖVE's
+[full buffering](https://www.love2d.org/wiki/%28File%29%3AsetBuffer), so a
+message does not force a disk write on every call. `Log.error(...)` flushes
+immediately. Call `Log.flush()` at checkpoints if you need recent info or warn
+messages on disk before the buffer fills; `Log.close()` flushes and closes the
+file. File output is disabled until configured and does no work in the game
+loop on its own. Tua does not rotate log files; choose a path and retention
+policy appropriate for your game.
+
+### Show recent logs on screen
+
+Enable a bounded overlay when the player or a tester needs to see recent game
+messages without opening the editor:
+
+```lua
+function love.load()
+  Log.configure({ console = false, screen = { lines = 8, maxBytes = 512 } })
+end
+
+function love.draw()
+  -- Draw your game first; this overlay uses screen coordinates.
+  Log.draw(8, 8)
+end
+```
+
+`lines` is limited to 1–50 and `maxBytes` to 64–2048 per message. The default
+is eight lines of up to 512 bytes each. `Log.clearScreen()` clears retained
+messages. The overlay creates one LÖVE Text object on its first draw and
+updates that object only after messages change. It draws only where you call
+`Log.draw`; Tua adds no frame callback. Screen output can be combined with
+console and file output in one `Log.configure` call. For example, omit
+`console = false` to keep the VS Code Game Console populated, or set it to
+`false` for an overlay-only session. Overlay-only logging truncates long
+messages before escaping or formatting arguments beyond the visible limit.
+
+`Log.configure` replaces the destination configuration. Put it in `love.load`
+after choosing the game's save identity. If both file and screen output are
+disabled and `console = false`, calls return before formatting their arguments
+or collecting a source location. A configured destination still has
+the cost of formatting, buffering, or drawing the messages you request.
+
 ## Source-Map Files
 
 With `emit_maps = true`, each generated Lua file can have two adjacent maps:

@@ -22,9 +22,9 @@ guides cannot silently omit an example.
 
 ## Files
 
-- `src/logging.tua` shows opt-in `Log` levels and scoped game messages. In the
-  Game Console, filter by level or scope and click the source location beside a
-  message to open its `.tua` call site.
+- `src/logging.tua` shows opt-in `Log` levels, scoped messages, buffered file
+  output, and a bounded screen overlay. In the Game Console, filter by level or
+  scope and click a message's source location to open its `.tua` call site.
 
 - `src/localization.tua` and `src/locales/{en,fr}.lua` demonstrate the opt-in
   `I18n` helper, literal key assistance, named arguments, plurals, and a player

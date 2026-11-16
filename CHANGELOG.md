@@ -10,6 +10,10 @@ language or editor behavior, and migration notes call out those changes.
 
 - Add the optional `Log` game API with levels and filterable scopes. Its Lua
   runtime is bundled only when referenced from Tua source.
+- Let games opt into buffered file logs in the LÖVE save directory, with
+  explicit flush and close calls and immediate flush for error-level messages.
+- Let games show a bounded log overlay with `Log.draw()`, without adding a
+  frame hook or rebuilding text when the messages have not changed.
 
 ### Fixed
 

@@ -2,6 +2,20 @@
 -- In an ordinary .lua file, use local Log = require("tualog") instead.
 local combat = Log.scope("combat")
 
+local function enableFileLogging()
+  -- Call from love.load; this file lives in the LOVE save directory.
+  Log.configure({ file = { path = "logs/game.log", bufferBytes = 8192 } })
+end
+
+local function enableScreenLogging()
+  Log.configure({ console = false, screen = { lines = 8, maxBytes = 512 } })
+end
+
+local function drawScreenLog()
+  -- Call from love.draw. The overlay stays in screen coordinates even with a camera.
+  Log.draw(8, 8)
+end
+
 local function reportDamage(amount: number)
   combat.info("damage", amount)
   if amount > 10 then
@@ -9,4 +23,9 @@ local function reportDamage(amount: number)
   end
 end
 
-return { reportDamage = reportDamage }
+return {
+  reportDamage = reportDamage,
+  enableFileLogging = enableFileLogging,
+  enableScreenLogging = enableScreenLogging,
+  drawScreenLog = drawScreenLog,
+}

@@ -613,6 +613,29 @@ return hit
     }
 
     #[test]
+    fn log_file_configuration_has_typed_options() {
+        let good = "Log.configure({console = false, file = {path = \"logs/game.log\", bufferBytes = 4096}})\nLog.flush()\nLog.close()\n";
+        crate::check_tua_source("src/main.tua", good).expect("typed log file options");
+        let bad = "Log.configure({file = {path = 42}})\n";
+        assert!(crate::check_tua_source("src/main.tua", bad).is_err());
+    }
+
+    #[test]
+    fn log_screen_configuration_and_draw_are_typed() {
+        let good = "Log.configure({console = false, screen = {lines = 6, maxBytes = 256}})\nLog.draw(10, 20)\nLog.clearScreen()\n";
+        crate::check_tua_source("src/main.tua", good).expect("typed log screen options");
+        for bad in [
+            "Log.configure({screen = {lines = \"many\"}})\n",
+            "Log.configure({screen = {maxBytes = \"wide\"}})\n",
+        ] {
+            assert!(
+                crate::check_tua_source("src/main.tua", bad).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
     fn using_a_module_emits_its_require_once() {
         let emitted = crate::emit_tua_source(
             "src/main.tua",
