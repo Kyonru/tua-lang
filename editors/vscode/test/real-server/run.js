@@ -98,6 +98,9 @@ function createProject(workspacePath) {
   const headerCompletionPath = path.join(sourcePath, "header_completion.tua");
   const protocolStubsPath = path.join(sourcePath, "protocol_stubs.tua");
   const graphPath = path.join(sourcePath, "graph_workflow.tua");
+  const hoverActionsPath = path.join(sourcePath, "hover_actions.tua");
+  const hoverGlobalsPath = path.join(sourcePath, "hover_globals.tua");
+  const hoverBridgePath = path.join(sourcePath, "hover_bridge.tua");
   const fontPath = path.join(workspacePath, "assets", "sniglet.otf");
   const cyclicProtocolAPath = path.join(sourcePath, "cyclic_a.d.tua");
   const cyclicProtocolBPath = path.join(sourcePath, "cyclic_b.d.tua");
@@ -148,6 +151,18 @@ function createProject(workspacePath) {
     'EnemyEvents:emit("enemy.hit", 3)',
     'return { movement = movement, bullets = bullets, events = EnemyEvents }',
     '',
+  ].join("\n"));
+  fs.writeFileSync(hoverGlobalsPath, "function loadAssets() return true end\n");
+  fs.writeFileSync(hoverBridgePath, 'require("hover_globals")\n');
+  fs.writeFileSync(hoverActionsPath, [
+    'require("hover_bridge")',
+    "local metadata = { health = 3 }",
+    "local health = metadata.health",
+    "local typo = metadata.healht",
+    "local image = love.graphics.newCanvas(16, 16)",
+    "local methodTypo = image:getWidht()",
+    "loadAssets()",
+    "",
   ].join("\n"));
   fs.writeFileSync(
     contractsPath,
@@ -347,6 +362,8 @@ function createProject(workspacePath) {
     graphPath,
     headerCompletionPath,
     helperPath,
+    hoverActionsPath,
+    hoverGlobalsPath,
     mainPath,
     protocolStubsPath,
     serverPath: process.env.TUA_REAL_SERVER_PATH,

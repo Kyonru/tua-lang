@@ -14,6 +14,7 @@ async function run() {
 
   await extension.activate();
   await waitForServer();
+  await testHoverActionAvailability(fixtures);
 
   const protocolStubDocument = await vscode.workspace.openTextDocument(fixtures.protocolStubsPath);
   await vscode.window.showTextDocument(protocolStubDocument, { preview: false });
@@ -888,6 +889,47 @@ async function run() {
       symbols: symbolNames(symbols),
     })}`,
   );
+}
+
+async function testHoverActionAvailability(fixtures) {
+  const document = await vscode.workspace.openTextDocument(fixtures.hoverActionsPath);
+  await vscode.window.showTextDocument(document, { preview: false });
+  const hover = (needle, prefix) => vscode.commands.executeCommand(
+    "vscode.executeHoverProvider", document.uri, positionAfter(document, needle, prefix),
+  );
+
+  const valid = await retry(
+    () => hover("metadata.health", "metadata."),
+    (result) => /health.*number/s.test(hoverText(result)),
+    "valid table member hover",
+  );
+  assert.match(hoverText(valid), /command:tua\.hover\.references/);
+  assert.match(hoverText(valid), /command:tua\.hover\.implementations/);
+
+  for (const [needle, prefix] of [
+    ["metadata.healht", "metadata."],
+    ["image:getWidht()", "image:"],
+  ]) {
+    const result = await hover(needle, prefix);
+    assert.doesNotMatch(
+      hoverText(result), /command:tua\.hover\.(?:references|implementations)/,
+      `${needle} should not advertise navigation with no target`,
+    );
+  }
+
+  const globalPosition = positionAfter(document, "loadAssets()", "");
+  const definitions = await retry(
+    () => vscode.commands.executeCommand(
+      "vscode.executeDefinitionProvider", document.uri, globalPosition,
+    ),
+    (result) => result?.some((location) => locationPath(location) === fixtures.hoverGlobalsPath),
+    "side-effect global definition",
+  );
+  assert(definitions.some((location) => locationPath(location) === fixtures.hoverGlobalsPath));
+  const globalHover = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider", document.uri, globalPosition,
+  );
+  assert.match(hoverText(globalHover), /command:tua\.hover\.references/);
 }
 
 async function waitForServer() {

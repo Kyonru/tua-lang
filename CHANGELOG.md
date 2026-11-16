@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hide References and Implementations hover links for unknown dot/colon
+  members while keeping those actions on known members and imported globals.
 - Show the source signature and documentation on globals introduced by
   side-effect imports when one reachable definition is unambiguous.
 - Keep Go to Definition, references, and rename on the correct lexical binding

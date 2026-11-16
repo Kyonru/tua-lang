@@ -44,7 +44,7 @@ const INSPECTION_UNPARENTHESIZED_PATTERN = /\b(?:spriteSheet|stateMachine)\s*\{|
 const inspectionSourceCache = new WeakMap();
 
 function registerHoverActions({ getClient, isTuaDocument }) {
-  return vscode.Disposable.from(
+  const registrations = vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.showHoverReferences, (target, locations) =>
       showProviderLocations({
         locations,
@@ -66,6 +66,27 @@ function registerHoverActions({ getClient, isTuaDocument }) {
       },
     }),
   );
+  return {
+    middleware: {
+      provideHover: (document, position, token, next) =>
+        provideMemberHoverActions({ document, isTuaDocument, next, position, token }),
+    },
+    dispose: () => registrations.dispose(),
+  };
+}
+
+async function provideMemberHoverActions({ document, isTuaDocument, next, position, token }) {
+  const hover = await next(document, position, token);
+  if (!hover || token?.isCancellationRequested || !isTuaDocument(document)) {
+    return hover;
+  }
+  const range = document.getWordRangeAtPosition(position, WORD_PATTERN);
+  if (!range || !isMemberIdentifier(document, range) || stringLiteralAtPosition(document, position)) {
+    return hover;
+  }
+  const target = commandTarget(document, position);
+  const markdown = navigationActionMarkdown(target);
+  return new vscode.Hover([...hover.contents, markdown], hover.range || range);
 }
 
 async function hoverActionsAtPosition({ document, getClient, isTuaDocument, position }) {
@@ -76,6 +97,7 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   const wordRange = document.getWordRangeAtPosition(position, WORD_PATTERN);
   const stringLiteral = stringLiteralAtPosition(document, position);
   const identifierRange = stringLiteral ? undefined : wordRange;
+  const memberIdentifier = identifierRange && isMemberIdentifier(document, identifierRange);
   const signalEvent = stringLiteral ? isSignalEventLiteral(document, stringLiteral) : false;
   const [asset, inspectionPreview] = await Promise.all([
     assetAtStringLiteral({ document, getClient, position, stringLiteral }),
@@ -104,12 +126,12 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
     enabledCommands.push(COMMANDS.revealAsset);
   }
 
-  if (identifierRange || signalEvent || asset) {
+  if ((identifierRange && !memberIdentifier) || signalEvent || asset) {
     actions.push(markdownCommandLink(COMMANDS.showHoverReferences, "References", [target]));
     enabledCommands.push(COMMANDS.showHoverReferences);
   }
 
-  if (identifierRange) {
+  if (identifierRange && !memberIdentifier) {
     actions.push(
       markdownCommandLink(COMMANDS.showHoverImplementations, "Implementations", [target]),
     );
@@ -121,6 +143,10 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
     enabledCommands.push(COMMANDS.showSignalGraph);
   }
 
+  if (actions.length === 0) {
+    return undefined;
+  }
+
   const markdown = new vscode.MarkdownString(actions.join(" · "), true);
   markdown.isTrusted = { enabledCommands };
 
@@ -130,6 +156,22 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
       stringLiteral?.range ||
       lspRangeToVscode(inspectionPreview?.selectionRange),
   );
+}
+
+function isMemberIdentifier(document, range) {
+  const before = document.lineAt(range.start.line).text.slice(0, range.start.character);
+  return /[.:]\s*$/.test(before);
+}
+
+function navigationActionMarkdown(target) {
+  const markdown = new vscode.MarkdownString([
+    markdownCommandLink(COMMANDS.showHoverReferences, "References", [target]),
+    markdownCommandLink(COMMANDS.showHoverImplementations, "Implementations", [target]),
+  ].join(" · "), true);
+  markdown.isTrusted = {
+    enabledCommands: [COMMANDS.showHoverReferences, COMMANDS.showHoverImplementations],
+  };
+  return markdown;
 }
 
 async function inspectionPreviewAtPosition({ document, getClient, position, wordRange }) {
@@ -460,6 +502,8 @@ function markdownCommandLink(command, title, args = []) {
 module.exports = {
   buildInspectionSourceIndex,
   hoverActionsAtPosition,
+  isMemberIdentifier,
   mayContainInspectionAtOffset,
+  provideMemberHoverActions,
   registerHoverActions,
 };

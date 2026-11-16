@@ -20,7 +20,7 @@ function registerEditorDevex(options) {
   const unitTestScaffold = registerUnitTestScaffold(options);
 
   return {
-    middleware: inlayHints.middleware,
+    middleware: { ...inlayHints.middleware, ...hoverActions.middleware },
     inlineCompletion,
     flushStats() {
       return inlineCompletion.flushLocalStats();
