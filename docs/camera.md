@@ -4,7 +4,7 @@ icon: lucide/video
 
 # Camera
 
-`Camera` is a built-in module, like `ecs`. It needs no `require` or
+`Camera` is a built-in module, like `ECS`. It needs no `require` or
 configuration: when a file uses it, Tua emits
 `local Camera = require("tuacamera")` and `tua build` copies the bundled
 runtime into the output. A file that declares its own `Camera` uses that
@@ -105,7 +105,7 @@ end
 animate them:
 
 ```tua
-tween.to(cam, 0.4, { zoom = 2 }):ease("quadout")
+Tween.to(cam, 0.4, { zoom = 2 }):ease("quadout")
 ```
 
 ## Screen And World Coordinates

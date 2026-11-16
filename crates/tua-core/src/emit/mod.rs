@@ -1928,12 +1928,26 @@ fn lower_builtin_call_operations(
     let baton_span = builtin_constructor_spans
         .get(input::CONSTRUCTOR_NAME)
         .copied();
-    let mut tuaecs_span = None;
+    let mut tuaecs_spans = BTreeMap::<String, SourceSpan>::new();
     let mut tuai18n_span = None;
     let mut tuasave_span = None;
     let game_math_helpers = game_math::used_helpers(parsed);
-    let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let scope = crate::scope::scope_map_parsed_source(parsed);
+    if ecs_enabled {
+        for reference in scope.references() {
+            if (reference.name == ecs::MODULE_NAME || reference.name == ecs::PREFERRED_MODULE_NAME)
+                && matches!(
+                    &reference.resolution,
+                    crate::scope::ScopeResolution::Global(global)
+                        if global.kind == crate::scope::ScopeGlobalKind::LuaBuiltin
+                )
+            {
+                tuaecs_spans
+                    .entry(reference.name.clone())
+                    .or_insert(reference.span);
+            }
+        }
+    }
     let builtin_module_spans = crate::builtin_module::MODULES
         .iter()
         .map(|module| {
@@ -1964,22 +1978,6 @@ fn lower_builtin_call_operations(
 
         if let Some(identifier_end) = consume_identifier(rest) {
             let name = &output[index..index + identifier_end];
-
-            if ecs_enabled && name == ecs::MODULE_NAME {
-                let field_start = skip_whitespace(&output, index + identifier_end);
-
-                if output[field_start..].starts_with('.') {
-                    let source_span = document.source_span_at(index);
-                    let binding_is_active = explicit_ecs_binding.is_some_and(|position| {
-                        (position.line, position.column)
-                            <= (source_span.start.line, source_span.start.column)
-                    });
-
-                    if !binding_is_active {
-                        tuaecs_span.get_or_insert(source_span);
-                    }
-                }
-            }
 
             if i18n_enabled && name == crate::i18n::MODULE_NAME {
                 let field_start = skip_whitespace(&output, index + identifier_end);
@@ -2024,7 +2022,7 @@ fn lower_builtin_call_operations(
         || tuastore_span.is_some()
         || baton_span.is_some()
         || tuaaudio_span.is_some()
-        || tuaecs_span.is_some()
+        || !tuaecs_spans.is_empty()
         || tuai18n_span.is_some()
         || tuasave_span.is_some()
         || builtin_module_spans.iter().any(Option::is_some)
@@ -2125,14 +2123,10 @@ fn lower_builtin_call_operations(
             LoweringKind::BuiltinCall,
         ));
     }
-    if let Some(source_span) = tuaecs_span {
+    for (name, source_span) in tuaecs_spans {
         operations.push(lowering::LoweringOperation::insert(
             0,
-            format!(
-                "local {} = require(\"{}\")\n",
-                ecs::MODULE_NAME,
-                ecs::RUNTIME_MODULE
-            ),
+            format!("local {} = require(\"{}\")\n", name, ecs::RUNTIME_MODULE),
             source_span,
             LoweringKind::BuiltinCall,
         ));
@@ -2184,36 +2178,6 @@ fn lower_builtin_call_operations(
     }
 
     operations
-}
-
-fn explicit_binding_position(parsed: &ParsedSource, binding: &str) -> Option<SourcePosition> {
-    parsed
-        .ast
-        .nodes()
-        .stmts()
-        .filter_map(|stmt| match stmt {
-            ast::Stmt::LocalAssignment(local) => local
-                .names()
-                .iter()
-                .find(|name| token_text(name) == binding)
-                .map(|name| SourcePosition::from_full_moon(name.start_position())),
-            ast::Stmt::LocalFunction(function) if token_text(function.name()) == binding => Some(
-                SourcePosition::from_full_moon(function.name().start_position()),
-            ),
-            ast::Stmt::Assignment(assignment) => {
-                assignment
-                    .variables()
-                    .iter()
-                    .find_map(|variable| match variable {
-                        Var::Name(name) if token_text(name) == binding => {
-                            Some(SourcePosition::from_full_moon(name.start_position()))
-                        }
-                        _ => None,
-                    })
-            }
-            _ => None,
-        })
-        .min_by_key(|position| (position.line, position.column))
 }
 
 fn lower_import_call_operations(

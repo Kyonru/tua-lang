@@ -16,7 +16,10 @@ generic executable extension system.
 - Reuse parser metadata, semantic queries, asset indexes, and the structured
   lowering operation IR.
 - Prefer ordinary Lua-compatible APIs such as `spriteSheet({...})` and
-  `ecs.world()` over new syntax.
+  `ECS.world()` over new syntax. Name built-in module values in PascalCase
+  (`ECS` for the acronym); keep factory functions in lower camel case and
+  their types in PascalCase (`vec2()` and `Vec2`). Preserve documented legacy
+  spellings when standardizing an existing API.
 - Keep helper runtimes opt-in by source references. In `.tua`, supported
   built-ins inject their import only when used; a compatible project module
   can replace the bundled runtime. Keep configuration gates for features that

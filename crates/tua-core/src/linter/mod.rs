@@ -138,7 +138,9 @@ pub(crate) fn lint_parsed_source(
     }
 
     if symbol_lints_enabled(config) {
-        let mut symbol_diagnostics = SymbolAnalyzer::new(parsed, config).analyze().diagnostics;
+        let mut symbol_diagnostics = SymbolAnalyzer::new(parsed, config, Some(environment))
+            .analyze()
+            .diagnostics;
         symbol_diagnostics.retain(|diagnostic| {
             !parsed
                 .raw
@@ -388,7 +390,7 @@ pub(crate) fn import_usages(parsed: &ParsedSource) -> Vec<ImportUsage> {
         ..DiagnosticsConfig::default()
     };
 
-    SymbolAnalyzer::new(parsed, &config).analyze().imports
+    SymbolAnalyzer::new(parsed, &config, None).analyze().imports
 }
 
 fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
@@ -983,6 +985,7 @@ struct SymbolAnalyzer<'a> {
     known_globals: BTreeSet<String>,
     defined_globals: BTreeSet<String>,
     shadowable_globals: BTreeMap<String, SourcePosition>,
+    game_modules: GameModuleAvailability,
     unresolved_global_reads: Vec<UnresolvedGlobalRead>,
     user_globals: BTreeMap<String, GlobalUsage>,
     function_stack: Vec<FunctionContext>,
@@ -991,6 +994,13 @@ struct SymbolAnalyzer<'a> {
     next_function_id: usize,
     next_declaration_group: usize,
     dead_store_conditional_depth: usize,
+}
+
+#[derive(Clone, Copy, Default)]
+struct GameModuleAvailability {
+    ecs: bool,
+    i18n: bool,
+    save: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1116,8 +1126,19 @@ fn pending_write_for_declaration(
 }
 
 impl<'a> SymbolAnalyzer<'a> {
-    fn new(parsed: &'a ParsedSource, config: &'a DiagnosticsConfig) -> Self {
+    fn new(
+        parsed: &'a ParsedSource,
+        config: &'a DiagnosticsConfig,
+        environment: Option<&TypeEnvironment>,
+    ) -> Self {
         let configured_globals = config.globals.iter().cloned().collect::<BTreeSet<_>>();
+        let game_modules = GameModuleAvailability {
+            ecs: environment
+                .is_some_and(|environment| environment.alias(ecs::WORLD_TYPE).is_some()),
+            i18n: environment
+                .is_some_and(|environment| environment.alias(crate::i18n::KEY_TYPE).is_some()),
+            save: parsed.raw.language == ParsedLanguage::Tua,
+        };
 
         Self {
             parsed,
@@ -1129,6 +1150,7 @@ impl<'a> SymbolAnalyzer<'a> {
             known_globals: configured_globals.clone(),
             defined_globals: configured_globals,
             shadowable_globals: BTreeMap::new(),
+            game_modules,
             unresolved_global_reads: Vec::new(),
             user_globals: BTreeMap::new(),
             function_stack: Vec::new(),
@@ -1223,6 +1245,17 @@ impl<'a> SymbolAnalyzer<'a> {
                     declaration.position,
                     &declaration.name,
                     shadowed.position,
+                ));
+                continue;
+            }
+
+            if declaration.kind != DeclarationKind::Import
+                && preferred_game_module_name(&declaration.name, self.game_modules)
+            {
+                diagnostics.push(tua_module_shadow_diagnostic(
+                    &self.parsed.path,
+                    declaration.position,
+                    &declaration.name,
                 ));
                 continue;
             }
@@ -2428,9 +2461,19 @@ impl<'a> SymbolAnalyzer<'a> {
 
     fn is_builtin_global(name: &str) -> bool {
         name == ecs::MODULE_NAME
+            || name == ecs::PREFERRED_MODULE_NAME
             || crate::builtin_module::module(name).is_some()
             || lua::is_protected_global(name)
     }
+}
+
+fn preferred_game_module_name(name: &str, available: GameModuleAvailability) -> bool {
+    (available.ecs && name == ecs::PREFERRED_MODULE_NAME)
+        || (available.i18n && name == crate::i18n::MODULE_NAME)
+        || (available.save && name == crate::save::MODULE_NAME)
+        || crate::builtin_module::MODULES
+            .iter()
+            .any(|module| module.name == name && module.name != "tween")
 }
 
 struct JitAnalyzer<'a> {
@@ -3402,6 +3445,19 @@ fn local_shadows_global_diagnostic(
         format!(
             "local `{name}` shadows a global used at {}:{}",
             global_position.line, global_position.column
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_LOCAL_SHADOW)
+}
+
+fn tua_module_shadow_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "local `{name}` hides Tua's built-in `{name}` module; use a different name or an explicit import when replacing it"
         ),
     )
     .with_code(DiagnosticCode::LINT_LOCAL_SHADOW)

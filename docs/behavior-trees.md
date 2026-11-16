@@ -43,9 +43,9 @@ when it spawns, then update the runner through an ECS system. The tree itself is
 shared by every enemy:
 
 ```tua
-local Brain = ecs.component("Brain", { context = "any", runner = "any" })
-local Effect = ecs.component("Effect")
-local world = ecs.world()
+local Brain = ECS.component("Brain", { context = "any", runner = "any" })
+local Effect = ECS.component("Effect")
+local world = ECS.world()
 local effects = objectPool({
   create = function() return { age = 0 } end,
   reset = function(effect) effect.age = 0 end,
@@ -63,7 +63,7 @@ local function spawnEnemy(actor)
   return entity
 end
 
-local brains = ecs.system(world, { Brain }, function(_, brain, dt)
+local brains = ECS.system(world, { Brain }, function(_, brain, dt)
   brain.runner:update(dt)
   if brain.context.wantsEffect then
     brain.context.wantsEffect = false

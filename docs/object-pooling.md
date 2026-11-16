@@ -199,7 +199,7 @@ in the new owner's cleanup path:
 
 ```tua
 -- Effect matches the x/y fields produced by the effects pool.
-local Effect = ecs.component("Effect", { x = "number", y = "number" })
+local Effect = ECS.component("Effect", { x = "number", y = "number" })
 -- A system over { Effect } later calls effects:release(effect).
 -- tua-ignore-next-line TL5007
 local particle = effects:acquire()

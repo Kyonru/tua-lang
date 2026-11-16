@@ -343,13 +343,17 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
-        if current_part.text == ecs::MODULE_NAME
+        if (current_part.text == ecs::MODULE_NAME
+            || current_part.text == ecs::PREFERRED_MODULE_NAME)
             && self
                 .environment
-                .local(ecs::MODULE_NAME)
+                .local(&current_part.text)
                 .is_some_and(|ty| ecs::is_module_type(self.environment, ty))
         {
-            let mut hover = hover("(built-in module) ecs", Some(current_part.span));
+            let mut hover = hover(
+                format!("(built-in module) {}", current_part.text),
+                Some(current_part.span),
+            );
             hover.documentation = Some(ecs::module_documentation().to_owned());
 
             return Some(hover);

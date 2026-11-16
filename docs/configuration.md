@@ -377,19 +377,19 @@ backend = "tua"
 ```
 
 `enabled`
-: Enables the built-in `ecs` module, first-class ECS analysis, ECS diagnostics,
+: Enables the built-in `ECS` module, first-class ECS analysis, ECS diagnostics,
 and automatic bundled runtime emission. The default is `true`; set it to
 `false` to opt out.
 
 `backend`
 : Names the runtime profile. The default `tua` profile emits the bundled
-`tuaecs.lua` runtime only when a source file uses the built-in `ecs` module.
+`tuaecs.lua` runtime only when a source file uses the built-in `ECS` module.
 
 When enabled, Tua recognizes:
 
-- `ecs.world(): EcsWorld`;
-- `ecs.component(name, schema): EcsComponent`;
-- `ecs.system(world, components, update): EcsSystem`;
+- `ECS.world(): EcsWorld`;
+- `ECS.component(name, schema): EcsComponent`;
+- `ECS.system(world, components, update): EcsSystem`;
 - world methods such as `world:create()`, `world:add(...)`, and
   `world:query(...)`.
 
@@ -402,13 +402,13 @@ The initial diagnostics cover clear, static patterns:
 
 - mismatched or missing fields in one-line `world:add(entity, Component, { ... })`
   calls;
-- unknown components in one-line `ecs.system(world, { ... }, ...)` or
+- unknown components in one-line `ECS.system(world, { ... }, ...)` or
   `world:query({ ... })` calls;
 - empty component query lists.
 
 Dynamic ECS construction remains permissive.
 
-An explicit binding such as `local ecs = require("project_ecs")` overrides the
+An explicit binding such as `local ECS = require("project_ecs")` overrides the
 built-in runtime for that file. See [Entity Component Systems](ecs.md) for the
 runtime model and guidance on when ECS is appropriate.
 

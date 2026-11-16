@@ -185,14 +185,17 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   completion, polling, deadzones, and joystick support.
 - `objectPool({...})` types factory results and supports `acquire`, `release`,
   `prewarm`, ownership/count inspection, cleanup, and `clear`.
-- Built-in `ecs` supplies typed components, worlds, systems, and queries
+- Built-in `ECS` supplies typed components, worlds, systems, and queries
   without an explicit package import. `BehaviorTree.new(...)` supplies
   composable actions, conditions, selectors, sequences, and per-actor runners;
   it can be used from ECS systems without creating a tree per entity or frame.
-- Built-in `tween` animates numeric fields; `Camera.new(...)` follows and
+- Built-in `Tween` animates numeric fields; `Camera.new(...)` follows and
   transforms a game view; `Rot` provides seeded randomness, maps, paths,
   visibility, noise, colors, grammars, and lighting. These names need no
-  explicit `require` in `.tua` source.
+  explicit `require` in `.tua` source. Use PascalCase for built-in module
+  values, `ECS` for the acronym, and lower camel case for factory functions
+  such as `vec2(...)`, `signal(...)`, and `store(...)`. Existing `ecs` and
+  `tween` module spellings remain compatible.
 - `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and
   event names. It supports bounded polyphonic voices, priorities, fades,
   snapshots, positional sources, effects, and beat/bar-quantized music; use

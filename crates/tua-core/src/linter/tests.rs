@@ -1210,6 +1210,62 @@ Project = {}
 }
 
 #[test]
+fn preferred_tua_module_names_warn_when_a_used_local_hides_them() {
+    let diagnostics = check_standard_rules_source(
+        "local Tween = { update = function() end }\nTween.update()\nlocal ECS = { world = function() end }\nECS.world()\nlocal Log = {}\nprint(Log)\n",
+    );
+    let shadows = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_LOCAL_SHADOW))
+        .collect::<Vec<_>>();
+    assert_eq!(shadows.len(), 3, "{diagnostics:#?}");
+    assert!(shadows
+        .iter()
+        .all(|diagnostic| diagnostic.message.contains("built-in")));
+}
+
+#[test]
+fn explicit_module_imports_and_lowercase_factory_locals_do_not_warn() {
+    let diagnostics = check_standard_rules_source(
+        "local Tween = require(\"my_tween\")\nTween.update(0.1)\nlocal ECS = require(\"my_ecs\")\nECS.world()\nlocal store = { get = function() end }\nstore.get()\n",
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn disabled_optional_modules_do_not_report_builtin_shadowing() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local ECS = { world = function() end }\nECS.world()\nlocal I18n = { t = function() end }\nI18n.t()\n",
+    )
+    .expect("source parses");
+    let diagnostics = check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+        &parsed,
+        &[std::path::PathBuf::from("src")],
+        &DiagnosticsConfig {
+            rules: true,
+            ..diagnostics_without_standard_rules()
+        },
+        &JitConfig::default(),
+        &EcsConfig {
+            enabled: false,
+            ..EcsConfig::default()
+        },
+    )
+    .err()
+    .unwrap_or_default();
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn local_shadow_ignores_unused_duplicate_builtin_and_configured_bindings() {
     let diagnostics = check_standard_rules_source(
         r#"

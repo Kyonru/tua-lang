@@ -4,33 +4,36 @@ icon: lucide/move-right
 
 # Tweening
 
-`tween` is a built-in module, like `ecs`. It needs no `require`, package, or
+`Tween` is a built-in module, like `ECS`. It needs no `require`, package, or
 configuration: when a file uses it, Tua emits
-`local tween = require("tuatween")` and `tua build` copies the bundled runtime
+`local Tween = require("tuatween")` and `tua build` copies the bundled runtime
 into the output. The runtime is [flux](https://github.com/rxi/flux) by rxi,
 unchanged apart from LuaDoc types, so flux's documentation and examples apply
 as written.
 
-A file that declares its own `tween` (a local, parameter, function, or global
-assignment) uses that instead, and nothing is injected. A global `tween`
+The earlier `tween` global continues to work. `Tween` is the preferred module
+name; `tween` remains available for existing projects and flux-style examples.
+
+A file that declares its own `Tween` (a local, parameter, function, or global
+assignment) uses that instead, and nothing is injected. A global `Tween`
 assignment in another project file also prevents injection. Load the defining
 file before using that global; prefer explicit local imports when you need
 precise cross-file member types.
 
 ## Animate A Value
 
-`tween.to(target, seconds, values)` moves each numeric field of `target`
-toward the value in `values`. Call `tween.update(dt)` once per frame.
+`Tween.to(target, seconds, values)` moves each numeric field of `target`
+toward the value in `values`. Call `Tween.update(dt)` once per frame.
 
 ```tua
 local banner = { x = -200, alpha = 0 }
 
 function love.load()
-  tween.to(banner, 0.6, { x = 40, alpha = 1 }):ease("backout")
+  Tween.to(banner, 0.6, { x = 40, alpha = 1 }):ease("backout")
 end
 
 function love.update(dt: number)
-  tween.update(dt)
+  Tween.update(dt)
 end
 
 function love.draw()
@@ -50,7 +53,7 @@ Setters return the tween, so they chain:
 ```tua
 local door = { y = -64 }
 
-tween.to(door, 0.4, { y = 0 })
+Tween.to(door, 0.4, { y = 0 })
   :ease("quadinout")
   :delay(0.25)
   :onstart(function() print("opening") end)
@@ -69,24 +72,24 @@ tween.to(door, 0.4, { y = 0 })
 
 Easing names are `linear` plus `quad`, `cubic`, `quart`, `quint`, `expo`,
 `sine`, `circ`, `back`, and `elastic`, each with an `in`, `out`, or `inout`
-suffix, such as `"elasticout"`. `tween.easing.quadout(0.5)` evaluates one curve
+suffix, such as `"elasticout"`. `Tween.easing.quadout(0.5)` evaluates one curve
 directly.
 
 ## Groups
 
-The functions on `tween` share one default group. `tween.group()` creates an
+The functions on `Tween` share one default group. `Tween.group()` creates an
 independent one, which is useful when parts of the game update at different
 times, for example UI that keeps animating while gameplay is paused:
 
 ```tua
-local ui = tween.group()
+local ui = Tween.group()
 local menu = { y = -300 }
 local paused = false
 
 function love.update(dt: number)
   ui:update(dt)
   if not paused then
-    tween.update(dt)
+    Tween.update(dt)
   end
 end
 
@@ -95,20 +98,20 @@ function openMenu()
 end
 ```
 
-`tween.remove(t)` and `t:stop()` both stop a tween early.
+`Tween.remove(t)` and `t:stop()` both stop a tween early.
 
 ## What Tua Checks
 
-Tua types `tween` from the runtime's own LuaDoc, so it checks how you call it:
+Tua types `Tween` from the runtime's own LuaDoc, so it checks how you call it:
 
 ```tua
-tween.to(box, 1, { x = "far" })          -- error: values.x expects number
-tween.to(box, 1, { x = 10 }):ease("bounce") -- error: not an easing name
-tween.update("fast")                    -- error: dt expects number
+Tween.to(box, 1, { x = "far" })          -- error: values.x expects number
+Tween.to(box, 1, { x = 10 }):ease("bounce") -- error: not an easing name
+Tween.update("fast")                    -- error: dt expects number
 ```
 
 Every setter in a fluent chain is checked, including later links such as
-`tween.to(box, 1, { x = 10 }):ease("quadout"):delay(0.5)`. The inferred
+`Tween.to(box, 1, { x = 10 }):ease("quadout"):delay(0.5)`. The inferred
 Tween instance type keeps completion and hover available for setter methods
 available after each call.
 

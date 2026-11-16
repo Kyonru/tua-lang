@@ -598,9 +598,14 @@ impl AnalysisSnapshot {
             .with_local_contract_types(self.project_local_annotation_types(parsed));
 
         let environment = if self.config.ecs.enabled {
+            let declared = crate::builtin_module::declared_names(parsed);
             environment
                 .with_alias_types(crate::ecs::builtin_aliases())
-                .with_local_types(crate::ecs::builtin_locals())
+                .with_local_types(
+                    crate::ecs::builtin_locals()
+                        .into_iter()
+                        .filter(|(name, _)| !declared.contains(name)),
+                )
         } else {
             environment
         };

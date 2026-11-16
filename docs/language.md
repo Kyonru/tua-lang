@@ -39,6 +39,15 @@ Built-in names such as `type` and `print` are ordinary identifiers and can be
 shadowed by locals or parameters. Keyword text is also valid as a quoted table
 key: `record["end"]`.
 
+Tua's game module values use PascalCase names, with `ECS` as the acronym:
+`ECS.world()`, `Tween.to(...)`, `Camera.new(...)`, and `Log.info(...)`.
+Functions that create a value keep Lua-style lower camel case, such as
+`vec2(...)`, `signal(...)`, `store(...)`, and `spriteSheet(...)`; their type names
+remain `Vec2`, `SignalBus`, `Store`, and `SpriteSheet`. Existing `ecs` and
+`tween` spellings remain compatible. A used local or parameter that hides a
+preferred built-in module name gets a `TL4035` warning under the standard lint
+rules; an explicit local import is treated as an intentional replacement.
+
 ## Find A Feature
 
 ### Types And Data

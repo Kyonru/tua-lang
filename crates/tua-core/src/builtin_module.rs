@@ -1,7 +1,7 @@
 //! Built-in runtime modules typed from their own LuaDoc.
 //!
-//! `tween` and `Camera` are globals in Tua source, like `ecs`: using one emits
-//! `local tween = require("tuatween")`, and `tua build` copies the runtime.
+//! `Tween` and `Camera` are globals in Tua source, like `ECS`: using one emits
+//! `local Tween = require("tuatween")`, and `tua build` copies the runtime.
 //! Their types come from the runtime's annotations, so the Lua file is the
 //! single source of truth for behavior and checking.
 
@@ -34,6 +34,14 @@ pub(crate) const TWEEN: BuiltinModule = BuiltinModule {
     summary: "built-in tweening module",
     documentation: "Tween numeric fields of any table with flux: \
         `tween.to(target, seconds, values)`, then call `tween.update(dt)` every frame.",
+};
+
+pub(crate) const TWEEN_PREFERRED: BuiltinModule = BuiltinModule {
+    name: "Tween",
+    runtime: TWEEN.runtime,
+    source: TWEEN.source,
+    summary: TWEEN.summary,
+    documentation: "Animate numeric fields with `Tween.to(target, seconds, values)` and advance the default group with `Tween.update(dt)`.",
 };
 
 pub(crate) const CAMERA: BuiltinModule = BuiltinModule {
@@ -95,6 +103,7 @@ pub(crate) const MODULES: &[BuiltinModule] = &[
     SHADER_SCAN,
     ROT,
     BEHAVIOR_TREE,
+    TWEEN_PREFERRED,
     LOG,
     AUDIO_DESIGN,
 ];
@@ -108,6 +117,9 @@ pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
 /// The module's export type, inferred once from its LuaDoc with the runtime's
 /// own classes inlined, so no internal type names leak into user code.
 pub(crate) fn module_type(module: &BuiltinModule) -> Type {
+    if module.name == TWEEN_PREFERRED.name {
+        return module_type(&TWEEN);
+    }
     if module.name == LOG.name {
         static LOG_TYPE: OnceLock<Type> = OnceLock::new();
         return LOG_TYPE
@@ -305,11 +317,13 @@ pub(crate) fn builtin_type_aliases() -> Vec<(String, Type)> {
 /// Locals that make the built-in modules visible in `parsed`. A module whose
 /// name the file declares anywhere, as a local, parameter, function, or
 /// global assignment, is left out so the project's own value wins.
-pub(crate) fn builtin_locals(parsed: &ParsedSource) -> Vec<(String, Type)> {
+pub(crate) fn builtin_locals(
+    parsed: &ParsedSource,
+    declared: &BTreeSet<String>,
+) -> Vec<(String, Type)> {
     if INFERRING.with(Cell::get) {
         return Vec::new();
     }
-    let declared = declared_names(parsed);
     MODULES
         .iter()
         .filter(|module| {
@@ -326,7 +340,7 @@ pub(crate) fn is_visible(parsed: &ParsedSource, name: &str) -> bool {
     module(name).is_some() && !declared_names(parsed).contains(name)
 }
 
-fn declared_names(parsed: &ParsedSource) -> BTreeSet<String> {
+pub(crate) fn declared_names(parsed: &ParsedSource) -> BTreeSet<String> {
     #[derive(Default)]
     struct Declarations(BTreeSet<String>);
 
@@ -513,7 +527,7 @@ mod tests {
                 "CameraOptions",
                 "CameraRect",
             ] {
-                if module.name == TWEEN.name && internal == "Tween" {
+                if module.runtime == TWEEN.runtime && internal == "Tween" {
                     continue;
                 }
                 assert!(
@@ -526,6 +540,7 @@ mod tests {
         }
 
         let tween = module_type(module("tween").expect("tween"));
+        assert_eq!(tween, module_type(module("Tween").expect("Tween")));
         let tween_instance = builtin_type_aliases();
         assert!(matches!(tween, Type::Table(_)));
         let Type::Table(instance) = &tween_instance[0].1 else {

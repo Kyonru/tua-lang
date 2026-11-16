@@ -4,13 +4,13 @@
 
 -- Feature: typed component schemas use simple string type names.
 -- The ECS analyzer checks one-line schemas and matching world:add values.
-local Position = ecs.component("Position", { x = "number", y = "number" })
-local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
-local Sprite = ecs.component("Sprite", { image = "Image" })
+local Position = ECS.component("Position", { x = "number", y = "number" })
+local Velocity = ECS.component("Velocity", { x = "number", y = "number" })
+local Sprite = ECS.component("Sprite", { image = "Image" })
 
 -- Feature: ECS API completion, hover, signature help, and diagnostics.
 -- Hover world to see EcsWorld. Type world:a to complete add.
-local world = ecs.world()
+local world = ECS.world()
 local player = world:create()
 
 world:add(player, Position, { x = 120, y = 80 })
@@ -20,7 +20,7 @@ world:add(player, Sprite, { image = image "assets/player.png" })
 -- Feature: typed query/system component lists.
 -- Unknown components or empty lists produce ECS domain diagnostics.
 local movingSprites = world:query({ Position, Velocity, Sprite })
-local movementSystem = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+local movementSystem = ECS.system(world, { Position, Velocity }, function(_, position, velocity, dt)
   position.x += velocity.x * dt
   position.y += velocity.y * dt
 end)

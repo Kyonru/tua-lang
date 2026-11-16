@@ -23,10 +23,12 @@ LÖVE workflows available; do not treat a Tua helper as a required framework.
 
 ## Game features and emitted code
 
-- In `.tua`, built-ins such as `ecs`, `tween`, `Camera`, `Rot`, `BehaviorTree`,
-  and `AudioDesign` can be used without a user-written `require`. Tua includes
-  their compatible Lua runtimes only when referenced. Plain `.lua` files use
-  explicit runtime imports. Read each feature page for its exact API and
+- In `.tua`, built-in module values such as `ECS`, `Tween`, `Camera`, `Rot`,
+  `BehaviorTree`, and `AudioDesign` need no user-written `require`. Tua includes
+  their Lua runtimes only when referenced. Plain `.lua` files use explicit
+  imports. Factory functions such as `vec2`, `signal`, and `store` keep lower
+  camel case; their type names use PascalCase. The older `ecs` and `tween`
+  spellings remain compatible. Read each feature page for its exact API and
   replacement rules; do not invent a universal registration or plugin system.
 - Type annotations, type imports, protocols, and generic applications erase
   from emitted Lua. Runtime behavior must remain compatible with Lua 5.1,

@@ -1901,6 +1901,46 @@ world:add(entity, Position, { x = 10 })
 }
 
 #[test]
+fn preferred_module_names_emit_the_same_lazy_runtimes() {
+    let source = "local Position = ECS.component(\"Position\", { x = \"number\" })\nlocal world = ECS.world()\nTween.to({ x = 0 }, 1, { x = 4 })\n";
+    let emitted = emit_tua_source("src/main.tua", source).expect("preferred module names emit");
+    assert_eq!(
+        emitted.matches("require(\"tuaecs\")").count(),
+        1,
+        "{emitted}"
+    );
+    assert_eq!(
+        emitted.matches("require(\"tuatween\")").count(),
+        1,
+        "{emitted}"
+    );
+    assert!(emitted.contains("ECS.component"), "{emitted}");
+    assert!(emitted.contains("Tween.to"), "{emitted}");
+    crate::parse_lua_source("src/main.lua", emitted).expect("generated Lua parses");
+}
+
+#[test]
+fn preferred_ecs_module_can_be_forwarded_as_a_value() {
+    let emitted = emit_tua_source("src/main.tua", "local framework = ECS\nreturn framework\n")
+        .expect("forwarded ECS module emits");
+    assert!(
+        emitted.contains("local ECS = require(\"tuaecs\")"),
+        "{emitted}"
+    );
+}
+
+#[test]
+fn preferred_module_names_respect_explicit_bindings() {
+    let emitted = emit_tua_source(
+        "src/main.tua",
+        "local ECS = require(\"my_ecs\")\nlocal Tween = require(\"my_tween\")\nECS.world()\nTween.update(0.1)\n",
+    )
+    .expect("explicit bindings emit");
+    assert!(!emitted.contains("tuaecs"), "{emitted}");
+    assert!(!emitted.contains("tuatween"), "{emitted}");
+}
+
+#[test]
 fn snapshot_preserves_an_explicit_ecs_runtime_binding() {
     let emitted = emit_tua_source(
         "src/ecs.tua",

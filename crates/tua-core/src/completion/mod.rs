@@ -1148,14 +1148,14 @@ pub(crate) fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec
             audio::workflow_snippet(),
         ),
         (
-            "ecs component",
+            "ECS component",
             None,
             "Tua ECS component and world workflow",
             ecs::workflow_snippet(),
         ),
     ]
     .into_iter()
-    .filter(|(label, _, _, _)| include_ecs || *label != "ecs component")
+    .filter(|(label, _, _, _)| include_ecs || *label != "ECS component")
     .filter(|(label, filter_text, _, _)| {
         completion_text_matches(label, prefix)
             || filter_text.is_some_and(|filter_text| completion_text_matches(filter_text, prefix))
@@ -1733,9 +1733,13 @@ fn complete_identifier_items(
     insert_scope_identifier_items(&mut completions, &mut labels, parsed, prefix, position);
 
     insert_visible_global_function_items(&mut completions, &mut labels, parsed, prefix, position);
-    let include_ecs = environment
-        .local(ecs::MODULE_NAME)
-        .is_some_and(|ty| ecs::is_module_type(environment, ty));
+    let include_ecs = [ecs::PREFERRED_MODULE_NAME, ecs::MODULE_NAME]
+        .into_iter()
+        .any(|name| {
+            environment
+                .local(name)
+                .is_some_and(|ty| ecs::is_module_type(environment, ty))
+        });
     insert_keyword_and_builtin_identifier_items(
         &mut completions,
         &mut labels,

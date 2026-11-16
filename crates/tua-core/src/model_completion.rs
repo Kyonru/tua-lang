@@ -1215,7 +1215,7 @@ mod tests {
             "spriteSheet({...})",
             "stateMachine({...})",
             "objectPool({...})",
-            "Built-in `ecs`",
+            "Built-in `ECS`",
             "Generic aliases, free functions, and classes support binders",
             "BehaviorTree.new(...)` supplies",
             "Camera.new(...)` follows",

@@ -26,6 +26,7 @@ pub use inspection::{
 };
 
 pub(crate) const MODULE_NAME: &str = "ecs";
+pub(crate) const PREFERRED_MODULE_NAME: &str = "ECS";
 pub(crate) const RUNTIME_MODULE: &str = "tuaecs";
 
 pub(crate) const WORLD_TYPE: &str = "EcsWorld";
@@ -60,7 +61,11 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
 }
 
 pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
-    vec![(MODULE_NAME.to_owned(), ecs_module_type())]
+    let module = ecs_module_type();
+    vec![
+        (PREFERRED_MODULE_NAME.to_owned(), module.clone()),
+        (MODULE_NAME.to_owned(), module),
+    ]
 }
 
 pub(crate) fn augment_environment(environment: TypeEnvironment) -> TypeEnvironment {
@@ -509,7 +514,7 @@ pub(crate) const fn module_documentation() -> &'static str {
 }
 
 pub(crate) const fn workflow_snippet() -> &'static str {
-    "local ${1:Position} = ecs.component(\"${1:Position}\", { ${2:x} = \"${3:number}\" })\nlocal ${4:world} = ecs.world()\nlocal ${5:entity} = ${4:world}:create()\n${4:world}:add(${5:entity}, ${1:Position}, { ${2:x} = ${6:0} })\n${0}"
+    "local ${1:Position} = ECS.component(\"${1:Position}\", { ${2:x} = \"${3:number}\" })\nlocal ${4:world} = ECS.world()\nlocal ${5:entity} = ${4:world}:create()\n${4:world}:add(${5:entity}, ${1:Position}, { ${2:x} = ${6:0} })\n${0}"
 }
 
 pub(crate) fn runtime_source() -> &'static str {

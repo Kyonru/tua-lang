@@ -11,11 +11,11 @@ type EnemyContext = {
 
 type Flash = { x: number, y: number, age: number }
 
-local Brain = ecs.component("Brain", { context = "any", runner = "any" })
-local FlashEffect = ecs.component("FlashEffect", {
+local Brain = ECS.component("Brain", { context = "any", runner = "any" })
+local FlashEffect = ECS.component("FlashEffect", {
   x = "number", y = "number", age = "number",
 })
-local world = ecs.world()
+local world = ECS.world()
 
 local flashes = objectPool({
   create = function(): Flash
@@ -45,7 +45,7 @@ local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
   BehaviorTree.action(function() return "running" end),
 }))
 
-local brains = ecs.system(world, { Brain }, function(_, brain, dt)
+local brains = ECS.system(world, { Brain }, function(_, brain, dt)
   local actor: EnemyContext = brain.context
   actor.cooldown = math.max(0, actor.cooldown - dt)
   brain.runner:update(dt)
@@ -59,7 +59,7 @@ local brains = ecs.system(world, { Brain }, function(_, brain, dt)
   end
 end)
 
-local effects = ecs.system(world, { FlashEffect }, function(entity, flash, dt)
+local effects = ECS.system(world, { FlashEffect }, function(entity, flash, dt)
   flash.age += dt
   if flash.age >= 0.12 then
     world:destroy(entity)

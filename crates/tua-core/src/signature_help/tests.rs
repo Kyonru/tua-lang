@@ -458,6 +458,16 @@ world:add(entity, Position,
         "function world:add(entity: EcsEntityId, component: EcsComponent, value: any): any"
     );
     assert_eq!(add.active_parameter, 2);
+
+    let preferred = signature_at(
+        "local Position = ECS.component(\"Position\", \n",
+        "ECS.component(\"Position\", ",
+    )
+    .expect("ECS.component should have signature help");
+    assert_eq!(
+        preferred.signatures[0].label,
+        "function ECS.component(name: string, schema?: {  }): EcsComponent"
+    );
 }
 
 #[test]

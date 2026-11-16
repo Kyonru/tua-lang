@@ -14,6 +14,9 @@ language or editor behavior, and migration notes call out those changes.
   explicit flush and close calls and immediate flush for error-level messages.
 - Let games show a bounded log overlay with `Log.draw()`, without adding a
   frame hook or rebuilding text when the messages have not changed.
+- Prefer `ECS` and `Tween` module globals for consistent game API naming while
+  keeping `ecs` and `tween` as compatible spellings. Standard lint rules warn
+  when used locals or parameters hide preferred built-in module names.
 
 ### Fixed
 

@@ -102,7 +102,7 @@ guides cannot silently omit an example.
 - `src/ecs.tua` demonstrates Tua's zero-setup ECS: component schemas, typed
   world/entity/query/system APIs, component diagnostics, and a system update
   over matching position and velocity data. Builds include `tuaecs.lua` only
-  because the source uses the built-in `ecs` module.
+  because the source uses the built-in `ECS` module.
 - `src/object_pool.tua` demonstrates zero-setup object pooling with a typed
   factory, prewarming, reset-on-release behavior, duplicate-release safety,
   item-aware editor support, and on-demand `tuaobjectpool.lua` emission.

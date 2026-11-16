@@ -86,6 +86,13 @@ share an existing Tua code because they are the same analysis.
 | `IntegerParsing` | `TL4050` |
 | `ComparisonPrecedence` | `TL4051` |
 | `VectorLength` | `TL4060` |
+
+`TL4035` also warns when a used local or parameter hides a preferred Tua game
+module such as `ECS`, `Tween`, or `Camera`. This can silently replace the
+built-in helper and change which runtime is bundled. An explicit local
+`require(...)` or `import(...)` is treated as an intentional replacement. The
+warning follows the standard `rules` switch and can be adjusted through
+`[diagnostics.severity]`.
 | `NewlineCall` | `TL4061` |
 | `NewfieldCall` | `TL4062` |
 | `UnscopedGlobalWrite` | `TL4063` |

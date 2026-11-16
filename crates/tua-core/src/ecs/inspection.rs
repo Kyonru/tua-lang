@@ -281,14 +281,16 @@ impl Visitor for EcsVisitor<'_> {
 
         match parts.as_slice() {
             [module, function]
-                if module == "ecs"
+                if (module == crate::ecs::MODULE_NAME
+                    || module == crate::ecs::PREFERRED_MODULE_NAME)
                     && function == "component"
                     && self.receiver_has_ecs_member(&parts, span.start) =>
             {
                 self.record_component(call, span, binding);
             }
             [module, function]
-                if module == "ecs"
+                if (module == crate::ecs::MODULE_NAME
+                    || module == crate::ecs::PREFERRED_MODULE_NAME)
                     && function == "system"
                     && self.receiver_has_ecs_member(&parts, span.start) =>
             {
@@ -732,6 +734,18 @@ mod tests {
         );
 
         ecs_file_index(parsed, &environment)
+    }
+
+    #[test]
+    fn preferred_ecs_name_keeps_component_and_system_inspection() {
+        let parsed = parse_tua_source(
+            Path::new("src/ecs.tua"),
+            "local Position = ECS.component(\"Position\", { x = \"number\" })\nlocal world = ECS.world()\nlocal movement = ECS.system(world, { Position }, function(_, position, dt) position.x += dt end)\n",
+        )
+        .expect("preferred ECS source parses");
+        let file = index(&parsed);
+        assert_eq!(file.components.len(), 1, "{file:?}");
+        assert_eq!(file.systems.len(), 1, "{file:?}");
     }
 
     #[test]

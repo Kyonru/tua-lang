@@ -91,6 +91,27 @@ fn hovers_builtin_ecs_module_and_documented_functions() {
 }
 
 #[test]
+fn preferred_module_names_have_matching_hover_documentation() {
+    let source = "local world = ECS.world()\nTween.update(0.016)\n";
+    for (name, expected) in [
+        ("ECS", "data-oriented ECS helpers"),
+        ("Tween", "Animate numeric fields"),
+    ] {
+        let result = hover_tua_source("src/main.tua", source, position_at(source, name))
+            .expect("preferred module hover")
+            .expect("preferred module exists");
+        assert_eq!(result.contents, format!("(built-in module) {name}"));
+        assert!(
+            result
+                .documentation
+                .as_deref()
+                .is_some_and(|documentation| documentation.contains(expected)),
+            "{result:?}"
+        );
+    }
+}
+
+#[test]
 fn hovers_function_parameters() {
     let source = r#"local function recursive(a: string)
   if a == tostring(1) then

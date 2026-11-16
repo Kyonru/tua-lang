@@ -170,6 +170,26 @@ fn completes_builtin_ecs_module_and_documented_members() {
 }
 
 #[test]
+fn preferred_module_names_complete_their_members() {
+    for (source, member) in [("local world = ECS.\n", "world"), ("Tween.\n", "to")] {
+        let position = position_after(source, ".");
+        let completions = complete_tua_source("src/main.tua", source, position)
+            .expect("preferred module completion");
+        assert!(
+            completions.iter().any(|item| item.label == member),
+            "{source}: {completions:?}"
+        );
+    }
+    let names = complete_tua_source(
+        "src/main.tua",
+        "Twee",
+        crate::SourcePosition { line: 1, column: 5 },
+    )
+    .expect("preferred global completion");
+    assert!(names.iter().any(|item| item.label == "Tween"));
+}
+
+#[test]
 fn completes_type_aliases_in_annotation_positions() {
     let completions = complete_at("typed: Pl").expect("alias completion should succeed");
 

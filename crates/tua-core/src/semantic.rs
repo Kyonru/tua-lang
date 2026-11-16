@@ -1085,7 +1085,7 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
-        if root == ecs::MODULE_NAME && fields.len() == 1 {
+        if (root == ecs::MODULE_NAME || root == ecs::PREFERRED_MODULE_NAME) && fields.len() == 1 {
             let receiver_type = self.type_of_name(root, position)?;
 
             if ecs::is_module_type(self.environment, &receiver_type) {

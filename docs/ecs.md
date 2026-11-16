@@ -4,10 +4,13 @@ icon: lucide/workflow
 
 # Entity Component Systems
 
-Tua includes a small entity component system through the built-in `ecs`
+Tua includes a small entity component system through the built-in `ECS`
 module. It needs no `require`, package installation, or project configuration.
-When a build uses `ecs`, Tua emits a bundled `tuaecs.lua` runtime beside the
+When a build uses `ECS`, Tua emits a bundled `tuaecs.lua` runtime beside the
 generated Lua.
+
+The earlier `ecs` global continues to work. `ECS` is the preferred name for
+new Tua code; the lowercase configuration section remains `[ecs]`.
 
 An ECS is useful when a game has many objects that share combinations of data
 and are updated by the same loops. It replaces a deep object hierarchy with
@@ -24,16 +27,16 @@ three simple ideas:
 === "Tua"
 
     ```tua
-    local Position = ecs.component("Position", { x = "number", y = "number" })
-    local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
+    local Position = ECS.component("Position", { x = "number", y = "number" })
+    local Velocity = ECS.component("Velocity", { x = "number", y = "number" })
 
-    local world = ecs.world()
+    local world = ECS.world()
     local player = world:create()
 
     world:add(player, Position, { x = 120, y = 80 })
     world:add(player, Velocity, { x = 30, y = 0 })
 
-    local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+    local movement = ECS.system(world, { Position, Velocity }, function(_, position, velocity, dt)
       position.x += velocity.x * dt
       position.y += velocity.y * dt
     end)
@@ -46,17 +49,17 @@ three simple ideas:
 === "Generated Lua"
 
     ```lua
-    local ecs = require("tuaecs")
-    local Position = ecs.component("Position", { x = "number", y = "number" })
-    local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
+    local ECS = require("tuaecs")
+    local Position = ECS.component("Position", { x = "number", y = "number" })
+    local Velocity = ECS.component("Velocity", { x = "number", y = "number" })
 
-    local world = ecs.world()
+    local world = ECS.world()
     local player = world:create()
 
     world:add(player, Position, { x = 120, y = 80 })
     world:add(player, Velocity, { x = 30, y = 0 })
 
-    local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+    local movement = ECS.system(world, { Position, Velocity }, function(_, position, velocity, dt)
       position.x = position.x + velocity.x * dt
       position.y = position.y + velocity.y * dt
     end)
@@ -66,7 +69,7 @@ three simple ideas:
     end
     ```
 
-The component order in `ecs.system(world, { Position, Velocity }, callback)`
+The component order in `ECS.system(world, { Position, Velocity }, callback)`
 is also the callback data order. The callback receives the entity ID first and
 `dt` last. For a literal component list, unannotated callback parameters inherit
 the component schemas, with a numeric entity ID and `dt`.
@@ -79,7 +82,7 @@ resolved through their module exports, and an inferred or annotated variable
 can be passed to `world:add`. Values whose type is genuinely dynamic remain
 permissive. Static component schemas also flow through `world:get`, `world:add`,
 and `world:remove`, so returned values expose their fields without local
-annotations. Typing `ecs component` also offers a complete starter snippet.
+annotations. Typing `ECS component` also offers a complete starter snippet.
 
 ## ECS Explorer
 
@@ -154,7 +157,7 @@ example](behavior-trees.md#use-a-tree-with-ecs-and-object-pools).
 
 ## Worlds And Queries
 
-`ecs.world()` owns all entities and component values:
+`ECS.world()` owns all entities and component values:
 
 ```tua
 local enemy = world:create()
@@ -202,9 +205,9 @@ component is expressed explicitly with `world:remove`.
 
 | Function | Behavior |
 | --- | --- |
-| `ecs.component(name, schema?)` | Create a component type. `name` must be a non-empty string and is used in errors and the ECS Explorer. `schema` maps field names to type names, such as `{ x = "number" }`, and gives the component's values their static type. |
-| `ecs.world()` | Create an empty world. |
-| `ecs.system(world, components, update)` | Create a system over `world:query(components)`. Each `system:update(dt)` calls `update(entity, value1, value2, ..., dt)` for every matching entity, with values in `components` order. |
+| `ECS.component(name, schema?)` | Create a component type. `name` must be a non-empty string and is used in errors and the ECS Explorer. `schema` maps field names to type names, such as `{ x = "number" }`, and gives the component's values their static type. |
+| `ECS.world()` | Create an empty world. |
+| `ECS.system(world, components, update)` | Create a system over `world:query(components)`. Each `system:update(dt)` calls `update(entity, value1, value2, ..., dt)` for every matching entity, with values in `components` order. |
 
 ### World
 
@@ -246,11 +249,11 @@ backend = "tua"
 
 The section can be omitted because these are the defaults. Set `enabled =
 false` to remove the typed semantic surface and automatic runtime injection.
-Existing projects can bind a local `ecs` module explicitly; Tua preserves that
+Existing projects can bind a local `ECS` module explicitly; Tua preserves that
 binding and does not inject the bundled runtime for the file:
 
 ```tua
-local ecs = require("project_ecs")
+local ECS = require("project_ecs")
 ```
 
 The current component schema diagnostics target clear static calls. Dynamic

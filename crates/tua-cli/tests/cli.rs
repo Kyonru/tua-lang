@@ -4419,6 +4419,67 @@ world:add(entity, Position, { x = 10 })
 }
 
 #[test]
+fn build_preferred_ecs_and_tween_names_bundle_and_run() {
+    let temp = TempDir::new("build-preferred-game-modules");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("write config");
+    fs::create_dir_all(temp.path().join("src")).expect("create source directory");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Position = ECS.component("Position", { x = "number" })
+local world = ECS.world()
+local entity = world:create()
+world:add(entity, Position, { x = 10 })
+local position = world:get(entity, Position)
+if position then
+  assert(position.x == 10)
+else
+  error("missing position")
+end
+local marker = { x = 0 }
+Tween.to(marker, 1, { x = 4 })
+Tween.update(1)
+assert(marker.x == 4)
+"#,
+    )
+    .expect("write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let build = temp.path().join("build");
+    let emitted = fs::read_to_string(build.join("main.lua")).expect("read emitted Lua");
+    assert!(
+        emitted.contains("local ECS = require(\"tuaecs\")"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("local Tween = require(\"tuatween\")"),
+        "{emitted}"
+    );
+    assert!(build.join("tuaecs.lua").is_file());
+    assert!(build.join("tuatween.lua").is_file());
+
+    if Command::new("lua")
+        .arg("-v")
+        .output()
+        .is_ok_and(|out| out.status.success())
+    {
+        let runtime = Command::new("lua")
+            .args([
+                "-e",
+                "package.path = './?.lua;' .. package.path; dofile('main.lua')",
+            ])
+            .current_dir(&build)
+            .output()
+            .expect("run emitted Lua");
+        assert!(runtime.status.success(), "{runtime:?}");
+    }
+}
+
+#[test]
 fn build_writes_tuaobjectpool_runtime_when_builtin_pool_is_used() {
     let temp = TempDir::new("build-object-pool-runtime");
 

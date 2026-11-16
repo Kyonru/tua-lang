@@ -2066,11 +2066,19 @@ pub(crate) fn build_type_environment_with_domain_registry(
     } else {
         Arc::new(aliases)
     };
-    let builtin_locals = crate::builtin_module::builtin_locals(parsed);
+    let declared = crate::builtin_module::declared_names(parsed);
+    let builtin_locals = crate::builtin_module::builtin_locals(parsed, &declared);
     // During builtin inference this list is intentionally empty. Do not seed
     // the catalog until all builtin modules have finished their own inference.
+    let eager_global_count = crate::builtin_module::MODULES
+        .iter()
+        .filter(|module| {
+            module.name != crate::builtin_module::LOG.name
+                && module.name != crate::builtin_module::AUDIO_DESIGN.name
+        })
+        .count();
     let can_share_locals = locals.is_empty()
-        && builtin_locals.len() == crate::builtin_module::EAGER_MODULES.len()
+        && builtin_locals.len() == eager_global_count
         && !parsed
             .source
             .contains(crate::builtin_module::AUDIO_DESIGN.name)
@@ -2081,7 +2089,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         .filter(|(name, _)| {
             name != crate::save::MODULE_NAME || parsed.raw.language == ParsedLanguage::Tua
         })
-        .filter(|(name, _)| !locals.contains_key(name))
+        .filter(|(name, _)| !locals.contains_key(name) && !declared.contains(name))
         .collect::<Vec<_>>();
     let locals = builtin_locals
         .into_iter()
