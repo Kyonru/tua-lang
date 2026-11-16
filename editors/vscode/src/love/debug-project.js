@@ -8,8 +8,8 @@ const { normalizeInstances } = require("../workspace/run-options");
 const { registerDebugInstanceGroups } = require("./debug-instances");
 const { COMMANDS } = require("../constants");
 const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
-const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
-const { sourceLocation } = require("../workspace/console-buffer");
+const { loadSourceMapsFromDirectory, sourceMapPathForGeneratedPath } = require("../editor/source-maps");
+const { runtimeOutputLocation } = require("../workspace/runtime-output-location");
 const { formatError } = require("../shared/errors");
 const { DEBUGGER_EXTENSION_ID, DEBUGGER_EXTENSION_IDS } = require("./debugger-extensions");
 const {
@@ -43,7 +43,8 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
           if (!debugSessionTargetsOutput(session, prepared.outputDirectory)) continue;
           for (const line of message.body.output.split(/\r?\n/)) {
             const source = message.body.source?.path;
-            const location = source?.endsWith(".tua") ? { path: source, line: Math.max(0, (message.body.line || 1) - 1), character: 0 } : sourceLocation(line, prepared.activitySession?.cwd || prepared.outputDirectory);
+            const location = runtimeOutputLocation(line, prepared.activitySession?.cwd || prepared.outputDirectory,
+              prepared.sourceMaps, source, message.body.line);
             activity?.output(prepared.activitySession, line, { location, stream: message.body.category });
           }
         }
@@ -271,6 +272,13 @@ async function buildAndPrepareLoveDebugProject({
     return undefined;
   }
 
+  let sourceMaps = [];
+  try {
+    sourceMaps = loadSourceMapsFromDirectory(layout.outputDirectory);
+  } catch (error) {
+    appendOutputLine?.(`[tua] Could not load traceback source maps: ${formatError(error)}`);
+  }
+
   let prepared;
   try {
     prepared = prepareLoveDebugOutput(layout.outputDirectory);
@@ -284,6 +292,7 @@ async function buildAndPrepareLoveDebugProject({
   const pendingOutput = {
     activitySession,
     outputDirectory: layout.outputDirectory,
+    sourceMaps,
     restore: prepared.restore,
   };
   preparedOutputs.add(pendingOutput);

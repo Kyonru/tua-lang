@@ -1,7 +1,8 @@
 "use strict";
 const { randomUUID } = require("node:crypto");
 const vscode = require("vscode");
-const { sourceLocation } = require("../workspace/console-buffer");
+const { loadSourceMapsFromDirectory } = require("../editor/source-maps");
+const { runtimeOutputLocation } = require("../workspace/runtime-output-location");
 const { createDebugSnapshot } = require("./debug-snapshot");
 
 function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepare, configuration, scriptFiles, inspector }) {
@@ -30,9 +31,8 @@ function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepar
           if (message.event !== "output" || typeof message.body?.output !== "string") return;
           for (const line of message.body.output.split(/\r?\n/)) {
             const source = message.body.source?.path;
-            const location = source?.endsWith(".tua")
-              ? { path: source, line: Math.max(0, (message.body.line || 1) - 1), character: 0 }
-              : sourceLocation(line, player.group.layout.configDirectory);
+            const location = runtimeOutputLocation(line, player.group.layout.configDirectory,
+              player.group.sourceMaps, source, message.body.line);
             activity?.output(player.activitySession, line, { location, stream: message.body.category });
           }
         } };
@@ -83,6 +83,12 @@ function registerDebugInstanceGroups({ activity, appendOutputLine, build, prepar
       if (group.cancelled) return undefined;
       if (code !== 0) throw new Error(`Tua debug build failed with exit code ${code}.`);
       group.snapshot = createDebugSnapshot(layout.outputDirectory);
+      try {
+        group.sourceMaps = loadSourceMapsFromDirectory(group.snapshot.outputDirectory);
+      } catch (error) {
+        group.sourceMaps = [];
+        output(`[tua] Could not load traceback source maps: ${error.message}`);
+      }
       const debugLayout = { ...layout, outputDirectory: group.snapshot.outputDirectory };
       prepare(debugLayout.outputDirectory);
       const files = scriptFiles(debugLayout.outputDirectory);

@@ -12,7 +12,7 @@ const {
   projectLayoutForWorkspaceRoot,
 } = require("../editor/project-layout");
 const { loadSourceMapsFromDirectory, remapTracebackLine } = require("../editor/source-maps");
-const { sourceLocation } = require("../workspace/console-buffer");
+const { runtimeOutputLocation } = require("../workspace/runtime-output-location");
 const { formatError } = require("../shared/errors");
 const { ProfileCapture } = require("../profiler/capture");
 const { exportCpuProfile, showProfile } = require("../profiler/view");
@@ -489,7 +489,7 @@ class LoveProjectTerminal {
     this.activity?.line(this.session, line);
     this.writeTerminalLine(line);
     const mapped = this.sourceMaps.length ? remapTracebackLine(line, this.sourceMaps) : undefined;
-    this.activity?.output(this.session, line, { stream, location: mapped ? sourceLocation(mapped, this.cwd) : undefined });
+    this.activity?.output(this.session, line, { stream, location: runtimeOutputLocation(line, this.cwd, this.sourceMaps) });
     if (mapped) for (const mappedLine of mapped.split("\n")) this.writeLine(`[tua] ${mappedLine}`, false);
   }
 
