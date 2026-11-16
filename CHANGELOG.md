@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep project-aware type checking active for recoverable syntax errors, so
+  an imported class call does not report a false receiver mismatch while a
+  nearby line is incomplete.
 - Complete fields from declared signal payload records inside unannotated
   handlers, including nested records through module imports.
 - Keep syntax errors after a class on their original Tua source lines, rather

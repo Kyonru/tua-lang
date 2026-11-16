@@ -2790,8 +2790,16 @@ impl AnalysisSnapshot {
             .parsed
             .as_ref()
             .ok()
+            .map(Arc::as_ref)
+            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
             .map(|parsed| {
-                let facts = self.semantic_facts_for_parsed(parsed);
+                let environment = if file.parsed.is_ok() {
+                    self.semantic_facts_for_parsed(parsed).environment.clone()
+                } else {
+                    self.degraded_current_semantic_facts(file)
+                        .map(|facts| facts.environment)
+                        .expect("degraded parse must have semantic facts")
+                };
                 let mut diagnostics_config = self.config.diagnostics.clone();
                 if parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config.globals.push(crate::save::MODULE_NAME.to_owned());
@@ -2800,7 +2808,7 @@ impl AnalysisSnapshot {
                     diagnostics_config.globals.push(crate::i18n::MODULE_NAME.to_owned());
                 }
 
-                if facts.environment.has_busted_globals() {
+                if environment.has_busted_globals() {
                     for name in crate::busted::GLOBAL_NAMES {
                         if !diagnostics_config.globals.iter().any(|global| global == name) {
                             diagnostics_config.globals.push((*name).to_owned());
@@ -2813,7 +2821,7 @@ impl AnalysisSnapshot {
                 let mut diagnostics =
                     check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
                         parsed,
-                        &facts.environment,
+                        &environment,
                         analysis_asset_roots(self.source_roots(), &self.asset_roots),
                         &diagnostics_config,
                         &self.config.jit,
@@ -2823,14 +2831,14 @@ impl AnalysisSnapshot {
                     .err()
                     .unwrap_or_default();
 
-                diagnostics.extend(facts.environment.generic_alias_diagnostics(parsed));
+                diagnostics.extend(environment.generic_alias_diagnostics(parsed));
                 diagnostics.extend(self.generic_protocol_bound_diagnostics(parsed));
                 diagnostics.retain(|diagnostic| {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
                 diagnostics.extend(self.type_import_binding_diagnostics(parsed));
                 if self.config.ecs.enabled {
-                    diagnostics.extend(crate::ecs::diagnostics(parsed, &facts.environment));
+                    diagnostics.extend(crate::ecs::diagnostics(parsed, &environment));
                 }
 
                 diagnostics
@@ -2960,16 +2968,26 @@ impl AnalysisSnapshot {
         let has_type_imports = file
             .parsed
             .as_ref()
-            .is_ok_and(|parsed| !parsed.type_imports.is_empty());
+            .ok()
+            .map(Arc::as_ref)
+            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
+            .is_some_and(|parsed| !parsed.type_imports.is_empty());
         let has_runtime_imports = file
             .hir()
+            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir))
             .is_some_and(|hir| !hir.require_bindings.is_empty());
 
         (has_type_imports || has_runtime_imports)
             && (has_type_imports
                 || file
                     .semantics()
-                    .is_none_or(|semantics| semantics.environment_diagnostics.is_empty()))
+                    .map(|semantics| semantics.environment_diagnostics.is_empty())
+                    .or_else(|| {
+                        file.degraded_semantics
+                            .as_ref()
+                            .map(|facts| facts.environment_diagnostics.is_empty())
+                    })
+                    .unwrap_or(true))
     }
 
     pub(super) fn project_diagnostic_enabled(&self, diagnostic: &Diagnostic) -> bool {

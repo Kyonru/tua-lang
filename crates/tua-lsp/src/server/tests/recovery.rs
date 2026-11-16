@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn malformed_consumer_does_not_report_false_imported_self_mismatch() {
+    let temp = TempProject::new("malformed-imported-self");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/agent.tua", "class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nexport type AgentInstance = Agent\nreturn { Agent = Agent }\n");
+    temp.write("src/factory.tua", "import type { AgentInstance } from \"./agent\"\nlocal Agent = require(\"agent\").Agent\nlocal function spawn(): AgentInstance\n  return Agent.new()\nend\nreturn { spawn = spawn }\n");
+    let valid =
+        "local factory = require \"factory\"\nlocal agent = factory.spawn()\nagent:takeDamage(1)\n";
+    let invalid = format!("local broken = (\n{valid}");
+    temp.write("src/main.tua", &invalid);
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, &invalid),
+        text_document_diagnostic_request(2, &uri),
+    ]);
+    let malformed = response_with_id(&output, 2)["result"]["items"]
+        .as_array()
+        .unwrap();
+    assert!(
+        malformed.iter().any(|item| item["code"] == "TL0001"),
+        "{malformed:?}"
+    );
+    assert!(
+        !malformed.iter().any(|item| item["code"] == "TL1003"),
+        "{malformed:?}"
+    );
+    let repaired = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, valid),
+        text_document_diagnostic_request(3, &uri),
+    ]);
+    let repaired = response_with_id(&repaired, 3)["result"]["items"]
+        .as_array()
+        .unwrap();
+    assert!(
+        !repaired.iter().any(|item| item["code"] == "TL1003"),
+        "{repaired:?}"
+    );
+
+    let wrong_argument = invalid.replace("takeDamage(1)", "takeDamage(\"bad\")");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, &wrong_argument),
+        text_document_diagnostic_request(4, &uri),
+    ]);
+    let diagnostics = response_with_id(&output, 4)["result"]["items"]
+        .as_array()
+        .unwrap();
+    assert!(
+        diagnostics.iter().any(|item| {
+            item["code"] == "TL1003" && !item["message"].as_str().unwrap_or("").contains("at self")
+        }),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn semantic_features_survive_incomplete_field_chain_statement() {
     let uri = "file:///tmp/recovered-love-conf.tua";
     let source = r#"function love.conf(t)
