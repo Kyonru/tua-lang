@@ -6,6 +6,18 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Count imported instance types used in class fields as real type uses, so
+  those fields no longer produce false unused-import warnings.
+- Navigate between signal listeners and emitters across files when an event
+  has no explicit declaration; include all handlers as navigation targets and
+  show project-wide counts in event hover.
+- Avoid jumping from an unresolved member call to an unrelated same-named
+  method; preserve navigation for typed generic and imported class instances.
+- Open VS Code's Debug Console when starting a Tua LOVE debug session. The
+  debugger's output-event test now checks that game `print(...)` reaches it.
+
 ## [0.10.0] - 2026-11-15
 
 ### Release summary

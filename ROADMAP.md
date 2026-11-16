@@ -186,6 +186,11 @@ parallel parser or semantic model in the extension.
   unchanged emitted Lua. See the November 13 game-trial follow-up.
 - Broaden control-flow and metatable inference only where identities are
   compiler-proven.
+- Evaluate nil-safe member access for APIs such as a projection that returns
+  `nil` when an object is off screen. A `?.` form is a design question, not
+  current syntax. Any proposal must evaluate the receiver once, preserve Lua's
+  `false` versus `nil` behavior, and work through the checker, formatter,
+  emitted Lua, and editor completion. Keep explicit guards documented meanwhile.
 - Expand LuaDoc/LuaCATS interoperability for common existing Lua libraries.
 - Improve safe project-wide refactors and module changes.
 - Preserve `any` and ordinary Lua as explicit dynamic escape paths.
