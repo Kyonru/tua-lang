@@ -98,6 +98,23 @@ want logs beside breakpoints and variable inspection.
 
 Neither workflow adds debugger code to project source.
 
+## Find game logs and runtime errors
+
+Run output appears in the bottom-panel **Tua Console → Game Console**. After a
+run starts, the status bar also shows **Game Logs**; click it to reopen the
+console. The Run configuration opens it automatically. A failed normal run
+opens it as the game exits. Debug sessions also write to VS Code's **Debug
+Console**.
+When a game is running, the console header also has **Stop Session**.
+
+The Game Console keeps the latest 2,000 messages, collapses consecutive
+duplicates, and can filter by level, scope, or run session. A mapped message
+shows `file.tua:line` beside it. Click the row to open that line. For generated
+Lua traceback lines, keep `emit_maps = true` so Tua can map them to `.tua`.
+When a generated line has no exact map, Tua leaves it unlinked rather than
+guessing a source line; inspect the full traceback in the run terminal or
+Debug Console.
+
 ### Source-Map Files
 
 With `emit_maps = true`, each generated Lua file can have two adjacent maps:

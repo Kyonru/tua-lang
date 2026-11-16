@@ -1,4 +1,5 @@
 "use strict";
+const path = require("node:path");
 const vscode = require("vscode");
 const { ConsoleBuffer } = require("./console-buffer");
 
@@ -13,8 +14,10 @@ function registerGameConsole(store) {
     getTreeItem(entry) {
       const item = new vscode.TreeItem(entry.text);
       item.id = entry.id;
-      item.description = `${entry.count > 1 ? `×${entry.count} · ` : ""}${entry.module}`;
-      item.tooltip = `${new Date(entry.time).toLocaleTimeString()} · ${entry.session.title || entry.session.kind} · ${entry.severity}\n${entry.text}`;
+      const source = entry.location && `${path.basename(entry.location.path)}:${entry.location.line + 1}`;
+      item.description = [entry.count > 1 && `×${entry.count}`, entry.module, source].filter(Boolean).join(" · ");
+      item.tooltip = `${new Date(entry.time).toLocaleTimeString()} · ${entry.session.title || entry.session.kind} · ${entry.severity}\n${entry.text}${source ? `\nOpen ${entry.location.path}:${entry.location.line + 1}` : ""}`;
+      item.accessibilityInformation = { label: `${entry.severity}: ${entry.text}${source ? `. Open ${source}` : ""}` };
       item.iconPath = new vscode.ThemeIcon(entry.severity === "error" ? "error" : entry.severity === "warn" ? "warning" : "output",
         entry.severity === "error" ? new vscode.ThemeColor("errorForeground") : entry.severity === "warn" ? new vscode.ThemeColor("list.warningForeground") : undefined);
       item.contextValue = "tuaConsoleEntry";
@@ -35,9 +38,15 @@ function registerGameConsole(store) {
     if (!timer) timer = setTimeout(() => { timer = undefined; refresh(); }, 100);
   };
   store.events.on("output", onOutput);
+  const onSessionChange = session => {
+    if (session.phase === "runtimeFailed" && session.kind !== "debug") {
+      void vscode.commands.executeCommand("tua.console.open");
+    }
+  };
+  store.events.on("change", onSessionChange);
   refresh();
   return vscode.Disposable.from(changed, view,
-    { dispose() { clearTimeout(timer); store.events.off("output", onOutput); } },
+    { dispose() { clearTimeout(timer); store.events.off("output", onOutput); store.events.off("change", onSessionChange); } },
     vscode.commands.registerCommand("tua.console.open", () => vscode.commands.executeCommand("tua.console.focus")),
     vscode.commands.registerCommand("tua.console.clear", () => { buffer.clear(); refresh(); }),
     vscode.commands.registerCommand("tua.console.copy", entry => entry && vscode.env.clipboard.writeText(entry.text)),

@@ -1833,6 +1833,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "tua.activity.stop",
+          "when": "view == tua.console && tua.hasActiveSession",
+          "group": "navigation@4"
+        },
+        {
           "command": "tua.checks.run",
           "when": "view == tua.checks",
           "group": "navigation"

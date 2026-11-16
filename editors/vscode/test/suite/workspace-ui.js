@@ -15,9 +15,11 @@ async function runWorkspaceUiTests() {
   const browser = await BrowserSession.connect(targets.find(item => item.type === "page").webSocketDebuggerUrl);
   const text = () => browser.evaluate("document.body.innerText");
   const clickToolbar = async label => {
+    const selector = label === "Stop Session" ? ".part.panel .action-label" : ".part.titlebar .action-label, .part.editor .editor-actions .action-label";
     const clicked = await browser.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.part.titlebar .action-label, .part.editor .editor-actions .action-label')]
-        .find(item => (item.getAttribute('aria-label') || item.title || '').includes(${JSON.stringify(label)}));
+      const button = [...document.querySelectorAll(${JSON.stringify(selector)})]
+        .find(item => (item.getAttribute('aria-label') || item.title || '').includes(${JSON.stringify(label)}) &&
+          item.getBoundingClientRect().width > 0 && item.getBoundingClientRect().height > 0 && item.getAttribute('aria-disabled') !== 'true');
       button?.click(); return Boolean(button);
     })()`);
     assert(clicked, `Toolbar action must be present: ${label}`);
@@ -71,6 +73,8 @@ async function runWorkspaceUiTests() {
     await waitFor(async () => (await text()).includes("Exited with errors"), "runtime exit status");
     await waitFor(async () => (await text()).includes("low health"), "captured game output");
     await waitFor(async () => (await text()).includes("×2"), "collapsed consecutive messages");
+    await waitFor(async () => (await text()).includes("intelligence.tua:7"), "error row shows its source line");
+    await waitFor(async () => (await text()).includes("Game Logs"), "direct game-log status action");
     await waitFor(async () => (await text()).includes("Exited with errors"), "runtime exit status");
     await screenshot("workspace-dark");
     await browser.evaluate(`(() => {

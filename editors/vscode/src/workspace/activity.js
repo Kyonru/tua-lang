@@ -23,21 +23,27 @@ function registerRunActivity() {
   };
   const view = vscode.window.createTreeView("tua.sessions", { treeDataProvider: provider });
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 20);
+  const logs = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 19);
   status.name = "Tua run status";
   status.command = "tua.activity.show";
+  logs.name = "Tua game logs";
+  logs.text = "$(output) Game Logs";
+  logs.tooltip = "Open Tua Game Console · click a source location to jump to its .tua line";
+  logs.command = "tua.console.open";
   const update = () => {
     void vscode.commands.executeCommand("setContext", "tua.hasActiveSession", store.sessions.some(session => session.active));
     const latest = store.sessions[0];
     changed.fire();
     view.message = latest ? undefined : "Run a Tua project to see build and reload status.";
-    if (!latest) return status.hide();
+    if (!latest) { status.hide(); logs.hide(); return; }
     status.text = `$(${sessionIcon(latest)}) Tua: ${latest.label}`;
     status.tooltip = `${latest.title || latest.kind} · ${latest.cwd}\nClick for affected modules and diagnostics`;
     status.backgroundColor = ["failed", "previous", "reloadFailed", "runtimeFailed"].includes(latest.phase) ? new vscode.ThemeColor("statusBarItem.warningBackground") : undefined;
     status.show();
+    logs.show();
   };
   update();
-  const disposable = vscode.Disposable.from(store, changed, view, status, store.subscribe(update),
+  const disposable = vscode.Disposable.from(store, changed, view, status, logs, store.subscribe(update),
     vscode.commands.registerCommand("tua.activity.show", async selected => {
       const session = typeof selected?.id === "string" ? store.sessions.find(item => item.id === selected.id) : store.sessions[0];
       if (!session) return vscode.commands.executeCommand("tua.sessions.focus");
@@ -52,11 +58,14 @@ function registerRunActivity() {
       if (picked?.command) return vscode.commands.executeCommand(picked.command);
     }),
     vscode.commands.registerCommand("tua.activity.stop", selected => {
-      const session = typeof selected?.id === "string"
+      // A Console view-title action receives its selected log row, whose id is
+      // not a run-session id. Treat that as the current run instead.
+      const selectedSession = typeof selected?.id === "string" && !("session" in selected);
+      const session = selectedSession
         ? store.sessions.find(item => item.id === selected.id && item.active)
         : store.sessions.find(item => item.active && item.stop);
       // Toolbar Stop targets the whole multiplayer run; an explicit player row stops only that player.
-      const target = typeof selected?.id !== "string" && session?.groupId
+      const target = !selectedSession && session?.groupId
         ? store.sessions.find(item => item.id === session.groupId && item.active) || session
         : session;
       return target?.stop?.();

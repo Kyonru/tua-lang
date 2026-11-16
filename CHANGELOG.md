@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Link LOVE runtime errors and scoped log messages to their Tua call sites in
+  both Run and Debug output. Show source locations in Game Console rows, open
+  the console after a failed normal run, and provide a direct Game Logs status
+  action.
 - Count imported instance types used in class fields as real type uses, so
   those fields no longer produce false unused-import warnings.
 - Navigate between signal listeners and emitters across files when an event

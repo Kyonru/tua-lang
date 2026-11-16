@@ -4,6 +4,7 @@ const test = require("node:test");
 const Module = require("node:module");
 const commands = new Map();
 const views = new Map();
+const statusItems = [];
 const executed = [];
 let picks = 0;
 const noop = { dispose() {} };
@@ -16,7 +17,7 @@ const vscode = {
   languages: { getDiagnostics: () => [] },
   window: {
     createTreeView: (id, options) => { views.set(id, options.treeDataProvider); return { dispose() {} }; },
-    createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {} }),
+    createStatusBarItem: () => { const item = { show() { this.visible = true; }, hide() { this.visible = false; }, dispose() {} }; statusItems.push(item); return item; },
     showQuickPick: async items => { picks++; return items.find(item => item.name === "Debug"); },
   },
   workspace: { getConfiguration: () => ({ get: (_key, fallback) => fallback }), onDidChangeConfiguration: () => noop },
@@ -69,19 +70,24 @@ test("Package runs once and an old Package selection defaults to Development", a
 
 test("Stop uses live sessions, ignores editor URIs, and does not stop unrelated sessions", () => {
   const feature = registerRunActivity();
+  const logs = statusItems.find(item => item.name === "Tua game logs");
+  assert.equal(logs?.command, "tua.console.open", "game logs need a direct visible status action");
   let firstStops = 0;
   let secondStops = 0;
   const first = feature.store.begin({ title: "First", cwd: "/game", kind: "run" });
+  assert.equal(logs.visible, true);
   first.stop = () => firstStops++;
   const second = feature.store.begin({ title: "Second", cwd: "/game", kind: "run" });
   second.stop = () => secondStops++;
   commands.get("tua.activity.stop")(editorUri);
   assert.equal(secondStops, 1);
   assert.equal(firstStops, 0);
+  commands.get("tua.activity.stop")({ id: "console-row", text: "error", session: second });
+  assert.equal(secondStops, 2, "console header Stop ignores the selected log entry id");
   commands.get("tua.activity.stop")({ id: first.id });
   assert.equal(firstStops, 1, "resolve the original callback by session ID");
   commands.get("tua.activity.stop")({ id: "expired-session" });
-  assert.equal(secondStops, 1, "a stale explicit session must not stop a different run");
+  assert.equal(secondStops, 2, "a stale explicit session must not stop a different run");
   feature.dispose();
 });
 
