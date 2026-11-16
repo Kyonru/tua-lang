@@ -24,8 +24,10 @@ path = "locales/fr.lua"
 ```
 
 Catalog paths are relative to `source`, so the example above reads
-`src/locales/en.lua` and `src/locales/fr.lua`. Each file is a Lua module with a
-table under its configured locale name:
+`src/locales/en.lua` and `src/locales/fr.lua`.
+Path components cannot contain dots (for example, `en.us.lua` is rejected),
+because the bundled runtime loads catalogs through Lua `require`.
+Each file is a Lua module with a table under its configured locale name:
 
 ```lua
 -- src/locales/en.lua

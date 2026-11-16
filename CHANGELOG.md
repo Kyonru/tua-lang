@@ -22,6 +22,8 @@ language or editor behavior, and migration notes call out those changes.
 
 - Import the optional localization and save runtimes when their module values
   are forwarded, while leaving unrelated table properties out of the build.
+- Reject dotted localization catalog path components at configuration time,
+  before Lua `require` would fail at game startup.
 - Avoid rescanning unrelated modules and repeated function declarations when
   resolving a side-effect imported global on hover or navigation.
 - Preserve exported type-alias origins through Tua and Lua forwarding files,

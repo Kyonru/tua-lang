@@ -214,6 +214,18 @@ fn parse_config_inner(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                     "i18n catalog paths must be source-relative `.lua` files without `..`",
                 ));
             }
+            if catalog
+                .path
+                .with_extension("")
+                .components()
+                .any(|part| part.as_os_str().to_string_lossy().contains('.'))
+            {
+                return Err(parse_error(
+                    input,
+                    None,
+                    "i18n catalog path components cannot contain dots; rename the file or directory so Lua `require` can load it",
+                ));
+            }
             if !paths.insert(catalog.path.clone()) {
                 return Err(parse_error(
                     input,

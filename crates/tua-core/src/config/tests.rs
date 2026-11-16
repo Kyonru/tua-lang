@@ -73,11 +73,22 @@ fn localization_is_opt_in_and_validates_catalog_identity_and_paths() {
     for input in [
         "[i18n]\nenabled = true\n",
         "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = '../outside.lua'\n",
+        "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'locales/en.us.lua'\n",
+        "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'locales.v2/en.lua'\n",
         "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'other.lua'\n",
         "[i18n]\nenabled = true\ndefault_locale = 'fr'\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n",
     ] {
         assert!(parse_config(input).is_err(), "accepted invalid i18n config: {input}");
     }
+    let error = parse_config(
+        "[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'locales/en.us.lua'\n",
+    )
+    .expect_err("dotted catalog names cannot be loaded via Lua require");
+    assert!(
+        error.message.contains("cannot contain dots"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]

@@ -162,6 +162,35 @@ fn localization_check_reports_catalog_errors_without_executing_catalogs() {
 }
 
 #[test]
+fn localization_build_rejects_dotted_catalog_paths_before_emitting_broken_lua() {
+    let project = configured_project("localization-dotted-catalog");
+    let config = fs::read_to_string(project.path().join("tua.toml")).unwrap();
+    fs::write(
+        project.path().join("tua.toml"),
+        config.replace("locales/en.lua", "locales/en.us.lua"),
+    )
+    .unwrap();
+    fs::rename(
+        project.path().join("src/locales/en.lua"),
+        project.path().join("src/locales/en.us.lua"),
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.tua"),
+        "print(I18n.t('menu.play'))\n",
+    )
+    .unwrap();
+    let built = run(&project, "build");
+    assert!(!built.status.success());
+    assert!(
+        String::from_utf8_lossy(&built.stderr).contains("cannot contain dots"),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(!project.path().join("build/main.lua").exists());
+}
+
+#[test]
 fn localization_builtin_yields_to_local_binding_and_is_absent_when_disabled() {
     let project = configured_project("localization-shadow");
     fs::write(project.path().join("src/main.tua"), "local function read()\n  local I18n = { t = function(_) return 'custom' end }\n  return I18n.t('own.key')\nend\nassert(read() == 'custom')\n").unwrap();
