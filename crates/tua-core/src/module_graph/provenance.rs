@@ -101,7 +101,7 @@ impl ModuleGraph {
                 if !changed || resolved.is_empty() {
                     continue;
                 }
-                function.return_type = Box::new(resolved[0].clone());
+                *function.return_type = resolved[0].clone();
                 function.return_types = resolved;
                 changed_any |= self.upsert_provenance_export(export);
             }
@@ -271,7 +271,7 @@ impl ModuleGraph {
                 if function.return_types_or_any() == returns.as_slice() {
                     continue;
                 }
-                function.return_type = Box::new(returns[0].clone());
+                *function.return_type = returns[0].clone();
                 function.return_types = returns;
                 changed |= self.upsert_provenance_export(export);
             }
