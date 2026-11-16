@@ -102,6 +102,10 @@ async function main() {
     await client.continueRequest({ threadId });
     await terminated;
     targetTerminated = true;
+    assert.ok(
+      adapterOutput.some(output => output.includes("Tua Debug Console output probe")),
+      `LOVE print output should reach a Debug Adapter Protocol output event\n${debuggerDiagnostics(adapterOutput)}`,
+    );
 
     console.log(
       `source-mapped LOVE breakpoint passed in ${Date.now() - startedAt}ms: ${mappedFrame.source.path}:${mappedFrame.line}`,
@@ -143,6 +147,7 @@ function createFixture(root) {
       "",
       "function love.load()",
       "  marker = marker + 1",
+      '  print("Tua Debug Console output probe")',
       "  if marker == 42 then",
       "    love.event.quit(0)",
       "  end",

@@ -642,6 +642,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
         args: [path.join(workspace, "build")],
         cwd: workspace,
         scriptRoots: [path.join(workspace, "build")],
+        internalConsoleOptions: "openOnSessionStart",
         stepUnmappedLines: false,
         stopOnEntry: false,
         scriptFiles: ["build/**/*.lua"],
@@ -783,6 +784,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.strictEqual(state.startedDebugSessions.length, 1);
     assert.strictEqual(state.startedDebugSessions[0].configuration.type, "lua-local");
+    assert.strictEqual(state.startedDebugSessions[0].configuration.internalConsoleOptions, "openOnSessionStart");
     assert.deepStrictEqual(
       state.startedDebugSessions[0].configuration.scriptFiles,
       ["build/**/*.lua"],

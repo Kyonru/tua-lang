@@ -88,6 +88,14 @@ Tua owns the integration around that adapter:
 5. Restore the prepared output and maps when the session ends or fails to
    start.
 
+When you start the **Debug** run configuration or **Tua: Debug LOVE Project**,
+Tua opens VS Code's **Debug Console**. The Lua debugger forwards LOVE's
+standard output and error output there, including `print(...)`. The Tua **Game
+Console** also receives those debugger output events. The **Development** run
+configuration is a normal task, so its game output appears in the run terminal
+and Tua Game Console; it has no Debug Console session. Choose **Debug** when you
+want logs beside breakpoints and variable inspection.
+
 Neither workflow adds debugger code to project source.
 
 ### Source-Map Files

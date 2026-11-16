@@ -340,6 +340,7 @@ function createLoveDebugConfiguration({ layout, loveCommand, overrides = {} }) {
     args: [layout.outputDirectory],
     cwd: layout.configDirectory,
     scriptRoots: [layout.outputDirectory],
+    internalConsoleOptions: "openOnSessionStart",
     stepUnmappedLines: false,
     stopOnEntry: false,
   };

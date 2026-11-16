@@ -623,6 +623,9 @@ a focused, cancellable VS Code task. `print(...)`, stdout, stderr, and mapped
 runtime traceback locations appear in its dedicated terminal. **Tua: Stop LOVE
 Project** terminates the active run, and **Tua: Restart LOVE Project** replaces
 it. The editor title shows Run while idle and Stop while the game is active.
+The **Tua Game Console** also captures game output. Starting the **Debug** run
+configuration opens VS Code's Debug Console for the debugger session; see
+[Debugging](debugging.md).
 The `tua` output channel remains reserved for extension and language-server
 messages. Configure a non-standard LOVE executable with `tua.love.command`.
 
