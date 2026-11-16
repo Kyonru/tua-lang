@@ -111,6 +111,12 @@ jobs:
       - name: Test bundled runtimes on LuaJIT
         if: runner.os == 'Linux'
         run: make runtime-test LUA=luajit
+      - name: Exercise native LÖVE save backend
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env TUA_LOVE_BIN=/usr/bin/love python3 scripts/test-save-love.py
+      - name: Exercise native LÖVE profiler capture
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env TUA_LOVE=/usr/bin/love npm --prefix editors/vscode run test:profiler
       - name: Test native Busted example
         if: runner.os == 'Linux'
         working-directory: examples/unit-testing
