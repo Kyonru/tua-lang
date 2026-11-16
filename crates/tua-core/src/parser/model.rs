@@ -210,75 +210,87 @@ impl RawParsedSource {
         &self,
         parser_position: SourcePosition,
     ) -> Option<ParserPositionOrigin> {
-        let provenance = self
-            .parser_provenance
-            .get(parser_position.line.saturating_sub(1))?;
-        if let Some(fragment) = provenance.source_fragment {
-            let width = fragment.source_span.end.column - fragment.source_span.start.column;
-            if parser_position.column >= fragment.parser_start_column
-                && parser_position.column <= fragment.parser_start_column + width
-            {
-                return Some(ParserPositionOrigin {
-                    source_position: SourcePosition {
-                        line: fragment.source_span.start.line,
-                        column: fragment.source_span.start.column + parser_position.column
-                            - fragment.parser_start_column,
-                    },
-                    class_generated: false,
-                });
-            }
-        }
-        let source_position = if provenance.class_generated {
-            provenance.source_span.start
-        } else {
-            SourcePosition {
-                line: provenance.source_span.start.line,
-                column: provenance.source_span.start.column.saturating_add(
-                    parser_position
-                        .column
-                        .saturating_sub(provenance.parser_start_column),
-                ),
-            }
-        };
-
-        Some(ParserPositionOrigin {
-            source_position,
-            class_generated: provenance.class_generated,
-        })
+        parser_position_origin_from_provenance(&self.parser_provenance, parser_position)
     }
 
     pub(crate) fn remap_parser_diagnostic(&self, diagnostic: &mut crate::Diagnostic) {
-        let parser_start = SourcePosition {
-            line: diagnostic.line,
-            column: diagnostic.column,
-        };
-        let parser_end = SourcePosition {
-            line: diagnostic.end_line,
-            column: diagnostic.end_column,
-        };
-        let Some(start) = self.parser_position_origin(parser_start) else {
-            return;
-        };
-        let end = self.parser_position_origin(parser_end).unwrap_or(start);
-        let source_start = start.source_position;
-        let source_end = if start.class_generated || end.class_generated {
-            SourcePosition {
-                line: source_start.line,
-                column: source_start.column.saturating_add(1),
-            }
-        } else {
-            end.source_position
-        };
-
-        diagnostic.line = source_start.line;
-        diagnostic.column = source_start.column;
-        diagnostic.end_line = source_end.line.max(source_start.line);
-        diagnostic.end_column = if diagnostic.end_line == source_start.line {
-            source_end.column.max(source_start.column.saturating_add(1))
-        } else {
-            source_end.column.max(1)
-        };
+        remap_parser_diagnostic_with_provenance(&self.parser_provenance, diagnostic);
     }
+}
+
+fn parser_position_origin_from_provenance(
+    provenance: &[ParserLineProvenance],
+    parser_position: SourcePosition,
+) -> Option<ParserPositionOrigin> {
+    let provenance = provenance.get(parser_position.line.saturating_sub(1))?;
+    if let Some(fragment) = provenance.source_fragment {
+        let width = fragment.source_span.end.column - fragment.source_span.start.column;
+        if parser_position.column >= fragment.parser_start_column
+            && parser_position.column <= fragment.parser_start_column + width
+        {
+            return Some(ParserPositionOrigin {
+                source_position: SourcePosition {
+                    line: fragment.source_span.start.line,
+                    column: fragment.source_span.start.column + parser_position.column
+                        - fragment.parser_start_column,
+                },
+                class_generated: false,
+            });
+        }
+    }
+    let source_position = if provenance.class_generated {
+        provenance.source_span.start
+    } else {
+        SourcePosition {
+            line: provenance.source_span.start.line,
+            column: provenance.source_span.start.column.saturating_add(
+                parser_position
+                    .column
+                    .saturating_sub(provenance.parser_start_column),
+            ),
+        }
+    };
+
+    Some(ParserPositionOrigin {
+        source_position,
+        class_generated: provenance.class_generated,
+    })
+}
+
+pub(crate) fn remap_parser_diagnostic_with_provenance(
+    provenance: &[ParserLineProvenance],
+    diagnostic: &mut crate::Diagnostic,
+) {
+    let parser_start = SourcePosition {
+        line: diagnostic.line,
+        column: diagnostic.column,
+    };
+    let parser_end = SourcePosition {
+        line: diagnostic.end_line,
+        column: diagnostic.end_column,
+    };
+    let Some(start) = parser_position_origin_from_provenance(provenance, parser_start) else {
+        return;
+    };
+    let end = parser_position_origin_from_provenance(provenance, parser_end).unwrap_or(start);
+    let source_start = start.source_position;
+    let source_end = if start.class_generated || end.class_generated {
+        SourcePosition {
+            line: source_start.line,
+            column: source_start.column.saturating_add(1),
+        }
+    } else {
+        end.source_position
+    };
+
+    diagnostic.line = source_start.line;
+    diagnostic.column = source_start.column;
+    diagnostic.end_line = source_end.line.max(source_start.line);
+    diagnostic.end_column = if diagnostic.end_line == source_start.line {
+        source_end.column.max(source_start.column.saturating_add(1))
+    } else {
+        source_end.column.max(1)
+    };
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -4,6 +4,66 @@ use proptest::prelude::*;
 use std::path::PathBuf;
 
 #[test]
+fn parser_errors_after_a_class_use_source_lines() {
+    let source = "final class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nlocal agent = Agent.new()\nagent:takeDamage(1)\nlocal hp = agent.health\nlocal broken = (\n";
+    let diagnostics = parse_tua_source("src/main.tua", source)
+        .expect_err("an incomplete expression after a class must be diagnosed");
+    let parse_errors = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::SYNTAX_PARSE))
+        .collect::<Vec<_>>();
+
+    assert!(!parse_errors.is_empty());
+    assert!(
+        parse_errors.iter().all(|diagnostic| diagnostic.line == 8),
+        "parser errors must point to the original line after class lowering: {parse_errors:#?}"
+    );
+    let mut columns = parse_errors
+        .iter()
+        .map(|diagnostic| diagnostic.column)
+        .collect::<Vec<_>>();
+    columns.sort_unstable();
+    assert_eq!(columns, [14, 16]);
+}
+
+#[test]
+fn parser_errors_in_class_bodies_and_parameter_fragments_keep_source_positions() {
+    for (name, source, line) in [
+        (
+            "body",
+            "--[=[ leading Unicode comment 😀\nstill a comment\n]=]\nfinal class Agent {\n  health: number = 100\n  update(): nil {\n    local label = \"café 😀\"\n    local emoji = \"😀\"; local broken = (\n  }\n}\n",
+            8,
+        ),
+        (
+            "parameter",
+            "--[=[ Unicode 😀 leading multiline comment\nstill a comment\n]=]\nfinal class Agent {\n  update(\n    amount: number,\n    invalid:\n  ): nil {\n  }\n}\n",
+            7,
+        ),
+    ] {
+        let diagnostics = parse_tua_source(format!("src/{name}.tua"), source)
+            .expect_err("malformed class source must produce a parse error");
+        let parse_errors = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::SYNTAX_PARSE))
+            .collect::<Vec<_>>();
+
+        assert!(!parse_errors.is_empty(), "{name}: {diagnostics:#?}");
+        assert!(
+            parse_errors.iter().all(|diagnostic| diagnostic.line == line),
+            "{name}: parser errors must point to the original source line: {parse_errors:#?}"
+        );
+        if name == "body" {
+            let mut columns = parse_errors
+                .iter()
+                .map(|diagnostic| diagnostic.column)
+                .collect::<Vec<_>>();
+            columns.sort_unstable();
+            assert_eq!(columns, [37, 39], "Unicode before the error must not shift source columns");
+        }
+    }
+}
+
+#[test]
 fn rejects_excessive_nesting_and_operator_chains_before_parsing() {
     for source in [
         format!("local x = {}1{}", "(".repeat(1000), ")".repeat(1000)),

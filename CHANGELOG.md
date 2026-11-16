@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep syntax errors after a class on their original Tua source lines, rather
+  than reporting generated parser lines in CLI and editor diagnostics.
 - Link LOVE runtime errors and scoped log messages to their Tua call sites in
   both Run and Debug output. Show source locations in Game Console rows, open
   the console after a failed normal run, and provide a direct Game Logs status

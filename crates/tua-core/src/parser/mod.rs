@@ -317,7 +317,11 @@ fn parse_raw_source(
         }
         Ok(Err(errors)) => Err(errors
             .into_iter()
-            .map(|error| parser_error_to_diagnostic(&path, error))
+            .map(|error| {
+                let mut diagnostic = parser_error_to_diagnostic(&path, error);
+                model::remap_parser_diagnostic_with_provenance(&parser_provenance, &mut diagnostic);
+                diagnostic
+            })
             .collect()),
         Err(_) => Err(vec![Diagnostic::error(
             &path,

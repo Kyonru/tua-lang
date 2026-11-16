@@ -65,6 +65,37 @@ const PROTOCOL_SIGNATURE_MISMATCH_CASES: &[ProtocolSignatureMismatchCase] = &[
 ];
 
 #[test]
+fn parse_error_after_a_class_points_to_the_original_document_line() {
+    let uri = "file:///tmp/class-followed-by-incomplete-edit.tua";
+    let source = "final class Agent {\n  health: number = 100\n  takeDamage(amount: number): nil { self.health -= amount }\n}\nlocal agent = Agent.new()\nagent:takeDamage(1)\nlocal hp = agent.health\nlocal broken = (\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        text_document_diagnostic_request(2, uri),
+    ]);
+    let diagnostics = response_with_id(&output, 2)["result"]["items"]
+        .as_array()
+        .expect("pull diagnostics should return items");
+    let parse_errors = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL0001")
+        .collect::<Vec<_>>();
+
+    assert!(!parse_errors.is_empty());
+    assert!(
+        parse_errors
+            .iter()
+            .all(|diagnostic| diagnostic["range"]["start"]["line"] == 7),
+        "class lowering must not move parser errors into generated lines: {parse_errors:#?}"
+    );
+    let mut characters = parse_errors
+        .iter()
+        .map(|diagnostic| diagnostic["range"]["start"]["character"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    characters.sort_unstable();
+    assert_eq!(characters, [13, 15]);
+}
+
+#[test]
 fn diagnostic_severities_round_trip_through_lsp() {
     for (severity, expected) in [
         (DiagnosticSeverity::Error, 1),
