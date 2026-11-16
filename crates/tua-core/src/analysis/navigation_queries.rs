@@ -278,7 +278,7 @@ impl AnalysisSnapshot {
             .or_else(|| self.side_effect_global_definition(parsed, position))
     }
 
-    fn side_effect_global_definition(
+    pub(super) fn side_effect_global_definition(
         &self,
         parsed: &ParsedSource,
         position: SourcePosition,

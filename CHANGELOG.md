@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Show the source signature and documentation on globals introduced by
+  side-effect imports when one reachable definition is unambiguous.
 - Keep Go to Definition, references, and rename on the correct lexical binding
   when a local is shadowed, including anonymous callback parameters.
 - Skip preview inspection requests for unrelated hovers in files containing

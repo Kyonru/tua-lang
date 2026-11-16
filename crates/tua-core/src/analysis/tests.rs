@@ -10404,6 +10404,11 @@ fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
     let old = host.snapshot();
     let definition = old.definition(&path, fixture.position("call")).unwrap();
     assert_eq!(definition.path, temp.path.join("src/globals.tua"));
+    let hover = old.hover(&path, fixture.position("call"));
+    assert!(
+        hover.as_ref().is_some_and(|hover| hover.contents.contains("loadAssets")),
+        "a navigable imported global should have a signature hover: {hover:?}"
+    );
     assert_eq!(
         old.definition(&path, fixture.position("shadow"))
             .unwrap()
@@ -10418,6 +10423,7 @@ fn side_effect_global_definition_follows_runtime_imports_without_guessing() {
         .snapshot()
         .definition(&path, fixture.position("call"))
         .is_none());
+    assert!(host.snapshot().hover(&path, fixture.position("call")).is_none());
     assert_eq!(
         old.definition(&path, fixture.position("call")).unwrap(),
         definition

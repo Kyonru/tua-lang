@@ -40,6 +40,7 @@ impl AnalysisSnapshot {
                 )
             }
         }
+        .or_else(|| self.side_effect_global_hover(path, position))
         .map(|mut hover| {
             if hover.documentation.is_none() {
                 if let Some(definition) = self.definition(path, position) {
@@ -51,6 +52,23 @@ impl AnalysisSnapshot {
             }
             hover
         })
+    }
+
+    fn side_effect_global_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        let parsed = self.file(path)?.parsed.as_ref().ok()?;
+        let definition = self.side_effect_global_definition(parsed, position)?;
+        if definition.path == parsed.path {
+            return None;
+        }
+        let mut hover = self.hover(&definition.path, definition.span.start)?;
+        hover.span = dotted_chain_at_position(&parsed.source, position)?
+            .parts
+            .first()
+            .map(|part| part.span);
+        hover
+            .context
+            .push(format!("module: {}", definition.path.display()));
+        Some(hover)
     }
 
     fn signal_event_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {

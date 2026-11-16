@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn side_effect_imported_global_hover_follows_unique_runtime_definition() {
+    let temp = TempProject::new("side-effect-global-hover");
+    let main = "require('bridge')\nloadAssets()\n";
+    let bridge = "require('globals')\n";
+    temp.write("tua.toml", "source = 'src'\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/bridge.tua", bridge);
+    temp.write(
+        "src/globals.tua",
+        "--- Loads the game assets.\nfunction loadAssets() return true end\n",
+    );
+    temp.write(
+        "src/other.tua",
+        "function loadAssets() return false end\n",
+    );
+    let uri = temp.uri_for("src/main.tua");
+    let bridge_uri = temp.uri_for("src/bridge.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, main));
+    server.send(hover_request(2, &uri, main, "loadAssets()"));
+    assert_hover_contains(server.output(), 2, "loadAssets");
+    assert_hover_contains(server.output(), 2, "Loads the game assets.");
+
+    server.send(did_open(&bridge_uri, bridge));
+    server.send(did_change(
+        &bridge_uri,
+        "require('globals')\nrequire('other')\n",
+        2,
+    ));
+    server.send(hover_request(3, &uri, main, "loadAssets()"));
+    assert!(response_with_id(server.output(), 3)["result"].is_null());
+    server.send(did_change(&bridge_uri, bridge, 3));
+    server.send(hover_request(4, &uri, main, "loadAssets()"));
+    assert_hover_contains(server.output(), 4, "Loads the game assets.");
+}
+
+#[test]
 fn hover_returns_known_alias_local_function_and_table_field_types() {
     let uri = "file:///tmp/hover.tua";
     let source = r#"type Vec2 = { x: number, y: number }
