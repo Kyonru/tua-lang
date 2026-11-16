@@ -16,6 +16,14 @@ pub struct ScopeMap {
     declarations: Vec<ScopeDeclaration>,
     references: Vec<ScopeReference>,
     globals: BTreeMap<String, ScopeGlobal>,
+    global_writes: BTreeMap<String, Vec<GlobalWrite>>,
+    unknown_global_writes: Vec<GlobalWrite>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct GlobalWrite {
+    span: SourceSpan,
+    conditional: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -71,6 +79,25 @@ pub enum ScopeGlobalKind {
 }
 
 impl ScopeMap {
+    pub(crate) fn has_global_write(&self, name: &str) -> bool {
+        self.global_writes.contains_key(name) || !self.unknown_global_writes.is_empty()
+    }
+
+    /// A write in this file can supersede a global supplied by a side-effect
+    /// import. Nested writes may execute before a use regardless of source order.
+    pub(crate) fn may_override_imported_global(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> bool {
+        let key = |position: SourcePosition| (position.line, position.column);
+        let may_precede =
+            |write: &GlobalWrite| write.conditional || key(write.span.start) <= key(position);
+        self.global_writes
+            .get(name)
+            .is_some_and(|writes| writes.iter().any(may_precede))
+            || self.unknown_global_writes.iter().any(may_precede)
+    }
     /// Fallback for incomplete edits and separately parsed default expressions.
     /// Complete call sites should prefer their exact reference resolution.
     pub(crate) fn has_non_builtin_binding_at(&self, name: &str, position: SourcePosition) -> bool {
@@ -212,6 +239,8 @@ struct ScopeBuilder<'a> {
     references: Vec<ScopeReference>,
     scopes: Vec<LexicalScope>,
     globals: BTreeMap<String, ScopeGlobal>,
+    global_writes: BTreeMap<String, Vec<GlobalWrite>>,
+    unknown_global_writes: Vec<GlobalWrite>,
 }
 
 impl<'a> ScopeBuilder<'a> {
@@ -264,6 +293,8 @@ impl<'a> ScopeBuilder<'a> {
             references: Vec::new(),
             scopes: Vec::new(),
             globals,
+            global_writes: BTreeMap::new(),
+            unknown_global_writes: Vec::new(),
         }
     }
 
@@ -272,6 +303,8 @@ impl<'a> ScopeBuilder<'a> {
             declarations: self.declarations,
             references: self.references,
             globals: self.globals,
+            global_writes: self.global_writes,
+            unknown_global_writes: self.unknown_global_writes,
         }
     }
 
@@ -435,12 +468,63 @@ impl<'a> ScopeBuilder<'a> {
                 let name_text = token_text(name);
 
                 if self.resolve_local(&name_text).is_none() {
+                    if let Some(span) = node_span(name) {
+                        self.record_global_write(Some(name_text.clone()), span);
+                    }
                     self.push_global(name_text, ScopeGlobalKind::Assigned);
                 } else {
                     self.read_token(name);
                 }
             }
-            Var::Expression(expression) => self.analyze_var_expression_base(expression),
+            Var::Expression(expression) => {
+                self.record_global_table_write(expression);
+                self.analyze_var_expression_base(expression);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_global_write(&mut self, name: Option<String>, span: SourceSpan) {
+        let write = GlobalWrite {
+            span,
+            conditional: self.scopes.len() > 1,
+        };
+        if let Some(name) = name {
+            self.global_writes.entry(name).or_default().push(write);
+        } else {
+            self.unknown_global_writes.push(write);
+        }
+    }
+
+    fn record_global_table_write(&mut self, expression: &ast::VarExpression) {
+        let Prefix::Name(root) = expression.prefix() else {
+            return;
+        };
+        if token_text(root) != "_G" || self.resolve_local("_G").is_some() {
+            return;
+        }
+        let mut suffixes = expression.suffixes();
+        let Some(index) = suffixes.next() else {
+            return;
+        };
+        if suffixes.next().is_some() {
+            return;
+        }
+        match index {
+            Suffix::Index(Index::Dot { name, .. }) => {
+                if let Some(span) = node_span(name) {
+                    self.record_global_write(Some(token_text(name)), span);
+                }
+            }
+            Suffix::Index(Index::Brackets { expression, .. }) => {
+                if let Some(span) = node_span(index) {
+                    let name = match expression {
+                        Expression::String(token) => crate::asset::string_literal_value(token),
+                        _ => None,
+                    };
+                    self.record_global_write(name, span);
+                }
+            }
             _ => {}
         }
     }

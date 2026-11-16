@@ -12,10 +12,7 @@ fn side_effect_imported_global_hover_follows_unique_runtime_definition() {
         "src/globals.tua",
         "--- Loads the game assets.\nfunction loadAssets() return true end\n",
     );
-    temp.write(
-        "src/other.tua",
-        "function loadAssets() return false end\n",
-    );
+    temp.write("src/other.tua", "function loadAssets() return false end\n");
     let uri = temp.uri_for("src/main.tua");
     let bridge_uri = temp.uri_for("src/bridge.tua");
     let mut server = TestServer::new();
@@ -36,6 +33,124 @@ fn side_effect_imported_global_hover_follows_unique_runtime_definition() {
     server.send(did_change(&bridge_uri, bridge, 3));
     server.send(hover_request(4, &uri, main, "loadAssets()"));
     assert_hover_contains(server.output(), 4, "Loads the game assets.");
+}
+
+#[test]
+fn side_effect_imported_global_hover_stops_after_consumer_assignment() {
+    let temp = TempProject::new("side-effect-global-override");
+    let main = "require('bridge')\nlocal result = loadAssets()\n";
+    let overridden = "require('bridge')\nloadAssets = function() return false end\nlocal result = loadAssets()\n";
+    let global_table_override =
+        "require('bridge')\n_G.loadAssets = function() return false end\nlocal result = loadAssets()\n";
+    let own_function =
+        "require('bridge')\nfunction loadAssets() return false end\nlocal result = loadAssets()\n";
+    temp.write("tua.toml", "source = 'src'\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/bridge.tua", "require('globals')\n");
+    temp.write(
+        "src/globals.tua",
+        "--- Loads assets.\nfunction loadAssets() return true end\n",
+    );
+    let uri = temp.uri_for("src/main.tua");
+    let globals_uri = temp.uri_for("src/globals.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, main));
+    server.send(hover_request(2, &uri, main, "loadAssets()"));
+    assert_hover_contains(server.output(), 2, "Loads assets.");
+    server.send(definition_request(
+        3,
+        &uri,
+        main,
+        "result = loadAssets()",
+        "result = ".len(),
+    ));
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"]["uri"],
+        globals_uri
+    );
+
+    server.send(did_change(&uri, overridden, 2));
+    server.send(hover_request(4, &uri, overridden, "loadAssets()"));
+    let hover = response_with_id(server.output(), 4)["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        !hover.contains("Loads assets."),
+        "overridden global must not inherit imported docs: {hover}"
+    );
+    server.send(definition_request(
+        5,
+        &uri,
+        overridden,
+        "result = loadAssets()",
+        "result = ".len(),
+    ));
+    assert!(response_with_id(server.output(), 5)["result"].is_null());
+
+    server.send(did_change(&uri, global_table_override, 3));
+    server.send(hover_request(
+        8,
+        &uri,
+        global_table_override,
+        "loadAssets()",
+    ));
+    let hover = response_with_id(server.output(), 8)["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        !hover.contains("Loads assets."),
+        "_G override must not inherit imported docs: {hover}"
+    );
+    server.send(definition_request(
+        9,
+        &uri,
+        global_table_override,
+        "result = loadAssets()",
+        "result = ".len(),
+    ));
+    assert!(response_with_id(server.output(), 9)["result"].is_null());
+
+    server.send(did_change(&uri, own_function, 4));
+    server.send(definition_request(
+        6,
+        &uri,
+        own_function,
+        "result = loadAssets()",
+        "result = ".len(),
+    ));
+    assert_eq!(response_with_id(server.output(), 6)["result"]["uri"], uri);
+
+    server.send(did_change(&uri, main, 5));
+    server.send(hover_request(7, &uri, main, "loadAssets()"));
+    assert_hover_contains(server.output(), 7, "Loads assets.");
+
+    let bridge_uri = temp.uri_for("src/bridge.tua");
+    server.send(did_open(&bridge_uri, "require('globals')\n"));
+    server.send(did_change(
+        &bridge_uri,
+        "require('globals')\nloadAssets = function() return false end\n",
+        2,
+    ));
+    server.send(hover_request(10, &uri, main, "loadAssets()"));
+    let hover = response_with_id(server.output(), 10)["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        !hover.contains("Loads assets."),
+        "bridge override must not inherit imported docs: {hover}"
+    );
+    server.send(definition_request(
+        11,
+        &uri,
+        main,
+        "result = loadAssets()",
+        "result = ".len(),
+    ));
+    assert!(response_with_id(server.output(), 11)["result"].is_null());
+    server.send(did_change(&bridge_uri, "require('globals')\n", 3));
+    server.send(hover_request(12, &uri, main, "loadAssets()"));
+    assert_hover_contains(server.output(), 12, "Loads assets.");
 }
 
 #[test]

@@ -124,6 +124,33 @@ return before, after
 }
 
 #[test]
+fn global_writes_bound_side_effect_import_navigation() {
+    let source = "before()\nbefore = function() end\nafter = function() end\nafter()\nlocal function nested()\n  dynamic = 1\nend\ndynamic()\n";
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+    let map = scope_map_parsed_source(&parsed);
+    assert!(!map.may_override_imported_global("before", SourcePosition { line: 1, column: 1 }));
+    assert!(map.may_override_imported_global("before", SourcePosition { line: 2, column: 1 }));
+    assert!(map.may_override_imported_global("after", SourcePosition { line: 4, column: 1 }));
+    assert!(map.may_override_imported_global("dynamic", SourcePosition { line: 8, column: 1 }));
+    assert!(!map.may_override_imported_global("missing", SourcePosition { line: 8, column: 1 }));
+
+    let global_table = "_G.loadAssets = function() end\n_G['other'] = 1\n_G[key] = 2\n";
+    let parsed =
+        parse_tua_source("src/global-table.tua", global_table).expect("source should parse");
+    let map = scope_map_parsed_source(&parsed);
+    assert!(map.may_override_imported_global(
+        "loadAssets",
+        SourcePosition {
+            line: 1,
+            column: 20
+        }
+    ));
+    assert!(!map.may_override_imported_global("unrelated", SourcePosition { line: 2, column: 1 }));
+    assert!(map.may_override_imported_global("other", SourcePosition { line: 3, column: 1 }));
+    assert!(map.may_override_imported_global("unrelated", SourcePosition { line: 4, column: 1 }));
+}
+
+#[test]
 fn colon_method_self_resolves_to_implicit_parameter() {
     let source = r#"
 local Account = {}

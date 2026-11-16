@@ -301,6 +301,9 @@ impl AnalysisSnapshot {
         if !is_project_global_reference(&reference.resolution) {
             return None;
         }
+        if scope.may_override_imported_global(name, parser_position) {
+            return None;
+        }
 
         // Follow only statically resolved runtime imports. A visited set bounds
         // cycles, and multiple definitions deliberately produce no guessed target.
@@ -321,6 +324,23 @@ impl AnalysisSnapshot {
                     }
                 }
             }
+        }
+        // A required module may overwrite the imported global after another
+        // dependency defines it. Its execution order is not proven by the
+        // dependency graph, so avoid attributing the consumer to that source.
+        if reachable
+            .iter()
+            .filter(|path| path.as_path() != parsed.path.as_path())
+            .any(|path| {
+                self.file(path)
+                    .and_then(|file| {
+                        file.scope()
+                            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.scope))
+                    })
+                    .is_some_and(|scope| scope.has_global_write(name))
+            })
+        {
+            return None;
         }
         let mut candidates = self.global_function_definitions().remove(name)?;
         candidates.retain(|definition| reachable.contains(&definition.path));

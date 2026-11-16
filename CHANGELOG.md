@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Avoid attributing a side-effect imported global to its original definition
+  after this file or a required module may reassign it.
 - Hide References and Implementations hover links for unknown dot/colon
   members while keeping those actions on known members and imported globals.
 - Show the source signature and documentation on globals introduced by
