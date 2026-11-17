@@ -97,7 +97,8 @@ result. This precision applies to project checking and ordinary local
 inference. A dynamic key can still fail at runtime, so handle `nil` where a
 translation is not statically guaranteed.
 
-**Tua: Show Localization Explorer** opens a key × locale coverage table. It
+**Tua: Show Localization Explorer** opens a key × locale coverage table for
+the project containing the active Tua or Lua file. It
 labels exact translations, fallback results, missing entries, and entries
 calculated by Lua. Select a key to compare its catalog text and plural forms,
 then open the source entry. Search and paging keep large catalogs manageable.

@@ -2112,7 +2112,10 @@ impl LspServer {
             .and_then(|params| params.get("offset"))
             .and_then(Value::as_u64)
             .unwrap_or(0) as usize;
-        let page = snapshot.localization_page(search, offset, 100);
+        let source_uri = params
+            .and_then(|params| params.get("uri"))
+            .and_then(Value::as_str);
+        let page = snapshot.localization_page(source_uri, search, offset, 100);
         let rows = page.rows.into_iter().map(|row| json!({
             "key": row.key,
             "cells": row.cells.into_iter().map(|cell| {

@@ -12,6 +12,7 @@ function registerLocalizationExplorer({ getClient }) {
   let timer;
   let search = "";
   let offset = 0;
+  let sourceUri;
   const gate = createRenderGate();
   async function refresh() {
     if (!panel?.visible) return;
@@ -19,7 +20,9 @@ function registerLocalizationExplorer({ getClient }) {
     if (!client) { panel.webview.postMessage({ type: "error", message: "Start the Tua language server to inspect catalogs." }); return; }
     const request = gate.begin();
     try {
-      const page = await client.sendRequest("tua/localizationCatalog", { search, offset });
+      const params = { search, offset };
+      if (sourceUri) params.uri = sourceUri;
+      const page = await client.sendRequest("tua/localizationCatalog", params);
       if (!gate.isCurrent(request) || !panel?.visible) return;
       panel.webview.postMessage({ type: "page", page });
     } catch (error) {
@@ -32,6 +35,10 @@ function registerLocalizationExplorer({ getClient }) {
     timer = setTimeout(refresh, 400);
   }
   const show = vscode.commands.registerCommand(COMMANDS.showLocalizationExplorer, async () => {
+    const active = vscode.window.activeTextEditor?.document;
+    sourceUri = active && /\.(?:tua|lua)$/i.test(active.uri.path)
+      ? active.uri.toString()
+      : undefined;
     if (!panel) {
       panel = vscode.window.createWebviewPanel("tuaLocalization", "Tua Localization", vscode.ViewColumn.Beside, {
         enableScripts: true,

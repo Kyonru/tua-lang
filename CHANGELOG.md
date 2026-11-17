@@ -101,6 +101,9 @@ provide a player-facing recovery choice before calling `acceptRecovery()` or
 
 ### Fixed
 
+- Apply a nested project's `[i18n]` configuration to its editor diagnostics,
+  completion, hover, navigation, and Localization Explorer instead of treating
+  `I18n` as undefined when the repository root is open.
 - Allow the release helper to validate and tag a versioned candidate commit
   without making a second release commit.
 

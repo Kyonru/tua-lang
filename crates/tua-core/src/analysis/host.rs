@@ -117,6 +117,21 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    /// Use the owning workspace's settings for source facts and fast editor
+    /// diagnostics when one LSP session contains nested or multiple projects.
+    pub fn set_workspace_configs(&mut self, configs: Vec<(PathBuf, ProjectConfig)>) {
+        if self.workspace_configs == configs {
+            return;
+        }
+        self.workspace_configs = configs;
+        self.invalidate_all_analysis();
+        self.bump_revision();
+    }
+
+    fn config_for_path(&self, path: &Path) -> &ProjectConfig {
+        super::config_for_path(&self.config, &self.workspace_configs, path)
+    }
+
     pub fn set_require_path_separator(&mut self, separator: ModulePathSeparator) {
         if self.require_path_separator == separator {
             return;
@@ -398,7 +413,7 @@ impl AnalysisHost {
 
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
-        let kind = infer_source_kind(&path, &self.config);
+        let kind = infer_source_kind(&path, self.config_for_path(&path));
 
         self.set_file_with_kind(path, source, kind);
     }
@@ -433,10 +448,11 @@ impl AnalysisHost {
         }
 
         self.adopt_current_snapshot_files();
-        let invalidated_dependents =
-            self.cache
-                .borrow_mut()
-                .invalidate_changed_file(&path, &source, kind, &self.config);
+        let config = self.config_for_path(&path);
+        let invalidated_dependents = self
+            .cache
+            .borrow_mut()
+            .invalidate_changed_file(&path, &source, kind, config);
         self.clear_completion_cache();
         if invalidated_dependents {
             self.clear_definition_cache();
@@ -479,7 +495,7 @@ impl AnalysisHost {
 
     pub fn open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
-        let kind = infer_source_kind(&path, &self.config);
+        let kind = infer_source_kind(&path, self.config_for_path(&path));
 
         self.open_document_with_kind(path, source, kind);
     }
@@ -510,10 +526,11 @@ impl AnalysisHost {
             self.bump_revision();
             return;
         }
-        let invalidated_dependents =
-            self.cache
-                .borrow_mut()
-                .invalidate_changed_file(&path, &source, kind, &self.config);
+        let config = self.config_for_path(&path);
+        let invalidated_dependents = self
+            .cache
+            .borrow_mut()
+            .invalidate_changed_file(&path, &source, kind, config);
         self.clear_completion_cache();
         if invalidated_dependents {
             self.clear_definition_cache();
@@ -582,7 +599,7 @@ impl AnalysisHost {
                         file.source(),
                         analysis_source_kind(file.kind()),
                         AnalysisBuildContext {
-                            config: &self.config,
+                            config: self.config_for_path(file.path()),
                             source_roots: &source_roots,
                             asset_roots: &self.asset_roots,
                             asset_index: self.asset_index.as_ref(),
@@ -730,6 +747,7 @@ impl AnalysisHost {
             input_errors: self.input_errors.clone(),
             revision: self.revision,
             config: self.config.clone(),
+            workspace_configs: self.workspace_configs.clone(),
             vfs: Arc::new(vfs),
             asset_roots: self.asset_roots.clone(),
             asset_index: self.asset_index.clone().map(Arc::new),
@@ -758,7 +776,9 @@ impl AnalysisHost {
             reverse_reference_index_build_lock: Arc::new(Mutex::new(())),
             project_module_globals: Arc::new(OnceLock::new()),
             catalog_index: Arc::new(OnceLock::new()),
+            workspace_catalog_indexes: Arc::new(OnceLock::new()),
             i18n_result_types: Arc::new(OnceLock::new()),
+            workspace_i18n_result_types: Arc::new(OnceLock::new()),
             call_hierarchy_symbols: Arc::new(call_hierarchy_symbols),
             call_hierarchy_calls: Arc::new(call_hierarchy_calls),
         };
@@ -1003,7 +1023,12 @@ impl AnalysisHost {
             return Vec::new();
         };
 
-        fast_diagnostics_for_source(&path, source, analysis_source_kind(kind), &self.config)
+        fast_diagnostics_for_source(
+            &path,
+            source,
+            analysis_source_kind(kind),
+            self.config_for_path(&path),
+        )
     }
 
     pub fn current_file_hover(
@@ -1012,6 +1037,7 @@ impl AnalysisHost {
         position: SourcePosition,
     ) -> Option<Hover> {
         let file = self.current_analysis_file(path.as_ref())?;
+        let config = self.config_for_path(path.as_ref());
         let parsed = file.parsed.as_ref().ok()?;
         let semantics = file
             .semantics()
@@ -1019,7 +1045,7 @@ impl AnalysisHost {
 
         // Catalog hovers need the project index, including unsaved catalog
         // overlays. A source-only `string` hover would mask that result.
-        if self.config.i18n.enabled
+        if config.i18n.enabled
             && (file
                 .i18n_key_uses()
                 .iter()
@@ -1028,10 +1054,17 @@ impl AnalysisHost {
                     .i18n_wrapper_key_uses()
                     .iter()
                     .any(|candidate| super::span_contains_position(candidate.usage.span, position))
-                || self.config.i18n.catalogs.iter().any(|catalog| {
-                    self.source_roots().first().is_some_and(|root| {
-                        normalize_path(root.join(&catalog.path)) == normalize_path(path.as_ref())
-                    })
+                || config.i18n.catalogs.iter().any(|catalog| {
+                    self.workspace_configs
+                        .iter()
+                        .filter(|(root, _)| path.as_ref().starts_with(root))
+                        .max_by_key(|(root, _)| root.components().count())
+                        .map(|(root, _)| root.join(&config.source))
+                        .or_else(|| self.source_roots().first().cloned())
+                        .is_some_and(|root| {
+                            normalize_path(root.join(&catalog.path))
+                                == normalize_path(path.as_ref())
+                        })
                 }))
         {
             return None;
@@ -1718,11 +1751,12 @@ impl AnalysisHost {
         let statistical_scope = include_statistical
             .then(|| self.peek_current_statistical_scope(&path))
             .flatten();
+        let include_ecs = self.config_for_path(&path).ecs.enabled;
         Some(crate::PreparedInlineCompletion {
             path,
             source,
             kind,
-            include_ecs: self.config.ecs.enabled,
+            include_ecs,
             baseline_parse_errors,
             project,
             statistical_scope,
@@ -2133,7 +2167,7 @@ impl AnalysisHost {
             source,
             kind,
             AnalysisBuildContext {
-                config: &self.config,
+                config: self.config_for_path(&path),
                 source_roots: &source_roots,
                 asset_roots: &self.asset_roots,
                 asset_index: self.asset_index.as_ref(),

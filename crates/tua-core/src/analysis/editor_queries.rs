@@ -80,21 +80,13 @@ impl AnalysisSnapshot {
     }
 
     fn i18n_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
-        if !self.config.i18n.enabled {
+        let config = self.config_for_path(path);
+        if !config.i18n.enabled {
             return None;
         }
         let file = self.file(path)?;
         let usage = self.i18n_key_use_at(file, position);
-        if usage.is_none()
-            && !self.config.i18n.catalogs.iter().any(|catalog| {
-                self.vfs.source_roots().first().is_some_and(|root| {
-                    normalize_path(root.join(&catalog.path)) == normalize_path(path)
-                })
-            })
-        {
-            return None;
-        }
-        let index = self.catalog_index();
+        let index = self.catalog_index_for_path(path);
         let (key, span, locale) = if let Some(usage) = usage {
             (
                 usage.key.clone(),
@@ -102,13 +94,13 @@ impl AnalysisSnapshot {
                 usage
                     .locale
                     .clone()
-                    .unwrap_or_else(|| self.config.i18n.default_locale.clone()),
+                    .unwrap_or_else(|| config.i18n.default_locale.clone()),
             )
         } else {
             let entry = index.entry_at(&normalize_path(path), position)?;
             (entry.key.clone(), entry.span, entry.locale.clone())
         };
-        let entry = index.resolved_entry(&key, &locale, &self.config.i18n.fallback_locale)?;
+        let entry = index.resolved_entry(&key, &locale, &config.i18n.fallback_locale)?;
         let preview = match &entry.value {
             crate::i18n::CatalogValue::Text(value) => format!("`{}`", value.replace('`', "\\`")),
             crate::i18n::CatalogValue::Dialogue(lines) => format!("{} dialogue lines", lines.len()),
@@ -293,10 +285,10 @@ impl AnalysisSnapshot {
     ) -> Vec<Completion> {
         let source = source_override.unwrap_or(&file.source);
 
-        if let Some(completions) = self.i18n_argument_completions(file, source, position) {
+        if let Some(completions) = self.i18n_argument_completions(path, file, source, position) {
             return completions;
         }
-        if let Some(completions) = self.i18n_string_completions(file, source, position) {
+        if let Some(completions) = self.i18n_string_completions(path, file, source, position) {
             return completions;
         }
 
@@ -391,11 +383,13 @@ impl AnalysisSnapshot {
 
     fn i18n_argument_completions(
         &self,
+        path: &Path,
         file: &AnalysisFile,
         source: &str,
         position: SourcePosition,
     ) -> Option<Vec<Completion>> {
-        if !self.config.i18n.enabled {
+        let config = self.config_for_path(path);
+        if !config.i18n.enabled {
             return None;
         }
         if file.scope().is_some_and(|scope| {
@@ -404,10 +398,10 @@ impl AnalysisSnapshot {
             return None;
         }
         let (key, prefix, used) = crate::i18n::argument_field_context(source, position)?;
-        let entry = self.catalog_index().resolved_entry(
+        let entry = self.catalog_index_for_path(path).resolved_entry(
             &key,
-            &self.config.i18n.default_locale,
-            &self.config.i18n.fallback_locale,
+            &config.i18n.default_locale,
+            &config.i18n.fallback_locale,
         )?;
         Some(
             entry
@@ -433,11 +427,13 @@ impl AnalysisSnapshot {
 
     fn i18n_string_completions(
         &self,
+        path: &Path,
         file: &AnalysisFile,
         source: &str,
         position: SourcePosition,
     ) -> Option<Vec<Completion>> {
-        if !self.config.i18n.enabled {
+        let config = self.config_for_path(path);
+        if !config.i18n.enabled {
             return None;
         }
         let crate::completion::context::CompletionContext::StringArgument {
@@ -470,13 +466,13 @@ impl AnalysisSnapshot {
             return None;
         }
         let values = if keys {
-            self.catalog_index()
+            self.catalog_index_for_path(path)
                 .entries
                 .keys()
                 .map(|key| (key.clone(), "translation key".to_owned()))
                 .collect::<Vec<_>>()
         } else {
-            self.config
+            config
                 .i18n
                 .catalogs
                 .iter()
@@ -493,10 +489,10 @@ impl AnalysisSnapshot {
                     kind: CompletionKind::Value,
                     detail: Some(detail),
                     documentation: if keys {
-                        self.catalog_index()
+                        self.catalog_index_for_path(path)
                             .entries
                             .get(&value)
-                            .and_then(|entries| entries.get(&self.config.i18n.default_locale))
+                            .and_then(|entries| entries.get(&config.i18n.default_locale))
                             .map(|entry| format!("Default: {:?}", entry.value))
                     } else {
                         None
@@ -860,18 +856,19 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let source_dir = self.assist_source_root_for_path(path);
+        let config = self.config_for_path(path);
 
         let mut actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
             &source_dir,
-            &self.config.extension,
+            &config.extension,
             &[],
-            &self.config.diagnostics,
+            &config.diagnostics,
         );
         actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
-        actions.extend(self.missing_i18n_key_actions(diagnostics, range));
+        actions.extend(self.missing_i18n_key_actions(path, diagnostics, range));
         actions
     }
 
@@ -887,41 +884,47 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let source_dir = self.assist_source_root_for_path(path);
+        let config = self.config_for_path(path);
 
         let mut actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
             &source_dir,
-            &self.config.extension,
+            &config.extension,
             requested_kinds,
-            &self.config.diagnostics,
+            &config.diagnostics,
         );
         if requested_kinds.is_empty() || requested_kinds.contains(&crate::AssistKind::QuickFix) {
             actions.extend(self.missing_protocol_method_actions(parsed, diagnostics, range));
-            actions.extend(self.missing_i18n_key_actions(diagnostics, range));
+            actions.extend(self.missing_i18n_key_actions(path, diagnostics, range));
         }
         actions
     }
 
     fn missing_i18n_key_actions(
         &self,
+        path: &Path,
         diagnostics: &[Diagnostic],
         range: AssistRange,
     ) -> Vec<Assist> {
-        if !self.config.i18n.enabled {
+        let config = self.config_for_path(path);
+        if !config.i18n.enabled {
             return Vec::new();
         }
-        let Some(catalog) = self
-            .config
+        let Some(catalog) = config
             .i18n
             .catalogs
             .iter()
-            .find(|catalog| catalog.locale == self.config.i18n.fallback_locale)
+            .find(|catalog| catalog.locale == config.i18n.fallback_locale)
         else {
             return Vec::new();
         };
-        let Some(root) = self.vfs.source_roots().first() else {
+        let Some(root) = self
+            .workspace_root_for_path(path)
+            .map(|root| root.join(&config.source))
+            .or_else(|| self.vfs.source_roots().first().cloned())
+        else {
             return Vec::new();
         };
         let path = normalize_path(root.join(&catalog.path));

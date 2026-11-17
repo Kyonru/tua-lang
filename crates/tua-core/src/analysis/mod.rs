@@ -157,6 +157,7 @@ pub struct AnalysisHost {
     input_sizes: BTreeMap<PathBuf, usize>,
     input_errors: BTreeMap<PathBuf, Diagnostic>,
     config: ProjectConfig,
+    workspace_configs: Vec<(PathBuf, ProjectConfig)>,
     vfs: VirtualFileSystem,
     require_path_separator: ModulePathSeparator,
     asset_roots: Vec<PathBuf>,
@@ -191,6 +192,7 @@ pub struct AnalysisSnapshot {
     input_errors: BTreeMap<PathBuf, Diagnostic>,
     revision: u64,
     config: ProjectConfig,
+    workspace_configs: Vec<(PathBuf, ProjectConfig)>,
     vfs: Arc<VfsSnapshot>,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<Arc<asset::AssetIndex>>,
@@ -219,9 +221,25 @@ pub struct AnalysisSnapshot {
     reverse_reference_index_build_lock: Arc<Mutex<()>>,
     project_module_globals: Arc<OnceLock<BTreeSet<String>>>,
     catalog_index: Arc<OnceLock<crate::i18n::CatalogIndex>>,
+    workspace_catalog_indexes: Arc<OnceLock<BTreeMap<PathBuf, crate::i18n::CatalogIndex>>>,
     i18n_result_types: Arc<OnceLock<Arc<BTreeMap<String, Type>>>>,
+    workspace_i18n_result_types: Arc<OnceLock<WorkspaceI18nResultTypes>>,
     call_hierarchy_symbols: Arc<BTreeMap<PathBuf, Vec<CallHierarchySymbol>>>,
     call_hierarchy_calls: Arc<BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>>,
+}
+
+type WorkspaceI18nResultTypes = BTreeMap<PathBuf, Arc<BTreeMap<String, Type>>>;
+
+fn config_for_path<'a>(
+    default: &'a ProjectConfig,
+    workspace_configs: &'a [(PathBuf, ProjectConfig)],
+    path: &Path,
+) -> &'a ProjectConfig {
+    workspace_configs
+        .iter()
+        .filter(|(root, _)| path.starts_with(root))
+        .max_by_key(|(root, _)| root.components().count())
+        .map_or(default, |(_, config)| config)
 }
 
 #[derive(Clone, Copy, Debug)]

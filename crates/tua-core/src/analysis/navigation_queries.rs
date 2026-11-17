@@ -36,16 +36,17 @@ impl AnalysisSnapshot {
         }
 
         let file = self.file(path)?;
-        if self.config.i18n.enabled && file.kind == AnalysisSourceKind::Tua {
+        let config = self.config_for_path(path);
+        if config.i18n.enabled && file.kind == AnalysisSourceKind::Tua {
             if let Some(usage) = self.i18n_key_use_at(file, position) {
                 let locale = usage
                     .locale
                     .as_deref()
-                    .unwrap_or(&self.config.i18n.default_locale);
-                if let Some(entry) = self.catalog_index().resolved_entry(
+                    .unwrap_or(&config.i18n.default_locale);
+                if let Some(entry) = self.catalog_index_for_path(path).resolved_entry(
                     &usage.key,
                     locale,
-                    &self.config.i18n.fallback_locale,
+                    &config.i18n.fallback_locale,
                 ) {
                     return Some(Definition {
                         path: entry.path.clone(),
@@ -1865,20 +1866,13 @@ impl AnalysisSnapshot {
     }
 
     fn i18n_key_at(&self, path: &Path, position: SourcePosition) -> Option<(String, SourceSpan)> {
-        if !self.config.i18n.enabled {
+        if !self.config_for_path(path).i18n.enabled {
             return None;
         }
         let file = self.file(path)?;
         if file.kind == AnalysisSourceKind::Lua {
-            if !self.config.i18n.catalogs.iter().any(|catalog| {
-                self.vfs.source_roots().first().is_some_and(|root| {
-                    normalize_path(root.join(&catalog.path)) == normalize_path(path)
-                })
-            }) {
-                return None;
-            }
             let entry = self
-                .catalog_index()
+                .catalog_index_for_path(path)
                 .entry_at(&normalize_path(path), position)?;
             return Some((entry.key.clone(), entry.span));
         }
@@ -1895,7 +1889,7 @@ impl AnalysisSnapshot {
         let (key, _) = self.i18n_key_at(path, position)?;
         let mut references = Vec::new();
         if include_declaration {
-            if let Some(entries) = self.catalog_index().entries.get(&key) {
+            if let Some(entries) = self.catalog_index_for_path(path).entries.get(&key) {
                 references.extend(entries.values().map(|entry| Reference {
                     path: entry.path.clone(),
                     span: entry.span,
@@ -1908,6 +1902,9 @@ impl AnalysisSnapshot {
                 continue;
             };
             if parsed.raw.language != crate::ParsedLanguage::Tua {
+                continue;
+            }
+            if self.workspace_root_for_path(&parsed.path) != self.workspace_root_for_path(path) {
                 continue;
             }
             references.extend(
@@ -1925,10 +1922,9 @@ impl AnalysisSnapshot {
         Some(references)
     }
 
-    fn rename_i18n_key(&self, key: &str, new_leaf: &str) -> Option<RenameEdit> {
-        if !is_valid_rename_identifier(new_leaf)
-            || self.catalog_index().duplicate_keys.contains(key)
-        {
+    fn rename_i18n_key(&self, path: &Path, key: &str, new_leaf: &str) -> Option<RenameEdit> {
+        let index = self.catalog_index_for_path(path);
+        if !is_valid_rename_identifier(new_leaf) || index.duplicate_keys.contains(key) {
             return None;
         }
         let parent = key.rsplit_once('.').map(|(parent, _)| parent);
@@ -1936,10 +1932,10 @@ impl AnalysisSnapshot {
             || new_leaf.to_owned(),
             |parent| format!("{parent}.{new_leaf}"),
         );
-        if new_key != key && self.catalog_index().entries.contains_key(&new_key) {
+        if new_key != key && index.entries.contains_key(&new_key) {
             return None;
         }
-        let references = self.catalog_index().entries.get(key)?;
+        let references = index.entries.get(key)?;
         let mut edits = Vec::new();
         for entry in references.values() {
             let source = self.source(&entry.path)?;
@@ -1963,6 +1959,9 @@ impl AnalysisSnapshot {
                 continue;
             };
             if parsed.raw.language != crate::ParsedLanguage::Tua {
+                continue;
+            }
+            if self.workspace_root_for_path(&parsed.path) != self.workspace_root_for_path(path) {
                 continue;
             }
             for usage in self
@@ -1997,7 +1996,11 @@ impl AnalysisSnapshot {
         let path = path.as_ref();
 
         if let Some((key, span)) = self.i18n_key_at(path, position) {
-            if self.catalog_index().duplicate_keys.contains(&key) {
+            if self
+                .catalog_index_for_path(path)
+                .duplicate_keys
+                .contains(&key)
+            {
                 return None;
             }
             return Some(RenameTarget {
@@ -2046,7 +2049,7 @@ impl AnalysisSnapshot {
         let path = path.as_ref();
 
         if let Some((key, _)) = self.i18n_key_at(path, position) {
-            return self.rename_i18n_key(&key, new_name);
+            return self.rename_i18n_key(path, &key, new_name);
         }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {

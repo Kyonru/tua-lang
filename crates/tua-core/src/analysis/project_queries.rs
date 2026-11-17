@@ -597,7 +597,8 @@ impl AnalysisSnapshot {
             }))
             .with_local_contract_types(self.project_local_annotation_types(parsed));
 
-        let environment = if self.config.ecs.enabled {
+        let config = self.config_for_path(&parsed.path);
+        let environment = if config.ecs.enabled {
             let declared = crate::builtin_module::declared_names(parsed);
             environment
                 .with_alias_types(crate::ecs::builtin_aliases())
@@ -609,7 +610,7 @@ impl AnalysisSnapshot {
         } else {
             environment
         };
-        if !self.config.i18n.enabled || parsed.raw.language != crate::ParsedLanguage::Tua {
+        if !config.i18n.enabled || parsed.raw.language != crate::ParsedLanguage::Tua {
             return environment;
         }
         // Key completion and literal diagnostics use the catalog index. The
@@ -635,7 +636,7 @@ impl AnalysisSnapshot {
         .flatten();
         environment
             .with_alias_types(aliases)
-            .with_i18n_result_types(self.i18n_result_types())
+            .with_i18n_result_types(self.i18n_result_types_for_path(&parsed.path))
     }
 
     fn project_imported_generic_alias_bindings(
@@ -1151,7 +1152,7 @@ impl AnalysisSnapshot {
             return crate::save::inferred_return(&parts, argument.as_ref())
                 .filter(|_| return_index == 0);
         }
-        if return_index == 0 && self.config.i18n.enabled {
+        if return_index == 0 && self.config_for_path(&parsed.path).i18n.enabled {
             if let Some(key) = crate::i18n::literal_key_from_call(function_call) {
                 let position = node_span(function_call)?.start;
                 let is_shadowed = self
@@ -1161,13 +1162,13 @@ impl AnalysisSnapshot {
                         scope.has_non_builtin_binding_at(crate::i18n::MODULE_NAME, position)
                     });
                 if !is_shadowed {
-                    if let Some(ty) = self.i18n_result_types().get(&key) {
+                    if let Some(ty) = self.i18n_result_types_for_path(&parsed.path).get(&key) {
                         return Some(ty.clone());
                     }
                 }
             }
         }
-        if self.config.ecs.enabled
+        if self.config_for_path(&parsed.path).ecs.enabled
             && parts.len() > 1
             && matches!(
                 parts.last().map(String::as_str),
@@ -2824,6 +2825,7 @@ impl AnalysisSnapshot {
         }
 
         let path = normalize_path(path);
+        let config = self.config_for_path(&path);
 
         if let Some(diagnostics) = self
             .project_diagnostics_cache
@@ -2850,11 +2852,11 @@ impl AnalysisSnapshot {
                         .map(|facts| facts.environment)
                         .expect("degraded parse must have semantic facts")
                 };
-                let mut diagnostics_config = self.config.diagnostics.clone();
+                let mut diagnostics_config = config.diagnostics.clone();
                 if parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config.globals.push(crate::save::MODULE_NAME.to_owned());
                 }
-                if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
+                if config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config.globals.push(crate::i18n::MODULE_NAME.to_owned());
                 }
 
@@ -2874,7 +2876,7 @@ impl AnalysisSnapshot {
                         &environment,
                         analysis_asset_roots(self.source_roots(), &self.asset_roots),
                         &diagnostics_config,
-                        &self.config.jit,
+                        &config.jit,
                         self.asset_index.as_deref(),
                         Some(self.usage_index.signal_event_index()),
                     )
@@ -2887,7 +2889,7 @@ impl AnalysisSnapshot {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
                 diagnostics.extend(self.type_import_binding_diagnostics(parsed));
-                if self.config.ecs.enabled {
+                if config.ecs.enabled {
                     diagnostics.extend(crate::ecs::diagnostics(parsed, &environment));
                 }
 
@@ -3040,18 +3042,15 @@ impl AnalysisSnapshot {
                     .unwrap_or(true))
     }
 
-    pub(super) fn project_diagnostic_enabled(&self, diagnostic: &Diagnostic) -> bool {
+    pub(super) fn project_diagnostic_enabled(&self, path: &Path, diagnostic: &Diagnostic) -> bool {
+        let config = self.config_for_path(path);
         match diagnostic.code {
             Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) => {
-                self.config.diagnostics.missing_requires
+                config.diagnostics.missing_requires
             }
             Some(crate::DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
-            | Some(crate::DiagnosticCode::LINT_REQUIRE_CYCLE) => {
-                self.config.diagnostics.bad_requires
-            }
-            Some(crate::DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING) => {
-                self.config.diagnostics.rules
-            }
+            | Some(crate::DiagnosticCode::LINT_REQUIRE_CYCLE) => config.diagnostics.bad_requires,
+            Some(crate::DiagnosticCode::LINT_CANONICAL_MODULE_SPELLING) => config.diagnostics.rules,
             _ => true,
         }
     }

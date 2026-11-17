@@ -32,7 +32,10 @@ test("localization explorer discards stale replies and refreshes after source ed
     ViewColumn: { Beside: 2 },
     Disposable: { from: (...items) => ({ dispose() { items.forEach(item => item.dispose?.()); } }) },
     commands: { registerCommand(_name, handler) { show = handler; return { dispose() {} }; } },
-    window: { createWebviewPanel() { return panel; } },
+    window: {
+      activeTextEditor: { document: { uri: { path: "/game/src/main.tua", toString: () => "file:///game/src/main.tua" } } },
+      createWebviewPanel() { return panel; },
+    },
     workspace: {
       onDidChangeTextDocument(handler) { onEdit = handler; return { dispose() {} }; },
       onDidSaveTextDocument(handler) { onSave = handler; return { dispose() {} }; },
@@ -60,7 +63,7 @@ test("localization explorer discards stale replies and refreshes after source ed
     const opened = show();
     assert.equal(requests.length, 1);
     const searched = receive({ type: "search", value: "menu.play" });
-    assert.deepEqual(requests[1].params, { search: "menu.play", offset: 0 });
+    assert.deepEqual(requests[1].params, { search: "menu.play", offset: 0, uri: "file:///game/src/main.tua" });
     requests[1].resolve(page("menu.play"));
     await searched;
     requests[0].resolve(page("stale"));

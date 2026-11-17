@@ -66,17 +66,70 @@ impl AnalysisSnapshot {
             })
             .clone()
     }
+
+    pub(super) fn i18n_result_types_for_path(&self, path: &Path) -> Arc<BTreeMap<String, Type>> {
+        let Some(root) = self.workspace_root_for_path(path) else {
+            return self.i18n_result_types();
+        };
+
+        self.workspace_i18n_result_types
+            .get_or_init(|| {
+                self.workspace_configs
+                    .iter()
+                    .map(|(root, config)| {
+                        (
+                            root.clone(),
+                            Arc::new(
+                                self.catalog_index_for_path(root)
+                                    .guaranteed_result_types(&config.i18n),
+                            ),
+                        )
+                    })
+                    .collect()
+            })
+            .get(root)
+            .expect("workspace i18n result types must exist")
+            .clone()
+    }
     pub(super) fn catalog_index(&self) -> &crate::i18n::CatalogIndex {
         self.catalog_index.get_or_init(|| {
-            let _profile = profile::span("analysis.index.i18n");
-            let mut index = crate::i18n::CatalogIndex::default();
-            if !self.config.i18n.enabled {
-                return index;
-            }
             let Some(root) = self.vfs.source_roots().first() else {
-                return index;
+                return crate::i18n::CatalogIndex::default();
             };
-            for catalog in &self.config.i18n.catalogs {
+            self.build_catalog_index(root, &self.config.i18n)
+        })
+    }
+
+    pub(super) fn catalog_index_for_path(&self, path: &Path) -> &crate::i18n::CatalogIndex {
+        let Some(root) = self.workspace_root_for_path(path) else {
+            return self.catalog_index();
+        };
+
+        self.workspace_catalog_indexes
+            .get_or_init(|| {
+                self.workspace_configs
+                    .iter()
+                    .map(|(root, config)| {
+                        (
+                            root.clone(),
+                            self.build_catalog_index(&root.join(&config.source), &config.i18n),
+                        )
+                    })
+                    .collect()
+            })
+            .get(root)
+            .expect("workspace catalog index must exist")
+    }
+
+    fn build_catalog_index(
+        &self,
+        root: &Path,
+        config: &crate::I18nConfig,
+    ) -> crate::i18n::CatalogIndex {
+        let _profile = profile::span("analysis.index.i18n");
+        let mut index = crate::i18n::CatalogIndex::default();
+        if config.enabled {
+            for catalog in &config.catalogs {
                 let path = normalize_path(root.join(&catalog.path));
                 let parsed = self
                     .files
@@ -84,9 +137,9 @@ impl AnalysisSnapshot {
                     .and_then(|file| file.parsed.as_ref().ok());
                 index.add_catalog(&catalog.locale, path, parsed.map(Arc::as_ref));
             }
-            index.finish(&self.config.i18n);
-            index
-        })
+            index.finish(config);
+        }
+        index
     }
 
     /// Catalog diagnostics are project facts, including catalogs that do not
@@ -109,7 +162,40 @@ impl AnalysisSnapshot {
         offset: usize,
         limit: usize,
     ) -> crate::LocalizationPage {
-        if !self.config.i18n.enabled {
+        self.localization_page_with_catalog(
+            &self.config.i18n,
+            self.catalog_index(),
+            search,
+            offset,
+            limit,
+        )
+    }
+
+    pub fn localization_page_for_path(
+        &self,
+        path: &Path,
+        search: &str,
+        offset: usize,
+        limit: usize,
+    ) -> crate::LocalizationPage {
+        self.localization_page_with_catalog(
+            &self.config_for_path(path).i18n,
+            self.catalog_index_for_path(path),
+            search,
+            offset,
+            limit,
+        )
+    }
+
+    fn localization_page_with_catalog(
+        &self,
+        config: &crate::I18nConfig,
+        index: &crate::i18n::CatalogIndex,
+        search: &str,
+        offset: usize,
+        limit: usize,
+    ) -> crate::LocalizationPage {
+        if !config.enabled {
             return crate::LocalizationPage {
                 enabled: false,
                 locales: Vec::new(),
@@ -117,10 +203,7 @@ impl AnalysisSnapshot {
                 rows: Vec::new(),
             };
         }
-        let index = self.catalog_index();
-        let locales = self
-            .config
-            .i18n
+        let locales = config
             .catalogs
             .iter()
             .map(|catalog| catalog.locale.clone())
@@ -146,8 +229,7 @@ impl AnalysisSnapshot {
                     .iter()
                     .map(|locale| {
                         let exact = entries.get(locale);
-                        let resolved =
-                            index.resolved_entry(key, locale, &self.config.i18n.fallback_locale);
+                        let resolved = index.resolved_entry(key, locale, &config.fallback_locale);
                         let status = match (exact, resolved) {
                             (Some(entry), _)
                                 if matches!(entry.value, crate::i18n::CatalogValue::Dynamic) =>
@@ -214,6 +296,18 @@ impl AnalysisSnapshot {
         &self.config
     }
 
+    pub(super) fn config_for_path(&self, path: &Path) -> &ProjectConfig {
+        super::config_for_path(&self.config, &self.workspace_configs, path)
+    }
+
+    pub(super) fn workspace_root_for_path(&self, path: &Path) -> Option<&Path> {
+        self.workspace_configs
+            .iter()
+            .filter(|(root, _)| path.starts_with(root))
+            .max_by_key(|(root, _)| root.components().count())
+            .map(|(root, _)| root.as_path())
+    }
+
     pub fn source_roots(&self) -> &[PathBuf] {
         self.vfs.source_roots()
     }
@@ -273,6 +367,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn pipeline_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        let config = self.config_for_path(path.as_ref());
         if let Some(error) = self.input_errors.get(&normalize_path(path.as_ref())) {
             return vec![error.clone()];
         }
@@ -301,9 +396,9 @@ impl AnalysisSnapshot {
         diagnostics.extend(self.unsent_shader_diagnostics(path.as_ref()));
         diagnostics.extend(self.shader_scan_runtime_path_diagnostics(path.as_ref(), file));
         diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
-        if self.config.i18n.enabled {
+        if config.i18n.enabled {
             if let Some(catalog_diagnostics) = self
-                .catalog_index()
+                .catalog_index_for_path(path.as_ref())
                 .diagnostics
                 .get(&normalize_path(path.as_ref()))
             {
@@ -316,8 +411,8 @@ impl AnalysisSnapshot {
                         parsed,
                         &uses,
                         file.i18n_locale_uses(),
-                        self.catalog_index(),
-                        &self.config.i18n,
+                        self.catalog_index_for_path(path.as_ref()),
+                        &config.i18n,
                     ));
                 }
             }
@@ -341,7 +436,7 @@ impl AnalysisSnapshot {
             self.module_graph
                 .diagnostics(path.as_ref())
                 .iter()
-                .filter(|diagnostic| self.project_diagnostic_enabled(diagnostic))
+                .filter(|diagnostic| self.project_diagnostic_enabled(path.as_ref(), diagnostic))
                 .cloned(),
         );
         diagnostics.extend(self.unparsed_lua_module_diagnostics(path.as_ref()));
@@ -360,11 +455,12 @@ impl AnalysisSnapshot {
             path.as_ref(),
             &file.source,
             diagnostics,
-            &self.config.diagnostics,
+            &config.diagnostics,
         )
     }
 
     fn checker_diagnostics(&self, path: &Path, file: &AnalysisFile) -> Vec<Diagnostic> {
+        let config = self.config_for_path(path);
         file.checker_diagnostics
             .get_or_init(|| {
                 let default_ecs = crate::config::EcsConfig::default();
@@ -389,28 +485,28 @@ impl AnalysisSnapshot {
                             &degraded.parsed,
                             &degraded.environment,
                             &degraded.environment_diagnostics,
-                            &self.config.ecs,
+                            &config.ecs,
                         )
                     }
                 };
                 if !environment_diagnostics.is_empty() {
                     return Vec::new();
                 }
-                let i18n_environment =
-                    (self.config.i18n.enabled && !file.i18n_key_uses().is_empty()).then(|| {
+                let i18n_environment = (config.i18n.enabled && !file.i18n_key_uses().is_empty())
+                    .then(|| {
                         environment
                             .clone()
-                            .with_i18n_result_types(self.i18n_result_types())
+                            .with_i18n_result_types(self.i18n_result_types_for_path(path))
                     });
                 let environment = i18n_environment.as_ref().unwrap_or(environment);
                 let _profile = profile::span_for_path("analysis.check", path);
-                let mut diagnostics_config = self.config.diagnostics.clone();
+                let mut diagnostics_config = config.diagnostics.clone();
                 if parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config
                         .globals
                         .push(crate::save::MODULE_NAME.to_owned());
                 }
-                if self.config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
+                if config.i18n.enabled && parsed.raw.language == crate::ParsedLanguage::Tua {
                     diagnostics_config
                         .globals
                         .push(crate::i18n::MODULE_NAME.to_owned());
@@ -433,7 +529,7 @@ impl AnalysisSnapshot {
                     crate::check::CheckQueryOptions::new(
                         analysis_asset_roots(self.vfs.source_roots(), &self.asset_roots),
                         &diagnostics_config,
-                        &self.config.jit,
+                        &config.jit,
                         ecs,
                         self.asset_index.as_deref(),
                         None,
@@ -453,6 +549,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let path = normalize_path(path);
+        let config = self.config_for_path(&path);
         if let Some(cached) = self
             .emission_diagnostics_cache
             .lock()
@@ -470,7 +567,7 @@ impl AnalysisSnapshot {
                 &known_paths,
                 self.vfs.source_roots(),
                 &self.vfs.options().output_roots,
-                &self.config.extension,
+                &config.extension,
                 self.require_path_separator,
             )
         };
@@ -479,10 +576,10 @@ impl AnalysisSnapshot {
         });
         let diagnostics = crate::emit::emit_lua_artifact_with_mode_import_resolver_and_environment(
             parsed,
-            self.config.emit.annotation_mode,
+            config.emit.annotation_mode,
             Some(&resolver),
-            self.config.ecs.enabled,
-            self.config.i18n.enabled,
+            config.ecs.enabled,
+            config.i18n.enabled,
             environment.as_ref(),
         )
         .err()

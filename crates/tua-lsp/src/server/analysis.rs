@@ -923,6 +923,18 @@ impl AnalysisHost {
             self.core
                 .set_config(settings.apply_project_config(workspace.config().clone()));
         }
+        self.core.set_workspace_configs(
+            model
+                .workspaces()
+                .iter()
+                .map(|workspace| {
+                    (
+                        workspace.root().to_path_buf(),
+                        settings.apply_project_config(workspace.config().clone()),
+                    )
+                })
+                .collect(),
+        );
         self.core.refresh_asset_index_from_disk();
 
         self.project_model = Some(model);
@@ -1271,11 +1283,18 @@ impl AnalysisSnapshot {
 
     pub(super) fn localization_page(
         &self,
+        source_uri: Option<&str>,
         search: &str,
         offset: usize,
         limit: usize,
     ) -> tua_core::LocalizationPage {
-        self.core.localization_page(search, offset, limit)
+        source_uri.map_or_else(
+            || self.core.localization_page(search, offset, limit),
+            |uri| {
+                self.core
+                    .localization_page_for_path(&path_from_uri(uri), search, offset, limit)
+            },
+        )
     }
 
     pub(super) fn module_dependency_graph(&self) -> ModuleDependencyGraph {
