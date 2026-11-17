@@ -289,6 +289,10 @@ for (const command of ["tua.setup.installDebugger", "tua.setup.installShaderHigh
   }
 }
 if (!commands.has("tua.openSetup")) throw new Error("Missing Set Up Tua command.");
+const agentToolNames = new Set((manifest.contributes.languageModelTools || []).map(tool => tool.name));
+for (const name of ["tua_build_project", "tua_run_love", "tua_start_love_debug", "tua_get_debug_context"]) {
+  if (!agentToolNames.has(name)) throw new Error(`Missing Tua editor agent tool: ${name}`);
+}
 if (!commands.has("tua.setup.agentTools")
     || !walkthrough.steps.some(step => step.id === "agents"
       && step.description.includes("(command:tua.setup.agentTools)"))) {

@@ -300,6 +300,7 @@ impl ApiSession {
     fn project_summary(&self) -> Value {
         json!({
             "workspace": display_path(&self.workspace_root),
+            "cliPath": std::env::current_exe().ok().map(|path| display_path(&path)),
             "analysisRevision": self.host.revision(),
             "target": self.workspace.config().target,
             "extension": self.workspace.config().extension,
@@ -1184,6 +1185,7 @@ mod tests {
             .is_some_and(|prompt| prompt.ends_with("local next = ")));
         assert_eq!(allowed[2]["result"]["completionScope"], "local");
         assert_eq!(allowed[2]["result"]["maxCompletionLines"], 8);
+        assert!(allowed[4]["result"]["cliPath"].as_str().is_some());
         assert_eq!(
             allowed[4]["result"]["overlays"].as_array().map(Vec::len),
             Some(0)
@@ -1230,7 +1232,8 @@ mod tests {
             }}),
             json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
             json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
-            json!({"jsonrpc":"2.0","id":3,"method":"shutdown"}),
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tua_project_summary","arguments":{}}}),
+            json!({"jsonrpc":"2.0","id":4,"method":"shutdown"}),
         ]
         .into_iter()
         .map(|value| serde_json::to_string(&value).unwrap())
@@ -1239,7 +1242,7 @@ mod tests {
         let mut output = Vec::new();
         run_mcp_stdio(input.as_bytes(), &mut output, &project.root).unwrap();
         let responses = response_lines(&output);
-        assert_eq!(responses.len(), 3);
+        assert_eq!(responses.len(), 4);
         assert_eq!(
             responses[0]["result"]["protocolVersion"],
             MCP_PROTOCOL_VERSION
@@ -1248,6 +1251,9 @@ mod tests {
             responses[1]["result"]["tools"].as_array().map(Vec::len),
             Some(12)
         );
+        assert!(responses[2]["result"]["structuredContent"]["cliPath"]
+            .as_str()
+            .is_some());
     }
 
     fn run_api(project: &TempProject, messages: Vec<Value>) -> Vec<Value> {

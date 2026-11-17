@@ -45,7 +45,7 @@ function registerGameConsole(store) {
   };
   store.events.on("change", onSessionChange);
   refresh();
-  return vscode.Disposable.from(changed, view,
+  const disposable = vscode.Disposable.from(changed, view,
     { dispose() { clearTimeout(timer); store.events.off("output", onOutput); store.events.off("change", onSessionChange); } },
     vscode.commands.registerCommand("tua.console.open", () => vscode.commands.executeCommand("tua.console.focus")),
     vscode.commands.registerCommand("tua.console.clear", () => { buffer.clear(); refresh(); }),
@@ -64,6 +64,7 @@ function registerGameConsole(store) {
       if (choice) { filters.session = choice.id; refresh(); }
     }),
   );
+  return { buffer, dispose: () => disposable.dispose() };
 }
 
 module.exports = { registerGameConsole };

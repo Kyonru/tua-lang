@@ -49,9 +49,12 @@ end
 The extension bundles its server for your platform. A separate CLI is useful for terminal builds, but it is not required for editor features. See [Installation](https://kyonru.github.io/tua-lang/installation/) if you prefer a manual VSIX or a custom server.
 
 For coding agents, supported VS Code agents can discover Tua's read-only MCP
-tools from the extension. Run **Tua: Set Up Agent Tools for Codex** to register
+tools from the extension. Editor agents can also build, run, debug, and read
+bounded run and paused-debug context through Tua's editor tools. Run
+**Tua: Set Up Agent Tools for Codex** to register
 the current project for terminal Codex and obtain a stable path to the bundled
-CLI. The command does not add `tua` to your shell's `PATH`.
+CLI. Terminal Codex can run CLI commands with that path; live debugger context
+requires the editor. The command does not add `tua` to your shell's `PATH`.
 
 ## See your project before you run it
 

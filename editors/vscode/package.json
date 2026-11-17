@@ -71,6 +71,60 @@
     "screenshots:readme:check": "node scripts/readme-screenshot-artifacts.js"
   },
   "contributes": {
+    "languageModelTools": [
+      {
+        "name": "tua_build_project",
+        "displayName": "Build Tua Project",
+        "toolReferenceName": "tuaBuild",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(tools)",
+        "userDescription": "Build the active Tua project using the editor's Tua task.",
+        "modelDescription": "Start the active Tua project's build in VS Code. Returns task start status; use the Tua debug context tool to read completion status and output. Requires a trusted local project and an active Tua file.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "tua_run_love",
+        "displayName": "Run Tua LÖVE Game",
+        "toolReferenceName": "tuaRunLove",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(play)",
+        "userDescription": "Start the active Tua LÖVE game through the editor.",
+        "modelDescription": "Start the active Tua LÖVE game using the existing VS Code run task. Returns task start status, not a completed run. Use the Tua debug context tool for recent output. Requires a trusted local game project and LÖVE.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "tua_start_love_debug",
+        "displayName": "Debug Tua LÖVE Game",
+        "toolReferenceName": "tuaDebugLove",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-start)",
+        "userDescription": "Start the active Tua LÖVE game with the configured debugger.",
+        "modelDescription": "Start the active Tua LÖVE game through the extension's existing debugger workflow. Requires a trusted local game project, LÖVE, and the optional Lua debugger extension. Use the Tua debug context tool after a breakpoint pauses execution.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "tua_get_debug_context",
+        "displayName": "Inspect Tua Debug Context",
+        "toolReferenceName": "tuaDebugContext",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-stackframe)",
+        "userDescription": "Read recent Tua run output and paused debug stack and locals.",
+        "modelDescription": "Read up to ten Tua run sessions, forty recent game output lines, and the active Tua debug session's bounded stack, scopes, and local variables when available. The live stack may be unavailable while the game is running. Does not start, stop, or evaluate code in the debugger.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
     "mcpServerDefinitionProviders": [
       {
         "id": "tua.mcp",

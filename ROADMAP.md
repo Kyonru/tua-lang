@@ -150,6 +150,16 @@ results.
 
 ## Next
 
+### Connect Terminal Agents To Live Editor Debugging
+
+- Terminal agents can discover the bundled CLI from MCP project summaries and
+  use their terminal tool to build, test, or launch projects. Editor agents can
+  start Tua tasks and read the active debug context. A separate, explicit
+  workspace-scoped bridge would be needed for terminal agents to inspect a live
+  VS Code debug session. Design its session identity, authorization, bounded
+  output, disconnect behavior, and installed-editor replay before exposing
+  stack frames or variables outside the editor process.
+
 ### Close Tua-Specific LSP Workflow Gaps
 
 The Kotlin LSP comparison found no missing standard request from its published

@@ -33,7 +33,7 @@ The session supports:
 
 | Method | Result |
 | --- | --- |
-| `tua.api/projectSummary` | Roots, config summary, files, overlays, and revision |
+| `tua.api/projectSummary` | Roots, config summary, files, overlays, revision, and the running CLI path |
 | `tua.api/languageContract` | The same compact contract embedded in model prompts |
 | `tua.api/refresh` | Explicit disk rescan; semantic requests never rescan implicitly |
 | `tua.api/setOverlay`, `clearOverlay` | In-memory document content for unsaved files |
@@ -82,6 +82,16 @@ when a trusted local project is open. Each workspace folder gets its own
 read-only analysis session. This registration does not connect external
 terminal agents.
 
+VS Code agents also get editor tools to build the active Tua project, run a
+LÖVE game, start LÖVE debugging, and inspect recent Tua run output. At a
+breakpoint, the debug-context tool can return a bounded stack and local
+variables from the active Tua debug session. Build, run, and debug use the
+same editor actions as the Command Palette; their tool calls report when a
+task starts, and the context tool reports its later status. Debugging needs
+LÖVE and the optional Lua debugger extension. These editor tools require a
+trusted local workspace and are available only while the VS Code extension
+is running. They are separate from the read-only MCP server.
+
 For Codex in a terminal, run **Tua: Set Up Agent Tools for Codex** from the
 Command Palette. The extension copies the bundled CLI to a stable path in its
 user storage, verifies an MCP project-summary call, and registers the selected
@@ -92,6 +102,12 @@ The command shows the stable CLI path for terminal `check`, `build`, `test`,
 and `dev` use; it does not change the shell's `PATH`. Start a new Codex
 session after registration. Run the setup command again after an extension
 update to refresh the copied CLI.
+Terminal Codex can use that CLI path through its terminal tool to build, test,
+and launch Tua projects. The MCP connection does not control a live VS Code
+debug session; use the editor agent's debug-context tool for live stack and
+variable information. The MCP project summary also returns `cliPath`, so an
+agent can discover the executable path without guessing where the extension
+installed it.
 
 ## Privacy And Trust
 

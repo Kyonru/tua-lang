@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Give VS Code agents editor tools to build Tua projects, run and debug LÖVE
+  games, and inspect bounded run output, stack frames, and locals from a paused
+  Tua debug session. MCP project summaries now expose the running CLI path so
+  terminal agents can invoke the bundled compiler through their terminal tool.
 - Expose the bundled read-only MCP server to supported VS Code agents, and add
   an explicit setup command that registers a stable extension-managed CLI
   path for terminal Codex in the selected workspace.

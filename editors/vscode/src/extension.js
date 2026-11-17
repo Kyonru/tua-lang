@@ -24,6 +24,7 @@ const { registerObjectPoolDevex } = require("./object-pools");
 const { shaderEnvironment } = require("./setup/shader-tools");
 const { registerSetup } = require("./setup");
 const { registerAgentTools } = require("./setup/agent-tools");
+const { registerEditorAgentTools } = require("./agents/editor-tools");
 const { registerRuntimeInspector } = require("./inspector/view");
 const { registerProjectChecks } = require("./workspace/checks");
 const { registerGameConsole } = require("./workspace/console");
@@ -77,7 +78,9 @@ async function activate(context) {
   const runActivity = registerRunActivity();
   context.subscriptions.push(runActivity);
   context.subscriptions.push(registerRunConfigurations(context, runActivity.store));
-  context.subscriptions.push(registerGameConsole(runActivity.store));
+  const gameConsole = registerGameConsole(runActivity.store);
+  context.subscriptions.push(gameConsole);
+  context.subscriptions.push(registerEditorAgentTools(runActivity.store, gameConsole.buffer));
   const runtimeInspector = registerRuntimeInspector(context, runActivity.store);
   context.subscriptions.push(runtimeInspector);
   loveDevex = registerLoveDevex({
