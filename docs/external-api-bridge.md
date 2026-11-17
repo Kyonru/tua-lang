@@ -94,13 +94,15 @@ is running. They are separate from the read-only MCP server.
 
 For terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
 lets you select a client, copies the bundled CLI to a stable path in extension
-storage, and verifies an MCP project-summary call. For clients that need
-configuration, it copies a client-specific snippet to the clipboard. Merge
-that snippet into the client's existing settings; setup does not edit them.
+storage, and verifies an MCP project-summary call. It registers Tua through
+the selected agent's CLI when available and verifies the saved command and
+workspace arguments. Existing entries with the same name are preserved.
+If automatic registration is unavailable, the command copies a client-specific
+snippet to the clipboard for you to merge into existing settings.
 Supported VS Code agents discover Tua through the extension's MCP provider.
 The action shows the stable CLI path for terminal `check`, `build`, `test`, and
 `dev` use; it does not change the shell's `PATH`. Start a new agent session
-after adding the snippet, and run setup again after an extension update to
+after setup, and run the command again after an extension update to
 refresh the copied CLI. The agent must launch the CLI on the same host where
 the extension installed it.
 

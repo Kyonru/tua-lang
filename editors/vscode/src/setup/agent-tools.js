@@ -3,6 +3,7 @@
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
@@ -118,11 +119,98 @@ function probeMcp(binary, folder) {
 function setupChoices() {
   return [
     { id: "copilot", label: "Copilot in VS Code", description: "Use the extension's MCP provider" },
-    { id: "claude", label: "Claude Code", description: "Copy a private project entry for ~/.claude.json" },
-    { id: "codex", label: "Codex", description: "Copy a config.toml entry" },
-    { id: "gemini", label: "Gemini CLI", description: "Copy an mcpServers entry for settings.json" },
+    { id: "claude", label: "Claude Code", description: "Register Tua for this project" },
+    { id: "codex", label: "Codex", description: "Register Tua through its CLI" },
+    { id: "gemini", label: "Gemini CLI", description: "Register Tua in user settings" },
     { id: "other", label: "Other MCP client", description: "Copy the command and argument fields" },
   ];
+}
+
+function agentExecutable(client) {
+  const filename = process.platform === "win32" ? `${client}.exe` : client;
+  const directories = [
+    ...((process.env.PATH || "").split(path.delimiter)),
+    path.join(os.homedir(), ".local", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+  ];
+  for (const directory of directories) {
+    if (!directory) continue;
+    const candidate = path.join(directory, filename);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch { /* Try the next location. */ }
+  }
+  return undefined;
+}
+
+function runAgentCli(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(command, args, { cwd, timeout: 20000, maxBuffer: 65536, windowsHide: true },
+      (error, stdout, stderr) => {
+        if (error) reject(new Error((stderr || error.message).trim().slice(-1000)));
+        else resolve(stdout);
+      });
+  });
+}
+
+function readAgentSettings(filename) {
+  try {
+    return JSON.parse(fs.readFileSync(filename, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+async function registeredEntry(client, command, name, folder) {
+  if (client === "codex") {
+    const entries = JSON.parse(await runAgentCli(command, ["mcp", "list", "--json"], folder.uri.fsPath));
+    const entry = entries.find(item => item.name === name);
+    return entry && { command: entry.transport?.command, args: entry.transport?.args, enabled: entry.enabled };
+  }
+  if (client === "claude") {
+    const configDir = process.env.CLAUDE_CONFIG_DIR || os.homedir();
+    const settings = readAgentSettings(path.join(configDir, ".claude.json"));
+    let canonicalPath = folder.uri.fsPath;
+    try { canonicalPath = fs.realpathSync(canonicalPath); } catch { /* The original path may still be configured. */ }
+    return settings.projects?.[canonicalPath]?.mcpServers?.[name]
+      || settings.projects?.[folder.uri.fsPath]?.mcpServers?.[name];
+  }
+  const settings = readAgentSettings(path.join(os.homedir(), ".gemini", "settings.json"));
+  return settings.mcpServers?.[name];
+}
+
+function sameDefinition(entry, definition) {
+  return entry?.command === definition.command
+    && JSON.stringify(entry.args) === JSON.stringify(definition.args)
+    && entry.enabled !== false;
+}
+
+async function registerAgentClient(client, binary, folder) {
+  if (!["claude", "codex", "gemini"].includes(client)) return { status: "manual" };
+  const command = agentExecutable(client);
+  if (!command) return { status: "manual", reason: `${client} CLI was not found by the editor` };
+  const name = serverName(folder);
+  const definition = mcpDefinition(binary, folder);
+  try {
+    const existing = await registeredEntry(client, command, name, folder);
+    if (existing) return sameDefinition(existing, definition)
+      ? { status: "registered", name, existing: true }
+      : { status: "manual", reason: `${client} already has a different MCP server named ${name}` };
+    const args = client === "codex"
+      ? ["mcp", "add", name, "--", binary, ...definition.args]
+      : client === "claude"
+        ? ["mcp", "add", "--scope", "local", "--transport", "stdio", name, "--", binary, ...definition.args]
+        : ["mcp", "add", "--scope", "user", name, binary, "mcp", "--", ...definition.args.slice(1)];
+    await runAgentCli(command, args, folder.uri.fsPath);
+    const saved = await registeredEntry(client, command, name, folder);
+    if (!sameDefinition(saved, definition)) throw new Error(`${client} did not save the expected Tua MCP command`);
+    return { status: "registered", name, existing: false };
+  } catch (error) {
+    return { status: "manual", reason: `${client} registration failed: ${error.message || error}` };
+  }
 }
 
 function clientSetup(client, binary, folder, editorProviderAvailable) {
@@ -146,7 +234,7 @@ function clientSetup(client, binary, folder, editorProviderAvailable) {
   if (client === "gemini" || client === "copilot") {
     return {
       text: JSON.stringify({ mcpServers: { [name]: client === "copilot" ? { type: "stdio", ...definition } : definition } }, null, 2),
-      destination: client === "gemini" ? ".gemini/settings.json" : "~/.copilot/mcp-config.json",
+      destination: client === "gemini" ? "~/.gemini/settings.json" : "~/.copilot/mcp-config.json",
     };
   }
   if (client === "other") {
@@ -178,15 +266,18 @@ function registerAgentTools(context) {
       const setup = clientSetup(client.id, binary, folder,
         typeof vscode.lm?.registerMcpServerDefinitionProvider === "function"
           && typeof vscode.McpStdioServerDefinition === "function");
-      if (setup.text) {
-        await vscode.env.clipboard.writeText(setup.text);
-      }
-      const choice = await vscode.window.showInformationMessage(
+      const registration = setup.available ? { status: "available" }
+        : await registerAgentClient(client.id, binary, folder);
+      if (registration.status === "manual" && setup.text) await vscode.env.clipboard.writeText(setup.text);
+      const message =
         setup.available
           ? `${setup.description} CLI: ${binary}`
-          : `Copied Tua MCP settings for ${client.label}. Merge them into ${setup.destination}; existing settings were not changed. CLI: ${binary}`,
-        "Copy CLI Path",
-      );
+          : registration.status === "registered"
+            ? `Tua MCP is ${registration.existing ? "already registered" : "registered"} for ${client.label} (${registration.name}). Start a new agent session to load it. CLI: ${binary}`
+            : `Tua is not registered for ${client.label}. ${registration.reason ? `${registration.reason}. ` : ""}Copied MCP settings; merge them into ${setup.destination}. CLI: ${binary}`;
+      const choice = registration.status === "manual"
+        ? await vscode.window.showWarningMessage(message, "Copy CLI Path")
+        : await vscode.window.showInformationMessage(message, "Copy CLI Path");
       if (choice === "Copy CLI Path") await vscode.env.clipboard.writeText(binary);
     } catch (error) {
       void vscode.window.showErrorMessage(`Tua agent setup: ${error.message || error}`);

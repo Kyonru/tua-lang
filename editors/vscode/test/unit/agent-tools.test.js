@@ -13,6 +13,8 @@ function fixture(root, clientChoice = "claude") {
   const commands = new Map();
   const copied = [];
   const messages = [];
+  const cliCalls = [];
+  const codexEntries = [];
   let provider;
   const folder = { name: "game", uri: { scheme: "file", fsPath: path.join(root, "game") } };
   const vscode = {
@@ -40,6 +42,7 @@ function fixture(root, clientChoice = "claude") {
     window: {
       showQuickPick: async choices => choices.find(choice => choice.id === clientChoice),
       showInformationMessage: async message => { messages.push(message); return undefined; },
+      showWarningMessage: async message => { messages.push(message); return undefined; },
       showErrorMessage: async () => undefined,
     },
     env: { clipboard: { writeText: async value => { copied.push(value); } } },
@@ -51,17 +54,58 @@ function fixture(root, clientChoice = "claude") {
   };
   const filename = path.resolve(__dirname, "../../src/setup/agent-tools.js");
   const module = { exports: {} };
+  const agentBin = path.join(root, "agent-bin");
+  const agentEnv = { PATH: agentBin };
+  const fakeExecFile = (command, args, options, callback) => {
+    cliCalls.push({ command, args, options });
+    const name = path.basename(command).replace(/\.exe$/, "");
+    if (name === "codex") {
+      if (args[1] === "list") return callback(null, JSON.stringify(codexEntries), "");
+      const separator = args.indexOf("--");
+      codexEntries.push({ name: args[2], enabled: true, transport: {
+        type: "stdio", command: args[separator + 1], args: args.slice(separator + 2),
+      } });
+      return callback(null, "Added", "");
+    }
+    if (name === "claude" || name === "gemini") {
+      const separator = args.indexOf("--");
+      const serverName = name === "claude" ? args[separator - 1] : args[4];
+      const definition = name === "claude"
+        ? { command: args[separator + 1], args: args.slice(separator + 2) }
+        : { command: args[5], args: [args[6], ...args.slice(separator + 1)] };
+      const configPath = name === "claude"
+        ? path.join(agentEnv.CLAUDE_CONFIG_DIR || root, ".claude.json")
+        : path.join(root, ".gemini", "settings.json");
+      const settings = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+      if (name === "claude") {
+        settings.projects ||= {};
+        const projectPath = fs.existsSync(options.cwd) ? fs.realpathSync(options.cwd) : options.cwd;
+        settings.projects[projectPath] ||= {};
+        settings.projects[projectPath].mcpServers ||= {};
+        settings.projects[projectPath].mcpServers[serverName] = definition;
+      } else {
+        settings.mcpServers ||= {};
+        settings.mcpServers[serverName] = definition;
+      }
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      fs.writeFileSync(configPath, JSON.stringify(settings));
+      return callback(null, "Added", "");
+    }
+    callback(new Error("Unknown fake CLI"), "", "");
+  };
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
     module,
-    process,
+    process: { platform: process.platform, pid: process.pid, env: agentEnv },
     setTimeout,
     clearTimeout,
     require: id => id === "vscode" ? vscode
-      : id === "node:child_process" ? { spawn: fakeMcpProcess }
+      : id === "node:child_process" ? { spawn: fakeMcpProcess, execFile: fakeExecFile }
+        : id === "node:os" ? { homedir: () => root }
         : id === "../constants" ? { COMMANDS: { setupAgentTools: "tua.setup.agentTools" } }
         : require(id),
   }, { filename });
-  return { api: module.exports, context, folder, commands, provider: () => provider, vscode, copied, messages };
+  return { api: module.exports, context, folder, commands, provider: () => provider, vscode, copied, messages,
+    cliCalls, agentBin, agentEnv, codexEntries };
 }
 
 function fakeMcpProcess() {
@@ -127,7 +171,7 @@ test("agent setup uses the editor's local global storage path for a non-file sto
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test("agent setup offers client-specific MCP settings without writing agent configuration", async () => {
+test("agent setup copies client-specific MCP settings when native registration is unavailable", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-client-tools-"));
   try {
     const f = fixture(root);
@@ -159,5 +203,52 @@ test("agent setup offers client-specific MCP settings without writing agent conf
       assert.equal(selected.copied.length, client === "copilot" ? 0 : 1, client);
       assert.equal(selected.messages.length, 1, client);
     }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("agent setup registers and verifies Codex, Claude Code, and Gemini CLI without replacing other entries", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-agent-register-"));
+  try {
+    fs.mkdirSync(path.join(root, "agent-bin"));
+    for (const client of ["codex", "claude", "gemini"]) {
+      const executable = process.platform === "win32" ? `${client}.exe` : client;
+      fs.writeFileSync(path.join(root, "agent-bin", executable), "fake CLI", { mode: 0o755 });
+      const f = fixture(root, client);
+      fs.mkdirSync(f.folder.uri.fsPath, { recursive: true });
+      if (client === "claude") f.agentEnv.CLAUDE_CONFIG_DIR = path.join(root, "claude-config");
+      const bundled = path.join(f.context.extensionPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+      fs.mkdirSync(path.dirname(bundled), { recursive: true });
+      fs.writeFileSync(bundled, "binary");
+      if (client === "codex") f.codexEntries.push({ name: "unrelated", transport: { type: "stdio", command: "other", args: [] } });
+      f.api.registerAgentTools(f.context);
+      await f.commands.get("tua.setup.agentTools")();
+      assert.equal(f.copied.length, 0, client);
+      assert.match(f.messages[0], /registered for/, client);
+      assert.equal(f.cliCalls.filter(call => call.args[1] === "add").length, 1, client);
+      assert.equal(f.cliCalls.find(call => call.args[1] === "add").options.cwd, f.folder.uri.fsPath);
+      await f.commands.get("tua.setup.agentTools")();
+      assert.match(f.messages[1], /already registered/, client);
+      assert.equal(f.cliCalls.filter(call => call.args[1] === "add").length, 1, client);
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("agent setup preserves a conflicting MCP name and copies manual settings", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-agent-conflict-"));
+  try {
+    const f = fixture(root, "codex");
+    fs.mkdirSync(f.agentBin, { recursive: true });
+    fs.writeFileSync(path.join(f.agentBin, process.platform === "win32" ? "codex.exe" : "codex"),
+      "fake CLI", { mode: 0o755 });
+    const bundled = path.join(f.context.extensionPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+    fs.mkdirSync(path.dirname(bundled), { recursive: true });
+    fs.writeFileSync(bundled, "binary");
+    f.codexEntries.push({ name: f.api.serverName(f.folder), enabled: true,
+      transport: { type: "stdio", command: "another-tool", args: [] } });
+    f.api.registerAgentTools(f.context);
+    await f.commands.get("tua.setup.agentTools")();
+    assert.equal(f.cliCalls.some(call => call.args[1] === "add"), false);
+    assert.equal(f.copied.length, 1);
+    assert.match(f.messages[0], /already has a different MCP server/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

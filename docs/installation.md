@@ -42,8 +42,9 @@ To use Tua analysis from a coding agent, see
 [External API and MCP](external-api-bridge.md). Supported VS Code agents can
 discover the extension's read-only MCP server in trusted local projects.
 Editor agents also get build, LÖVE run/debug, and debug-context tools. For
-terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It shows
-a stable CLI path and copies settings for the selected client when needed.
+terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
+registers Tua with the selected agent when its CLI is available and shows a
+stable Tua CLI path. If registration is unavailable, it copies manual settings.
 Installing the extension alone does not add `tua` to your shell's `PATH`.
 
 For source-mapped LOVE breakpoints, stepping, variables, and watches, continue

@@ -12,10 +12,12 @@ existing Tua tasks and debugger, and need a trusted local project.
 
 For terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
 lets you choose a client, copies the bundled CLI to stable extension storage,
-and checks an MCP tool call. It copies settings for the selected client to the
-clipboard when needed. Merge them into your existing settings; setup does not
-edit those files. Use the displayed CLI path for `check`, `build`, `test`, or
-`dev`. Run setup again after updating the extension to refresh that copy. The
-MCP project summary returns `cliPath` so a connected agent can find the
-executable without shell `PATH` changes. Live debug context is available
+and checks an MCP tool call. For supported terminal agents, it uses the
+selected agent's CLI to register Tua and verifies the saved command and
+workspace arguments. Existing entries with the same name are preserved. If
+the agent CLI is unavailable, it copies manual settings to the clipboard.
+Use the displayed CLI path for `check`, `build`, `test`, or `dev`. Start a new
+agent session after setup. Run setup again after updating the extension to
+refresh that copy. The MCP project summary returns `cliPath` so a connected
+agent can find the executable without shell `PATH` changes. Live debug context is available
 through the editor agent tool.

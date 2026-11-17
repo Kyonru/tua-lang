@@ -51,8 +51,9 @@ The extension bundles its server for your platform. A separate CLI is useful for
 For coding agents, supported VS Code agents can discover Tua's read-only MCP
 tools from the extension. Editor agents can also build, run, debug, and read
 bounded run and paused-debug context through Tua's editor tools. Run
-**Tua: Set Up Agent Tools** from the Command Palette to get a stable path to
-the bundled CLI and copy settings for a selected terminal agent. Live debugger
+**Tua: Set Up Agent Tools** from the Command Palette to register a selected
+terminal agent and get a stable path to the bundled CLI. If its CLI is
+unavailable, the command copies manual settings. Live debugger
 context requires the editor.
 Setup does not add `tua` to your shell's `PATH`.
 

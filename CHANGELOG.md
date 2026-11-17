@@ -15,6 +15,8 @@ language or editor behavior, and migration notes call out those changes.
 - Expose the bundled read-only MCP server to supported VS Code agents, and add
   an explicit setup command that provides client-specific MCP settings and a
   stable extension-managed CLI path for terminal agents.
+- Register the selected terminal agent through its native CLI when available,
+  then verify its saved Tua MCP entry. Keep manual settings as a fallback.
 
 ### Fixed
 
