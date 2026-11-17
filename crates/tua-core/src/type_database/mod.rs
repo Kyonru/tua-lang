@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::audio;
 use crate::ecs;
@@ -31,6 +32,7 @@ pub struct ProjectTypeDatabase {
 pub struct ProjectTypeModule {
     pub path: PathBuf,
     pub source_kind: AnalysisSourceKind,
+    builtin_aliases: Option<Arc<BTreeMap<String, Type>>>,
     class_names: BTreeSet<String>,
     aliases: BTreeMap<String, ProjectTypeBinding>,
     generic_aliases: BTreeMap<String, GenericAliasDefinition>,
@@ -114,6 +116,9 @@ impl ProjectTypeDatabase {
             let mut module = ProjectTypeModule {
                 path: path.clone(),
                 source_kind: input.source_kind,
+                builtin_aliases: input
+                    .environment
+                    .map(TypeEnvironment::builtin_alias_catalog),
                 class_names: BTreeSet::new(),
                 aliases: BTreeMap::new(),
                 generic_aliases: BTreeMap::new(),
@@ -169,7 +174,7 @@ impl ProjectTypeDatabase {
                         .insert(definition.id.clone(), definition.clone());
                 }
 
-                for (name, ty) in environment.aliases() {
+                for (name, ty) in environment.declared_aliases() {
                     if environment.is_class(name) {
                         module.class_names.insert(name.to_owned());
                     }
@@ -184,7 +189,7 @@ impl ProjectTypeDatabase {
                     );
                 }
 
-                for (name, ty) in environment.locals() {
+                for (name, ty) in environment.declared_locals() {
                     module.locals.insert(
                         name.to_owned(),
                         ProjectTypeBinding {
@@ -972,10 +977,22 @@ impl ProjectTypeDatabase {
         if let Some(binding) = source_module.aliases.get(name) {
             return Some(binding.clone());
         }
-        let imported = source_module.named_type_imports.get(name)?;
-        let module_path =
-            self.module_path_for_specifier(module_graph, source_path, &imported.module)?;
-        self.resolve_exported_alias_binding(module_graph, &module_path, &imported.imported)
+        if let Some(imported) = source_module.named_type_imports.get(name) {
+            let module_path =
+                self.module_path_for_specifier(module_graph, source_path, &imported.module)?;
+            return self.resolve_exported_alias_binding(
+                module_graph,
+                &module_path,
+                &imported.imported,
+            );
+        }
+        let ty = source_module.builtin_aliases.as_ref()?.get(name)?.clone();
+        Some(ProjectTypeBinding {
+            module_path: source_path.to_path_buf(),
+            name: name.to_owned(),
+            ty,
+            origin: ProjectTypeOrigin::Builtin,
+        })
     }
 
     fn resolve_exported_alias_binding(

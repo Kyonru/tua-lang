@@ -42,6 +42,8 @@ use super::{
 pub struct TypeEnvironment {
     path: PathBuf,
     aliases: Arc<BTreeMap<String, Type>>,
+    builtin_aliases: Arc<BTreeMap<String, Type>>,
+    declared_alias_names: BTreeSet<String>,
     generic_aliases: Arc<HashMap<crate::parser::TypeAliasId, GenericAliasDefinition>>,
     generic_alias_bindings: Arc<HashMap<(PathBuf, String), crate::parser::TypeAliasId>>,
     generic_classes: Arc<HashMap<GenericDeclarationId, GenericClassDefinition>>,
@@ -55,6 +57,7 @@ pub struct TypeEnvironment {
     protocol_method_definitions: BTreeMap<(PathBuf, String, String), crate::Definition>,
     protocol_conformance_identities: BTreeSet<(String, PathBuf, String)>,
     locals: Arc<BTreeMap<String, Type>>,
+    declared_local_names: BTreeSet<String>,
     local_docs: BTreeMap<String, String>,
     local_contracts: LocalContracts,
     functions: Vec<TypedFunction>,
@@ -186,6 +189,16 @@ impl TypeEnvironment {
 
     pub fn aliases(&self) -> impl Iterator<Item = (&str, &Type)> {
         self.aliases.iter().map(|(name, ty)| (name.as_str(), ty))
+    }
+
+    pub(crate) fn declared_aliases(&self) -> impl Iterator<Item = (&str, &Type)> {
+        self.declared_alias_names
+            .iter()
+            .filter_map(|name| self.aliases.get(name).map(|ty| (name.as_str(), ty)))
+    }
+
+    pub(crate) fn builtin_alias_catalog(&self) -> Arc<BTreeMap<String, Type>> {
+        Arc::clone(&self.builtin_aliases)
     }
 
     pub(crate) fn generic_alias_definitions(
@@ -666,6 +679,12 @@ impl TypeEnvironment {
         self.locals.iter().map(|(name, ty)| (name.as_str(), ty))
     }
 
+    pub(crate) fn declared_locals(&self) -> impl Iterator<Item = (&str, &Type)> {
+        self.declared_local_names
+            .iter()
+            .filter_map(|name| self.locals.get(name).map(|ty| (name.as_str(), ty)))
+    }
+
     pub fn functions(&self) -> &[TypedFunction] {
         &self.functions
     }
@@ -825,6 +844,7 @@ impl TypeEnvironment {
         for name in names {
             if crate::builtin_module::is_visible(parsed, name) {
                 Arc::make_mut(&mut self.locals).insert(name.clone(), Type::Any);
+                self.declared_local_names.insert(name.clone());
             }
         }
         self
@@ -839,6 +859,7 @@ impl TypeEnvironment {
         locals: impl IntoIterator<Item = (String, Type)>,
     ) -> Self {
         for (name, ty) in locals {
+            self.declared_local_names.insert(name.clone());
             if self.locals.get(&name) != Some(&ty) {
                 Arc::make_mut(&mut self.locals).insert(name, ty);
             }
@@ -864,6 +885,7 @@ impl TypeEnvironment {
             self.local_contracts
                 .types
                 .insert((position.line, position.column), ty.clone());
+            self.declared_local_names.insert(name.clone());
             Arc::make_mut(&mut self.locals).insert(name, ty);
         }
         self
@@ -875,6 +897,7 @@ impl TypeEnvironment {
     ) -> Self {
         for (name, ty) in aliases {
             if !self.aliases.contains_key(&name) {
+                self.declared_alias_names.insert(name.clone());
                 Arc::make_mut(&mut self.aliases).insert(name, ty);
             }
         }
@@ -1867,6 +1890,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
         aliases.insert(protocol.name.clone(), Type::Table(table));
     }
 
+    let declared_alias_names = aliases
+        .keys()
+        .cloned()
+        .chain(class_names.iter().cloned())
+        .collect::<BTreeSet<_>>();
     for (name, ty) in builtin_aliases {
         aliases.entry(name).or_insert(ty);
     }
@@ -2062,10 +2090,11 @@ pub(crate) fn build_type_environment_with_domain_registry(
         domains.shared_builtin_aliases()
     };
     let aliases = if aliases == *shared_aliases {
-        shared_aliases
+        Arc::clone(&shared_aliases)
     } else {
         Arc::new(aliases)
     };
+    let declared_local_names = locals.keys().cloned().collect::<BTreeSet<_>>();
     let declared = crate::builtin_module::declared_names(parsed);
     let builtin_locals = crate::builtin_module::builtin_locals(parsed, &declared);
     // During builtin inference this list is intentionally empty. Do not seed
@@ -2105,6 +2134,8 @@ pub(crate) fn build_type_environment_with_domain_registry(
     let environment = TypeEnvironment {
         path: parsed.path.clone(),
         aliases,
+        builtin_aliases: shared_aliases,
+        declared_alias_names,
         generic_aliases: Arc::new(generic_aliases),
         generic_alias_bindings: Arc::new(generic_alias_bindings),
         generic_classes: Arc::new(generic_classes),
@@ -2201,6 +2232,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             })
             .collect(),
         locals,
+        declared_local_names,
         local_docs,
         local_contracts,
         function_declarations: function_origins

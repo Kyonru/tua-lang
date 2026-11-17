@@ -20,6 +20,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Share builtin type aliases in the project type database instead of copying
+  their nested types into every module, reducing warm LSP memory use in large
+  workspaces while preserving imported type lookup and editor assistance.
 - Stop canceled CodeLens reference-count scans without caching a partial
   reference index or continuing through the remaining project files.
 - Keep hover, typing assistance, and diagnostics responsive while CodeLens

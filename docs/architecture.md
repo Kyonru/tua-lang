@@ -131,6 +131,9 @@ project-wide indexes. Updating a file creates new records and indexes; in-flight
 requests retain the previous revision without copying its AST and semantic data.
 Identical builtin alias and local catalogs also share storage across files;
 project-specific additions use copy-on-write storage.
+The project type database stores only source-declared aliases and locals in each
+module record. Unqualified builtin type lookups use the shared alias catalog;
+module-qualified lookups cannot accidentally export those builtins.
 
 Standalone import inference, including initial file-fact construction, uses a
 bounded filesystem export cache. Reuse validates transitive source contents and

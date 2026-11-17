@@ -30,6 +30,96 @@ fn host_from_fixture(fixture: &Fixture) -> AnalysisHost {
 
 const REEXPORT_DEPTHS: [usize; 5] = [1, 16, 64, 65, 256];
 
+#[test]
+fn project_type_modules_keep_source_bindings_without_copying_builtin_catalogs() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { LoveColor } from "./api"
+local api = require("api")
+local _keep = api
+local imported: LoveColor = { custom = 3 }
+local _value: number = imported.custom
+-- file: src/empty.tua
+return {}
+-- file: src/empty2.tua
+return {}
+-- file: src/api.tua
+export type LoveColor = { custom: number }
+local ECS: number = 42
+return {}
+-- file: src/legacy.lua
+---@alias Custom number
+return {}
+"#,
+    );
+    let snapshot = host_from_fixture(&fixture).snapshot();
+    let database = snapshot.type_database();
+    let graph = snapshot.module_graph();
+
+    let empty = database.module("src/empty.tua").expect("empty module");
+    let empty2 = database
+        .module("src/empty2.tua")
+        .expect("second empty module");
+    assert!(
+        empty.aliases.is_empty() && empty.locals.is_empty(),
+        "empty module retained {} aliases and {} locals from builtin catalogs",
+        empty.aliases.len(),
+        empty.locals.len()
+    );
+    assert!(
+        std::sync::Arc::ptr_eq(
+            empty.builtin_aliases.as_ref().expect("builtin aliases"),
+            empty2.builtin_aliases.as_ref().expect("builtin aliases")
+        ),
+        "modules should share one immutable builtin alias catalog"
+    );
+    assert_eq!(
+        database
+            .resolve_type_name(graph, "src/empty.tua", "LoveColor")
+            .expect("unqualified builtin type should remain available")
+            .origin,
+        ProjectTypeOrigin::Builtin
+    );
+
+    let user_alias = database
+        .resolve_type_name(graph, "src/api.tua", "LoveColor")
+        .expect("user alias should shadow builtin alias");
+    assert_eq!(user_alias.origin, ProjectTypeOrigin::Tua);
+    assert_eq!(
+        user_alias.ty,
+        Type::table([("custom", TableField::required(Type::number()))])
+    );
+    let qualified = database
+        .resolve_type_name(graph, "src/main.tua", "api.LoveColor")
+        .expect("module-qualified exported alias should resolve");
+    assert_eq!(qualified.module_path, PathBuf::from("src/api.tua"));
+    assert_eq!(qualified.ty, user_alias.ty);
+    let named_import = database
+        .resolve_type_name(graph, "src/main.tua", "LoveColor")
+        .expect("named import should resolve ahead of the builtin alias");
+    assert_eq!(named_import.ty, user_alias.ty);
+    assert!(
+        snapshot.diagnostics("src/main.tua").is_empty(),
+        "checker and type database should agree on imported alias: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+    assert_eq!(
+        database
+            .module("src/api.tua")
+            .and_then(|module| module.local("ECS"))
+            .map(|binding| &binding.ty),
+        Some(&Type::number()),
+        "user local should shadow the builtin value"
+    );
+
+    let legacy = database.module("src/legacy.lua").expect("Lua module");
+    assert!(legacy.alias("Custom").is_some());
+    assert!(
+        legacy.alias("LoveColor").is_none(),
+        "Lua module must not export builtin aliases"
+    );
+}
+
 fn reexport_depth_fixture() -> Fixture {
     let mut source = String::from("-- file: src/main.tua\n");
 
