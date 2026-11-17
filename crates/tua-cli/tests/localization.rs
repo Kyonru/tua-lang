@@ -52,6 +52,9 @@ fn localization_build_is_lazy_and_runtime_is_shared_across_modules() {
     if let Some(lua) = support::lua_executable() {
         let result = Command::new(lua)
             .arg("main.lua")
+            // Match the LuaJIT 5.1 path that lacks ./?/init.lua. The packaged
+            // Smiti entry point must load without a caller changing package.path.
+            .env("LUA_PATH", "./?.lua")
             .current_dir(&out)
             .output()
             .unwrap();

@@ -1,6 +1,8 @@
 -- Tua's configured localization adapter. Kept separate from the pinned Smiti18n runtime.
 local config = require("tuai18n_config")
-local smiti = require("smiti18n")
+-- LuaJIT's default package.path may omit ./?/init.lua. Requiring the entry
+-- module explicitly also works with Lua 5.1 and LOVE's module search path.
+local smiti = require("smiti18n.init")
 local previous_locale = smiti.getLocale()
 
 for _, catalog in ipairs(config.catalogs) do
