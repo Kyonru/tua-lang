@@ -100,6 +100,7 @@ jobs:
       # bypass Gatekeeper to install it on a hosted runner. Linux exercises the
       # real debugger/runtime path with the distribution-trusted LOVE package.
       - name: Test workspace
+        shell: bash
         env:
           # Match the explicit analysis-thread stack used by the CLI and LSP.
           # Windows test threads otherwise default too low for debug AST walks.
@@ -109,7 +110,7 @@ jobs:
           TUA_LUAJIT_BIN: ${{ runner.os == 'Linux' && 'luajit' || '' }}
         run: |
           set -o pipefail
-          log="${RUNNER_TEMP}/workspace-tests.log"
+          log="$(mktemp)"
           if cargo test --workspace 2>&1 | tee "${log}"; then
             exit 0
           fi
