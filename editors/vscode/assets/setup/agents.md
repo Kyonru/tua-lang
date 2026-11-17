@@ -10,12 +10,11 @@ debugging, and inspect recent output. At a breakpoint, the debug-context tool
 can read a bounded stack and local variables. These actions use the editor's
 existing Tua tasks and debugger, and need a trusted local project.
 
-For Codex in a terminal, use **Tua: Set Up Agent Tools for Codex**.
-The command copies the bundled CLI to Tua's stable user storage, checks an MCP
-tool call, and registers this workspace with Codex. It does not change your
-terminal's `PATH`. Use the displayed CLI path for `check`, `build`, `test`,
-or `dev` in a terminal.
-Run the setup command again after updating the extension to refresh that copy.
-Terminal Codex can invoke the CLI through its terminal tool; its MCP tools do
-not access the live editor debugger. The MCP project summary returns `cliPath`
-so the agent can find the executable without shell `PATH` changes.
+For terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
+copies the bundled CLI to stable extension storage, checks an MCP tool call,
+and attempts to register this workspace with a supported agent CLI. It does
+not change your terminal's `PATH`. Use the displayed CLI path for `check`,
+`build`, `test`, or `dev`. Run setup again after updating the extension to
+refresh that copy. The MCP project summary returns `cliPath` so a connected
+agent can find the executable without shell `PATH` changes. Live debug context
+is available through the editor agent tool.

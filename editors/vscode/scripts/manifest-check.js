@@ -296,7 +296,7 @@ for (const name of ["tua_build_project", "tua_run_love", "tua_start_love_debug",
 if (!commands.has("tua.setup.agentTools")
     || !walkthrough.steps.some(step => step.id === "agents"
       && step.description.includes("(command:tua.setup.agentTools)"))) {
-  throw new Error("Missing Codex agent setup action.");
+  throw new Error("Missing terminal agent setup action.");
 }
 
 const shaderGrammar = grammars.find((grammar) => grammar.language === "love-glsl");

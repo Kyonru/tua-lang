@@ -14,7 +14,7 @@ language or editor behavior, and migration notes call out those changes.
   terminal agents can invoke the bundled compiler through their terminal tool.
 - Expose the bundled read-only MCP server to supported VS Code agents, and add
   an explicit setup command that registers a stable extension-managed CLI
-  path for terminal Codex in the selected workspace.
+  path for a supported terminal agent in the selected workspace.
 
 ### Fixed
 

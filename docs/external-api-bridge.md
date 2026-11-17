@@ -92,22 +92,21 @@ LÖVE and the optional Lua debugger extension. These editor tools require a
 trusted local workspace and are available only while the VS Code extension
 is running. They are separate from the read-only MCP server.
 
-For Codex in a terminal, run **Tua: Set Up Agent Tools for Codex** from the
-Command Palette. The extension copies the bundled CLI to a stable path in its
-user storage, verifies an MCP project-summary call, and registers the selected
-workspace with Codex. The command runs only when invoked. If the Codex CLI is
-not available to the extension, it copies the equivalent registration command
-to the clipboard. Existing Codex entries with different commands are preserved.
-The command shows the stable CLI path for terminal `check`, `build`, `test`,
-and `dev` use; it does not change the shell's `PATH`. Start a new Codex
-session after registration. Run the setup command again after an extension
-update to refresh the copied CLI.
-Terminal Codex can use that CLI path through its terminal tool to build, test,
-and launch Tua projects. The MCP connection does not control a live VS Code
-debug session; use the editor agent's debug-context tool for live stack and
-variable information. The MCP project summary also returns `cliPath`, so an
-agent can discover the executable path without guessing where the extension
-installed it.
+For terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
+copies the bundled CLI to a stable path in extension storage, verifies an MCP
+project-summary call, and attempts to register the selected workspace with a
+supported agent CLI. If automatic registration is unavailable, it copies a
+registration command to the clipboard. Existing entries with different
+commands are preserved. The action shows the stable CLI path for terminal
+`check`, `build`, `test`, and `dev` use; it does not change the shell's `PATH`.
+Start a new agent session after registration, and run setup again after an
+extension update to refresh the copied CLI.
+
+Agents can also configure Tua's MCP server manually using the
+`tua mcp --stdio --workspace /path/to/project` command shown above. The project
+summary returns `cliPath`, so a connected agent can discover the executable
+for build, test, and launch commands. Live VS Code debug sessions are available
+through the editor agent's debug-context tool.
 
 ## Privacy And Trust
 
