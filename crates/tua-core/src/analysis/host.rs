@@ -755,6 +755,7 @@ impl AnalysisHost {
             project_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             emission_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
+            reverse_reference_index_build_lock: Arc::new(Mutex::new(())),
             project_module_globals: Arc::new(OnceLock::new()),
             catalog_index: Arc::new(OnceLock::new()),
             i18n_result_types: Arc::new(OnceLock::new()),

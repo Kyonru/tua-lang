@@ -5047,6 +5047,126 @@ local message = greet("Ada")
 }
 
 #[test]
+fn canceled_reverse_reference_index_build_does_not_cache_partial_results() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/globals.tua
+function <|global_def|>greet(name: string): string
+  return name
+end
+-- file: src/use.tua
+local message = greet("Ada")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    for index in 0..40 {
+        host.set_file(
+            format!("src/extra_{index:02}.tua"),
+            format!("local value_{index} = {index}\n"),
+        );
+    }
+
+    let snapshot = host.snapshot();
+    let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let reached = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let resumed = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let cancel_worker = {
+        let cancelled = std::sync::Arc::clone(&cancelled);
+        let reached = std::sync::Arc::clone(&reached);
+        let resumed = std::sync::Arc::clone(&resumed);
+        std::thread::spawn(move || {
+            reached.wait();
+            cancelled.store(true, std::sync::atomic::Ordering::Release);
+            resumed.wait();
+        })
+    };
+    let checks = std::cell::Cell::new(0);
+    let canceled = snapshot.reverse_reference_index_cancellable(&|| {
+        let next = checks.get() + 1;
+        checks.set(next);
+        if next == 8 {
+            reached.wait();
+            resumed.wait();
+        }
+        cancelled.load(std::sync::atomic::Ordering::Acquire)
+    });
+    cancel_worker.join().expect("cancel worker should finish");
+    assert!(
+        canceled.is_none(),
+        "the build should stop after cancellation"
+    );
+    assert_eq!(checks.get(), 8);
+    assert!(
+        snapshot.reverse_reference_index.get().is_none(),
+        "a canceled build must not cache an incomplete index"
+    );
+
+    let target = snapshot
+        .definition("src/globals.tua", fixture.position("global_def"))
+        .expect("global function should resolve");
+    let scan_checks = std::cell::Cell::new(0);
+    let canceled_scan = snapshot.references_by_scan(&target, false, &|| {
+        let next = scan_checks.get() + 1;
+        scan_checks.set(next);
+        next >= 5
+    });
+    assert!(
+        canceled_scan.is_none(),
+        "fallback scan should stop between files"
+    );
+    assert_eq!(scan_checks.get(), 5);
+    let references = snapshot
+        .reverse_reference_index()
+        .references(&target, false)
+        .expect("completed build should find the function");
+    assert!(references
+        .iter()
+        .any(|reference| reference.path == Path::new("src/use.tua")));
+}
+
+#[test]
+fn canceled_reverse_reference_index_build_stops_inside_large_file() {
+    let source = (0..100)
+        .map(|index| format!("local value_{index} = {index}\n"))
+        .collect::<String>();
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/large.tua", source);
+
+    let snapshot = host.snapshot();
+    let periodic_checks = std::cell::Cell::new(0);
+    let complete = snapshot.build_reverse_reference_index_cancellable(&|| {
+        periodic_checks.set(periodic_checks.get() + 1);
+        false
+    });
+    assert!(complete.is_some());
+    assert!(
+        periodic_checks.get() >= 10,
+        "the long file should check cancellation between token batches"
+    );
+
+    let checks = std::cell::Cell::new(0);
+    let canceled = snapshot.reverse_reference_index_cancellable(&|| {
+        let next = checks.get() + 1;
+        checks.set(next);
+        next >= 8
+    });
+
+    assert!(canceled.is_none());
+    assert_eq!(
+        checks.get(),
+        8,
+        "cancellation should be checked within the file"
+    );
+    assert!(snapshot.reverse_reference_index.get().is_none());
+    let _ = snapshot.reverse_reference_index();
+    assert!(snapshot.reverse_reference_index.get().is_some());
+}
+
+#[test]
 fn module_alias_references_use_file_scope_without_building_reverse_index() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

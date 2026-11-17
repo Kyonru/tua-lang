@@ -262,6 +262,33 @@ local made = Player.makePlayer("Ada")
     assert_eq!(resolved["command"]["arguments"][0]["uri"], player_uri);
     assert_eq!(locations, references);
 }
+
+#[test]
+fn cancelled_code_lens_resolution_returns_no_reference_count() {
+    let temp = TempProject::new("cancelled-code-lens-resolve");
+    let source =
+        "local function makePlayer(): number return 1 end\nreturn { makePlayer = makePlayer }\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", source);
+
+    let uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(code_lens_request(2, &uri));
+
+    let lens = code_lens_with_name(server.output(), 2, "makePlayer");
+    let cancelled = std::sync::atomic::AtomicBool::new(true);
+    let result = server.server.execute_request_with_cancellation(
+        code_lens_resolve_request(3, lens),
+        "codeLens/resolve",
+        &cancelled,
+    );
+
+    assert_eq!(result["error"]["code"], -32800);
+}
+
 #[test]
 fn code_lens_omits_ambiguous_aliases_and_non_exported_functions() {
     let temp = TempProject::new("code-lens-ambiguous");

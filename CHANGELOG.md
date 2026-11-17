@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Stop canceled CodeLens reference-count scans without caching a partial
+  reference index or continuing through the remaining project files.
 - Keep hover, typing assistance, and diagnostics responsive while CodeLens
   reference counts build on a separate worker after opening a file.
 - Keep pull diagnostics complete after the typing debounce even when editor

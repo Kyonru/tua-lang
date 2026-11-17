@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
@@ -432,7 +432,12 @@ impl LspServer {
             RequestKind::FoldingRange => response(id, self.folding_range_response(&message)),
             RequestKind::CodeAction => response(id, self.code_action_response(&message)),
             RequestKind::CodeLens => response(id, self.code_lens_response(&message)),
-            RequestKind::CodeLensResolve => response(id, self.code_lens_resolve_response(message)),
+            RequestKind::CodeLensResolve => {
+                match self.code_lens_resolve_response(message, cancelled) {
+                    Some(lens) => response(id, lens),
+                    None => error_response(id, -32800, "request cancelled".to_owned()),
+                }
+            }
             RequestKind::Formatting => response(
                 id,
                 self.formatting_response(&message).unwrap_or(Value::Null),
@@ -2770,12 +2775,15 @@ impl LspServer {
         )
     }
 
-    fn code_lens_resolve_response(&self, message: Value) -> Value {
+    fn code_lens_resolve_response(&self, message: Value, cancelled: &AtomicBool) -> Option<Value> {
+        if cancelled.load(Ordering::Acquire) {
+            return None;
+        }
         let Some(lens) = message.get("params").cloned() else {
-            return Value::Null;
+            return Some(Value::Null);
         };
         let Some(data) = code_lens_resolve_data(&lens) else {
-            return lens;
+            return Some(lens);
         };
         let snapshot = {
             let _profile = tua_core::profile::span("lsp.code_lens.resolve.snapshot");
@@ -2786,10 +2794,19 @@ impl LspServer {
         let references = {
             let _profile = tua_core::profile::span("lsp.code_lens.resolve.references");
 
-            snapshot.references(&data.target.path, data.target.position, false)
+            snapshot.references_cancellable(
+                &data.target.path,
+                data.target.position,
+                false,
+                cancelled,
+            )?
         };
 
-        lsp_resolved_reference_code_lens(lens, &data.target, references, &snapshot)
+        if cancelled.load(Ordering::Acquire) {
+            return None;
+        }
+        let resolved = lsp_resolved_reference_code_lens(lens, &data.target, references, &snapshot);
+        (!cancelled.load(Ordering::Acquire)).then_some(resolved)
     }
 
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {

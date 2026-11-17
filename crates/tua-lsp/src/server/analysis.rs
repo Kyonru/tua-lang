@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 use tua_core::{
     require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
@@ -1740,6 +1741,17 @@ impl AnalysisSnapshot {
         include_declaration: bool,
     ) -> Vec<Reference> {
         self.core.references(path, position, include_declaration)
+    }
+
+    pub(super) fn references_cancellable(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+        cancelled: &AtomicBool,
+    ) -> Option<Vec<Reference>> {
+        self.core
+            .references_cancellable(path, position, include_declaration, cancelled)
     }
 
     pub(super) fn prepare_rename(

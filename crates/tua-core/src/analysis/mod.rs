@@ -216,6 +216,7 @@ pub struct AnalysisSnapshot {
     project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
+    reverse_reference_index_build_lock: Arc<Mutex<()>>,
     project_module_globals: Arc<OnceLock<BTreeSet<String>>>,
     catalog_index: Arc<OnceLock<crate::i18n::CatalogIndex>>,
     i18n_result_types: Arc<OnceLock<Arc<BTreeMap<String, Type>>>>,

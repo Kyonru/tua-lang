@@ -1,4 +1,7 @@
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::TryLockError;
+use std::time::Duration;
 
 impl AnalysisSnapshot {
     /// All navigation targets, including uniforms declared in both shader stages
@@ -1176,67 +1179,111 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         include_declaration: bool,
     ) -> Vec<Reference> {
+        self.references_impl(path.as_ref(), position, include_declaration, None)
+            .expect("uncancelled reference query should complete")
+    }
+
+    /// Returns `None` when canceled without caching a partial reference index.
+    pub fn references_cancellable(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+        include_declaration: bool,
+        cancelled: &AtomicBool,
+    ) -> Option<Vec<Reference>> {
+        self.references_impl(
+            path.as_ref(),
+            position,
+            include_declaration,
+            Some(cancelled),
+        )
+    }
+
+    fn references_impl(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+        cancelled: Option<&AtomicBool>,
+    ) -> Option<Vec<Reference>> {
         let _profile = profile::span("analysis.query.references");
-        let path = path.as_ref();
+        let is_cancelled = || cancelled.is_some_and(|flag| flag.load(Ordering::Acquire));
+        if is_cancelled() {
+            return None;
+        }
 
         if let Some(references) = self.i18n_references(path, position, include_declaration) {
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         if let Some(references) =
             self.signal_event_references_at_position(path, position, include_declaration)
         {
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         if let Some(references) = self.asset_references_at_position(path, position) {
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         let Some(target) = self.definition(path, position) else {
-            return self
+            let references = self
                 .scope_references_at_position(path, position, include_declaration)
                 .unwrap_or_default();
+            return (!is_cancelled()).then_some(references);
         };
 
         if let Some(definitions) = self
             .type_database
             .protocol_related_method_definitions(&target)
         {
-            let index = self.reverse_reference_index();
-            let mut references = definitions
-                .iter()
-                .flat_map(|definition| {
-                    index
-                        .references(definition, include_declaration)
-                        .filter(|references| !references.is_empty())
-                        .unwrap_or_else(|| self.references_by_scan(definition, include_declaration))
-                })
-                .collect::<Vec<_>>();
+            let index = if cancelled.is_some() {
+                self.reverse_reference_index_cancellable(&is_cancelled)?
+            } else {
+                self.reverse_reference_index()
+            };
+            let mut references = Vec::new();
+            for definition in &definitions {
+                if is_cancelled() {
+                    return None;
+                }
+                let mut related = match index
+                    .references(definition, include_declaration)
+                    .filter(|references| !references.is_empty())
+                {
+                    Some(references) => references,
+                    None => {
+                        self.references_by_scan(definition, include_declaration, &is_cancelled)?
+                    }
+                };
+                references.append(&mut related);
+            }
             sort_and_dedup_references(&mut references);
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         if let Some(references) = self.parameter_scope_references(&target, include_declaration) {
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         if let Some(references) =
             self.scope_references_at_position(path, position, include_declaration)
         {
-            return references;
+            return (!is_cancelled()).then_some(references);
         }
 
         let _profile = profile::span("analysis.references.reverse_index.lookup");
 
-        if let Some(references) = self
-            .reverse_reference_index()
-            .references(&target, include_declaration)
-        {
-            return references;
+        let index = if cancelled.is_some() {
+            self.reverse_reference_index_cancellable(&is_cancelled)?
+        } else {
+            self.reverse_reference_index()
+        };
+        if let Some(references) = index.references(&target, include_declaration) {
+            return (!is_cancelled()).then_some(references);
         }
 
-        self.references_by_scan(&target, include_declaration)
+        self.references_by_scan(&target, include_declaration, &is_cancelled)
     }
 
     fn signal_event_references_at_position(
@@ -1371,8 +1418,12 @@ impl AnalysisSnapshot {
         &self,
         target: &Definition,
         include_declaration: bool,
-    ) -> Vec<Reference> {
+        is_cancelled: &impl Fn() -> bool,
+    ) -> Option<Vec<Reference>> {
         let _profile = profile::span("analysis.references.fallback_scan");
+        if is_cancelled() {
+            return None;
+        }
         let global_name = self
             .file(&target.path)
             .and_then(|file| file.parsed.as_ref().ok())
@@ -1384,6 +1435,9 @@ impl AnalysisSnapshot {
         let mut references = Vec::new();
 
         for file in self.files.values() {
+            if is_cancelled() {
+                return None;
+            }
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
@@ -1437,18 +1491,35 @@ impl AnalysisSnapshot {
 
         references.sort_by_key(reference_key);
         references.dedup_by_key(|reference| reference_key(reference));
-        references
+        (!is_cancelled()).then_some(references)
     }
 
     pub(super) fn build_reverse_reference_index(&self) -> ReverseReferenceIndex {
+        self.build_reverse_reference_index_cancellable(&|| false)
+            .expect("uncancelled reverse-reference index build should complete")
+    }
+
+    pub(super) fn build_reverse_reference_index_cancellable(
+        &self,
+        is_cancelled: &impl Fn() -> bool,
+    ) -> Option<ReverseReferenceIndex> {
         let _profile = profile::span("analysis.references.index.build");
+        if is_cancelled() {
+            return None;
+        }
         let global_functions = self.global_function_definitions();
+        if is_cancelled() {
+            return None;
+        }
         let global_aliases = self.global_type_alias_definitions();
         let mut type_alias_names = self.symbol_index.names_for_kind(SymbolIndexKind::TypeAlias);
         type_alias_names.extend(self.symbol_index.names_for_kind(SymbolIndexKind::Class));
         let mut index = ReverseReferenceIndex::default();
 
         for file in self.files.values() {
+            if is_cancelled() {
+                return None;
+            }
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
@@ -1465,25 +1536,76 @@ impl AnalysisSnapshot {
             let module_export_candidates =
                 self.module_export_candidates_for_file(parsed, file.hir());
 
-            self.index_token_references(
+            if !self.index_token_references(
                 parsed,
                 &global_aliases,
                 &type_alias_names,
                 &module_export_candidates,
                 &mut index,
-            );
+                is_cancelled,
+            ) {
+                return None;
+            }
         }
 
+        if is_cancelled() {
+            return None;
+        }
         index.finish();
-        index
+        (!is_cancelled()).then_some(index)
     }
 
     pub(super) fn reverse_reference_index(&self) -> &ReverseReferenceIndex {
+        if let Some(index) = self.reverse_reference_index.get() {
+            return index;
+        }
+        let _build_lock = self
+            .reverse_reference_index_build_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.reverse_reference_index.get_or_init(|| {
             let _profile = profile::span("analysis.index.references");
 
             self.build_reverse_reference_index()
         })
+    }
+
+    pub(super) fn reverse_reference_index_cancellable(
+        &self,
+        is_cancelled: &impl Fn() -> bool,
+    ) -> Option<&ReverseReferenceIndex> {
+        if is_cancelled() {
+            return None;
+        }
+        if let Some(index) = self.reverse_reference_index.get() {
+            return Some(index);
+        }
+
+        let _build_lock = loop {
+            if is_cancelled() {
+                return None;
+            }
+            match self.reverse_reference_index_build_lock.try_lock() {
+                Ok(guard) => break guard,
+                Err(TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(1)),
+                Err(TryLockError::Poisoned(poisoned)) => break poisoned.into_inner(),
+            }
+        };
+
+        if is_cancelled() {
+            return None;
+        }
+        if let Some(index) = self.reverse_reference_index.get() {
+            return Some(index);
+        }
+        let index = self.build_reverse_reference_index_cancellable(is_cancelled)?;
+        if is_cancelled() {
+            return None;
+        }
+        self.reverse_reference_index
+            .set(index)
+            .expect("reverse-reference index build lock should allow one initializer");
+        self.reverse_reference_index.get()
     }
 
     pub(super) fn index_scope_references(
@@ -1587,8 +1709,12 @@ impl AnalysisSnapshot {
         type_alias_names: &BTreeSet<String>,
         module_export_candidates: &ModuleExportCandidates,
         index: &mut ReverseReferenceIndex,
-    ) {
-        for identifier in source_identifiers(&parsed.source) {
+        is_cancelled: &impl Fn() -> bool,
+    ) -> bool {
+        for (ordinal, identifier) in source_identifiers(&parsed.source).into_iter().enumerate() {
+            if ordinal % 16 == 0 && is_cancelled() {
+                return false;
+            }
             let span = identifier.span;
             let name = identifier.text.clone();
             let is_type_reference = is_type_reference_position(parsed, span.start);
@@ -1641,6 +1767,7 @@ impl AnalysisSnapshot {
                 );
             }
         }
+        !is_cancelled()
     }
 
     pub(super) fn index_type_alias_token_reference(
