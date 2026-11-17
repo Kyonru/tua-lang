@@ -6,7 +6,88 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-17
+
+### Release summary
+
+Tua 0.10.0 adds optional game systems for localization, typed saves, and
+logging. Catalog-backed localization checks translation keys, placeholders,
+locales, and coverage while editing. Save contracts describe JSON-shaped
+snapshots, support explicit migrations, and persist stores through revision
+polling. The Log API can write scoped messages to the console, a buffered file,
+or an optional on-screen overlay. These runtimes are included in a game build
+only when used; existing Lua and LÖVE projects can keep their own solutions.
+
+#### Highlights
+
+- Complete translation keys and named arguments, inspect localized text in
+  hover, navigate to catalog entries, and compare locale coverage in the
+  Localization Explorer.
+- Define typed save schemas with bounded writes, two-slot verification,
+  recovery choices, and store bindings that avoid serializing on every edit.
+- Profile a LÖVE game for a short development capture: inspect slow frames,
+  sampled CPU stacks, selected game-system boundaries, and source-mapped
+  failures. Export a `.cpuprofile` or open an approximate flame chart with the
+  optional viewer.
+- Start Tua runs and profiles from VS Code's Run and Debug view, with the same
+  run configurations available from Tua's project tools.
+- Find source-linked game logs and errors more quickly, and opt into buffered
+  file logs or a bounded on-screen log overlay when a game needs them.
+- Keep inferred store and save types useful across files and nil fallbacks,
+  and type stable translation results more precisely. Large-workspace type
+  sharing and cancellable reference scans also reduce editor memory and
+  contention without suppressing diagnostics.
+
+#### Upgrade notes
+
+No project configuration migration is required. Localization stays disabled
+until `[i18n]` is enabled; saves, logging, and profiling are used only when
+requested. `ECS` and `Tween` are the preferred built-in names; the existing
+`ecs` and `tween` spellings remain compatible. Update the CLI/server and
+extension together. For save contracts, keep a stable LÖVE save identity and
+provide a player-facing recovery choice before calling `acceptRecovery()` or
+`reset()`.
+
 ### Added
+
+- Export timed LÖVE CPU samples as `.cpuprofile` and open them directly in the
+  optional Flame Chart Visualizer; keep the sample timeline bounded and label
+  callback batching and source attribution as approximate.
+
+- Add **Show Run Options in Run and Debug** and a shortcut from Tua's Run
+  Configuration view so a collapsed Run and Debug section can be reopened;
+  remove a size hint that VSCodium ignores for built-in view containers.
+- List Tua's optional debugger, shader-highlighting, and file-icon companion
+  extensions in setup, with install-on-click actions and a reminder that the
+  flame hot-reload button is built in.
+- Add an opt-in **Profile LOVE Game** development capture with bounded frame
+  timings, LuaJIT CPU stacks, source-map links to Tua and generated Lua, a
+  chosen frame budget, and manual or timed stop. Ordinary builds are untouched.
+- Add selectable ECS, behavior, signal, audio, and asset boundary timing for
+  short captures, with bounded recent-call context and source-mapped failure
+  reports. Selected wrappers are restored after capture.
+- Add optional bounded keyboard/mouse capture and same-project input replay in
+  temporary development launchers, with a controlled seed and explicit
+  nondeterministic-runtime limits.
+- Show the shared Tua LOVE run configurations in VS Code's Run and Debug
+  sidebar, with Profile/Stop Capture controls in both run views.
+- Offer a Tua LOVE launch in VS Code's Select and Start Debugging picker when
+  the workspace has `tua.toml`; custom `launch.json` files remain optional.
+
+- Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
+  catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in
+  files that use the built-in.
+- Complete translation keys, named arguments, and locales; show catalog-backed
+  hover, navigation, references, rename, diagnostics, safe missing-key stubs,
+  and a searchable Localization Explorer in VS Code.
+- Infer stable literal translation result types from catalog entries, and
+  package only the runtime and catalogs needed by a using build.
+- Expose a typed `store:revision()` counter for polling mutations without a
+  whole-store subscription; increments remain allocation-free, including for
+  no-op and partially failed updates.
+- Add opt-in typed `Save` contracts with bounded JSON, direct migrations,
+  verified two-slot writes, explicit recovery, and revision-polled store
+  persistence. A using `.tua` file imports its runtime automatically.
 
 - Add the optional `Log` game API with levels and filterable scopes. Its Lua
   runtime is bundled only when referenced from Tua source.
@@ -19,6 +100,34 @@ language or editor behavior, and migration notes call out those changes.
   when used locals or parameters hide preferred built-in module names.
 
 ### Fixed
+
+- Allow the release helper to validate and tag a versioned candidate commit
+  without making a second release commit.
+
+- Skip unrelated source-map line scans when converting large LÖVE CPU captures,
+  keeping the extension host responsive at report completion.
+
+- Make the Command Palette CPU export save the latest LÖVE capture instead of
+  requesting an unsupported server artifact; remove the unavailable heap
+  summary command.
+
+- Report errors raised while loading a profiled game's main module, preserving
+  the original failure and its source-mapped traceback before sampling starts.
+
+- Start exported LÖVE flame charts at the first retained callback after a long
+  capture, and show how many earlier callbacks were evicted.
+
+- Keep Package as a one-time action so the Play button defaults to Development
+  even when an older workspace remembered Package as its selection.
+
+- Infer plural translations as strings when catalog shapes agree, and use the
+  required `other` form if a locale's plural rule selects a missing form.
+- Widen inferred store state before constructing method signatures, so stores
+  initialized with string literals retain usable `set` types across factories.
+- Preserve the inferred snapshot type through `saved or defaults`, including
+  Store member completion and checker errors after importing a save contract.
+- Resolve assertion guards only for the name being queried, avoiding repeated
+  analysis of unrelated save-result variables during `tua check` and editor requests.
 
 - Share builtin type aliases in the project type database instead of copying
   their nested types into every module, reducing warm LSP memory use in large
@@ -83,113 +192,6 @@ language or editor behavior, and migration notes call out those changes.
   method; preserve navigation for typed generic and imported class instances.
 - Open VS Code's Debug Console when starting a Tua LOVE debug session. The
   debugger's output-event test now checks that game `print(...)` reaches it.
-
-## [0.10.0] - 2026-11-15
-
-### Release summary
-
-Tua 0.10.0 adds two optional game systems: catalog-backed localization and
-typed save contracts. A project can enable localization in `tua.toml` to check
-translation keys, placeholders, locales, and catalog coverage while editing.
-Save contracts describe JSON-shaped snapshots, support explicit migrations,
-and can persist stores through revision polling. Both helpers are added to a
-game build only when Tua code uses them; existing Lua and LÖVE projects can
-keep their own solutions.
-
-#### Highlights
-
-- Complete translation keys and named arguments, inspect localized text in
-  hover, navigate to catalog entries, and compare locale coverage in the
-  Localization Explorer.
-- Define typed save schemas with bounded writes, two-slot verification,
-  recovery choices, and store bindings that avoid serializing on every edit.
-- Profile a LÖVE game for a short development capture: inspect slow frames,
-  sampled CPU stacks, selected game-system boundaries, and source-mapped
-  failures. Export a `.cpuprofile` or open an approximate flame chart with the
-  optional viewer.
-- Start Tua runs and profiles from VS Code's Run and Debug view, with the same
-  run configurations available from Tua's project tools.
-- Keep inferred store and save types useful across files and nil fallbacks,
-  and type stable translation results more precisely.
-
-#### Upgrade notes
-
-No project configuration migration is required. Localization stays disabled
-until `[i18n]` is enabled; save contracts and profiling are used only when
-requested. Update the CLI/server and extension together. For save contracts,
-keep a stable LÖVE save identity and provide a player-facing recovery choice
-before calling `acceptRecovery()` or `reset()`.
-
-### Added
-
-- Export timed LÖVE CPU samples as `.cpuprofile` and open them directly in the
-  optional Flame Chart Visualizer; keep the sample timeline bounded and label
-  callback batching and source attribution as approximate.
-
-- Add **Show Run Options in Run and Debug** and a shortcut from Tua's Run
-  Configuration view so a collapsed Run and Debug section can be reopened;
-  remove a size hint that VSCodium ignores for built-in view containers.
-- List Tua's optional debugger, shader-highlighting, and file-icon companion
-  extensions in setup, with install-on-click actions and a reminder that the
-  flame hot-reload button is built in.
-- Add an opt-in **Profile LOVE Game** development capture with bounded frame
-  timings, LuaJIT CPU stacks, source-map links to Tua and generated Lua, a
-  chosen frame budget, and manual or timed stop. Ordinary builds are untouched.
-- Add selectable ECS, behavior, signal, audio, and asset boundary timing for
-  short captures, with bounded recent-call context and source-mapped failure
-  reports. Selected wrappers are restored after capture.
-- Add optional bounded keyboard/mouse capture and same-project input replay in
-  temporary development launchers, with a controlled seed and explicit
-  nondeterministic-runtime limits.
-- Show the shared Tua LOVE run configurations in VS Code's Run and Debug
-  sidebar, with Profile/Stop Capture controls in both run views.
-- Offer a Tua LOVE launch in VS Code's Select and Start Debugging picker when
-  the workspace has `tua.toml`; custom `launch.json` files remain optional.
-
-- Add opt-in `[i18n]` localization for LOVE projects, with source-relative Lua
-  catalogs, a pinned Smiti18n runtime, and automatic `I18n` import only in
-  files that use the built-in.
-- Complete translation keys, named arguments, and locales; show catalog-backed
-  hover, navigation, references, rename, diagnostics, safe missing-key stubs,
-  and a searchable Localization Explorer in VS Code.
-- Infer stable literal translation result types from catalog entries, and
-  package only the runtime and catalogs needed by a using build.
-- Expose a typed `store:revision()` counter for polling mutations without a
-  whole-store subscription; increments remain allocation-free, including for
-  no-op and partially failed updates.
-- Add opt-in typed `Save` contracts with bounded JSON, direct migrations,
-  verified two-slot writes, explicit recovery, and revision-polled store
-  persistence. A using `.tua` file imports its runtime automatically.
-
-### Fixed
-
-- Allow the release helper to validate and tag a versioned candidate commit
-  without making a second release commit.
-
-- Skip unrelated source-map line scans when converting large LÖVE CPU captures,
-  keeping the extension host responsive at report completion.
-
-- Make the Command Palette CPU export save the latest LÖVE capture instead of
-  requesting an unsupported server artifact; remove the unavailable heap
-  summary command.
-
-- Report errors raised while loading a profiled game's main module, preserving
-  the original failure and its source-mapped traceback before sampling starts.
-
-- Start exported LÖVE flame charts at the first retained callback after a long
-  capture, and show how many earlier callbacks were evicted.
-
-- Keep Package as a one-time action so the Play button defaults to Development
-  even when an older workspace remembered Package as its selection.
-
-- Infer plural translations as strings when catalog shapes agree, and use the
-  required `other` form if a locale's plural rule selects a missing form.
-- Widen inferred store state before constructing method signatures, so stores
-  initialized with string literals retain usable `set` types across factories.
-- Preserve the inferred snapshot type through `saved or defaults`, including
-  Store member completion and checker errors after importing a save contract.
-- Resolve assertion guards only for the name being queried, avoiding repeated
-  analysis of unrelated save-result variables during `tua check` and editor requests.
 
 ## [0.9.0] - 2026-11-14
 
