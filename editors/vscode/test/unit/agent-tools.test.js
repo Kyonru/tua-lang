@@ -1,14 +1,18 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { PassThrough } = require("node:stream");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function fixture(root, execFile) {
+function fixture(root, clientChoice = "claude") {
   const commands = new Map();
+  const copied = [];
+  const messages = [];
   let provider;
   const folder = { name: "game", uri: { scheme: "file", fsPath: path.join(root, "game") } };
   const vscode = {
@@ -34,10 +38,11 @@ function fixture(root, execFile) {
       onDidGrantWorkspaceTrust: () => ({ dispose() {} }),
     },
     window: {
-      showInformationMessage: async () => undefined,
+      showQuickPick: async choices => choices.find(choice => choice.id === clientChoice),
+      showInformationMessage: async message => { messages.push(message); return undefined; },
       showErrorMessage: async () => undefined,
     },
-    env: { clipboard: { writeText: async () => {} } },
+    env: { clipboard: { writeText: async value => { copied.push(value); } } },
   };
   const context = {
     extensionPath: path.join(root, "extension"),
@@ -52,17 +57,30 @@ function fixture(root, execFile) {
     setTimeout,
     clearTimeout,
     require: id => id === "vscode" ? vscode
-      : id === "node:child_process" ? { execFile }
+      : id === "node:child_process" ? { spawn: fakeMcpProcess }
         : id === "../constants" ? { COMMANDS: { setupAgentTools: "tua.setup.agentTools" } }
         : require(id),
   }, { filename });
-  return { api: module.exports, context, folder, commands, provider: () => provider, vscode };
+  return { api: module.exports, context, folder, commands, provider: () => provider, vscode, copied, messages };
+}
+
+function fakeMcpProcess() {
+  const child = new EventEmitter();
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => {};
+  queueMicrotask(() => {
+    child.stdout.write(JSON.stringify({ id: 2, result: { structuredContent: { workspace: "test" } } }) + "\n");
+    child.emit("close", 0);
+  });
+  return child;
 }
 
 test("agent discovery uses the packaged CLI and setup installs a stable copy only on request", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-agent-tools-"));
   try {
-    const f = fixture(root, () => {});
+    const f = fixture(root);
     const bundled = path.join(f.context.extensionPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
     fs.mkdirSync(path.dirname(bundled), { recursive: true });
     fs.writeFileSync(bundled, "first binary");
@@ -87,29 +105,37 @@ test("agent discovery uses the packaged CLI and setup installs a stable copy onl
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test("Codex registration is scoped to the project and reuses an exact existing entry", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-codex-tools-"));
+test("agent setup offers client-specific MCP settings without writing agent configuration", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-client-tools-"));
   try {
-    const calls = [];
-    let existing;
-    const f = fixture(root, (_command, args, _options, callback) => {
-      calls.push(args);
-      if (args[1] === "get" && !existing) {
-        const error = new Error("missing");
-        error.code = 1;
-        callback(error, "", "Error: No MCP server named 'tua-game' found.");
-      } else if (args[1] === "add") {
-        existing = { transport: { command: args[4], args: args.slice(5) } };
-        callback(null, "", "");
-      } else callback(null, JSON.stringify(existing), "");
-    });
-    const binary = path.join(root, "stable", "tua");
-    const first = await f.api.configureCodex(binary, f.folder);
-    assert.equal(first.alreadyConfigured, false);
-    assert.equal(calls[1][1], "add");
-    assert.equal(calls[1].at(-1), f.folder.uri.fsPath);
-    const second = await f.api.configureCodex(binary, f.folder);
-    assert.equal(second.alreadyConfigured, true);
-    assert.equal(calls.filter(args => args[1] === "add").length, 1);
+    const f = fixture(root);
+    const bundled = path.join(f.context.extensionPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+    fs.mkdirSync(path.dirname(bundled), { recursive: true });
+    fs.writeFileSync(bundled, "binary");
+    f.api.registerAgentTools(f.context);
+    await f.commands.get("tua.setup.agentTools")();
+    assert.equal(f.copied.length, 1);
+    const name = f.api.serverName(f.folder);
+    const claude = JSON.parse(f.copied[0]).projects[f.folder.uri.fsPath].mcpServers[name];
+    assert.equal(claude.command, f.api.stableCli(f.context));
+    assert.equal(claude.args.at(-1), f.folder.uri.fsPath);
+    assert.match(f.messages[0], /\.claude\.json/);
+    assert.match(f.api.clientSetup("codex", claude.command, f.folder, false).text, /\[mcp_servers\./);
+    const gemini = JSON.parse(f.api.clientSetup("gemini", claude.command, f.folder, false).text);
+    assert.equal(gemini.mcpServers[name].command, claude.command);
+    const other = JSON.parse(f.api.clientSetup("other", claude.command, f.folder, false).text);
+    assert.equal(other.name, name);
+    assert.equal(other.type, "stdio");
+    assert.equal(f.api.clientSetup("copilot", claude.command, f.folder, true).available, true);
+    const copilotFallback = JSON.parse(f.api.clientSetup("copilot", claude.command, f.folder, false).text).mcpServers[name];
+    assert.equal(copilotFallback.command, claude.command);
+    assert.equal(copilotFallback.type, "stdio");
+    for (const client of ["codex", "gemini", "other", "copilot"]) {
+      const selected = fixture(root, client);
+      selected.api.registerAgentTools(selected.context);
+      await selected.commands.get("tua.setup.agentTools")();
+      assert.equal(selected.copied.length, client === "copilot" ? 0 : 1, client);
+      assert.equal(selected.messages.length, 1, client);
+    }
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

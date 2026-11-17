@@ -50,26 +50,14 @@ function installCli(context) {
   return destination;
 }
 
-function codexName(folder) {
+function serverName(folder) {
   const slug = folder.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "project";
   const suffix = crypto.createHash("sha256").update(folder.uri.fsPath).digest("hex").slice(0, 8);
   return `tua-${slug}-${suffix}`;
 }
 
-function codexArgs(binary, folder) {
-  return [binary, "mcp", "--stdio", "--workspace", folder.uri.fsPath];
-}
-
-function execCodex(args) {
-  return new Promise((resolve, reject) => {
-    childProcess.execFile("codex", args, { timeout: 15000, windowsHide: true, maxBuffer: 65536 },
-      (error, stdout, stderr) => {
-        if (error) {
-          error.stderr = stderr;
-          reject(error);
-        } else resolve({ stdout, stderr });
-      });
-  });
+function mcpDefinition(binary, folder) {
+  return { command: binary, args: ["mcp", "--stdio", "--workspace", folder.uri.fsPath] };
 }
 
 function probeMcp(binary, folder) {
@@ -124,29 +112,44 @@ function probeMcp(binary, folder) {
   });
 }
 
-function shellQuote(value) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+function setupChoices() {
+  return [
+    { id: "copilot", label: "Copilot in VS Code", description: "Use the extension's MCP provider" },
+    { id: "claude", label: "Claude Code", description: "Copy a private project entry for ~/.claude.json" },
+    { id: "codex", label: "Codex", description: "Copy a config.toml entry" },
+    { id: "gemini", label: "Gemini CLI", description: "Copy an mcpServers entry for settings.json" },
+    { id: "other", label: "Other MCP client", description: "Copy the command and argument fields" },
+  ];
 }
 
-async function configureCodex(binary, folder) {
-  const name = codexName(folder);
-  const args = codexArgs(binary, folder);
-  try {
-    const existing = JSON.parse((await execCodex(["mcp", "get", name, "--json"])).stdout);
-    const transport = existing.transport || existing;
-    if (transport.command === args[0] && JSON.stringify(transport.args) === JSON.stringify(args.slice(1))) {
-      return { name, alreadyConfigured: true };
-    }
-    throw new Error(`Codex already has a different server named ${name}; remove it manually before setting up Tua`);
-  } catch (error) {
-    if (error.code === "ENOENT") throw new Error("Codex CLI was not found on PATH");
-    if (!error.stderr?.includes("No MCP server named")) throw error;
+function clientSetup(client, binary, folder, editorProviderAvailable) {
+  const name = serverName(folder);
+  const definition = mcpDefinition(binary, folder);
+  if (client === "copilot" && editorProviderAvailable) {
+    return { available: true, description: "Tua MCP tools are available from this extension in the trusted VS Code workspace." };
   }
-  await execCodex(["mcp", "add", name, "--", ...args]);
-  const configured = JSON.parse((await execCodex(["mcp", "get", name, "--json"])).stdout);
-  const transport = configured.transport || configured;
-  if (transport.command !== binary) throw new Error("Codex did not retain the Tua MCP command");
-  return { name, alreadyConfigured: false };
+  if (client === "codex") {
+    return {
+      text: `[mcp_servers.${name}]\ncommand = ${JSON.stringify(binary)}\nargs = ${JSON.stringify(definition.args)}\n`,
+      destination: "~/.codex/config.toml",
+    };
+  }
+  if (client === "claude") {
+    return {
+      text: JSON.stringify({ projects: { [folder.uri.fsPath]: { mcpServers: { [name]: definition } } } }, null, 2),
+      destination: `~/.claude.json under projects[${JSON.stringify(folder.uri.fsPath)}].mcpServers`,
+    };
+  }
+  if (client === "gemini" || client === "copilot") {
+    return {
+      text: JSON.stringify({ mcpServers: { [name]: client === "copilot" ? { type: "stdio", ...definition } : definition } }, null, 2),
+      destination: client === "gemini" ? ".gemini/settings.json" : "~/.copilot/mcp-config.json",
+    };
+  }
+  if (client === "other") {
+    return { text: JSON.stringify({ name, type: "stdio", ...definition }, null, 2), destination: "your MCP client's server settings" };
+  }
+  throw new Error("Unknown agent selection");
 }
 
 function workspaceFolders() {
@@ -162,23 +165,26 @@ function registerAgentTools(context) {
       if (!folders.length) throw new Error("Open and trust a local Tua project first");
       const folder = folders.length === 1 ? folders[0] : await vscode.window.showQuickPick(
         folders.map(item => ({ label: item.name, description: item.uri.fsPath, folder: item })),
-        { placeHolder: "Choose the project to expose to Codex" },
+        { placeHolder: "Choose the Tua project for agent tools" },
       ).then(item => item?.folder);
       if (!folder) return;
+      const client = await vscode.window.showQuickPick(setupChoices(), { placeHolder: "Choose your coding agent" });
+      if (!client) return;
       const binary = installCli(context);
       await probeMcp(binary, folder);
-      try {
-        const result = await configureCodex(binary, folder);
-        void vscode.window.showInformationMessage(
-          `Tua tools are ${result.alreadyConfigured ? "already available" : "configured"} for Codex in ${folder.name}. CLI: ${binary}`,
-          "Copy CLI Path",
-        ).then(choice => choice === "Copy CLI Path" && vscode.env.clipboard.writeText(binary));
-      } catch (error) {
-        const command = ["codex", "mcp", "add", codexName(folder), "--", ...codexArgs(binary, folder)]
-          .map(shellQuote).join(" ");
-        await vscode.env.clipboard.writeText(command);
-        throw new Error(`${error.message}. The setup command was copied to your clipboard; CLI: ${binary}`);
+      const setup = clientSetup(client.id, binary, folder,
+        typeof vscode.lm?.registerMcpServerDefinitionProvider === "function"
+          && typeof vscode.McpStdioServerDefinition === "function");
+      if (setup.text) {
+        await vscode.env.clipboard.writeText(setup.text);
       }
+      const choice = await vscode.window.showInformationMessage(
+        setup.available
+          ? `${setup.description} CLI: ${binary}`
+          : `Copied Tua MCP settings for ${client.label}. Merge them into ${setup.destination}; existing settings were not changed. CLI: ${binary}`,
+        "Copy CLI Path",
+      );
+      if (choice === "Copy CLI Path") await vscode.env.clipboard.writeText(binary);
     } catch (error) {
       void vscode.window.showErrorMessage(`Tua agent setup: ${error.message || error}`);
     }
@@ -212,4 +218,4 @@ function registerAgentTools(context) {
   return vscode.Disposable.from(...disposables);
 }
 
-module.exports = { registerAgentTools, bundledCli, stableCli, installCli, codexName, codexArgs, configureCodex, probeMcp };
+module.exports = { registerAgentTools, bundledCli, stableCli, installCli, serverName, mcpDefinition, clientSetup, probeMcp };

@@ -43,8 +43,8 @@ To use Tua analysis from a coding agent, see
 discover the extension's read-only MCP server in trusted local projects.
 Editor agents also get build, LÖVE run/debug, and debug-context tools. For
 terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It shows
-a stable CLI path for terminal commands; installing the extension alone does
-not add `tua` to your shell's `PATH`.
+a stable CLI path and copies settings for the selected client when needed.
+Installing the extension alone does not add `tua` to your shell's `PATH`.
 
 For source-mapped LOVE breakpoints, stepping, variables, and watches, continue
 with [Debugging](debugging.md) after installing the Tua extension.

@@ -2258,7 +2258,7 @@
           {
             "id": "agents",
             "title": "Connect Tua to coding agents",
-            "description": "VS Code agents can discover Tua's read-only MCP tools from this extension. For terminal agents, copy the bundled CLI to a stable user-local path and configure this workspace explicitly.\n[Set Up Tua Agent Tools](command:tua.setup.agentTools)",
+            "description": "VS Code agents can discover Tua's read-only MCP tools from this extension. For terminal agents, choose a client and copy its MCP settings and a stable CLI path.\n[Set Up Tua Agent Tools](command:tua.setup.agentTools)",
             "media": {
               "markdown": "assets/setup/agents.md"
             },
