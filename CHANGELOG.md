@@ -101,6 +101,8 @@ provide a player-facing recovery choice before calling `acceptRecovery()` or
 
 ### Fixed
 
+- Keep wide translation coverage tables inside the Localization Explorer's
+  scrollable pane in narrow editor columns.
 - Load the bundled localization runtime with LuaJIT's standard Lua 5.1 module
   search path, which does not always include `?/init.lua`.
 - Apply a nested project's `[i18n]` configuration to its editor diagnostics,

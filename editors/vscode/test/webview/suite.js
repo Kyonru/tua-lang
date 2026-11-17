@@ -285,7 +285,9 @@ async function run() {
     await waitFor(() => evaluate("document.getElementById('summary').textContent === '1 keys · 2 locales'"), "localization recovery");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 640, height: 900, deviceScaleFactor: 1, mobile: false });
     await waitFor(() => workbench.evaluate("window.innerWidth <= 640"), "narrow localization viewport");
-    assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), true, "localization view fits a narrow editor");
+    const localizationWidths = await evaluate("({ viewport: window.innerWidth, document: document.documentElement.scrollWidth, coverage: document.querySelector('.layout > section').scrollWidth, table: document.getElementById('table').scrollWidth, tableWrap: document.querySelector('.table-wrap').clientWidth })");
+    assert(localizationWidths.document <= localizationWidths.viewport + 1,
+      "localization view fits a narrow editor while the coverage table scrolls inside its pane: " + JSON.stringify(localizationWidths));
     await screenshot("localization-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     const emptyExplorers = [

@@ -18,6 +18,7 @@ button { cursor: pointer; padding: 5px 9px; border: 1px solid var(--vscode-butto
 button:hover { background: var(--vscode-button-secondaryHoverBackground); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
 .layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(250px, .8fr); gap: 16px; align-items: start; }
+.layout > section { min-width: 0; }
 .table-wrap { overflow: auto; max-height: calc(100vh - 180px); border: 1px solid var(--vscode-panel-border); }
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; }
@@ -33,7 +34,7 @@ tr[aria-selected="true"] { background: var(--vscode-list-activeSelectionBackgrou
 .sample { white-space: pre-wrap; overflow-wrap: anywhere; margin: 7px 0; }
 .small { color: var(--vscode-descriptionForeground); font-size: .9em; }
 .pager { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-@media (max-width: 760px) { body { padding: 12px; } .layout { grid-template-columns: 1fr; } .table-wrap { max-height: 45vh; } }
+@media (max-width: 760px) { body { padding: 12px; } .layout { grid-template-columns: minmax(0, 1fr); } .table-wrap { max-height: 45vh; } }
 </style></head><body>
 <header><h1>Localization</h1><span id="summary" class="small" aria-live="polite">Loading catalogs…</span></header>
 <div class="tools"><input id="search" type="search" aria-label="Find translation key" placeholder="Find translation key"><button id="refresh" type="button">Refresh</button></div>
