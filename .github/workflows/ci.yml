@@ -107,7 +107,14 @@ jobs:
           # Run emitted-Lua and runtime fixtures on the LuaJIT target. A pinned
           # interpreter fails the tests when missing instead of skipping them.
           TUA_LUAJIT_BIN: ${{ runner.os == 'Linux' && 'luajit' || '' }}
-        run: cargo test --workspace
+        run: |
+          set -o pipefail
+          log="${RUNNER_TEMP}/workspace-tests.log"
+          if cargo test --workspace 2>&1 | tee "${log}"; then
+            exit 0
+          fi
+          python3 scripts/ci_failure_summary.py "${log}" "Workspace tests failed"
+          exit 1
       - name: Test bundled runtimes on LuaJIT
         if: runner.os == 'Linux'
         run: make runtime-test LUA=luajit
@@ -168,7 +175,14 @@ jobs:
       - name: Test extension host
         run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:vscode
       - name: Test preview webviews
-        run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:webviews
+        run: |
+          set -o pipefail
+          log="${RUNNER_TEMP}/preview-webviews.log"
+          if xvfb-run --auto-servernum npm --prefix editors/vscode run test:webviews 2>&1 | tee "${log}"; then
+            exit 0
+          fi
+          python3 scripts/ci_failure_summary.py "${log}" "Preview webviews failed"
+          exit 1
       - name: Test extension with the real server
         run: xvfb-run --auto-servernum make extension-real-server-test
 
