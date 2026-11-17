@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Expose the bundled read-only MCP server to supported VS Code agents, and add
+  an explicit setup command that registers a stable extension-managed CLI
+  path for terminal Codex in the selected workspace.
+
 ### Fixed
 
 - Navigate from a class `implements` clause to the local or imported protocol

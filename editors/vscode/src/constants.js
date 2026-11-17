@@ -2,6 +2,7 @@
 
 const COMMANDS = {
   openSetup: "tua.openSetup",
+  setupAgentTools: "tua.setup.agentTools",
   setupApplyTheme: "tua.setup.applyTheme",
   setupRestoreTheme: "tua.setup.restoreTheme",
   setupApplyLayout: "tua.setup.applyLayout",

@@ -42,6 +42,7 @@
   ],
   "activationEvents": [
     "onCommand:tua.initProject",
+    "onCommand:tua.setup.agentTools",
     "onCommand:tua.debugLoveProject",
     "onCommand:tua.tests.createForFunction",
     "onDebugResolve:lua-local",
@@ -70,6 +71,12 @@
     "screenshots:readme:check": "node scripts/readme-screenshot-artifacts.js"
   },
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "tua.mcp",
+        "label": "Tua Project Analysis"
+      }
+    ],
     "breakpoints": [
       {
         "language": "tua"
@@ -1109,6 +1116,11 @@
       {
         "command": "tua.openSetup",
         "title": "Set Up Tua",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.setup.agentTools",
+        "title": "Set Up Agent Tools for Codex",
         "category": "Tua"
       },
       {
@@ -2187,6 +2199,17 @@
             },
             "completionEvents": [
               "onCommand:tua.setup.installDebugger"
+            ]
+          },
+          {
+            "id": "agents",
+            "title": "Connect Tua to coding agents",
+            "description": "VS Code agents can discover Tua's read-only MCP tools from this extension. For terminal Codex, copy the bundled CLI to a stable user-local path and register this workspace explicitly.\n[Set Up Tua Tools for Codex](command:tua.setup.agentTools)",
+            "media": {
+              "markdown": "assets/setup/agents.md"
+            },
+            "completionEvents": [
+              "onCommand:tua.setup.agentTools"
             ]
           },
           {

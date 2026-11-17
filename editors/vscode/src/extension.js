@@ -23,6 +23,7 @@ const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { shaderEnvironment } = require("./setup/shader-tools");
 const { registerSetup } = require("./setup");
+const { registerAgentTools } = require("./setup/agent-tools");
 const { registerRuntimeInspector } = require("./inspector/view");
 const { registerProjectChecks } = require("./workspace/checks");
 const { registerGameConsole } = require("./workspace/console");
@@ -61,6 +62,7 @@ async function activate(context) {
   context.subscriptions.push(registerAnnotationGuide(context));
   context.subscriptions.push(registerTesting({ getServerCommand: () => currentServerInfo?.command || configuredServerPath(context) }));
   context.subscriptions.push(registerSetup(context, { getServerCommand: () => configuredServerPath(context) }));
+  context.subscriptions.push(registerAgentTools(context));
   context.subscriptions.push(registerWorkspaceSidebar({ getClient: () => client }));
   context.subscriptions.push(registerProjectChecks({ getClient: () => client, getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext) }));
   editorDevex = registerEditorDevex({

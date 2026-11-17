@@ -268,8 +268,8 @@ function assertExistingJson(relativePath, label) {
 
 // Setup must be discoverable and self-contained in the packaged extension.
 const walkthrough = manifest.contributes.walkthroughs?.find((item) => item.id === "tua.setup");
-if (!walkthrough || walkthrough.steps.length !== 6) {
-  throw new Error("Tua setup should expose six optional steps.");
+if (!walkthrough || walkthrough.steps.length !== 7) {
+  throw new Error("Tua setup should expose seven optional steps.");
 }
 for (const step of walkthrough.steps) {
   const media = step.media?.image || step.media?.markdown;
@@ -289,6 +289,11 @@ for (const command of ["tua.setup.installDebugger", "tua.setup.installShaderHigh
   }
 }
 if (!commands.has("tua.openSetup")) throw new Error("Missing Set Up Tua command.");
+if (!commands.has("tua.setup.agentTools")
+    || !walkthrough.steps.some(step => step.id === "agents"
+      && step.description.includes("(command:tua.setup.agentTools)"))) {
+  throw new Error("Missing Codex agent setup action.");
+}
 
 const shaderGrammar = grammars.find((grammar) => grammar.language === "love-glsl");
 if (!shaderGrammar) throw new Error("Missing LÖVE shader grammar");

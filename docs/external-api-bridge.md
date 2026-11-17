@@ -75,6 +75,24 @@ Tool results contain compact text plus `structuredContent`. The MCP process
 does not call a model, execute project Lua, open a socket, authenticate remote
 clients, or apply edits.
 
+### Agents using the VS Code extension
+
+The extension advertises its bundled MCP server to supported VS Code agents
+when a trusted local project is open. Each workspace folder gets its own
+read-only analysis session. This registration does not connect external
+terminal agents.
+
+For Codex in a terminal, run **Tua: Set Up Agent Tools for Codex** from the
+Command Palette. The extension copies the bundled CLI to a stable path in its
+user storage, verifies an MCP project-summary call, and registers the selected
+workspace with Codex. The command runs only when invoked. If the Codex CLI is
+not available to the extension, it copies the equivalent registration command
+to the clipboard. Existing Codex entries with different commands are preserved.
+The command shows the stable CLI path for terminal `check`, `build`, `test`,
+and `dev` use; it does not change the shell's `PATH`. Start a new Codex
+session after registration. Run the setup command again after an extension
+update to refresh the copied CLI.
+
 ## Privacy And Trust
 
 - The API and MCP servers read only configured source roots and type libraries,
