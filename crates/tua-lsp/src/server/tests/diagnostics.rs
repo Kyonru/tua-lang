@@ -2469,6 +2469,38 @@ fn pull_diagnostics_use_fast_current_file_results_during_edit_window() {
     );
 }
 #[test]
+fn pull_diagnostics_after_refresh_are_complete_during_input_backlog() {
+    let temp = TempProject::new("pull-diagnostics-backlog-after-refresh");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local ready = true\n");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&uri, "local ready = true\n"));
+    server.send(did_change(
+        &uri,
+        "local sprite = image \"missing.png\"\nreturn sprite\n",
+        2,
+    ));
+
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("the edit should queue a project-aware refresh");
+    server.drain_due_diagnostics(due);
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 1);
+
+    server.server.input_backlog_active = true;
+    server.send_without_drain(text_document_diagnostic_request(2, &uri));
+    server.server.input_backlog_active = false;
+
+    assert_eq!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 2)),
+        vec!["TL2004"],
+        "a debounced refresh must not be consumed by another fast-only result"
+    );
+}
+#[test]
 fn did_change_applies_incremental_edits_and_republishes_diagnostics() {
     let uri = "file:///tmp/incremental-change.tua";
     let source = "local hp: number = 10\nprint(hp)\n";

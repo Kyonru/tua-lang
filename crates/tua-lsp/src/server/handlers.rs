@@ -1442,6 +1442,16 @@ impl LspServer {
     fn background_request_backlog_result(&self, message: &Value, method: &str) -> Option<Value> {
         let uri = self.active_edit_background_request_uri(message, method)?;
 
+        // A pull refresh is the client's only prompt to request the complete
+        // project result for this edit. Once the debounce has elapsed, an
+        // input backlog must not replace that answer with fast diagnostics:
+        // the client may otherwise keep an incomplete result indefinitely.
+        if method == "textDocument/diagnostic"
+            && !self.should_use_pull_fast_diagnostics(uri, Instant::now())
+        {
+            return None;
+        }
+
         Some(match method {
             "textDocument/diagnostic" => {
                 super::protocol::document_diagnostic_report(self.fast_diagnostics_for(uri))
