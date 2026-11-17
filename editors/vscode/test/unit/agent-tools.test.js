@@ -105,6 +105,28 @@ test("agent discovery uses the packaged CLI and setup installs a stable copy onl
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test("agent setup uses the editor's local global storage path for a non-file storage URI", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-agent-storage-"));
+  try {
+    const f = fixture(root);
+    f.context.globalStorageUri = { scheme: "vscode-userdata", fsPath: path.join(root, "virtual-storage") };
+    f.context.globalStoragePath = path.join(root, "storage");
+    const bundled = path.join(f.context.extensionPath, "bin", process.platform === "win32" ? "tua.exe" : "tua");
+    fs.mkdirSync(path.dirname(bundled), { recursive: true });
+    fs.writeFileSync(bundled, "binary");
+    const target = path.join(f.context.globalStoragePath, "bin", path.basename(bundled));
+    assert.equal(f.api.installCli(f.context), target);
+    assert.equal(fs.readFileSync(target, "utf8"), "binary");
+    f.api.registerAgentTools(f.context);
+    await f.commands.get("tua.setup.agentTools")();
+    assert.equal(JSON.parse(f.copied[0]).projects[f.folder.uri.fsPath].mcpServers[f.api.serverName(f.folder)].command, target);
+    delete f.context.globalStoragePath;
+    assert.throws(() => f.api.installCli(f.context), /did not provide a local global storage path/);
+    fs.rmSync(bundled);
+    assert.throws(() => f.api.installCli(f.context), /has no bundled CLI at/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test("agent setup offers client-specific MCP settings without writing agent configuration", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-client-tools-"));
   try {

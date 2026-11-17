@@ -19,14 +19,17 @@ function bundledCli(context) {
 }
 
 function stableCli(context) {
-  if (context.globalStorageUri?.scheme !== "file") return undefined;
-  return path.join(context.globalStorageUri.fsPath, "bin", executableName());
+  const storagePath = (context.globalStorageUri?.scheme === "file" && context.globalStorageUri.fsPath)
+    || context.globalStoragePath;
+  if (!storagePath) return undefined;
+  return path.join(storagePath, "bin", executableName());
 }
 
 function installCli(context) {
   const source = bundledCli(context);
   const destination = stableCli(context);
-  if (!source || !destination) throw new Error("This Tua install has no local bundled CLI");
+  if (!source) throw new Error(`This Tua install has no bundled CLI at ${path.join(context.extensionPath, "bin", executableName())}`);
+  if (!destination) throw new Error("This editor did not provide a local global storage path for the Tua CLI");
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   const sourceHash = crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex");
   if (fs.existsSync(destination)) {
