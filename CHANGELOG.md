@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep hover, typing assistance, and diagnostics responsive while CodeLens
+  reference counts build on a separate worker after opening a file.
 - Keep pull diagnostics complete after the typing debounce even when editor
   requests are queued, so a refresh cannot leave a type error hidden.
 - Infer each return position through calls to methods of a locally declared

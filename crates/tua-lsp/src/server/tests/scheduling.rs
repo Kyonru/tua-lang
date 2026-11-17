@@ -1034,6 +1034,51 @@ fn object_pool_graph_yields_to_typing_and_completion() {
 }
 
 #[test]
+fn code_lens_resolution_yields_to_hover() {
+    let uri = "file:///tmp/code-lens-hover-priority.tua";
+    let source = "local value = 1\n";
+    let mut messages = std::collections::VecDeque::from([
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "codeLens/resolve", "params": {} }),
+        hover_request(3, uri, source, "value"),
+    ]);
+
+    let first = pop_next_pending_message(&mut messages).expect("first message");
+    let second = pop_next_pending_message(&mut messages).expect("second message");
+
+    assert_eq!(first["method"], "textDocument/hover");
+    assert_eq!(second["method"], "codeLens/resolve");
+}
+
+#[test]
+fn code_lens_resolution_does_not_share_the_diagnostic_background_lane() {
+    let uri = "file:///tmp/code-lens-lane.tua";
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                did_open(uri, "local value = 1\n"),
+                slow_background_request(2, None, 300),
+            ],
+        ),
+        (
+            Duration::from_millis(50),
+            vec![json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "codeLens/resolve",
+                "params": {}
+            })],
+        ),
+    ]);
+
+    assert!(
+        response_index_with_id(&output, 3) < response_index_with_id(&output, 2),
+        "CodeLens resolution must not queue behind diagnostic background work: {output:#?}"
+    );
+}
+
+#[test]
 fn shutdown_does_not_overtake_an_earlier_interactive_request() {
     let uri = "file:///tmp/shutdown-order.tua";
     let source = "local hp: number = 10\n";

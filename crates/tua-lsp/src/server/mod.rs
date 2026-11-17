@@ -1282,6 +1282,7 @@ fn method_is_background_refresh(method: &str) -> bool {
         method,
         "textDocument/codeAction"
             | "textDocument/codeLens"
+            | "codeLens/resolve"
             | "textDocument/diagnostic"
             | "textDocument/documentLink"
             | "textDocument/documentSymbol"

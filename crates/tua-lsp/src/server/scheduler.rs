@@ -57,6 +57,7 @@ pub(super) struct RequestScheduler {
     inlay_tx: Sender<WorkerJob>,
     fast_diagnostic_tx: Sender<WorkerJob>,
     background_tx: Sender<WorkerJob>,
+    reference_tx: Sender<WorkerJob>,
     speculative_lane: SpeculativeLane,
     jobs: BTreeMap<u64, InFlightJob>,
     request_jobs: BTreeMap<String, u64>,
@@ -175,6 +176,7 @@ impl RequestScheduler {
         let inlay_tx = spawn_worker_lane("inlay", 1, event_tx.clone());
         let fast_diagnostic_tx = spawn_worker_lane("fast-diagnostics", 1, event_tx.clone());
         let background_tx = spawn_worker_lane("background", 1, event_tx.clone());
+        let reference_tx = spawn_worker_lane("references", 1, event_tx.clone());
         let speculative_lane = spawn_speculative_lane(event_tx);
 
         Self {
@@ -183,6 +185,7 @@ impl RequestScheduler {
             inlay_tx,
             fast_diagnostic_tx,
             background_tx,
+            reference_tx,
             speculative_lane,
             jobs: BTreeMap::new(),
             request_jobs: BTreeMap::new(),
@@ -216,6 +219,7 @@ impl RequestScheduler {
         });
         let background = request_runs_in_background(&method);
         let inlay = method == "textDocument/inlayHint";
+        let reference_resolve = method == "codeLens/resolve";
         let speculative = matches!(
             method.as_str(),
             "tua/localInlineCompletion" | "textDocument/inlineCompletion"
@@ -392,6 +396,10 @@ impl RequestScheduler {
             })
         } else if inlay {
             self.inlay_tx.send(worker).map_err(|_| ())
+        } else if reference_resolve {
+            // Project-wide reference counting must not occupy either the
+            // interactive or diagnostic worker lane.
+            self.reference_tx.send(worker).map_err(|_| ())
         } else if background {
             self.background_tx.send(worker).map_err(|_| ())
         } else {
