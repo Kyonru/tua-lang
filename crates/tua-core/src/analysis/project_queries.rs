@@ -2012,6 +2012,50 @@ impl AnalysisSnapshot {
         })
     }
 
+    pub(super) fn project_store_state_field_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+        degraded_facts: Option<&DegradedSemanticFacts>,
+    ) -> Option<Definition> {
+        if !parsed.source.contains(crate::store::CONSTRUCTOR_NAME) {
+            return None;
+        }
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let [state, field] = chain.parts.as_slice() else {
+            return None;
+        };
+        if chain.cursor_index != 1 {
+            return None;
+        }
+
+        let environment = self.semantic_query_environment(parsed, degraded_facts);
+        let initializer = SemanticModel::new(parsed, &environment)
+            .local_initializer_inference(&state.text, position)?;
+        let initializer_span = initializer.expression_span?;
+        let mut syntax = ExpectedTableSyntaxCollector::default();
+        syntax.visit_ast(&parsed.ast);
+        let getter = syntax.calls.into_iter().find(|call| {
+            node_span(call) == Some(initializer_span)
+                && field_chain_before_first_call(call)
+                    .is_some_and(|parts| parts.len() == 2 && parts[1] == "get")
+        })?;
+        let parts = field_chain_before_first_call(&getter)?;
+        let store = helper_constructor_call_for_local(
+            parsed,
+            &environment,
+            &parts[0],
+            position,
+            crate::store::CONSTRUCTOR_NAME,
+        )?;
+        let span = store_state_field_span(&store, &field.text)?;
+        Some(Definition {
+            path: parsed.path.clone(),
+            span,
+            kind: DefinitionKind::TableField,
+        })
+    }
+
     pub(super) fn project_expected_table_field_definition(
         &self,
         parsed: &ParsedSource,

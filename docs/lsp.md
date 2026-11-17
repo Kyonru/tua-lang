@@ -366,13 +366,16 @@ modules returns no speculative location.
 
 Go to Definition on a named type-import binding or a type annotation follows
 the exported type to its declaration, including renamed imports and namespaced
-uses through re-exports.
+uses through re-exports. The protocol name in a class `implements` clause also
+navigates to its declaration.
 
 Built-in helper configuration fields navigate to generated virtual schema
 documents. Names derived from static source retain their source identity:
 `store` watcher keys navigate to the initial state field, sprite animation
 members navigate to the named animation entry, and state-machine event methods
 and callback keys navigate to the event or state string that created them.
+Fields read from a local `store:get()` result navigate to that store's initial
+state key when the store is constructed in the same file.
 
 Native class names, fields, and methods support definition, references, prepare
 rename, and project-wide rename. The same identity follows locally inferred

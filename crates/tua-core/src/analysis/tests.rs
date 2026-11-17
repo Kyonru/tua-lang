@@ -5236,6 +5236,63 @@ lookupObject.<|field_ref|>count<|/field_ref|> = 1
 }
 
 #[test]
+fn protocol_implements_reference_navigates_to_declaration() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+export protocol <|remote_definition|>Updatable<|/remote_definition|> { update(): nil }
+-- file: src/main.tua
+import type { Updatable } from "./contracts"
+protocol <|local_definition|>Drawable<|/local_definition|> { draw(): nil }
+final class Actor implements <|remote_use|>Updatable, <|local_use|>Drawable {
+  update(): nil {}
+  draw(): nil {}
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for (use_name, target_name, expected_path) in [
+        ("remote_use", "remote_definition", "src/contracts.tua"),
+        ("local_use", "local_definition", "src/main.tua"),
+    ] {
+        let definition = snapshot
+            .definition("src/main.tua", fixture.position(use_name))
+            .expect("implements reference should navigate to its protocol");
+        assert_eq!(definition.path, PathBuf::from(expected_path));
+        assert_eq!(definition.span, fixture.range(target_name));
+    }
+}
+
+#[test]
+fn store_get_field_navigates_to_initial_state_key() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local game = store({ <|score_definition|>score<|/score_definition|> = 0 })
+local state = game:get()
+local result = { score = state.<|score_use|>score }
+local ordinary = { score = 1 }
+local other = ordinary.<|ordinary_use|>score
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_file("src/main.tua", fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let store_field = snapshot
+        .definition("src/main.tua", fixture.position("score_use"))
+        .expect("store state field should navigate to its initializer key");
+    assert_eq!(store_field.path, PathBuf::from("src/main.tua"));
+    assert_eq!(store_field.span, fixture.range("score_definition"));
+    let ordinary_field = snapshot
+        .definition("src/main.tua", fixture.position("ordinary_use"))
+        .expect("ordinary table field navigation should still work");
+    assert_ne!(ordinary_field.span, fixture.range("score_definition"));
+}
+
+#[test]
 fn snapshot_completion_uses_is_metatable_narrowing_inside_branch() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

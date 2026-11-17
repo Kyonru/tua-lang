@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Navigate from a class `implements` clause to the local or imported protocol
+  declaration.
+- Navigate from a field read on a local `store:get()` result to its initial
+  state key, including after an unsaved edit.
+
 ## [0.10.0] - 2026-11-17
 
 ### Release summary

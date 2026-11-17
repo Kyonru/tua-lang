@@ -1117,6 +1117,15 @@ fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -
         return true;
     }
 
+    if parsed.class_declarations.iter().any(|class| {
+        class
+            .implemented_protocols
+            .iter()
+            .any(|(_, span)| span_contains_position(*span, position))
+    }) {
+        return true;
+    }
+
     let Some(line) = line_at(&parsed.source, position.line) else {
         return false;
     };

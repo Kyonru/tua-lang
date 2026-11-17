@@ -2,6 +2,58 @@ use super::*;
 use std::fmt::Write as _;
 
 #[test]
+fn implements_protocol_definition_reaches_local_and_imported_declarations() {
+    let temp = TempProject::new("implements-definition");
+    let contracts = "export protocol Updatable { update(): nil }\n";
+    let source = "import type { Updatable } from \"./contracts\"\nprotocol Drawable { draw(): nil }\nfinal class Actor implements Updatable, Drawable {\n  update(): nil {}\n  draw(): nil {}\n}\n";
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/contracts.tua", contracts);
+    temp.write("src/main.tua", source);
+    let main_uri = temp.uri_for("src/main.tua");
+    let contracts_uri = temp.uri_for("src/contracts.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, source),
+        did_open(&contracts_uri, contracts),
+        definition_request(
+            2,
+            &main_uri,
+            source,
+            "implements Updatable",
+            "implements ".len(),
+        ),
+        definition_request(3, &main_uri, source, ", Drawable", 2),
+    ]);
+    assert_definition_text(&output, 2, &contracts_uri, contracts, "Updatable");
+    assert_definition_text(&output, 3, &main_uri, source, "Drawable");
+}
+
+#[test]
+fn store_state_field_definition_tracks_unsaved_initializer_edit() {
+    let temp = TempProject::new("store-state-field-definition");
+    let source = "local game = store({ score = 0 })\nlocal state = game:get()\nreturn { score = state.score }\n";
+    let edited = source
+        .replace("score = 0", "health = 0")
+        .replace("state.score", "state.health");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    let uri = temp.uri_for("src/main.tua");
+    let initial_output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        definition_request(2, &uri, source, "state.score", "state.".len()),
+    ]);
+    assert_definition_text(&initial_output, 2, &uri, source, "score");
+    let edited_output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        did_change(&uri, &edited, 2),
+        definition_request(3, &uri, &edited, "state.health", "state.".len()),
+    ]);
+    assert_definition_text(&edited_output, 3, &uri, &edited, "health");
+}
+
+#[test]
 fn outer_local_definition_survives_nested_shadow_and_unsaved_edit() {
     let uri = "file:///tmp/shadowed-outer-local-definition.tua";
     let source = r#"local value = { outer = 1 }

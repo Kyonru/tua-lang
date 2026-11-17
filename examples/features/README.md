@@ -63,7 +63,8 @@ guides cannot silently omit an example.
   runtime `is` checks.
 - `src/protocols.tua` covers method-only protocols, explicit class conformance,
   bounded generic helpers, heterogeneous protocol-typed arrays, and checked
-  method dispatch. Its assertions can run with Lua without LOVE.
+  method dispatch. Go to Definition on a protocol name in an `implements`
+  clause opens its declaration. Its assertions can run with Lua without LOVE.
 - `src/generics.tua` covers generic aliases, inferred generic function calls,
   and generic class constructor inference with concrete member types.
 - `src/polymorphism.tua` and `src/polymorphism/actors.tua` demonstrate imported
@@ -171,7 +172,8 @@ guides cannot silently omit an example.
 - `src/store.tua` covers the explicit `store({...})` helper: inferred state
   fields, typed reads and updates, whole-store subscriptions, keyed watcher
   signatures, idempotent unsubscribe functions, and on-demand `tuastore.lua`
-  build output.
+  build output. Go to Definition on a field read from `store:get()` opens its
+  initial state key.
 - `src/save_contracts.tua` defines a typed save schema and a direct migration;
   the optional `tuasave.lua` runtime is included only when this module is used.
 - `src/assets/` contains placeholder files used by static asset validation,

@@ -4,6 +4,7 @@ protocol Updatable {
   progress(): number
 }
 
+-- Go to Definition on Updatable here opens the protocol declaration.
 final class Particle implements Updatable {
   elapsed: number = 0
 

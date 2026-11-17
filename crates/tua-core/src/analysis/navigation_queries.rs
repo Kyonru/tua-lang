@@ -276,6 +276,12 @@ impl AnalysisSnapshot {
             }
         }
 
+        if let Some(definition) =
+            self.project_store_state_field_definition(parsed, position, degraded_facts)
+        {
+            return Some(definition);
+        }
+
         crate::definition::definition_parsed_source_with_hir_and_scope(parsed, hir, scope, position)
             .ok()
             .flatten()
