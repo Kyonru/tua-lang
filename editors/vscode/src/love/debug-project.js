@@ -1,11 +1,13 @@
 "use strict";
 
 const childProcess = require("child_process");
+const { randomUUID } = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
 const { normalizeInstances } = require("../workspace/run-options");
 const { registerDebugInstanceGroups } = require("./debug-instances");
+const { createDebugSnapshot } = require("./debug-snapshot");
 const { COMMANDS } = require("../constants");
 const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { loadSourceMapsFromDirectory, sourceMapPathForGeneratedPath } = require("../editor/source-maps");
@@ -25,6 +27,7 @@ const DEBUG_BOOTSTRAP =
 
 function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand, activity, inspector }) {
   const preparedOutputs = new Set();
+  const pendingCommandLaunches = new Set();
   const instanceGroups = registerDebugInstanceGroups({ activity, inspector, appendOutputLine, build: runBuildCommand,
     prepare: prepareLoveDebugOutput, configuration: createLoveDebugConfiguration, scriptFiles: debuggerScriptFiles });
   const startDisposable = vscode.debug.onDidStartDebugSession?.((session) => {
@@ -55,7 +58,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     for (const prepared of preparedOutputs) {
       if (debugSessionTargetsOutput(session, prepared.outputDirectory)) {
         activity?.finish(prepared.activitySession, 0);
-        restorePreparedOutput(preparedOutputs, prepared);
+        disposePreparedOutput(preparedOutputs, prepared);
       }
     }
   });
@@ -64,6 +67,13 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     {
       async resolveDebugConfigurationWithSubstitutedVariables(folder, configuration) {
         if (configuration?.[TUA_LAUNCH_PROPERTY] !== true) {
+          return configuration;
+        }
+
+        // The command prepares its first launch before calling startDebugging.
+        // A VS Code Restart resolves the same configuration again and must build
+        // a new snapshot, even if the previous session has not terminated yet.
+        if (pendingCommandLaunches.delete(configuration.tuaPreparedLaunch)) {
           return configuration;
         }
 
@@ -86,6 +96,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
           return undefined;
         }
 
+        const originalConfiguration = configuration.tuaOriginalConfiguration || configuration;
         const prepared = await buildAndPrepareLoveDebugProject({
           appendOutputLine,
           activity,
@@ -97,14 +108,16 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
           return undefined;
         }
 
-        const launchDirectory = await inspector?.launch(prepared.pendingOutput.activitySession, layout.outputDirectory);
+        const debugLayout = { ...layout, outputDirectory: prepared.pendingOutput.outputDirectory };
+        const launchDirectory = await inspector?.launch(prepared.pendingOutput.activitySession, debugLayout.outputDirectory);
         return createLoveDebugConfiguration({
-          layout,
+          layout: debugLayout,
           loveCommand: configuredLoveCommand(),
           overrides: {
-            ...configuration,
+            ...originalConfiguration,
+            tuaOriginalConfiguration: originalConfiguration,
             ...(launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {}),
-            scriptFiles: debuggerScriptFiles(layout.outputDirectory),
+            scriptFiles: debuggerScriptFiles(debugLayout.outputDirectory),
           },
         });
       },
@@ -170,40 +183,55 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
       return undefined;
     }
     const { pendingOutput, prepared } = preparedResult;
+    const debugLayout = { ...layout, outputDirectory: pendingOutput.outputDirectory };
 
     const folder = vscode.workspace.getWorkspaceFolder(
       vscode.Uri.file(layout.configDirectory),
     );
-    const launchDirectory = await inspector?.launch(pendingOutput.activitySession, layout.outputDirectory);
+    const launchDirectory = await inspector?.launch(pendingOutput.activitySession, debugLayout.outputDirectory);
+    const launchId = randomUUID();
+    const originalConfiguration = {
+      type: DEBUGGER_TYPE, request: "launch", name: options?.title || "Debug LOVE Project (Tua)",
+      [TUA_LAUNCH_PROPERTY]: true,
+    };
     const configuration = createLoveDebugConfiguration({
-      layout,
+      layout: debugLayout,
       loveCommand: configuredLoveCommand(),
-      overrides: launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {},
+      overrides: {
+        ...originalConfiguration,
+        tuaOriginalConfiguration: originalConfiguration,
+        tuaPreparedLaunch: launchId,
+        scriptFiles: debuggerScriptFiles(debugLayout.outputDirectory),
+        ...(launchDirectory ? { tuaInspectorLaunch: launchDirectory } : {}),
+      },
     });
+    pendingCommandLaunches.add(launchId);
     let started;
     try {
       started = await vscode.debug.startDebugging(folder, configuration);
     } catch (error) {
       activity?.finish(pendingOutput.activitySession, 1);
-      restorePreparedOutput(preparedOutputs, pendingOutput);
+      disposePreparedOutput(preparedOutputs, pendingOutput);
       vscode.window.showErrorMessage(
         `Second Local Lua Debugger did not start the LOVE project: ${formatError(error)}`,
       );
       return undefined;
+    } finally {
+      pendingCommandLaunches.delete(launchId);
     }
 
     if (!started) {
       activity?.finish(pendingOutput.activitySession, 1);
-      restorePreparedOutput(preparedOutputs, pendingOutput);
+      disposePreparedOutput(preparedOutputs, pendingOutput);
       vscode.window.showErrorMessage("Second Local Lua Debugger did not start the LOVE project.");
       return undefined;
     }
 
     activity?.update(pendingOutput.activitySession, "running");
-    appendOutputLine?.(`[tua] Debugging LOVE from ${layout.outputDirectory}`);
+    appendOutputLine?.(`[tua] Debugging LOVE from ${debugLayout.outputDirectory}`);
     return {
       bootstrapPath: prepared.bootstrapPath,
-      outputDirectory: layout.outputDirectory,
+      outputDirectory: debugLayout.outputDirectory,
       debuggerType: DEBUGGER_TYPE,
     };
   });
@@ -219,9 +247,10 @@ function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCom
     {
       dispose() {
         for (const prepared of preparedOutputs) {
-          prepared.restore();
+          prepared.dispose();
         }
         preparedOutputs.clear();
+        pendingCommandLaunches.clear();
       },
     },
   );
@@ -272,32 +301,43 @@ async function buildAndPrepareLoveDebugProject({
     return undefined;
   }
 
-  let sourceMaps = [];
+  let snapshot;
   try {
-    sourceMaps = loadSourceMapsFromDirectory(layout.outputDirectory);
+    snapshot = createDebugSnapshot(layout.outputDirectory);
   } catch (error) {
-    appendOutputLine?.(`[tua] Could not load traceback source maps: ${formatError(error)}`);
+    activity?.finish(activitySession, 1);
+    appendOutputLine?.(`[tua] Could not snapshot LOVE debug output: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Could not snapshot LOVE debug output: ${formatError(error)}`);
+    return undefined;
   }
 
   let prepared;
   try {
-    prepared = prepareLoveDebugOutput(layout.outputDirectory);
+    prepared = prepareLoveDebugOutput(snapshot.outputDirectory);
   } catch (error) {
+    snapshot.dispose();
     activity?.finish(activitySession, 1);
     appendOutputLine?.(`[tua] Could not prepare LOVE debug output: ${formatError(error)}`);
     vscode.window.showErrorMessage(`Could not prepare LOVE debug output: ${formatError(error)}`);
     return undefined;
   }
 
+  let sourceMaps = [];
+  try {
+    sourceMaps = loadSourceMapsFromDirectory(snapshot.outputDirectory);
+  } catch (error) {
+    appendOutputLine?.(`[tua] Could not load traceback source maps: ${formatError(error)}`);
+  }
+
   const pendingOutput = {
     activitySession,
-    outputDirectory: layout.outputDirectory,
+    outputDirectory: snapshot.outputDirectory,
     sourceMaps,
-    restore: prepared.restore,
+    dispose: snapshot.dispose,
   };
   preparedOutputs.add(pendingOutput);
 
-  if (!hasDebuggerSourceMap(layout.outputDirectory)) {
+  if (!hasDebuggerSourceMap(snapshot.outputDirectory)) {
     vscode.window.showWarningMessage(
       "No Tua debugger source maps were emitted. Enable emit_maps in tua.toml to bind breakpoints in .tua files.",
     );
@@ -331,9 +371,9 @@ function debugSessionTargetsOutput(session, outputDirectory) {
   );
 }
 
-function restorePreparedOutput(preparedOutputs, prepared) {
+function disposePreparedOutput(preparedOutputs, prepared) {
   preparedOutputs.delete(prepared);
-  prepared.restore();
+  prepared.dispose();
 }
 
 function createLoveDebugConfiguration({ layout, loveCommand, overrides = {} }) {

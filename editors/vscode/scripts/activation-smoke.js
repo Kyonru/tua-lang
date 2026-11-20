@@ -777,49 +777,64 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.strictEqual(gameLaunch.name, "Debug My Tua Game");
     assert.strictEqual(gameLaunch.tuaProject, true);
-    assert.deepStrictEqual(gameLaunch.args, [path.join(workspace, "build"), "--console"]);
-    assert.deepStrictEqual(gameLaunch.scriptRoots, [path.join(workspace, "build")]);
+    assert.notStrictEqual(gameLaunch.args[0], sourceMapDirectory,
+      "debug sessions should run from an isolated output snapshot");
+    assert.deepStrictEqual(gameLaunch.args.slice(1), ["--console"]);
+    assert.deepStrictEqual(gameLaunch.scriptRoots, [gameLaunch.args[0]]);
     assert.deepStrictEqual(gameLaunch.scriptFiles, [
-      path.join(workspace, "build", "conf.lua"),
-      path.join(workspace, "build", "main.lua"),
+      path.join(gameLaunch.args[0], "conf.lua"),
+      path.join(gameLaunch.args[0], "main.lua"),
     ]);
     assert(
-      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8").startsWith(
+      fs.readFileSync(path.join(gameLaunch.args[0], "conf.lua"), "utf8").startsWith(
         debuggerBridge.DEBUG_BOOTSTRAP,
       ),
-      "a game launch configuration should prepare generated LOVE output",
+      "a game launch configuration should prepare its snapshot",
     );
+    assert.strictEqual(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
+      "function love.conf(t) end\n", "debugging must not patch the build output");
+    const restartedSavedLaunch = await launchProvider.provider.resolveDebugConfigurationWithSubstitutedVariables(
+      state.vscode.workspace.workspaceFolders[0], gameLaunch);
+    assert.notStrictEqual(restartedSavedLaunch.args[0], gameLaunch.args[0]);
+    assert.deepStrictEqual(restartedSavedLaunch.args.slice(1), ["--console"],
+      "Restart must preserve custom LOVE arguments without passing the old snapshot");
     state.fireDebugTermination({ configuration: gameLaunch });
-    assert.strictEqual(
-      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
-      "function love.conf(t) end\n",
-      "ending a game launch configuration should restore generated conf.lua",
-    );
+    assert(!fs.existsSync(gameLaunch.args[0]), "ending a game launch should release its snapshot");
+    assert(fs.existsSync(path.join(restartedSavedLaunch.args[0], "conf.lua")),
+      "the previous launch must not remove the restarted saved configuration");
+    state.fireDebugTermination({ configuration: restartedSavedLaunch });
+    assert(!fs.existsSync(restartedSavedLaunch.args[0]));
 
     const debugResult = await state.commands.get("tua.debugLoveProject")();
-    assert.deepStrictEqual(
-      debugResult,
-      {
-        bootstrapPath: path.join(sourceMapDirectory, "conf.lua"),
-        outputDirectory: sourceMapDirectory,
-        debuggerType: "lua-local",
-      },
-      "debug LOVE should build, prepare generated output, and start the Lua debugger",
-    );
+    assert.strictEqual(debugResult.bootstrapPath, path.join(debugResult.outputDirectory, "conf.lua"));
+    assert.strictEqual(debugResult.debuggerType, "lua-local");
+    assert.notStrictEqual(debugResult.outputDirectory, sourceMapDirectory);
     assert.strictEqual(state.startedDebugSessions.length, 1);
     assert.strictEqual(state.startedDebugSessions[0].configuration.type, "lua-local");
+    assert.strictEqual(state.startedDebugSessions[0].configuration.tuaProject, true,
+      "VS Code Restart must resolve the Tua launch provider again");
     assert.strictEqual(state.startedDebugSessions[0].configuration.internalConsoleOptions, "openOnSessionStart");
     assert.deepStrictEqual(
       state.startedDebugSessions[0].configuration.scriptFiles,
-      ["build/**/*.lua"],
+      [path.join(debugResult.outputDirectory, "conf.lua"), path.join(debugResult.outputDirectory, "main.lua")],
       "debug LOVE should pre-cache generated scripts for Tua breakpoint mapping",
     );
+    const restartedLaunch = await launchProvider.provider.resolveDebugConfigurationWithSubstitutedVariables(
+      state.vscode.workspace.workspaceFolders[0], state.startedDebugSessions[0].configuration);
+    assert.notStrictEqual(restartedLaunch.args[0], debugResult.outputDirectory,
+      "Restart must use a fresh snapshot even before the previous session terminates");
+    assert.deepStrictEqual(restartedLaunch.args, [restartedLaunch.args[0]],
+      "Restart must not pass the old snapshot as an extra game argument");
+    assert(fs.readFileSync(path.join(restartedLaunch.args[0], "conf.lua"), "utf8")
+      .startsWith(debuggerBridge.DEBUG_BOOTSTRAP));
     state.fireDebugTermination(state.startedDebugSessions[0]);
-    assert.strictEqual(
-      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
-      "function love.conf(t) end\n",
-      "ending the LOVE debug session should restore generated conf.lua",
-    );
+    assert(!fs.existsSync(debugResult.outputDirectory), "old session should release only its snapshot");
+    assert(fs.existsSync(path.join(restartedLaunch.args[0], "conf.lua")),
+      "old termination must leave the restarted game intact");
+    state.fireDebugTermination({ configuration: restartedLaunch });
+    assert(!fs.existsSync(restartedLaunch.args[0]), "restarted session should release its snapshot");
+    assert.strictEqual(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
+      "function love.conf(t) end\n", "subsequent normal runs must see the unmodified build");
 
     state.setConfiguration("preview.enabled", true);
     fs.mkdirSync(path.join(workspace, "src", "assets"), { recursive: true });

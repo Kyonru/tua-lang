@@ -35,7 +35,7 @@ This is the default for new projects.
     A normal `lua-local` configuration bypasses Tua's build and source-map
     preparation. The suggested **Debug Tua LOVE Game** configuration includes
     `tuaProject: true`. Add it to any custom configuration as shown below so
-    Tua can prepare and restore the generated output correctly.
+    Tua can prepare an isolated debug copy on every launch and restart.
 
 ## Run From The VS Code UI
 
@@ -75,18 +75,19 @@ Tua prepends the generated game directory to `args` before LOVE starts.
 
 ## What Runs
 
-The debug target is the configured output directory, normally `build/`. Tua
+The debug target is a temporary copy of the configured output directory,
+normally `build/`. Tua
 uses Second Local Lua Debugger's `lua-local` adapter for execution, stepping,
 variables, watches, conditional breakpoints, and debug-console evaluation.
 
 Tua owns the integration around that adapter:
 
 1. Run `tua build` for the active project.
-2. Add a temporary debugger bootstrap to the output `conf.lua`.
-3. Launch LOVE against the generated output directory.
+2. Copy the generated output and add a debugger bootstrap to the copy's `conf.lua`.
+3. Launch LOVE against the temporary copy.
 4. Map `.tua` breakpoints to generated Lua and map stopped frames back to Tua.
-5. Restore the prepared output and maps when the session ends or fails to
-   start.
+5. Remove the temporary copy when the session ends or fails to start. The
+   original build remains available for normal runs.
 
 When you start the **Debug** run configuration or **Tua: Debug LOVE Project**,
 Tua opens VS Code's **Debug Console**. The Lua debugger forwards LOVE's
@@ -205,11 +206,10 @@ Unmapped generated helper lines are skipped while stepping by default. Source
 maps currently provide line provenance, so mapped target columns begin at
 column zero.
 
-!!! warning "Rebuild after source changes"
-    Tua builds whenever the command or launch configuration starts. After
-    editing source, stop the current session and start the configuration again.
-    Restarting only the existing Lua debug session does not invoke a new Tua
-    build.
+!!! note "Restart after source changes"
+    VS Code's debugger **Restart** button rebuilds the Tua project and starts
+    a fresh debug copy. An older session can finish shutting down without
+    changing the restarted game's files.
 
 ## Live Runtime Inspector
 
@@ -453,5 +453,5 @@ assignment code and you need to see the exact Lua executed by LOVE.
 | Second Local Lua Debugger is unavailable or disabled by the environment | Install and enable it in the same VS Code build and profile as Tua.                            |
 | LOVE cannot be launched                                                 | Set `tua.love.command` to the LOVE executable and trust the workspace.                         |
 | A `.tua` breakpoint remains unbound                                     | Confirm `emit_maps = true`, then stop and start the Tua launch configuration or command again. |
-| The session runs stale generated code                                   | Stop it and start the Tua launch configuration or command again so Tua rebuilds first.         |
+| The session runs stale generated code                                   | Use the debugger Restart button or start the Tua launch configuration again to rebuild.       |
 | The debug build fails                                                   | Run **Tua: Focus Output** and fix the reported build diagnostics before relaunching.           |

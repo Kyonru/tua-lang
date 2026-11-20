@@ -25,6 +25,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Rebuild and isolate each VS Code LÖVE debug session on Restart so an ending
+  session cannot remove the next game's debugger bootstrap or source maps.
 - Keep generated build assets and source-root-prefixed duplicates out of LOVE
   asset-path suggestions, and match partial paths inside existing strings.
 - Preserve `ShaderScan` scanner method signatures and shader collection types
