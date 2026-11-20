@@ -10929,6 +10929,63 @@ fn asset_paths_survive_incomplete_strings_and_scope_exit() {
 }
 
 #[test]
+fn asset_completion_ignores_output_files_and_completes_inside_existing_paths() {
+    let temp = TempProject::new("asset-completion-output-root");
+    temp.write("src/assets/tiles/stone_floor.png", png_header(16, 16));
+    temp.write("build/assets/tiles/generated.png", png_header(16, 16));
+    let fixture = Fixture::parse(
+        "-- file: src/main.tua\nlocal texture = image \"assets/tiles/sto<|partial|>ne_floor.png\"\nlocal short = image \"stone_f<|basename|>\"\nlocal nested = image \"tiles/sto<|suffix|>\"\nlocal other = image \"<|empty|>\"\n",
+    );
+    for indexed in [false, true] {
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([temp.path().join("src")]);
+        host.set_output_roots([temp.path().join("build")]);
+        host.set_asset_roots([
+            temp.path().to_path_buf(),
+            temp.path().join("src"),
+            temp.path().join("build"),
+        ]);
+        host.set_file(&fixture.files()[0].path, fixture.files()[0].source.clone());
+        if indexed {
+            host.refresh_asset_index_from_disk();
+        }
+        let snapshot = host.snapshot();
+        let partial =
+            completion_labels(&snapshot.completion("src/main.tua", fixture.position("partial")));
+        assert!(
+            partial.contains(&"assets/tiles/stone_floor.png".to_owned()),
+            "indexed={indexed}: {partial:?}"
+        );
+        for marker in ["basename", "suffix"] {
+            let labels =
+                completion_labels(&snapshot.completion("src/main.tua", fixture.position(marker)));
+            assert!(
+                labels.contains(&"assets/tiles/stone_floor.png".to_owned()),
+                "indexed={indexed} marker={marker}: {labels:?}"
+            );
+        }
+        let empty =
+            completion_labels(&snapshot.completion("src/main.tua", fixture.position("empty")));
+        assert!(
+            empty.contains(&"assets/tiles/stone_floor.png".to_owned()),
+            "indexed={indexed}: {empty:?}"
+        );
+        assert!(
+            empty.iter().all(|label| !label.starts_with("build/")),
+            "indexed={indexed}: {empty:?}"
+        );
+        assert!(
+            empty.iter().all(|label| !label.starts_with("src/")),
+            "indexed={indexed}: {empty:?}"
+        );
+        assert!(
+            !empty.contains(&"assets/tiles/generated.png".to_owned()),
+            "indexed={indexed}: {empty:?}"
+        );
+    }
+}
+
+#[test]
 fn love_conf_window_completion_tracks_initial_state_and_disable() {
     for (statement, expected) in [
         ("t.window.width = 320", true),

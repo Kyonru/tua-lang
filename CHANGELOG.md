@@ -25,6 +25,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep generated build assets and source-root-prefixed duplicates out of LOVE
+  asset-path suggestions, and match partial paths inside existing strings.
 - Preserve `ShaderScan` scanner method signatures and shader collection types
   when exported through a project module.
 - Reuse an idle LÖVE Run task terminal for the same configuration instead of

@@ -549,6 +549,11 @@ choices such as fullscreen modes.
 
 Static asset paths in Tua helpers and supported native LOVE constructors receive
 completion, validation, hover metadata, definition, references, and rename.
+Path completion works inside an existing string and can match a partial path
+from any directory component, such as `stone_f` for
+`assets/tiles/stone_floor.png`. For files under the configured source root,
+suggestions use paths relative to that root rather than a `src/` prefix.
+Files in the configured build output directory are excluded.
 Diagnostics cover missing files, unsupported formats, incompatible loader
 types, and filesystem casing mismatches. Image metadata such as PNG dimensions
 is shown when it can be read cheaply.

@@ -115,6 +115,42 @@ local next = image "assets/p"
 }
 
 #[test]
+fn asset_completion_replaces_existing_path_and_omits_generated_roots() {
+    let temp = TempProject::new("asset-partial-path");
+    let source = "local texture = image \"assets/tiles/stone_floor.png\"\nlocal short = image \"stone_f\"\nlocal empty = image \"\"\n";
+    temp.write("tua.toml", "source = \"src\"\nout = \"build\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/assets/tiles/stone_floor.png", "placeholder");
+    temp.write("build/assets/tiles/generated.png", "placeholder");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "assets/tiles/sto"));
+    server.send(completion_request(3, &uri, source, "stone_f"));
+    server.send(completion_request(
+        4,
+        &uri,
+        source,
+        "local empty = image \"",
+    ));
+    server.send(trigger_character_completion_request(
+        5, &uri, source, "stone_f", "f",
+    ));
+
+    for id in [2, 3, 4, 5] {
+        assert_completion_labels(server.output(), id, ["assets/tiles/stone_floor.png"]);
+    }
+    let item = &response_with_id(server.output(), 2)["result"][0];
+    assert_eq!(item["textEdit"]["newText"], "assets/tiles/stone_floor.png");
+    let first_line = source.lines().next().unwrap();
+    let start = first_line.find("assets/tiles/").unwrap();
+    let end = start + "assets/tiles/stone_floor.png".len();
+    assert_eq!(item["textEdit"]["range"]["start"]["character"], start);
+    assert_eq!(item["textEdit"]["range"]["end"]["character"], end);
+}
+
+#[test]
 fn completion_replaces_typed_identifier_and_input_source_prefixes() {
     let uri = "file:///tmp/completion-replacement.tua";
     let source = r#"local playerName = 1

@@ -425,9 +425,14 @@ impl AnalysisSnapshot {
 
         self.asset_index
             .as_ref()
-            .map(|index| index.complete_paths(kind, &prefix))
+            .map(|index| index.complete_paths(kind, &prefix, &self.vfs.options().output_roots))
             .unwrap_or_else(|| {
-                asset::complete_asset_paths(self.effective_asset_roots(), kind, &prefix)
+                asset::complete_asset_paths_excluding(
+                    self.effective_asset_roots(),
+                    &self.vfs.options().output_roots,
+                    kind,
+                    &prefix,
+                )
             })
             .into_iter()
             .map(|candidate| Completion {

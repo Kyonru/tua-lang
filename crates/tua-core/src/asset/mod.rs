@@ -542,6 +542,7 @@ impl AssetIndex {
         &self,
         kind: AssetLoaderKind,
         prefix: &str,
+        excluded_roots: &[PathBuf],
     ) -> Vec<AssetPathCandidate> {
         self.by_relative
             .values()
@@ -552,7 +553,13 @@ impl AssetIndex {
                     return None;
                 }
 
-                if !entry.relative_path.starts_with(prefix) {
+                if !asset_path_is_visible(
+                    &entry.absolute_path,
+                    &entry.relative_path,
+                    &self.roots,
+                    excluded_roots,
+                ) || !asset_path_matches(&entry.relative_path, prefix)
+                {
                     return None;
                 }
 
@@ -710,15 +717,33 @@ pub(crate) fn asset_at_position(
         .find(|asset| contains_position(asset.span, position))
 }
 
+#[cfg(test)]
 pub(crate) fn complete_asset_paths(
     roots: &[PathBuf],
     kind: AssetLoaderKind,
     prefix: &str,
 ) -> Vec<AssetPathCandidate> {
-    let mut candidates = BTreeMap::new();
+    complete_asset_paths_excluding(roots, &[], kind, prefix)
+}
 
-    for root in normalize_asset_roots(roots) {
-        collect_asset_path_candidates(&root, &root, kind, prefix, &mut candidates);
+pub(crate) fn complete_asset_paths_excluding(
+    roots: &[PathBuf],
+    excluded_roots: &[PathBuf],
+    kind: AssetLoaderKind,
+    prefix: &str,
+) -> Vec<AssetPathCandidate> {
+    let mut candidates = BTreeMap::new();
+    let roots = normalize_asset_roots(roots);
+    for root in &roots {
+        collect_asset_path_candidates(
+            root,
+            root,
+            &roots,
+            excluded_roots,
+            kind,
+            prefix,
+            &mut candidates,
+        );
     }
 
     candidates.into_values().collect()
@@ -1114,6 +1139,8 @@ fn parts_match(parts: &[String], expected: &[&str]) -> bool {
 fn collect_asset_path_candidates(
     root: &Path,
     dir: &Path,
+    roots: &[PathBuf],
+    excluded_roots: &[PathBuf],
     kind: AssetLoaderKind,
     prefix: &str,
     candidates: &mut BTreeMap<String, AssetPathCandidate>,
@@ -1126,7 +1153,23 @@ fn collect_asset_path_candidates(
         let path = entry.path();
 
         if path.is_dir() {
-            collect_asset_path_candidates(root, &path, kind, prefix, candidates);
+            if !excluded_roots
+                .iter()
+                .any(|excluded| path.starts_with(excluded))
+                && !roots
+                    .iter()
+                    .any(|nested| nested.as_path() != root && path == *nested)
+            {
+                collect_asset_path_candidates(
+                    root,
+                    &path,
+                    roots,
+                    excluded_roots,
+                    kind,
+                    prefix,
+                    candidates,
+                );
+            }
             continue;
         }
 
@@ -1143,7 +1186,9 @@ fn collect_asset_path_candidates(
             continue;
         };
 
-        if relative.starts_with(prefix) {
+        if asset_path_is_visible(&path, &relative, roots, excluded_roots)
+            && asset_path_matches(&relative, prefix)
+        {
             candidates
                 .entry(relative.clone())
                 .or_insert(AssetPathCandidate {
@@ -1153,6 +1198,33 @@ fn collect_asset_path_candidates(
                 });
         }
     }
+}
+
+fn asset_path_matches(path: &str, prefix: &str) -> bool {
+    path.starts_with(prefix)
+        || path
+            .match_indices(prefix)
+            .any(|(index, _)| index > 0 && path.as_bytes()[index - 1] == b'/')
+}
+
+fn asset_path_is_visible(
+    path: &Path,
+    relative: &str,
+    roots: &[PathBuf],
+    excluded_roots: &[PathBuf],
+) -> bool {
+    if excluded_roots
+        .iter()
+        .any(|excluded| path.starts_with(excluded))
+    {
+        return false;
+    }
+    roots
+        .iter()
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .and_then(|root| path.strip_prefix(root).ok())
+        .is_some_and(|canonical| normalize_relative_path(canonical) == relative)
 }
 
 fn collect_asset_index_entries(root: &Path, dir: &Path, index: &mut AssetIndex) {
