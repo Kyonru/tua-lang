@@ -5,14 +5,35 @@
 
 local M = {}
 local warned = setmetatable({}, { __mode = "k" })
+---@class ShaderScanPreloadEntry
+---@field name string
+---@field path string
+---@class ShaderScanPreloadError
+---@field name string
+---@field path string
+---@field message string
+---@class ShaderScanPreloadJob
+---@field total number
+---@field completed number
+---@field successful number
+---@field failed number
+---@field current_name? string
+---@field current_path? string
+---@field errors ShaderScanPreloadError[]
+---@field done boolean
+---@field cancelled boolean
+---@field cancel fun(self: ShaderScanPreloadJob)
 ---@class ShaderScanInstance
 ---@field s table<string, Shader>
 ---@field load_shader fun(self: ShaderScanInstance, name: string, path: string): Shader
 ---@field update fun(self: ShaderScanInstance, dt: number)
 ---@field safe_send fun(self: ShaderScanInstance, name: string, uniform: string, ...: any): boolean
 ---@field on_compiled? fun(name: string, path: string, shader: Shader, previous: Shader|nil)
+---@field preload fun(self: ShaderScanInstance, entries: ShaderScanPreloadEntry[], on_progress?: fun(job: ShaderScanPreloadJob), on_complete?: fun(job: ShaderScanPreloadJob)): ShaderScanPreloadJob
 local Scanner = {}
 Scanner.__index = Scanner
+local Job = {}
+Job.__index = Job
 
 local function normalize(path)
   path = path:gsub("\\", "/")
@@ -191,6 +212,87 @@ local function activate(self, name, loaded)
   return loaded.shader
 end
 
+local function notify(callback, job, kind)
+  if not callback then return end
+  local ok, message = pcall(callback, job)
+  if not ok then
+    print(("[ShaderScan] preload %s callback failed: %s"):format(kind, tostring(message)))
+  end
+end
+
+local function finish_preload(self, job, cancelled)
+  if job.done then return end
+  job.done = true
+  job.cancelled = cancelled
+  if self.preload_job == job then self.preload_job = nil end
+  notify(job.on_complete, job, "completion")
+end
+
+---@return nil
+function Job:cancel()
+  if self.done then return end
+  if self.processing then
+    self.cancel_requested = true
+    return
+  end
+  finish_preload(self.scanner, self, self.completed < self.total)
+end
+
+---@param entries ShaderScanPreloadEntry[]
+---@param on_progress? fun(job: ShaderScanPreloadJob)
+---@param on_complete? fun(job: ShaderScanPreloadJob)
+---@return ShaderScanPreloadJob
+function Scanner:preload(entries, on_progress, on_complete)
+  if self.preload_job then error("a ShaderScan preload is already running", 2) end
+  if type(entries) ~= "table" then error("ShaderScan preload entries must be a list", 2) end
+  local queue = {}
+  local names = {}
+  for index, entry in ipairs(entries) do
+    if type(entry) ~= "table" or type(entry.name) ~= "string" or entry.name == ""
+      or type(entry.path) ~= "string" or entry.path == "" then
+      error(("ShaderScan preload entry %d needs a name and path"):format(index), 2)
+    end
+    if names[entry.name] then
+      error(("ShaderScan preload name %q occurs twice"):format(entry.name), 2)
+    end
+    names[entry.name] = true
+    queue[#queue + 1] = { name = entry.name, path = entry.path }
+  end
+  local job = setmetatable({
+    scanner = self, entries = queue, total = #queue,
+    completed = 0, successful = 0, failed = 0,
+    errors = {}, done = false, cancelled = false,
+    current_name = queue[1] and queue[1].name or nil,
+    current_path = queue[1] and queue[1].path or nil,
+    on_progress = on_progress, on_complete = on_complete,
+  }, Job)
+  self.preload_job = job
+  if job.total == 0 then finish_preload(self, job, false) end
+  return job
+end
+
+local function process_preload(self)
+  local job = self.preload_job
+  if not job then return end
+  local entry = job.entries[job.completed + 1]
+  job.current_name = entry.name
+  job.current_path = entry.path
+  job.processing = true
+  local ok, result = pcall(self.load_shader, self, entry.name, entry.path)
+  job.processing = false
+  job.completed = job.completed + 1
+  if ok then
+    job.successful = job.successful + 1
+  else
+    job.failed = job.failed + 1
+    job.errors[#job.errors + 1] = { name = entry.name, path = entry.path, message = tostring(result) }
+  end
+  notify(job.on_progress, job, "progress")
+  if not job.done and (job.cancel_requested or job.completed == job.total) then
+    finish_preload(self, job, job.completed < job.total)
+  end
+end
+
 ---@return ShaderScanInstance
 function M.new()
   return setmetatable({ s = {}, loaded = {}, elapsed = 0 }, Scanner)
@@ -213,6 +315,7 @@ end
 ---@param dt number
 ---@return nil
 function Scanner:update(dt)
+  process_preload(self)
   self.elapsed = self.elapsed + math.max(dt or 0, 0)
   if self.elapsed < 0.25 then return end
   self.elapsed = 0

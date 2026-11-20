@@ -1,8 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+mod support;
 
 struct TempProject(PathBuf);
 
@@ -338,4 +341,219 @@ print("CALLBACK_OK")
 
     let (_, output) = build_and_run(&temp, lua);
     assert!(output.is_empty(), "{output}");
+}
+
+#[test]
+fn preload_reports_each_result_and_cancel_keeps_completed_shaders() {
+    let Some(lua) = lua_runtime() else {
+        eprintln!("skipping emitted ShaderScan runtime test: Lua is unavailable");
+        return;
+    };
+    let temp = TempProject::new();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r##"
+local files = {
+  ["shaders/shared.glsl"] = "float helper() { return 1.0; }",
+  ["shaders/one.glsl"] = '#include "shaders/shared.glsl"\nvec4 effect() { return vec4(helper()); }',
+  ["shaders/bad.glsl"] = '#include "shaders/shared.glsl"\nBAD',
+  ["shaders/two.glsl"] = '#include "shaders/shared.glsl"\nvec4 effect() { return vec4(helper() * 2.0); }',
+}
+
+local compilations = 0
+local notices = {}
+print = function(message) notices[#notices + 1] = message end
+_G.love = {
+  filesystem = { read = function(path) return files[path], "not found" end },
+  graphics = { newShader = function(code)
+    compilations = compilations + 1
+    if code:find("BAD", 1, true) then error("Line 2: compile failure") end
+    return { code = code }
+  end },
+}
+
+local scanner = ShaderScan.new()
+local activated = 0
+scanner.on_compiled = function(name: string, path: string, shader: Shader, previous: Shader | nil)
+  activated = activated + 1
+end
+local progress = {}
+local completions = 0
+local job = scanner:preload({
+  { name = "one", path = "shaders/one.glsl" },
+  { name = "bad", path = "shaders/bad.glsl" },
+  { name = "two", path = "shaders/two.glsl" },
+}, function(state)
+  progress[#progress + 1] = { state.completed, state.successful, state.failed, state.current_name }
+end, function(state)
+  completions = completions + 1
+  assert(state.done and not state.cancelled)
+end)
+assert(job.total == 3 and job.completed == 0 and not job.done)
+assert(job.current_name == "one" and job.current_path == "shaders/one.glsl")
+assert(scanner.s.one == nil and compilations == 0)
+local concurrent_ok = pcall(function() scanner:preload({}) end)
+assert(not concurrent_ok)
+scanner:update(0)
+local first = scanner.s.one
+assert(first and first.code:find("float helper", 1, true))
+assert(job.completed == 1 and job.successful == 1 and job.failed == 0)
+assert(compilations == 1 and completions == 0)
+scanner:update(0)
+assert(job.completed == 2 and job.successful == 1 and job.failed == 1)
+assert(scanner.s.bad == nil and #job.errors == 1)
+assert(job.errors[1].name == "bad" and job.errors[1].path == "shaders/bad.glsl")
+assert(job.errors[1].message:find("shaders/bad.glsl:2", 1, true))
+scanner:update(0)
+assert(job.done and not job.cancelled and completions == 1)
+assert(job.completed == 3 and job.successful == 2 and job.failed == 1)
+assert(scanner.s.one == first and scanner.s.two ~= nil and compilations == 3 and activated == 2)
+assert(progress[1][1] == 1 and progress[1][2] == 1 and progress[1][3] == 0 and progress[1][4] == "one")
+assert(progress[2][1] == 2 and progress[2][3] == 1 and progress[2][4] == "bad")
+assert(progress[3][1] == 3 and progress[3][2] == 2 and progress[3][4] == "two")
+job:cancel()
+assert(completions == 1)
+local duplicate_ok, duplicate_error = pcall(function()
+  scanner:preload({ { name = "same", path = "shaders/one.glsl" }, { name = "same", path = "shaders/two.glsl" } })
+end)
+assert(not duplicate_ok and tostring(duplicate_error):find("occurs twice", 1, true))
+
+local cancelled_completions = 0
+local second = scanner:preload({
+  { name = "new", path = "shaders/one.glsl" },
+  { name = "later", path = "shaders/two.glsl" },
+}, function() error("progress display failed") end, function(state)
+  cancelled_completions = cancelled_completions + 1
+  assert(state.done and state.cancelled)
+end)
+scanner:update(0)
+assert(second.completed == 1 and scanner.s.new ~= nil)
+second:cancel()
+second:cancel()
+scanner:update(0)
+assert(second.done and second.cancelled and second.completed == 1)
+assert(second.successful == 1 and second.failed == 0 and second.total == 2)
+assert(cancelled_completions == 1 and scanner.s.later == nil and compilations == 4 and activated == 3)
+assert(#notices == 1 and notices[1]:find("progress display failed", 1, true))
+
+local empty_completions = 0
+local empty = scanner:preload({}, nil, function(state)
+  empty_completions = empty_completions + 1
+  assert(state.done and not state.cancelled)
+end)
+assert(empty.done and empty.total == 0 and empty_completions == 1)
+
+local cancel_during_compile = function() end
+scanner.on_compiled = function(name: string, path: string, shader: Shader, previous: Shader | nil)
+  if name == "during" then cancel_during_compile() end
+end
+local during_completions = 0
+local during = scanner:preload({
+  { name = "during", path = "shaders/one.glsl" },
+  { name = "skipped", path = "shaders/two.glsl" },
+}, nil, function(state)
+  during_completions = during_completions + 1
+  assert(state.completed == 1 and state.successful == 1 and scanner.s.during ~= nil)
+end)
+cancel_during_compile = function() during:cancel() end
+scanner:update(0)
+assert(during.done and during.cancelled and during.completed == 1)
+assert(during_completions == 1 and scanner.s.skipped == nil)
+
+local final_completions = 0
+local final = scanner:preload({ { name = "last", path = "shaders/one.glsl" } }, function(state)
+  state:cancel()
+end, function(state)
+  final_completions = final_completions + 1
+  assert(state.done and not state.cancelled and state.completed == state.total)
+end)
+scanner:update(0)
+assert(final.done and not final.cancelled and final_completions == 1)
+"##,
+    )
+    .expect("write preload source");
+
+    let (_, output) = build_and_run(&temp, lua);
+    assert!(output.is_empty(), "{output}");
+}
+
+#[test]
+fn shader_scan_preloads_with_real_love() {
+    let Some(love) = support::love_executable() else {
+        eprintln!("skipping ShaderScan LÖVE smoke; set TUA_TEST_LOVE_RUNTIME=1");
+        return;
+    };
+    let temp = TempProject::new();
+    let assets = temp.path().join("src/assets");
+    fs::create_dir_all(&assets).expect("create shader assets");
+    let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/features/src/assets");
+    for name in ["solid.glsl", "wave.glsl"] {
+        fs::copy(examples.join(name), assets.join(name)).expect("copy shader example asset");
+    }
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local scanner = ShaderScan.new()
+local compiled = 0
+local draws = 0
+scanner.on_compiled = function(name: string, path: string, replacement: Shader, previous: Shader | nil)
+  compiled += 1
+  if name == "wave" then replacement:send("time", 0) end
+end
+local job = scanner:preload({
+  { name = "solid", path = "assets/solid.glsl" },
+  { name = "wave", path = "assets/wave.glsl" },
+})
+
+function love.update(dt)
+  scanner:update(dt)
+  if job.done then
+    assert(job.completed == 2 and job.successful == 2 and job.failed == 0)
+    assert(compiled == 2 and draws >= 1)
+    assert(scanner.s.solid and scanner.s.wave)
+    love.event.quit(0)
+  end
+end
+
+function love.draw()
+  draws += 1
+  local solid = scanner.s.solid
+  if solid then
+    love.graphics.setShader(solid)
+    love.graphics.rectangle("fill", 0, 0, 8, 8)
+  end
+  local wave = scanner.s.wave
+  if wave then
+    love.graphics.setShader(wave)
+    love.graphics.rectangle("fill", 8, 8, 8, 8)
+  end
+  love.graphics.setShader()
+end
+"#,
+    )
+    .expect("write LÖVE preload source");
+    let build = Command::new(env!("CARGO_BIN_EXE_tua"))
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("build LÖVE preload project");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let child = Command::new(love)
+        .arg(temp.path().join("build"))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("launch LÖVE preload project");
+    let output = support::wait_for_child_output(child, Duration::from_secs(10));
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

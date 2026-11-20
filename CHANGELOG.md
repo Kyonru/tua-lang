@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- `ShaderScan:preload` processes one named shader per update, reports progress
+  and errors, supports cancellation, and reuses the existing shader collection.
 - `ShaderScan.on_compiled` runs after initial and reload compilation, before
   activation, so games can restore uniforms and textures. Failed setup keeps
   the last working shader.

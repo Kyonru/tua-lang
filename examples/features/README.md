@@ -144,6 +144,9 @@ guides cannot silently omit an example.
   becomes active, polling for edits, and reading the live shader binding during
   drawing. `src/assets.tua` covers uniform checking and the
   `shader` asset helper.
+- `src/shader_preload.tua` demonstrates a loading screen that processes one
+  shader per update, displays counts and individual errors, allows retry or
+  cancellation, then draws with shaders from the same `scanner.s` collection.
 - `src/game_math.tua` covers the opt-in `math` and `love.math` game helpers:
   `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`, `round`,
   `smoothstep`, `rgb`, and `rgba`, including byte-to-LOVE color tables and

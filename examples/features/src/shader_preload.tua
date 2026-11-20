@@ -1,0 +1,61 @@
+-- Feature: compile named shaders across update calls before entering gameplay.
+-- A screen can draw progress between compilations and keep successful shaders
+-- in scanner.s for ordinary drawing and later hot reload.
+local scanner = ShaderScan.new()
+
+local function begin()
+  local ready = false
+  local entries = {
+    { name = "solid", path = "assets/solid.glsl" },
+    { name = "wave", path = "assets/wave.glsl" },
+  }
+  local function completed(state)
+    ready = not state.cancelled and state.failed == 0
+  end
+  local function queue()
+    return scanner:preload(entries, nil, completed)
+  end
+  local job = queue()
+
+  local function update(dt: number)
+    scanner:update(dt)
+  end
+
+  local function draw()
+    if not ready then
+      love.graphics.print(("Shaders %d / %d (ok %d, failed %d)"):format(
+        job.completed, job.total, job.successful, job.failed), 16, 16)
+      love.graphics.print((job.current_name or "Waiting") .. ": " ..
+        (job.current_path or ""), 16, 40)
+      if job.cancelled then
+        love.graphics.print("Loading cancelled. Press R to retry", 16, 64)
+        return
+      end
+      local firstError = job.errors[1]
+      if firstError then
+        love.graphics.print(firstError.message, 16, 64)
+        love.graphics.print("Fix the shader, then press R to retry", 16, 88)
+      end
+      return
+    end
+
+    local wave = scanner.s.wave
+    if wave then love.graphics.setShader(wave) end
+    love.graphics.rectangle("fill", 16, 16, 320, 180)
+    love.graphics.setShader()
+  end
+
+  local function retry()
+    if not job.done then job:cancel() end
+    ready = false
+    job = queue()
+  end
+
+  local function cancel()
+    job:cancel()
+  end
+
+  return { update = update, draw = draw, retry = retry, cancel = cancel }
+end
+
+return { begin = begin, scanner = scanner }

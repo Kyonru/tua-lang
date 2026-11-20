@@ -90,6 +90,39 @@ exported.scanner:<|methods|>
 }
 
 #[test]
+fn exported_shader_preload_job_keeps_progress_and_cancel_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/provider.tua
+local scanner = ShaderScan.new()
+local job = scanner:preload({ { name = "wave", path = "assets/wave.glsl" } })
+return { scanner = scanner, job = job }
+-- file: src/main.tua
+local exported = require("provider")
+local count: number = exported.job.completed
+local wrong: string = exported.job.completed
+exported.job:cancel()
+local another = exported.scanner:preload({ { name = "water", path = "assets/water.glsl" } }, function(state)
+  local progress: number = state.completed
+  local wrong_progress: string = state.completed
+end)
+local total: number = another.total
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .map(|diagnostic| diagnostic.line)
+        .collect::<Vec<_>>();
+    assert_eq!(mismatches, [3, 7], "{diagnostics:#?}");
+}
+
+#[test]
 fn shader_uniform_completion_ranks_and_filters_names() {
     let temp = TempProject::new("shader-completion");
     let fixture = Fixture::parse(

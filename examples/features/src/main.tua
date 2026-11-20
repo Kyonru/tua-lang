@@ -36,6 +36,7 @@ local Roguelike = require("roguelike")
 local ObjectPool = require("object_pool")
 local Comments = require("comments")
 local Shaders = require("shaders")
+local ShaderPreload = require("shader_preload")
 local Localization = require("localization")
 local SaveContracts = require("save_contracts")
 local Logging = require("logging")
@@ -79,6 +80,7 @@ return {
   object_pool = ObjectPool,
   comments = Comments,
   shaders = Shaders,
+  shaderPreload = ShaderPreload,
   localization = Localization,
   saveContracts = SaveContracts,
   logging = Logging,

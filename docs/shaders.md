@@ -113,6 +113,69 @@ end)
 if not ok then print(message) end
 ```
 
+## Preload shaders for a loading screen
+
+Synchronous `load_shader(name, path)` remains available. To spread a named list
+across frames, call `scanner:preload(entries, on_progress?, on_complete?)` and
+keep calling `scanner:update(dt)`. Each entry is `{ name = "...", path = "..." }`.
+The returned job has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `total` | Number of entries submitted. |
+| `completed` | Entries attempted; always `successful + failed`. |
+| `successful`, `failed` | Compile and setup results. |
+| `current_name`, `current_path` | First queued entry before the first update, then the most recently attempted entry. |
+| `errors` | `{ name, path, message }` for each failed entry, including source mapped include and compiler errors. |
+| `done`, `cancelled` | Whether the job ended, and whether it ended by cancellation. |
+
+`on_progress(job)` runs after each attempt. `on_complete(job)` runs exactly once
+after the last entry, after `job:cancel()`, or immediately for an empty list.
+Progress or completion callback errors are printed and do not change shader
+results or counts. Only one preload job can run per scanner; starting another
+before the first finishes raises an error. Empty names or paths and duplicate
+names are rejected when the list is submitted.
+
+For a complete loading screen with progress, error display, retry, and a
+transition into gameplay, see
+[`examples/features/src/shader_preload.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/shader_preload.tua).
+Wire it into a LÖVE entry point like this:
+
+```tua
+local Loading = require("shader_preload")
+local screen = Loading.begin()
+
+function love.update(dt)
+    screen.update(dt)
+end
+function love.draw()
+    screen.draw()
+end
+function love.keypressed(key)
+    if key == "r" then screen.retry() end
+    if key == "escape" then screen.cancel() end
+end
+```
+
+Each `update` call attempts at most one queued shader. A failure is recorded in
+`job.errors`, and later entries still run. The scanner uses the same include
+expansion, source mapped diagnostics, and `on_compiled` callback as direct
+loads. Successfully preloaded shaders are immediately available through
+`scanner.s[name]` and continue to hot reload after the job ends. A failed job
+keeps its final counts; start a new job after fixing a shader to retry it.
+
+`job:cancel()` skips entries not yet attempted and preserves completed shaders.
+Outside a compilation it notifies completion immediately. If called from
+`on_compiled` during a compilation, it waits for that entry's result and
+progress notification before completing. `cancelled` is true when entries were
+skipped; cancelling after the final entry has completed leaves it false. It
+cannot interrupt a GPU compilation on the main thread. There is no per-frame time
+budget: limiting the queue to one compilation per `update` lets the game draw
+between entries, but a single GPU compilation can still stall that frame.
+Some shaders also incur a separate first-draw GPU cost; ShaderScan does not
+warm them up by drawing, so a game that needs that can render with the compiled
+shader during its loading phase.
+
 Tua expands includes for the shared shader index. Uniforms
 declared in included files participate in `Shader:send` diagnostics, completion,
 hover, go to definition, and LOVE-backed shader validation. Diagnostics and

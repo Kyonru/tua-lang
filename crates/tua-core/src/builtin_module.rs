@@ -58,7 +58,7 @@ pub(crate) const SHADER_SCAN: BuiltinModule = BuiltinModule {
     runtime: "tuashaderscan",
     source: include_str!("../../../vendor/runtime/tuashaderscan.lua"),
     summary: "shader iteration helpers",
-    documentation: "Safely send optional shader uniforms with `ShaderScan.safe_send(shader, name, ...)`; absent or optimized-out uniforms are skipped and reported once.",
+    documentation: "Load and hot reload named shaders with `ShaderScan.new()`, `scanner:load_shader(name, path)`, and `scanner:update(dt)`. Use `scanner:preload(entries, on_progress?, on_complete?)` for one compile per update and `ShaderScan.safe_send` for optional uniforms.",
 };
 
 pub(crate) const ROT: BuiltinModule = BuiltinModule {
