@@ -85,6 +85,9 @@ The run choice is remembered per workspace and drives the compact toolbar Run bu
 New workspaces default to Development; a previously saved Package selection also
 falls back to Development. The Run button opens the game console. Run uses a green play icon and Stop a red square,
 with light/dark variants. Direct run commands retain their task terminal.
+After a normal Run ends, starting the same configuration reuses its task
+terminal. An overlapping run or a changed configuration uses a separate
+terminal.
 Customize names and modes in `tua.run.configurations`; packaging configurations
 can specify `packageTarget` (`love`, `windows`, `macos`, `web`, or
 `custom:<name>` from `tua.toml`). Existing launch

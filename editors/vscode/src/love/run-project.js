@@ -1,7 +1,7 @@
 "use strict";
 
 const childProcess = require("child_process");
-const { randomInt } = require("node:crypto");
+const { createHash, randomInt } = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
@@ -25,6 +25,11 @@ const PROFILE_CONTEXT = "tua.loveProfileCapturing";
 
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector, extensionPath }) {
   const activeExecutions = new Set();
+  const activeRunIds = new Map();
+  const pendingRunIds = new Set();
+  const runIdsByConfiguration = new Map();
+  const endedTasks = new WeakSet();
+  const endedProcesses = new WeakSet();
   let nextRun = 0;
   let lastRun = {};
   let currentCapture;
@@ -85,6 +90,8 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   if (vscode.tasks?.onDidEndTask) {
     disposables.push(
       vscode.tasks.onDidEndTask((event) => {
+        endedTasks.add(event.execution);
+        activeRunIds.delete(event.execution);
         if (activeExecutions.delete(event.execution)) {
           void setRunningContext(activeExecutions.size > 0);
         }
@@ -95,6 +102,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   if (vscode.tasks?.onDidEndTaskProcess) {
     disposables.push(
       vscode.tasks.onDidEndTaskProcess((event) => {
+        endedProcesses.add(event.execution);
         if (activeExecutions.delete(event.execution)) {
           void setRunningContext(activeExecutions.size > 0);
         }
@@ -159,9 +167,38 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, true);
     }
 
+    const loveCommand = configuredLoveCommand();
+    const tuaCommand = options.getServerCommand?.() || "tua";
+    const runKey = runTerminalKey({
+      projectRoot: layout.configDirectory,
+      outputDirectory: layout.outputDirectory,
+      configurationName: options.configurationName,
+      instances,
+      title: options.title,
+      showConsole: options.showConsole,
+      loveCommand,
+      tuaCommand,
+      inspectorEnabled: inspector?.enabled(),
+      profileDuration: options.profileDuration,
+      budgetMs: options.budgetMs,
+      traceCategories: options.traceCategories,
+      inputSeed: options.inputSeed,
+      replay: Boolean(options.replayInput),
+    });
+    let runIds = runIdsByConfiguration.get(runKey);
+    if (!runIds) {
+      runIds = [];
+      runIdsByConfiguration.set(runKey, runIds);
+    }
+    const busyRunIds = new Set([...pendingRunIds, ...activeRunIds.values()]);
+    let runId = runIds.find(id => !busyRunIds.has(id));
+    if (!runId) {
+      runId = runIds.length === 0 ? runKey : `${runKey}-${++nextRun}`;
+      runIds.push(runId);
+    }
     const task = createLoveProjectTask({
       configurationName: options.configurationName,
-      runId: ++nextRun,
+      runId,
       instances,
       title: options.title,
       showConsole: options.showConsole,
@@ -172,15 +209,18 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       replayInputPath: path.join(extensionPath, "assets", "profiler", "input.lua"),
       appendOutputLine,
       layout,
-      loveCommand: configuredLoveCommand(),
-      tuaCommand: options.getServerCommand?.() || "tua",
+      loveCommand,
+      tuaCommand,
     });
+    pendingRunIds.add(runId);
 
     let execution;
     try { execution = await vscode.tasks.executeTask(task); }
     catch (error) { capture?.finish(); throw error; }
-    activeExecutions.add(execution);
-    await setRunningContext(true);
+    finally { pendingRunIds.delete(runId); }
+    if (!endedTasks.has(execution)) activeRunIds.set(execution, runId);
+    if (!endedTasks.has(execution) && !endedProcesses.has(execution)) activeExecutions.add(execution);
+    await setRunningContext(activeExecutions.size > 0);
 
     return {
       outputDirectory: layout.outputDirectory,
@@ -205,8 +245,15 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   return vscode.Disposable.from(...disposables, { dispose() {
     for (const execution of activeExecutions) execution.terminate();
     activeExecutions.clear();
+    activeRunIds.clear();
+    pendingRunIds.clear();
+    runIdsByConfiguration.clear();
     void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, false);
   } });
+}
+
+function runTerminalKey(configuration) {
+  return createHash("sha256").update(JSON.stringify(configuration)).digest("hex").slice(0, 16);
 }
 
 function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture, replay, replayInputPath }) {

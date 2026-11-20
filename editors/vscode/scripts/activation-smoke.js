@@ -456,6 +456,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert.strictEqual(state.executedTasks.length, 1, "run LOVE should execute one VS Code task");
     assert.strictEqual(state.executedTasks[0].task.name, "Run LOVE Project");
     assert.strictEqual(state.executedTasks[0].task.definition.type, "tua");
+    assert.strictEqual(state.executedTasks[0].task.presentationOptions.panel, state.vscode.TaskPanelKind.Dedicated);
     assert.strictEqual(
       state.executedTasks[0].task.execution.callback instanceof Function,
       true,
@@ -508,10 +509,13 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "stop LOVE should report that it terminated the running task",
     );
     assert.strictEqual(state.taskTerminations.length, 1, "stop LOVE should terminate the active task");
+    state.finishTask(state.executedTasks[0].execution);
 
     await state.commands.get("tua.restartLoveProject")();
     assert.strictEqual(state.taskTerminations.length, 1, "restart after stop has no stale task to terminate");
     assert.strictEqual(state.executedTasks.length, 2, "restart LOVE should start a fresh task");
+    assert.strictEqual(state.executedTasks[1].task.definition.runId, state.executedTasks[0].task.definition.runId,
+      "a finished run with the same configuration should reuse its dedicated task terminal");
 
     const players = [{ name: "Host", args: ["--host"] }, { name: "Client", args: ["--join", "localhost"] }];
     await state.commands.get("tua.runLoveProject")({ instances: players, title: "Local players", console: true });
@@ -529,6 +533,26 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     const tasksBeforeInvalid = state.executedTasks.length;
     await state.commands.get("tua.runLoveProject")({ instances: [] });
     assert.strictEqual(state.executedTasks.length, tasksBeforeInvalid, "invalid instance groups cannot start tasks");
+    for (const item of state.executedTasks.slice(1)) state.finishTask(item.execution);
+    await state.commands.get("tua.runLoveProject")();
+    const idleRun = state.executedTasks.at(-1);
+    assert.strictEqual(idleRun.task.definition.runId, state.executedTasks[0].task.definition.runId);
+    await state.commands.get("tua.runLoveProject")();
+    const overlappingRun = state.executedTasks.at(-1);
+    assert.notStrictEqual(overlappingRun.task.definition.runId, idleRun.task.definition.runId,
+      "overlapping runs must keep separate task terminals");
+    state.finishTask(idleRun.execution);
+    await state.commands.get("tua.runLoveProject")();
+    assert.strictEqual(state.executedTasks.at(-1).task.definition.runId, idleRun.task.definition.runId,
+      "an idle terminal can be reused while another run remains active");
+    state.finishTask(overlappingRun.execution);
+    await state.commands.get("tua.runLoveProject")();
+    assert.strictEqual(state.executedTasks.at(-1).task.definition.runId, overlappingRun.task.definition.runId,
+      "a second terminal can also be reused after its overlapping run ends");
+    await state.commands.get("tua.runLoveProject")({ configurationName: "Alternative" });
+    assert.notStrictEqual(state.executedTasks.at(-1).task.definition.runId, idleRun.task.definition.runId,
+      "a changed run configuration gets a separate task terminal");
+    await state.commands.get("tua.stopLoveProject")();
 
     const loveRunner = require(path.join(extensionRoot, "src", "love", "run-project.js"));
     const fakeLove = path.join(workspace, "bin", platformLoveExecutableName());
@@ -1964,6 +1988,8 @@ function createMockState(workspace, options = {}) {
   const quickPickCalls = [];
   const executedTasks = [];
   const taskTerminations = [];
+  const taskEndListeners = [];
+  const taskProcessEndListeners = [];
   const startedDebugSessions = [];
   const hoverProviders = [];
   const treeViews = [];
@@ -2119,11 +2145,13 @@ function createMockState(workspace, options = {}) {
         executedTasks.push({ task, execution });
         return Promise.resolve(execution);
       },
-      onDidEndTask() {
-        return { dispose() {} };
+      onDidEndTask(listener) {
+        taskEndListeners.push(listener);
+        return { dispose() { taskEndListeners.splice(taskEndListeners.indexOf(listener), 1); } };
       },
-      onDidEndTaskProcess() {
-        return { dispose() {} };
+      onDidEndTaskProcess(listener) {
+        taskProcessEndListeners.push(listener);
+        return { dispose() { taskProcessEndListeners.splice(taskProcessEndListeners.indexOf(listener), 1); } };
       },
     },
     Uri: {
@@ -2856,6 +2884,10 @@ function createMockState(workspace, options = {}) {
     documentSaveListeners,
     executedCommands,
     executedTasks,
+    finishTask(execution, exitCode = 0) {
+      for (const listener of [...taskProcessEndListeners]) listener({ execution, exitCode });
+      for (const listener of [...taskEndListeners]) listener({ execution });
+    },
     fileWatchers,
     fireDebugTermination(session) {
       for (const listener of debugTerminationListeners) {

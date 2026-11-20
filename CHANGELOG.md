@@ -20,6 +20,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Reuse an idle LÖVE Run task terminal for the same configuration instead of
+  opening a new terminal on every run. Keep overlapping and changed runs separate.
 - Navigate from a class `implements` clause to the local or imported protocol
   declaration.
 - Navigate from a field read on a local `store:get()` result to its initial
