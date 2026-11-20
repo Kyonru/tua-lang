@@ -140,8 +140,9 @@ guides cannot silently omit an example.
   completion. `ShaderScan.safe_send` demonstrates optional shader uniforms.
   LOVE code actions can also rewrite obvious raw constructors into helper calls.
 - `src/shaders.tua` demonstrates `ShaderScan.new()`, loading a shader by its
-  project-root-relative path, polling for edits, and reading the live shader
-  binding during drawing. `src/assets.tua` covers uniform checking and the
+  project-root-relative path, restoring uniforms before a compiled replacement
+  becomes active, polling for edits, and reading the live shader binding during
+  drawing. `src/assets.tua` covers uniform checking and the
   `shader` asset helper.
 - `src/game_math.tua` covers the opt-in `math` and `love.math` game helpers:
   `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`, `round`,

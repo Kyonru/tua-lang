@@ -3,13 +3,22 @@
 -- Paths are relative to the running game root. Build copies src/assets to
 -- build/assets, so this same path works in source and generated games.
 local shaders = ShaderScan.new()
+local elapsed = 0
+
+-- Restore uniforms on the compiled candidate before it replaces the old shader.
+shaders.on_compiled = function(name: string, path: string, replacement: Shader, previous: Shader | nil)
+  if name == "wave" then replacement:send("time", elapsed) end
+end
 
 local function load()
   shaders:load_shader("wave", "assets/wave.glsl")
 end
 
 local function update(dt: number)
+  elapsed += dt
   shaders:update(dt)
+  local wave = shaders.s.wave
+  if wave then wave:send("time", elapsed) end
 end
 
 local function draw()

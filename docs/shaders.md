@@ -75,6 +75,33 @@ shader through `shaders.s.<name>` so drawing code sees the replacement rather
 than a shader value cached before the edit. Polling checks file contents every
 250 ms and does not require `tua dev`.
 
+Set `scanner.on_compiled` before loading when a shader needs textures or
+uniforms restored. The callback receives `(name: string, path: string,
+shader: Shader, previous: Shader | nil)` after compilation succeeds but before
+`scanner.s[name]` changes. `previous` is `nil` on the first successful load;
+on reload it is the still-active shader. For example:
+
+```tua
+local shaders = ShaderScan.new()
+local elapsed = 0
+shaders.on_compiled = function(name: string, path: string, replacement: Shader, previous: Shader | nil)
+    if name == "water" then
+        replacement:send("time", elapsed)
+        replacement:send("noiseTexture", noiseTexture)
+    end
+end
+shaders:load_shader("water", "shaders/water.glsl")
+```
+
+The callback runs for both direct `load_shader` calls and successful automatic
+reloads. If it throws, ShaderScan releases the new candidate and keeps the
+last working shader active. A direct load reports the error to its caller;
+an automatic reload prints it once. An automatic retry occurs when the shader
+or an included file changes again. Fixing setup state without editing a file
+requires another explicit `load_shader` call. A successful replacement releases
+the previous shader after the callback returns. The callback's return value
+does not affect activation.
+
 If the first load fails during development, catch the load error so the game
 continues to call `update`. The scanner remembers the failed shader and retries
 when its file or an included file changes:

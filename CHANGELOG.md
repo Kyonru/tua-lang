@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- `ShaderScan.on_compiled` runs after initial and reload compilation, before
+  activation, so games can restore uniforms and textures. Failed setup keeps
+  the last working shader.
 - Give VS Code agents editor tools to build Tua projects, run and debug LÖVE
   games, and inspect bounded run output, stack frames, and locals from a paused
   Tua debug session. MCP project summaries now expose the running CLI path so

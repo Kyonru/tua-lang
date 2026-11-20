@@ -185,6 +185,7 @@ local files = {
   ["shaders/lib/error.glsl"] = "BROKEN",
   ["shaders/missing.glsl"] = '#include "shaders/lib/nope.glsl"',
 }
+
 local captured = {}
 local messages = {}
 print = function(message) messages[#messages + 1] = message end
@@ -261,4 +262,80 @@ assert(scanner.loaded.broken.failed == nil and scanner.loaded.missing.failed == 
 
     let (_, output) = build_and_run(&temp, lua);
     assert!(output.is_empty());
+}
+
+#[test]
+fn compiled_callback_precedes_publication_and_failed_setup_keeps_last_shader() {
+    let Some(lua) = lua_runtime() else {
+        eprintln!("skipping emitted ShaderScan runtime test: Lua is unavailable");
+        return;
+    };
+    let temp = TempProject::new();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local files = { ["shaders/effect.glsl"] = "FIRST" }
+local messages = {}
+print = function(message) messages[#messages + 1] = message end
+_G.love = {
+  filesystem = { read = function(path) return files[path], "not found" end },
+  graphics = { newShader = function(code)
+    if code:find("BAD", 1, true) then error("Line 1: compile failure") end
+    return {
+      code = code,
+      send = function(self, name, value) self[name] = value end,
+      release = function(self) self.released = true end,
+    }
+  end },
+}
+
+local scanner = ShaderScan.new()
+local fail_setup = true
+local callbacks = 0
+scanner.on_compiled = function(name: string, path: string, shader: Shader, previous: Shader | nil)
+  callbacks = callbacks + 1
+  assert(name == "effect" and path == "shaders/effect.glsl")
+  assert(scanner.s.effect == previous)
+  if previous then assert(not previous.released) end
+  if fail_setup then error("uniform setup failed") end
+  shader:send("gain", callbacks)
+end
+
+local ok, message = pcall(function() scanner:load_shader("effect", "shaders/effect.glsl") end)
+assert(not ok and tostring(message):find("uniform setup failed", 1, true))
+assert(scanner.s.effect == nil)
+assert(callbacks == 1)
+fail_setup = false
+files["shaders/effect.glsl"] = "SECOND"
+scanner:update(0.3)
+local first = scanner.s.effect
+assert(first and first.gain == 2)
+fail_setup = true
+files["shaders/effect.glsl"] = "THIRD"
+scanner:update(0.3)
+assert(scanner.s.effect == first and not first.released)
+assert(callbacks == 3)
+scanner:update(0.3)
+assert(callbacks == 3)
+fail_setup = false
+files["shaders/effect.glsl"] = "BAD"
+scanner:update(0.3)
+assert(scanner.s.effect == first and not first.released)
+files["shaders/effect.glsl"] = "FOURTH"
+scanner:update(0.3)
+assert(scanner.s.effect ~= first and first.released)
+local final = scanner.s.effect
+assert(final and final.gain == 4)
+local setup_errors = 0
+for _, entry in ipairs(messages) do
+  if entry:find("uniform setup failed", 1, true) then setup_errors = setup_errors + 1 end
+end
+assert(setup_errors == 1)
+print("CALLBACK_OK")
+"#,
+    )
+    .expect("write callback source");
+
+    let (_, output) = build_and_run(&temp, lua);
+    assert!(output.is_empty(), "{output}");
 }

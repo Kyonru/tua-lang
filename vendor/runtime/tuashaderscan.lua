@@ -10,6 +10,7 @@ local warned = setmetatable({}, { __mode = "k" })
 ---@field load_shader fun(self: ShaderScanInstance, name: string, path: string): Shader
 ---@field update fun(self: ShaderScanInstance, dt: number)
 ---@field safe_send fun(self: ShaderScanInstance, name: string, uniform: string, ...: any): boolean
+---@field on_compiled? fun(name: string, path: string, shader: Shader, previous: Shader|nil)
 local Scanner = {}
 Scanner.__index = Scanner
 
@@ -151,6 +152,45 @@ local function load(name, path)
   }
 end
 
+local function remember_failure(self, name, failed, message)
+  if not failed then return end
+  local previous = self.loaded[name]
+  if previous then
+    previous.failed = failed
+    previous.retry_path = failed.path
+    previous.last_error = message
+  else
+    self.loaded[name] = {
+      path = failed.path,
+      dependencies = failed.dependencies,
+      source_by_path = failed.source_by_path,
+      failed = failed,
+      last_error = message,
+    }
+  end
+end
+
+local function activate(self, name, loaded)
+  local previous = self.loaded[name]
+  local old_shader = previous and previous.shader or nil
+  if self.on_compiled then
+    local ok, message = pcall(self.on_compiled, name, loaded.path, loaded.shader, old_shader)
+    if not ok then
+      if loaded.shader.release then loaded.shader:release() end
+      return nil, ("shader %q setup failed: %s"):format(name, tostring(message)), {
+        path = loaded.path,
+        dependencies = loaded.dependencies,
+        source_by_path = loaded.source_by_path,
+      }
+    end
+  end
+  loaded.name = name
+  self.loaded[name] = loaded
+  self.s[name] = loaded.shader
+  if old_shader and old_shader.release then old_shader:release() end
+  return loaded.shader
+end
+
 ---@return ShaderScanInstance
 function M.new()
   return setmetatable({ s = {}, loaded = {}, elapsed = 0 }, Scanner)
@@ -161,29 +201,13 @@ end
 ---@return Shader
 function Scanner:load_shader(name, path)
   local loaded, message, failed = load(name, path)
-  if not loaded then
-    if failed then
-      local previous = self.loaded[name]
-      if previous then
-        previous.failed = failed
-        previous.last_error = message
-      else
-        self.loaded[name] = {
-          path = failed.path,
-          dependencies = failed.dependencies,
-          source_by_path = failed.source_by_path,
-          failed = failed,
-          last_error = message,
-        }
-      end
-    end
-    error(message, 2)
+  if loaded then
+    local shader
+    shader, message, failed = activate(self, name, loaded)
+    if shader then return shader end
   end
-  loaded.name = name
-  loaded.failed = nil
-  self.s[name] = loaded.shader
-  self.loaded[name] = loaded
-  return loaded.shader
+  remember_failure(self, name, failed, message)
+  error(message, 2)
 end
 
 ---@param dt number
@@ -203,14 +227,15 @@ function Scanner:update(dt)
       end
     end
     if changed then
-      local replacement, message, failed = load(name, previous.path)
+      local replacement, message, failed = load(name, previous.retry_path or previous.path)
       if replacement then
-        replacement.name = name
-        self.loaded[name] = replacement
-        self.s[name] = replacement.shader
-        if previous.shader and previous.shader.release then previous.shader:release() end
-        print(("[ShaderScan] reloaded %s (%s)"):format(name, previous.path))
-      else
+        local shader
+        shader, message, failed = activate(self, name, replacement)
+        if shader then
+          print(("[ShaderScan] reloaded %s (%s)"):format(name, previous.path))
+        end
+      end
+      if message then
         previous.failed = failed or observed
         if previous.last_error ~= message then
           print(("[ShaderScan] %s"):format(message))
