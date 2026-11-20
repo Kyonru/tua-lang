@@ -64,6 +64,9 @@ project build. The implementation is independent and follows the feature ideas
 of the [MIT-licensed LÖVE ShaderScan project](https://github.com/idbrii/love-shaderscan).
 The [feature-tour example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/shaders.tua)
 shows the loading, update, and drawing flow with a bundled shader asset.
+The scanner and its `s` collection keep their method and `Shader` lookup types
+when exported from a Tua module. A lookup can be `nil` before its first
+successful load, so check it before drawing.
 
 Call `shaders:update(dt)` from `love.update` to poll the shader and its includes
 for edits. A successful compile replaces `shaders.s.water`; a compile failure

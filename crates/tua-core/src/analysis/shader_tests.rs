@@ -45,6 +45,51 @@ scan:load_shader("reassigned", "src/assets/pulse.glsl")
 }
 
 #[test]
+fn exported_shader_scanner_and_collection_keep_method_and_shader_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/provider.tua
+local scanner = ShaderScan.new()
+return { scanner = scanner, collection = scanner.s }
+-- file: src/main.tua
+local exported = require("provider")
+local from_scanner: Shader | nil = exported.scanner.s.wave
+local from_collection: Shader | nil = exported.collection.wave
+local wrong_shader: number = exported.collection.wave
+exported.scanner:update("wrong")
+local wrong_load: number = exported.scanner:load_shader("wave", "assets/wave.glsl")
+exported.scanner:<|methods|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .map(|diagnostic| diagnostic.line)
+        .collect::<Vec<_>>();
+    assert_eq!(mismatches, [4, 5, 6], "{diagnostics:#?}");
+    let completions =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("methods")));
+    assert!(
+        completions.contains(&"load_shader".to_owned()),
+        "{completions:?}"
+    );
+    assert!(
+        completions.contains(&"update".to_owned()),
+        "{completions:?}"
+    );
+    assert!(
+        completions.contains(&"safe_send".to_owned()),
+        "{completions:?}"
+    );
+}
+
+#[test]
 fn shader_uniform_completion_ranks_and_filters_names() {
     let temp = TempProject::new("shader-completion");
     let fixture = Fixture::parse(

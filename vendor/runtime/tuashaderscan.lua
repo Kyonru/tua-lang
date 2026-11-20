@@ -7,6 +7,9 @@ local M = {}
 local warned = setmetatable({}, { __mode = "k" })
 ---@class ShaderScanInstance
 ---@field s table<string, Shader>
+---@field load_shader fun(self: ShaderScanInstance, name: string, path: string): Shader
+---@field update fun(self: ShaderScanInstance, dt: number)
+---@field safe_send fun(self: ShaderScanInstance, name: string, uniform: string, ...: any): boolean
 local Scanner = {}
 Scanner.__index = Scanner
 
