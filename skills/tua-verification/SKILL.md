@@ -21,7 +21,11 @@ cleanup, docs, packaging, or conflict resolution.
 
 ## Common Commands
 
-- Formatting: `cargo fmt --all`
+- Rust formatting: `cargo fmt --all`
+- Tua source/spec formatting: `tua fmt --check` from each affected project root;
+  run `tua fmt` to apply the shared defaults. This is separate from type checking
+  and whitespace checks. Include the project's authored Lua formatting gate when
+  present; `.lua` assets are not automatically covered by the Tua project check.
 - Core tests: `cargo test -p tua-core`
 - LSP tests: `cargo test -p tua-lsp`
 - CLI unit tests: `cargo test -p tua-cli --lib`

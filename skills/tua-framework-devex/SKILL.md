@@ -41,6 +41,10 @@ the smallest set that improves the game's code and editing experience.
 
 ## Verify A Game Workflow
 
+- Format changed source/specs using the project formatter and require
+  `tua fmt --check` before committing. Keep authored Lua harnesses equally readable
+  and use their formatting gate too. Do not compress statements behind semicolons
+  to save space; literal fixture inputs testing layout are the exception.
 - Check and build the project, run emitted Lua or LÖVE where available, and
   inspect generated imports for used and unused helpers.
 - Exercise an edit or dependency change, then test completion/hover and a

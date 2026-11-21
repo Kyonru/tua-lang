@@ -39,6 +39,23 @@ LÖVE workflows available; do not treat a Tua helper as a required framework.
   distinct. A performance fix must preserve current diagnostics, navigation,
   preview freshness, and visible editor assistance.
 
+## Source readability
+
+- Treat Tua's shared formatter defaults as the baseline for CLI, editor, examples,
+  and agent-written source. Write one statement per line; expand multi-action
+  blocks and use one field per line in multiline tables. Small single-action
+  guards and simple expressions can remain compact.
+- Run `tua fmt` and `tua fmt --check` in affected Tua projects before committing.
+  Type checking, runtime tests, `cargo fmt`, and `git diff --check` do not replace
+  the Tua formatting check. Preserve unrelated project changes.
+- Keep authored test/harness code as readable as production code. Intentionally
+  compact or malformed fixture *strings* may remain unchanged when layout is the
+  behavior under test. Plain Lua assets need a separate formatting gate; do not
+  imply `tua fmt --check` checked them automatically.
+- If formatting is unstable or changes program behavior, retain a regression and
+  fix the shared formatter. Do not silently skip the gate or add an editor-only
+  style implementation. Keep mechanical cleanup separate from behavior changes.
+
 ## Tooling and verification
 
 - Repository skills live under `skills/tua-*`; `.codex/skills/` contains their
