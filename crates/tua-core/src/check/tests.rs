@@ -7899,3 +7899,32 @@ consume(copied)
     )
     .expect("literal widening should respect each field's initializer");
 }
+
+#[test]
+fn literal_or_guards_narrow_each_successful_path() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+type Region = "head" | "body" | "none"
+local function read(value: Region | nil): Region
+  if value == "head" or "body" == value then
+    local exact: "head" | "body" = value
+    return exact
+  end
+  return "none"
+end
+"#,
+    )
+    .expect("each successful alternative excludes nil and unrelated literals");
+    for condition in [
+        "value == 'head' or value == nil",
+        "value == 'head' or flag",
+        "value == 'head' or mutate()",
+    ] {
+        let source = format!("local function read(value: string | nil, flag: boolean, mutate: () -> boolean): string\n if {condition} then return value end\n return ''\nend");
+        assert!(
+            check_tua_source("src/main.tua", &source).is_err(),
+            "{condition}"
+        );
+    }
+}

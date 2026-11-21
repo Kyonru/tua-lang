@@ -19,6 +19,8 @@ pub(crate) struct TypeNarrowing {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TypeNarrowingKind {
     NonNil,
+    StringLiteral(String),
+    Alternatives(Vec<TypeNarrowingKind>),
     Nil,
     Primitive(PrimitiveType),
     Table,
@@ -794,6 +796,35 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
             .into_iter()
             .chain(condition_narrowings(rhs))
             .collect(),
+        // Every successful OR path must establish a guard for the same name.
+        Expression::BinaryOperator {
+            lhs,
+            binop: ast::BinOp::Or(_),
+            rhs,
+        } => {
+            struct Calls(bool);
+            impl Visitor for Calls {
+                fn visit_function_call(&mut self, _: &FunctionCall) {
+                    self.0 = true;
+                }
+            }
+            let mut calls = Calls(false);
+            condition.visit(&mut calls);
+            if calls.0 {
+                return Vec::new();
+            }
+            let left = condition_narrowings(lhs);
+            let right = condition_narrowings(rhs);
+            left.into_iter()
+                .filter_map(|guard| {
+                    let other = right.iter().find(|other| other.name == guard.name)?;
+                    Some(TypeNarrowing {
+                        name: guard.name,
+                        kind: TypeNarrowingKind::Alternatives(vec![guard.kind, other.kind.clone()]),
+                    })
+                })
+                .collect()
+        }
         // A truthy value is not nil. It may still be `true`, so booleans stay.
         Expression::Var(var) => crate::ast_utils::plain_field_chain_from_var(var)
             .map(|parts| TypeNarrowing {
@@ -888,6 +919,12 @@ fn equality_narrowing(
         return None;
     }
 
+    if let Some(value) = string_type_literal(rhs) {
+        return Some(TypeNarrowing {
+            name,
+            kind: TypeNarrowingKind::StringLiteral(value),
+        });
+    }
     let kind = primitive_literal_type(rhs).map(|primitive| match primitive {
         PrimitiveType::Nil => TypeNarrowingKind::Nil,
         primitive => TypeNarrowingKind::Primitive(primitive),
@@ -992,6 +1029,27 @@ fn apply_narrowing(
     let resolved = resolve_aliases_from_map(aliases, base, 0);
 
     match kind {
+        TypeNarrowingKind::Alternatives(alternatives) => {
+            let types = alternatives
+                .iter()
+                .map(|kind| {
+                    apply_narrowing(aliases, &resolved, kind, lookup)
+                        .unwrap_or_else(|| resolved.clone())
+                })
+                .collect::<Vec<_>>();
+            Some(Type::union(types))
+        }
+        TypeNarrowingKind::StringLiteral(value) => {
+            fn accepts(ty: &Type, value: &str) -> bool {
+                match ty {
+                    Type::Any | Type::Primitive(PrimitiveType::String) => true,
+                    Type::StringLiteral(literal) => literal == value,
+                    Type::Union(types) => types.iter().any(|ty| accepts(ty, value)),
+                    _ => false,
+                }
+            }
+            accepts(&resolved, value).then(|| Type::string_literal(value))
+        }
         TypeNarrowingKind::NonNil => Some(remove_nil(&resolved)),
         TypeNarrowingKind::Nil => type_contains_primitive(&resolved, PrimitiveType::Nil)
             .then(Type::nil)

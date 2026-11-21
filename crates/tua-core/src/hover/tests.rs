@@ -2326,3 +2326,14 @@ fn annotated_callback_local_parameters_use_contextual_types() {
         "outer callback contract must not leak"
     );
 }
+
+#[test]
+fn hover_joins_literal_or_guards() {
+    let source = "local function read(value: string | nil)\n  if value == 'head' or value == 'body' then\n    local copy = value\n  end\nend\n";
+    assert_hover_in_source(
+        source,
+        "local copy = value",
+        "local copy = ".len(),
+        "parameter value: \"head\" | \"body\"",
+    );
+}

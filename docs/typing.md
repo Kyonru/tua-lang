@@ -518,6 +518,12 @@ fails, or the call.
 
 ## Narrowing
 
+Literal equality alternatives also narrow: inside
+`if region == "head" or region == "body" then`, `region` has type
+`"head" | "body"`. Every successful alternative must constrain the same value;
+`region == "head" or flag` does not remove nil. Conditions with function calls
+remain conservative because a call can mutate a captured value.
+
 Nil checks narrow optional values inside the guarded branch:
 
 ```tua
