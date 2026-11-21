@@ -239,3 +239,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   interpolated strings, or Luau generics.
 - Invented package managers, runtime type objects, decorators, async/promises,
   DOM APIs, or executable plugins.
+
+- `require("tuaboundedqueue")` is an opt-in typed bounded FIFO. Use
+  `Queue.new(capacity, typedInitialArray)` with dot methods `push`, `pop`,
+  `count`, `capacity`, `rejected`, `clear`, and `drain(limit, visitor)`.
+  `push` returns false when full; `pop` returns the payload or nil. Nil
+  payloads are forbidden, false is valid. Drains defer new entries, return
+  zero when nested, and stop on clear; callbacks must not yield.

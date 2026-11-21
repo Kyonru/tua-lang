@@ -34,6 +34,7 @@ local Audio = require("audio")
 local AudioDesignCue = require("audio_design")
 local Roguelike = require("roguelike")
 local ObjectPool = require("object_pool")
+local BoundedQueue = require("bounded_queue")
 local Comments = require("comments")
 local Shaders = require("shaders")
 local ShaderPreload = require("shader_preload")
@@ -42,6 +43,7 @@ local SaveContracts = require("save_contracts")
 local Logging = require("logging")
 
 return {
+  boundedQueue = BoundedQueue,
   types = Types,
   functions = Functions,
   compound = Compound,

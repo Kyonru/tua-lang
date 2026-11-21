@@ -16,6 +16,13 @@ pub struct BundledRuntime {
 
 pub const RUNTIMES: &[BundledRuntime] = &[
     BundledRuntime {
+        module: "tuaboundedqueue",
+        file_name: "tuaboundedqueue.lua",
+        source: || include_str!("../../../vendor/runtime/tuaboundedqueue.lua"),
+        dependencies: &[],
+        explicit_import: true,
+    },
+    BundledRuntime {
         module: "brinevector",
         file_name: "brinevector.lua",
         source: crate::brinevector_runtime_source,

@@ -7123,3 +7123,87 @@ print("indexed compound oracle passed")
     );
     assert!(String::from_utf8_lossy(&run.stdout).contains("indexed compound oracle passed"));
 }
+
+#[test]
+fn bounded_queue_runtime_preserves_reentrant_drain_boundaries() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("bounded-queue");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = \"src\"\nout = \"build\"\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/main.tua"), "local Queue = require(\"tuaboundedqueue\")\nlocal initial: number[] = {}\nlocal queue = Queue.new(3, initial)\nassert(queue.push(5))\nassert(queue.pop() == 5)\n").unwrap();
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    assert!(temp.path().join("build/tuaboundedqueue.lua").exists());
+    fs::write(
+        temp.path().join("build/oracle.lua"),
+        include_str!("fixtures/bounded_queue_runtime.lua"),
+    )
+    .unwrap();
+    let typed = Command::new(&lua)
+        .arg("main.lua")
+        .current_dir(temp.path().join("build"))
+        .output()
+        .unwrap();
+    assert!(
+        typed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&typed.stderr)
+    );
+    let output = Command::new(&lua)
+        .arg("oracle.lua")
+        .current_dir(temp.path().join("build"))
+        .output()
+        .expect("failed to run emitted bounded queue runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn bounded_queue_is_opt_in_and_preserves_project_replacements() {
+    let temp = TempDir::new("queue-opt-in");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src/main.tua"), "return 1\n").unwrap();
+    let unused = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(unused.status.success(), "{unused:?}");
+    assert!(!temp.path().join("build/tuaboundedqueue.lua").exists());
+    let custom = "return { custom = true }\n";
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "return require(\"tuaboundedqueue\")\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/tuaboundedqueue.lua"), custom).unwrap();
+    let replaced = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(replaced.status.success(), "{replaced:?}");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/tuaboundedqueue.lua")).unwrap(),
+        custom
+    );
+}

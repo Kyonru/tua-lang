@@ -310,6 +310,7 @@ language reference:
 - [Behavior Trees](behavior-trees.md)
 - [Entity Component Systems](ecs.md)
 - [Object Pooling](object-pooling.md)
+- [Bounded Queues](bounded-queues.md)
 - [Audio Systems](audio.md)
 
 Helpers lower to ordinary LOVE calls or bundled Lua modules. The build includes

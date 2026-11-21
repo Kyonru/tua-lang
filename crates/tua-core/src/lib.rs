@@ -4,6 +4,7 @@ mod asset;
 mod ast_utils;
 mod audio;
 mod behavior_tree;
+mod bounded_queue;
 mod builtin_module;
 mod bundled_runtime;
 mod busted;

@@ -174,6 +174,7 @@ impl BuiltinDomainRegistry {
         };
 
         match module {
+            "tuaboundedqueue" => Some(crate::bounded_queue::module_type()),
             vector::RUNTIME_MODULE => constructor(BuiltinDomain::Vector),
             signal::RUNTIME_MODULE => constructor(BuiltinDomain::Signal),
             object_pool::RUNTIME_MODULE => constructor(BuiltinDomain::ObjectPool),

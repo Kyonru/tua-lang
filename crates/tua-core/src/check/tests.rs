@@ -7928,3 +7928,36 @@ end
         );
     }
 }
+
+#[test]
+fn bounded_queue_import_preserves_item_and_callback_types() {
+    let prefix = r#"local Queue = require("tuaboundedqueue")
+type Item = { value: number }
+local initial: Item[] = {}
+local queue = Queue.new(3, initial)
+"#;
+    check_tua_source(
+        "src/main.tua",
+        format!(
+            r#"{prefix}
+queue.push({{ value = 1 }})
+local item = queue.pop()
+if item then local n: number = item.value end
+queue.drain(2, function(item)
+  local n: number = item.value
+end)
+"#
+        ),
+    )
+    .unwrap();
+    for invalid in [
+        "queue.push({ value = 'bad' })",
+        "local item = queue.pop()\nlocal n: number = item.value",
+        "queue.drain(2, function(item) local n: string = item.value end)",
+    ] {
+        assert!(
+            check_tua_source("src/main.tua", format!("{prefix}{invalid}")).is_err(),
+            "{invalid}"
+        );
+    }
+}

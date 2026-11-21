@@ -11815,3 +11815,35 @@ brain.tree:instance(<|signature|>{health=3})
         "{diagnostics:?}"
     );
 }
+
+#[test]
+fn bounded_queue_reexport_keeps_generic_item_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/queue.tua
+return require("tuaboundedqueue")
+-- file: src/main.tua
+local Queue = require("queue")
+local initial: { value: number }[] = {}
+local pending = Queue.new(4, initial)
+pending.push({ value = "bad" })
+local item = pending.pop()
+if item then print(item.<|complete|>value) end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"value".to_owned()), "{labels:?}");
+}

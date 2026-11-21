@@ -2337,3 +2337,14 @@ fn hover_joins_literal_or_guards() {
         "parameter value: \"head\" | \"body\"",
     );
 }
+
+#[test]
+fn hover_bounded_queue_payload() {
+    let source = "local Queue = require('tuaboundedqueue')\nlocal initial: { value: number }[] = {}\nlocal queue = Queue.new(2, initial)\nlocal item = queue.pop()\nif item then\n  local copy = item.value\nend\n";
+    assert_hover_in_source(
+        source,
+        "local copy = item.value",
+        "local copy = item.".len(),
+        "(field) value: number",
+    );
+}

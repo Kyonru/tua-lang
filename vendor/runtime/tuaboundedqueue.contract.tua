@@ -1,0 +1,13 @@
+-- Compiler-visible contract; execution is supplied by tuaboundedqueue.lua.
+local function new<T>(capacity: number, initial: T[]): {
+  push: (T) -> boolean,
+  pop: () -> T | nil,
+  count: () -> number,
+  capacity: () -> number,
+  rejected: () -> number,
+  clear: () -> nil,
+  drain: (number, (T) -> nil) -> number,
+}
+error("declaration only")
+end
+return { new = new }
