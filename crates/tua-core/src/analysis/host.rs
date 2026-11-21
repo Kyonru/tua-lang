@@ -623,6 +623,7 @@ impl AnalysisHost {
                         parsed: facts.parsed,
                         hir: facts.hir,
                         exports: facts.exports,
+                        environment: facts.environment,
                         source_kind: file.kind,
                     }
                 }),

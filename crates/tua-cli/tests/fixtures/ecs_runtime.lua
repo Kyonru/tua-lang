@@ -238,12 +238,6 @@ do
   end
 end
 
-if failures > 0 then
-  io.stderr:write(failures .. " ECS runtime check(s) failed\n")
-  os.exit(1)
-end
-print("ecs runtime checks passed")
-
 -- False is a present payload, not an absent component.
 do
   local world, flag = ecs.world(), ecs.component('Flag', {})
@@ -253,3 +247,33 @@ do
   assert(world:remove(entity, flag) == false)
   assert(not world:has(entity, flag) and world:get(entity, flag) == nil)
 end
+
+-- Bound readers validate once and follow live storage across all lifecycle changes.
+do
+  local world, position = ecs.world(), ecs.component('Position', {x='number'})
+  local read = world:reader(position)
+  check(not pcall(function() world:reader({}) end), 'reader rejects an invalid component')
+  check(read(1) == nil and read('absent') == world:get('absent', position), 'reader matches get for absent IDs')
+  local id = world:create()
+  local first, replacement = {x=1}, {x=2}
+  world:add(id, position, first)
+  check(read(id) == first, 'reader sees a store created after binding')
+  world:add(id, position, replacement)
+  check(read(id) == replacement, 'reader sees replacement')
+  world:add(id, position, false)
+  check(read(id) == false, 'reader preserves false payloads')
+  world:remove(id, position)
+  check(read(id) == nil, 'reader sees removal')
+  world:add(id, position, replacement)
+  world:destroy(id)
+  check(read(id) == nil, 'reader sees destruction')
+  world:clear()
+  local nextId = world:create()
+  world:add(nextId, position, first)
+  check(read(id) == nil and read(nextId) == first, 'reader survives world clear and repopulation')
+end
+if failures > 0 then
+  io.stderr:write(failures .. " ECS runtime check(s) failed\n")
+  os.exit(1)
+end
+print("ecs runtime checks passed")

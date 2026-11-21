@@ -28,11 +28,20 @@ end)
 -- A LOVE update callback can call this with its dt value.
 movementSystem:update(1 / 60)
 
+-- Feature: component-bound readers preserve the nullable payload type and
+-- remain valid across replacement, removal, and world:clear().
+local readPosition = world:reader(Position)
+local position = readPosition(player)
+if position then
+  position.x += 1
+end
+
 return {
   Position = Position,
   Velocity = Velocity,
   Sprite = Sprite,
   world = world,
+  readPosition = readPosition,
   player = player,
   movementSystem = movementSystem,
 }

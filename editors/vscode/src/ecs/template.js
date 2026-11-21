@@ -368,7 +368,7 @@ function ecsExplorerHtml(webview, viewModel) {
 
     function accessBadge(access) {
       const badge = label(accessLabel(access), "access " + access);
-      badge.title = access === "unknown" ? "A method call may mutate this component" : "Component access: " + accessLabel(access);
+      badge.title = access === "unknown" ? "Component mutation cannot be determined from this binding or call" : "Component access: " + accessLabel(access);
       return badge;
     }
 
@@ -377,6 +377,7 @@ function ecsExplorerHtml(webview, viewModel) {
     }
 
     function queryKind(query) {
+      if (query.kind === "reader") return "component reader";
       return query.kind === "system" ? "system query" : "standalone query";
     }
 

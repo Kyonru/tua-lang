@@ -11507,3 +11507,112 @@ print(<|result|>result)
         .unwrap();
     assert!(hover.contents.contains("string"), "{hover:?}");
 }
+
+#[test]
+fn ecs_readers_preserve_imported_and_reexported_payload_types_and_editor_help() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/components.tua
+local Position = ECS.component("Position", { x = "number" })
+return { Position = Position }
+-- file: src/component_exports.tua
+return require("components")
+-- file: src/readers.tua
+local C = require("component_exports")
+local world = ECS.world()
+local read = world:reader(C.Position)
+return { read = read, world = world }
+-- file: src/reexport.tua
+return require("readers")
+-- file: src/main.tua
+local Readers = require("reexport")
+local read = Readers.read
+local p = read(<|signature|>1)
+print(<|payload|>p)
+if p then
+  print(p.<|completion|>x)
+  p.x = "wrong"
+end
+local bad = read("invalid id")
+local readerMethod = Readers.world.<|method|>reader
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("payload"))
+        .unwrap();
+    assert!(
+        hover.contents.contains("x: number") && hover.contents.contains("nil"),
+        "{hover:?}"
+    );
+    let completion =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("completion")));
+    assert!(completion.contains(&"x".to_owned()), "{completion:?}");
+    let methods =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("method")));
+    assert!(methods.contains(&"reader".to_owned()), "{methods:?}");
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature.signatures[0].label.contains("EcsEntityId"),
+        "{signature:?}"
+    );
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)
+                && d.message.contains("p.x")),
+        "{diagnostics:?}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.message.contains("expected EcsEntityId, found string")),
+        "{diagnostics:?}"
+    );
+    let graph = snapshot.ecs_graph();
+    let reader = graph
+        .queries
+        .iter()
+        .find(|q| q.kind == crate::EcsQueryKind::Reader)
+        .unwrap();
+    assert_eq!(reader.components[0].reference, "C.Position");
+}
+
+#[test]
+fn ecs_reader_exports_refresh_when_imported_schema_changes() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        "src/c.tua",
+        "return { P = ECS.component(\"P\", { x = \"number\" }) }",
+    );
+    host.set_file(
+        "src/r.tua",
+        "local C = require(\"c\"); local w = ECS.world(); return { read = w:reader(C.P) }",
+    );
+    host.set_file(
+        "src/main.tua",
+        "local R = require(\"r\"); local p = R.read(1); if p then p.x = 10 end",
+    );
+    assert!(!host
+        .snapshot()
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
+    host.set_file(
+        "src/c.tua",
+        "return { P = ECS.component(\"P\", { x = \"string\" }) }",
+    );
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
+}

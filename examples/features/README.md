@@ -101,6 +101,7 @@ guides cannot silently omit an example.
   `any` escape hatch. The feature is disabled by default, so the example
   remains buildable without warnings.
 - `src/ecs.tua` demonstrates Tua's zero-setup ECS: component schemas, typed
+  component readers for repeated indexed access,
   world/entity/query/system APIs, component diagnostics, and a system update
   over matching position and velocity data. Builds include `tuaecs.lua` only
   because the source uses the built-in `ECS` module.

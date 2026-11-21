@@ -103,6 +103,17 @@ function World:get(entity, component)
   return nil
 end
 
+-- Bind the validated component, not its current store: clear replaces stores
+-- and the component may not have been attached to any entity yet.
+function World:reader(component)
+  assertComponent(component, 2)
+  return function(entity)
+    local store = self._stores[component]
+    if store then return store.values[entity] end
+    return nil
+  end
+end
+
 function World:has(entity, component)
   local store = self:_store(component, false)
 

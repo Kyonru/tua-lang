@@ -4429,12 +4429,20 @@ fn build_preferred_ecs_and_tween_names_bundle_and_run() {
 local world = ECS.world()
 local entity = world:create()
 world:add(entity, Position, { x = 10 })
-local position = world:get(entity, Position)
+local read = world:reader(Position)
+local position = read(entity)
 if position then
   assert(position.x == 10)
 else
   error("missing position")
 end
+world:clear()
+assert(read(entity) == nil)
+local replacement = world:create()
+world:add(replacement, Position, { x = 12 })
+local fresh = read(replacement)
+assert(fresh ~= nil)
+if fresh then assert(fresh.x == 12) end
 local marker = { x = 0 }
 Tween.to(marker, 1, { x = 4 })
 Tween.update(1)

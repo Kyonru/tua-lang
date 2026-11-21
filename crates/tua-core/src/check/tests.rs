@@ -7834,3 +7834,27 @@ fn generic_function_inference_matches_lua_string_and_table_call_sugar() {
     )
     .expect("string and table call sugar should participate in generic inference");
 }
+
+#[test]
+fn ecs_readers_check_arguments_fields_and_nullable_results() {
+    let prefix = r#"local Position = ECS.component("Position", { x = "number" })
+local world = ECS.world()
+local read = world:reader(Position)
+"#;
+    check_tua_source(
+        "src/reader.tua",
+        format!("{prefix}\nlocal p = read(1)\nif p then p.x += 1 end"),
+    )
+    .expect("guarded reader payloads retain their schema");
+    for tail in [
+        "local p = read(1)\nprint(p.x)",
+        "local p = read(1)\nif p then p.x = 'wrong' end",
+        "local p = read('wrong')",
+        "local readInvalid = world:reader(42)",
+    ] {
+        assert!(
+            check_tua_source("src/reader.tua", format!("{prefix}\n{tail}")).is_err(),
+            "{tail}"
+        );
+    }
+}

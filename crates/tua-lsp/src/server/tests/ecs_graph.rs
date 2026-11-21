@@ -94,3 +94,24 @@ local positioned = world:query({ Components.Position })
     assert_eq!(query["components"][0]["reference"], "Components.Position");
     assert_eq!(query["components"][0]["componentId"], component_id);
 }
+
+#[test]
+fn ecs_graph_exposes_bound_readers_and_resolves_imported_component() {
+    let temp = TempProject::new("ecs-reader-graph");
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/components.tua", "local Position = ECS.component(\"Position\", {x=\"number\"})\nreturn {Position=Position}\n");
+    temp.write("src/main.tua", "local C = require(\"components\")\nlocal world = ECS.world()\nlocal readPosition = world:reader(C.Position)\n");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        ecs_graph_request(2),
+    ]);
+    let graph = &response_with_id(&output, 2)["result"]["graph"];
+    let reader = &graph["queries"][0];
+    assert_eq!(reader["kind"], "reader");
+    assert_eq!(reader["name"], "readPosition");
+    assert_eq!(
+        reader["components"][0]["componentId"],
+        graph["components"][0]["id"]
+    );
+    assert_eq!(reader["components"][0]["access"], "unknown");
+}

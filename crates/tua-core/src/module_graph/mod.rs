@@ -102,6 +102,7 @@ pub struct ModuleGraphInput<'a> {
     pub parsed: Option<&'a ParsedSource>,
     pub hir: Option<&'a HirModule>,
     pub exports: Option<&'a ModuleExports>,
+    pub environment: Option<&'a crate::TypeEnvironment>,
     pub source_kind: AnalysisSourceKind,
 }
 
@@ -325,6 +326,8 @@ impl ModuleGraph {
             })
             .flatten()
             .collect::<Vec<_>>();
+        graph.propagate_runtime_export_forwards(&forwards);
+        graph.enrich_reader_exports(&inputs, &forwards);
         let class_returns_changed = graph.enrich_imported_class_returns(&inputs);
         graph.propagate_runtime_export_forwards(&forwards);
         if class_returns_changed {
@@ -500,7 +503,9 @@ impl ModuleGraph {
                         .unwrap_or_else(|| target_path.clone());
                     let should_replace = self
                         .export(&forward.source_path, public_name)
-                        .is_none_or(|entry| entry.field.ty == crate::Type::Any);
+                        .is_none_or(|entry| entry.field.ty == crate::Type::Any)
+                        || self.export_type_source_path(&forward.source_path, public_name)
+                            == Some(type_source.as_path());
                     if !should_replace {
                         if self
                             .export(&forward.source_path, public_name)
@@ -561,7 +566,10 @@ impl ModuleGraph {
                             .cloned();
                         let should_replace = existing
                             .as_ref()
-                            .is_none_or(|entry| entry.field.ty == crate::Type::Any);
+                            .is_none_or(|entry| entry.field.ty == crate::Type::Any)
+                            || self
+                                .export_type_source_path(&forward.source_path, &target.public_name)
+                                == Some(type_source.as_path());
                         if !should_replace {
                             if existing
                                 .as_ref()

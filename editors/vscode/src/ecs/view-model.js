@@ -69,7 +69,7 @@ function queryViewModel(query) {
     file: displayUriPath(query.uri),
     line: lineNumber(query.nameRange || query.range),
     name: stringOr(query.name, `Query at line ${lineNumber(query.range)}`),
-    kind: query.kind === "system" ? "system" : "standalone",
+    kind: ["system", "reader"].includes(query.kind) ? query.kind : "standalone",
     ownerSystemId:
       typeof query.ownerSystemId === "string" ? query.ownerSystemId : undefined,
     range: query.range,

@@ -54,6 +54,7 @@ fn graph_with_options<'a>(
         inputs
             .into_iter()
             .map(|(parsed, hir, exports, source_kind)| ModuleGraphInput {
+                environment: None,
                 path: &parsed.path,
                 parsed: Some(parsed),
                 hir: Some(hir),

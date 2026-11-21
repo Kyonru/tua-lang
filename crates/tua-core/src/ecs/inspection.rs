@@ -71,6 +71,7 @@ pub struct EcsSystem {
 pub enum EcsQueryKind {
     Standalone,
     System,
+    Reader,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -301,6 +302,11 @@ impl Visitor for EcsVisitor<'_> {
             {
                 self.record_query(call, span, binding);
             }
+            _ if parts.last().is_some_and(|part| part == "reader")
+                && self.receiver_has_ecs_member(&parts, span.start) =>
+            {
+                self.record_reader(call, span, binding);
+            }
             _ => {}
         }
     }
@@ -460,6 +466,39 @@ impl EcsVisitor<'_> {
             name_span,
         });
         self.record_wide_query_insight(&id, span, components.len());
+    }
+
+    fn record_reader(
+        &mut self,
+        call: &FunctionCall,
+        span: SourceSpan,
+        binding: Option<LocalBinding>,
+    ) {
+        let Some(expression) = argument_expression(call, 0) else {
+            return;
+        };
+        let Some(parts) = plain_field_chain_from_expression(expression) else {
+            return;
+        };
+        let Some(component_span) = node_span(expression) else {
+            return;
+        };
+        self.index.queries.push(EcsQuery {
+            id: graph_id("reader", self.path, span.start),
+            path: self.path.to_path_buf(),
+            name: binding.as_ref().map(|binding| binding.name.clone()),
+            kind: EcsQueryKind::Reader,
+            owner_system_id: None,
+            components: vec![EcsComponentUse {
+                reference: parts.join("."),
+                component_id: None,
+                // Binding a reader does not prove how callers use the mutable payload.
+                access: EcsAccessKind::Unknown,
+                span: component_span,
+            }],
+            span,
+            name_span: binding.map(|binding| binding.name_span),
+        });
     }
 
     fn record_wide_query_insight(&mut self, subject_id: &str, span: SourceSpan, count: usize) {

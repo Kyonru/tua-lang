@@ -32,6 +32,7 @@ return {
     let exports = infer_module_exports(&parsed).expect("exports should infer");
     let graph = ModuleGraph::build(
         [ModuleGraphInput {
+            environment: None,
             path: &parsed.path,
             parsed: Some(&parsed),
             hir: Some(&hir),
@@ -89,6 +90,7 @@ end
     let hir = lower_parsed_source(&parsed);
     let graph = ModuleGraph::build(
         [ModuleGraphInput {
+            environment: None,
             path: &parsed.path,
             parsed: Some(&parsed),
             hir: Some(&hir),
@@ -141,6 +143,7 @@ final class BeatManager {
     let hir = lower_parsed_source(&parsed);
     let graph = ModuleGraph::build(
         [ModuleGraphInput {
+            environment: None,
             path: &parsed.path,
             parsed: Some(&parsed),
             hir: Some(&hir),
@@ -201,6 +204,7 @@ return { makeEnemy = makeEnemy }
     let graph = ModuleGraph::build(
         [
             ModuleGraphInput {
+                environment: None,
                 path: &player.path,
                 parsed: Some(&player),
                 hir: Some(&player_hir),
@@ -208,6 +212,7 @@ return { makeEnemy = makeEnemy }
                 source_kind: AnalysisSourceKind::Tua,
             },
             ModuleGraphInput {
+                environment: None,
                 path: &enemy.path,
                 parsed: Some(&enemy),
                 hir: Some(&enemy_hir),
@@ -273,6 +278,7 @@ return { makePlayer = makePlayer }
     let exports = infer_module_exports(&parsed).expect("exports should infer");
     let graph = ModuleGraph::build(
         [ModuleGraphInput {
+            environment: None,
             path: &parsed.path,
             parsed: Some(&parsed),
             hir: Some(&hir),

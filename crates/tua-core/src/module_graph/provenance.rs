@@ -388,3 +388,90 @@ fn function_return_forwards(
         })
         .collect()
 }
+
+#[derive(Default)]
+struct ReaderCalls(bool);
+impl Visitor for ReaderCalls {
+    fn visit_function_call(&mut self, call: &full_moon::ast::FunctionCall) {
+        self.0 |= crate::ast_utils::field_chain_before_first_call(call)
+            .is_some_and(|parts| parts.last().is_some_and(|part| part == "reader"));
+    }
+}
+
+impl ModuleGraph {
+    /// Reuse normal semantic/export inference with indexed imports. File-local
+    /// inference cannot specialize a reader whose component comes from another
+    /// module. No project code or filesystem lookup is needed here.
+    pub(super) fn enrich_reader_exports(
+        &mut self,
+        inputs: &[ModuleGraphInput<'_>],
+        forwards: &[RuntimeExportForward],
+    ) {
+        let candidates = inputs
+            .iter()
+            .filter(|input| {
+                let (Some(parsed), Some(_)) = (input.parsed, input.environment) else {
+                    return false;
+                };
+                if !parsed.source.contains("reader") {
+                    return false;
+                }
+                let mut calls = ReaderCalls::default();
+                calls.visit_ast(&parsed.ast);
+                calls.0
+            })
+            .collect::<Vec<_>>();
+        for _ in 0..candidates.len().min(64) {
+            let mut changed = false;
+            for input in &candidates {
+                let parsed = input.parsed.expect("filtered above");
+                let mut bindings = Vec::new();
+                let mut required = Vec::new();
+                for binding in crate::module_index::require_bindings_for_parsed_source(parsed) {
+                    let Some(path) = self.resolved_require_path(input.path, &binding.module) else {
+                        continue;
+                    };
+                    let Some(module) = self.module(&path) else {
+                        continue;
+                    };
+                    let ty = Type::table(module.exports.iter().map(|entry| {
+                        (
+                            entry.public_name.clone(),
+                            crate::TableField::required(entry.field.ty.clone()),
+                        )
+                    }));
+                    bindings.push((binding.alias, ty.clone()));
+                    required.push((binding.module, ty));
+                }
+                let environment = input
+                    .environment
+                    .expect("filtered above")
+                    .clone()
+                    .with_local_types(bindings)
+                    .with_required_module_types(required);
+                let Some(exports) = crate::module_index::infer_module_exports_with_environment(
+                    parsed,
+                    &environment,
+                ) else {
+                    continue;
+                };
+                for (name, field) in exports.fields {
+                    let Some(mut entry) = self.export(input.path, &name).cloned() else {
+                        continue;
+                    };
+                    // Only function values are specialized here; retain the
+                    // existing provenance for other exported values/classes.
+                    if !matches!(field.ty, Type::Function(_)) {
+                        continue;
+                    }
+                    entry.field.ty = field.ty;
+                    changed |= self.upsert_provenance_export(entry);
+                }
+            }
+            if !changed {
+                break;
+            }
+            self.propagate_runtime_export_forwards(forwards);
+        }
+    }
+}

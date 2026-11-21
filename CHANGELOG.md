@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- `ECS` worlds provide typed `reader(component)` functions for repeated indexed
+  access, preserving nullable payload types and observing current storage after
+  replacement, removal, destruction, and world clearing. Reader bindings appear
+  in the ECS Explorer alongside queries.
 - `ShaderScan:preload` processes one named shader per update, reports progress
   and errors, supports cancellation, and reuses the existing shader collection.
 - `ShaderScan.on_compiled` runs after initial and reload compilation, before

@@ -125,6 +125,15 @@ fn world_type() -> Type {
             TableField::required(typed_method(WORLD_TYPE, "get").unwrap().as_type().unwrap()),
         ),
         (
+            "reader",
+            TableField::required(
+                typed_method(WORLD_TYPE, "reader")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
+        ),
+        (
             "has",
             TableField::required(typed_method(WORLD_TYPE, "has").unwrap().as_type().unwrap()),
         ),
@@ -183,18 +192,36 @@ pub(crate) fn inferred_method_return_types(
         ]);
     }
 
-    if !is_world_type_direct(receiver_type) || !matches!(method, "add" | "get" | "remove") {
+    if !is_world_type_direct(receiver_type) || !is_component_access_method(method) {
         return None;
     }
 
     let value = component_argument_type
         .and_then(component_value_type)
         .unwrap_or(Type::Any);
-    Some(vec![if method == "add" {
+    Some(vec![if method == "reader" {
+        reader_type(value)
+    } else if method == "add" {
         value
     } else {
         Type::union([value, Type::nil()])
     }])
+}
+
+pub(crate) fn is_component_access_method(method: &str) -> bool {
+    matches!(method, "add" | "get" | "remove" | "reader")
+}
+
+fn reader_type(value: Type) -> Type {
+    Type::Function(crate::FunctionType::new_signature(
+        [crate::FunctionParameter::named(
+            "entity",
+            Type::alias(ENTITY_ID_TYPE),
+        )],
+        1,
+        None,
+        [Type::union([value, Type::nil()])],
+    ))
 }
 
 /// Contextual system arguments share the same component value metadata as lookups.
@@ -246,10 +273,10 @@ pub(crate) fn component_argument<'a>(
     let method = parts.last()?.as_str();
     // Only these proven ECS operations consume a component argument type.
     // Ordinary calls must not recursively infer an irrelevant second argument.
-    if !is_world_type_direct(receiver_type) || !matches!(method, "add" | "get" | "remove") {
+    if !is_world_type_direct(receiver_type) || !is_component_access_method(method) {
         return None;
     }
-    call_argument(call, 1)
+    call_argument(call, if method == "reader" { 0 } else { 1 })
 }
 
 fn component_type_from_call(call: &FunctionCall) -> Option<Type> {
@@ -433,6 +460,12 @@ pub(crate) fn typed_method(type_name: &str, method: &str) -> Option<TypedFunctio
             [self_parameter, entity(), component()],
             Type::Any,
             "Return an entity's component data, or nil when it is absent.",
+        )),
+        (WORLD_TYPE, "reader") => Some(typed_function(
+            method,
+            [self_parameter, component()],
+            reader_type(Type::Any),
+            "Bind a validated component and read its current payload or nil by entity ID. Readers remain valid after world:clear().",
         )),
         (WORLD_TYPE, "has") => Some(typed_function(
             method,

@@ -1175,10 +1175,9 @@ impl AnalysisSnapshot {
         }
         if self.config_for_path(&parsed.path).ecs.enabled
             && parts.len() > 1
-            && matches!(
-                parts.last().map(String::as_str),
-                Some("add" | "get" | "remove")
-            )
+            && parts
+                .last()
+                .is_some_and(|method| crate::ecs::is_component_access_method(method))
         {
             let receiver_parts = &parts[..parts.len() - 1];
             let receiver = self

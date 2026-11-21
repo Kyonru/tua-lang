@@ -199,6 +199,36 @@ no portable visitation order, so a query does not promise whether those new
 matches run in the same iteration. Component values cannot be `nil`; removing a
 component is expressed explicitly with `world:remove`.
 
+### Bind a component reader
+
+For repeated indexed access to one component, bind a reader once:
+
+```tua
+local readPosition = world:reader(Position)
+local position = readPosition(player)
+if position then
+    position.x += 1
+end
+```
+
+The reader checks the component handle when it is created, then returns the
+current payload or `nil` for an entity ID. Its result keeps the component's
+schema, including through module exports and imports. Like `world:get`, it
+returns the actual mutable payload, not a copy; `false` is a valid payload for
+components whose values are booleans. The typed function accepts an `EcsEntityId`
+(number). Runtime lookup follows `get`: unknown or destroyed IDs return `nil`;
+creating a reader with an invalid component raises an error.
+
+Readers observe replacement, removal, and destruction, and remain usable after
+`world:clear()` and repopulation. They do not retain the old component store.
+Treat component handles as immutable definitions. Use a query's supplied values
+when already iterating a matching population; a reader is for indexed lookups,
+not a reason to repeat reads inside every entity callback.
+
+The ECS Explorer includes reader bindings in its query list as **component
+readers**, with links to their component definitions. Their mutation access is
+unknown because callers may modify returned payloads.
+
 ## ECS API
 
 ### Module
@@ -217,6 +247,7 @@ component is expressed explicitly with `world:remove`.
 | `destroy(entity)` | Remove the entity and all of its components. Destroying an unknown or already destroyed entity does nothing. |
 | `add(entity, component, value)` | Attach `value`, replacing any existing value of that component, and return it. Raises an error for a destroyed entity or a `nil` value. |
 | `get(entity, component)` | Return the entity's value for `component`, or `nil`. |
+| `reader(component)` | Validate and bind a component once; return a function taking an entity ID and returning its current payload or `nil`. |
 | `has(entity, component)` | Return `true` when the entity has `component`. |
 | `remove(entity, component)` | Detach the component and return the removed value, or `nil` if it wasn't attached. |
 | `query(components)` | Return a reusable query over entities that have every listed component. The list must contain at least one component. |

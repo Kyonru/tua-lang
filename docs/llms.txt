@@ -186,7 +186,9 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - `objectPool({...})` types factory results and supports `acquire`, `release`,
   `prewarm`, ownership/count inspection, cleanup, and `clear`.
 - Built-in `ECS` supplies typed components, worlds, systems, and queries
-  without an explicit package import. `BehaviorTree.new(...)` supplies
+  without an explicit package import. `world:reader(Component)` binds a typed
+  entity-ID lookup returning the current payload or nil; readers survive world
+  clear/repopulation. `BehaviorTree.new(...)` supplies
   composable actions, conditions, selectors, sequences, and per-actor runners;
   it can be used from ECS systems without creating a tree per entity or frame.
 - Built-in `Tween` animates numeric fields; `Camera.new(...)` follows and

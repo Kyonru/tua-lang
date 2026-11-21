@@ -518,6 +518,7 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph, snapshot: &AnalysisSnapsh
                 "kind": match query.kind {
                     EcsQueryKind::Standalone => "standalone",
                     EcsQueryKind::System => "system",
+                    EcsQueryKind::Reader => "reader",
                 },
                 "ownerSystemId": query.owner_system_id,
                 "range": lsp_range_for_source(snapshot.source(&query.path).unwrap_or(""), query.span),
