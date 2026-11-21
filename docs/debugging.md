@@ -343,6 +343,15 @@ separate uninstrumented runs. Benchmark callers can supply workload, warm-up
 update count, repetitions and revision through the profiler launch context;
 ordinary interactive captures do not invent these values.
 
+For a repeatable profiler-overhead comparison, run
+`TUA_LOVE=/path/to/love TUA_BENCH_OUTPUT=/tmp/profiler-benchmark.json npm --prefix editors/vscode run bench:profiler`.
+This existing hidden-window fixture alternates three independent ordinary and
+profiled runs, omits ten warm-up updates, and reports median/p95 values plus raw
+trials and runtime, binary, harness and revision provenance. Its CPU column times
+the workload block; the frame column uses LÖVE's complete-loop delta. It does
+not measure allocated memory or establish a rendered game FPS improvement.
+
+
 CPU stacks come from LuaJIT's statistical profiler. Click a mapped stack to
 open its `.tua` line, or **Lua** to inspect the generated line. Enable
 `emit_maps = true` for source links. Sampling may miss short work, and JIT
