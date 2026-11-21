@@ -607,6 +607,65 @@ fn type_matches(
     }
 }
 
+/// Type names in proven component schemas are real type uses, not ordinary
+/// string literals. Share the component decoder with inference and checking.
+pub(crate) fn schema_type_references(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<String> {
+    struct SchemaTypes<'a> {
+        environment: &'a TypeEnvironment,
+        semantic: SemanticModel<'a>,
+        names: Vec<String>,
+    }
+    impl Visitor for SchemaTypes<'_> {
+        fn visit_function_call(&mut self, call: &FunctionCall) {
+            let Some(parts) = field_chain_before_first_call(call) else {
+                return;
+            };
+            let Some((member, receiver_parts)) = parts.split_last() else {
+                return;
+            };
+            if member != "component" {
+                return;
+            }
+            let Some(span) = node_span(call) else {
+                return;
+            };
+            let Some(receiver) = self
+                .semantic
+                .type_of_field_chain(receiver_parts, span.start)
+            else {
+                return;
+            };
+            if !is_module_type(self.environment, &receiver) {
+                return;
+            }
+            let Some(component) = component_type_from_call(call) else {
+                return;
+            };
+            let Some(Type::Table(payload)) = component_value_type(&component) else {
+                return;
+            };
+            for (_, field) in payload.fields() {
+                if let Type::Alias(name) = &field.ty {
+                    self.names.push(name.clone());
+                }
+            }
+        }
+    }
+    if environment.alias(WORLD_TYPE).is_none() {
+        return Vec::new();
+    }
+    let mut visitor = SchemaTypes {
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
+        names: Vec::new(),
+    };
+    visitor.visit_ast(&parsed.ast);
+    visitor.names
+}
+
 pub(crate) fn diagnostics(parsed: &ParsedSource, environment: &TypeEnvironment) -> Vec<Diagnostic> {
     let mut visitor = EcsDiagnosticVisitor {
         parsed,

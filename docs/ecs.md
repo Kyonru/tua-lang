@@ -82,7 +82,10 @@ resolved through their module exports, and an inferred or annotated variable
 can be passed to `world:add`. Values whose type is genuinely dynamic remain
 permissive. Static component schemas also flow through `world:get`, `world:add`,
 and `world:remove`, so returned values expose their fields without local
-annotations. Typing `ECS component` also offers a complete starter snippet.
+annotations. Component schema strings may name local aliases or imported types;
+these references and their alias dependencies count as type uses for unused-type
+and unused-import diagnostics. Unrelated strings and shadowed ECS modules do not.
+Typing `ECS component` also offers a complete starter snippet.
 
 ## ECS Explorer
 

@@ -40,6 +40,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Count type aliases and type imports referenced by ECS component schemas as
+  used, including transitive alias dependencies and module aliases.
+
 - Keep shadowed ECS, Save, and I18n bindings out of the shared built-in catalog,
   preventing source-order-dependent checking and editor types.
 

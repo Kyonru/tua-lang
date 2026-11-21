@@ -1079,7 +1079,10 @@ print(position)
 "#,
     )
     .expect("source should parse");
-    let diagnostics = super::unused_type_diagnostics(&parsed);
+    // This lint-only fixture deliberately has no module provider. Keep the
+    // partial environment; unresolved-import checking is a separate concern.
+    let (environment, _) = crate::types::build_type_environment_with_diagnostics(&parsed);
+    let diagnostics = super::unused_type_diagnostics(&parsed, &environment);
 
     assert!(diagnostics.is_empty(), "{diagnostics:#?}");
 }
@@ -5317,5 +5320,71 @@ fn nested_callback_defaults_count_lexically_resolved_outer_reads() {
             == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
             && diagnostic.message.contains("seed")),
         "nested parameter must not read outer seed: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn ecs_schema_type_usage_keeps_alias_dependencies_and_imports_live() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+import type { Imported } from "./types"
+import type Shared from "./shared"
+type Detail = { health: number }
+type Runner = { context: Detail }
+type Unused = { health: number }
+local lib = ECS
+local _Brain = lib.component("Brain", {runner="Runner", external="Imported", shared="Shared.Actor"})
+"#,
+    );
+    let unused = diagnostics
+        .iter()
+        .filter(|d| {
+            matches!(
+                d.code,
+                Some(DiagnosticCode::LINT_UNUSED_TYPE | DiagnosticCode::LINT_UNUSED_IMPORT)
+            )
+        })
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        unused,
+        ["type `Unused` is never used; prefix with `_` to silence"],
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn ecs_schema_type_usage_does_not_treat_unrelated_strings_as_types() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Unused = { health: number }
+local ECS = { component = function(_name: string, _schema: any) return {} end }
+local _value = ECS.component("Fake", {value="Unused"})
+print("Unused")
+"#,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::LINT_UNUSED_TYPE)
+                && d.message.contains("`Unused`")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn ecs_schema_type_usage_keeps_an_explicit_builtin_import_live() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Actor = { health: number }
+local ECS = require("tuaecs")
+local _Brain = ECS.component("Brain", {actor="Actor"})
+"#,
+    );
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::LINT_UNUSED_TYPE)),
+        "{diagnostics:?}"
     );
 }

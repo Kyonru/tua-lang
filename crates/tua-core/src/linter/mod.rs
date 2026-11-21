@@ -157,7 +157,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.rules {
-        diagnostics.extend(unused_type_diagnostics(parsed));
+        diagnostics.extend(unused_type_diagnostics(parsed, environment));
         diagnostics.extend(class_rules::lint(
             parsed,
             scope
@@ -189,7 +189,10 @@ pub(crate) fn lint_parsed_source(
     diagnostics
 }
 
-fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
+fn unused_type_diagnostics(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<Diagnostic> {
     fn collect(ty: &TuaType, names: &mut BTreeSet<String>) {
         match ty {
             TuaType::Named(name) => {
@@ -245,6 +248,9 @@ fn unused_type_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         .map(|class| class.name.as_str())
         .collect::<BTreeSet<_>>();
     let mut live = BTreeSet::new();
+    if !aliases.is_empty() || !parsed.type_imports.is_empty() {
+        live.extend(crate::ecs::schema_type_references(parsed, environment));
+    }
 
     for ty in parsed
         .local_annotations
