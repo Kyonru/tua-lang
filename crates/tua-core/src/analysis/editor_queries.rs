@@ -598,6 +598,9 @@ impl AnalysisSnapshot {
             }
         }
         match resolved {
+            Type::Readonly(inner) => self
+                .field_type_for_type(source_path, &inner, field)
+                .map(Type::readonly),
             Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
             Type::Union(types) => {
                 let fields = types

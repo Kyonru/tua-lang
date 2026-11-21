@@ -265,6 +265,34 @@ fn collect_constraints(
             depth + 1,
         );
     }
+    if let Type::Readonly(inner) = pattern {
+        if let Type::Alias(name) = actual {
+            if let Some(resolved) = context.alias(name) {
+                return collect_constraints(
+                    context,
+                    pattern,
+                    resolved,
+                    binders,
+                    invariant_binders,
+                    substitutions,
+                    depth + 1,
+                );
+            }
+        }
+        let actual = match actual {
+            Type::Readonly(inner) => inner.as_ref().clone(),
+            other => other.clone(),
+        };
+        return collect_constraints(
+            context,
+            inner,
+            &actual,
+            binders,
+            invariant_binders,
+            substitutions,
+            depth + 1,
+        );
+    }
     match (pattern, actual) {
         (Type::GenericParameter { id, name }, actual) if binders.contains(id) => {
             if let Some(previous) = substitutions.get(id) {
@@ -484,6 +512,9 @@ fn collect_invariant_parameters(
         return;
     }
     match ty {
+        Type::Readonly(inner) => {
+            collect_invariant_parameters(context, inner, binders, found, depth + 1)
+        }
         Type::Array(item) => collect_generic_parameters(item, binders, found, depth + 1),
         Type::Dictionary { key, value } => {
             collect_generic_parameters(key, binders, found, depth + 1);
@@ -531,6 +562,7 @@ fn contains_any_parameter(ty: &Type, binders: &HashSet<TypeParameterId>, depth: 
         return false;
     }
     match ty {
+        Type::Readonly(inner) => contains_any_parameter(inner, binders, depth + 1),
         Type::GenericParameter { id, .. } => binders.contains(id),
         Type::Union(types) | Type::Tuple(types) => types
             .iter()
@@ -573,6 +605,7 @@ fn contains_parameter(ty: &Type, parameter: &TypeParameterId, depth: usize) -> b
         return contains_parameter_iteratively(ty, parameter);
     }
     match ty {
+        Type::Readonly(inner) => contains_parameter(inner, parameter, depth + 1),
         Type::GenericParameter { id, .. } => id == parameter,
         Type::Union(types) | Type::Tuple(types) => types
             .iter()
@@ -607,6 +640,7 @@ fn contains_parameter_iteratively(root: &Type, parameter: &TypeParameterId) -> b
     let mut pending = vec![root];
     while let Some(ty) = pending.pop() {
         match ty {
+            Type::Readonly(inner) => pending.push(inner),
             Type::GenericParameter { id, .. } if id == parameter => return true,
             Type::Union(types) | Type::Tuple(types) => pending.extend(types),
             Type::Function(function) => {
@@ -642,6 +676,7 @@ fn collect_generic_parameters(
         return;
     }
     match ty {
+        Type::Readonly(inner) => collect_generic_parameters(inner, binders, found, depth + 1),
         Type::GenericParameter { id, .. } if binders.contains(id) => {
             found.insert(id.clone());
         }

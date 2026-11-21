@@ -75,6 +75,7 @@ fn type_doc(ty: &Type, depth: usize) -> TypeDoc {
     }
 
     match ty {
+        Type::Readonly(inner) => concat([text("Readonly<"), type_doc(inner, depth + 1), text(">")]),
         Type::Primitive(primitive) => text(primitive.to_string()),
         Type::Any => text("any"),
         Type::Alias(name) => text(name),

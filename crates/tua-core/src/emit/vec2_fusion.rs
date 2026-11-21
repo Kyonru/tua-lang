@@ -154,6 +154,7 @@ fn type_mentions_vec2(
         return true;
     }
     match ty {
+        Type::Readonly(inner) => type_mentions_vec2(environment, inner, vec2, visited),
         Type::Alias(name) => {
             name == vector::TYPE_NAME
                 || (visited.insert(name.clone())

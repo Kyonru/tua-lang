@@ -4379,6 +4379,7 @@ fn is_type_checked_binary_operator(binop: &ast::BinOp) -> bool {
 
 fn type_is_dynamic(ty: &Type, context: &TypeContext) -> bool {
     match ty {
+        Type::Readonly(inner) => type_is_dynamic(inner, context),
         Type::Any => true,
         Type::Alias(name) => context
             .alias(name)

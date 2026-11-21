@@ -1359,6 +1359,7 @@ fn luacats_function_type(function: &crate::FunctionAnnotation) -> String {
 
 fn luacats_export_type(ty: &Type) -> Option<String> {
     match ty {
+        Type::Readonly(inner) => luacats_export_type(inner),
         Type::Any => None,
         Type::Primitive(_)
         | Type::Alias(_)
@@ -1413,6 +1414,7 @@ fn append_luacats_vararg(parameters: String, vararg_type: Option<&Type>) -> Stri
 
 fn luacats_type_from_type(ty: &Type) -> String {
     match ty {
+        Type::Readonly(inner) => luacats_type_from_type(inner),
         Type::Primitive(_)
         | Type::Any
         | Type::Alias(_)

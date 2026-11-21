@@ -1163,6 +1163,7 @@ fn signature_from_type(
     environment: &TypeEnvironment,
 ) -> Option<SignatureInformation> {
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => signature_from_type(name, &inner, environment),
         Type::Function(function) => Some(signature_from_function_type(name, &function)),
         Type::Union(types) => types
             .iter()

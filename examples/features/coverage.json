@@ -12,6 +12,7 @@
   "behavior-trees.md": ["src/behavior_tree.tua"],
   "ecs.md": ["src/ecs.tua"],
   "object-pooling.md": ["src/object_pool.tua"],
+  "bounded-queues.md": ["src/bounded_queue.tua"],
   "audio.md": ["src/audio.tua", "src/audio_design.tua"],
   "localization.md": ["src/localization.tua"]
 }

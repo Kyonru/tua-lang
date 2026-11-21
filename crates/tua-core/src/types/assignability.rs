@@ -383,6 +383,23 @@ impl TypeContext {
             }
         }
 
+        // Normalize non-nominal aliases inside the view so scalar aliases
+        // retain their ordinary assignability and nullable aliases distribute.
+        if let Type::Readonly(inner) = source {
+            let expanded = match inner.as_ref() {
+                Type::Alias(name) if !self.is_nominal_alias_type(name) => self.alias(name).cloned(),
+                other => self.expand_generic_alias_application(other),
+            };
+            if let Some(expanded) = expanded {
+                return self.check_assignable_inner(
+                    &Type::readonly(expanded),
+                    target,
+                    depth + 1,
+                    resolving,
+                );
+            }
+        }
+
         if let Some(failure) = self
             .generic_class_bound_failure(source)
             .or_else(|| self.generic_class_bound_failure(target))
@@ -600,6 +617,12 @@ impl TypeContext {
                     && self.is_nominal_subtype(source, target, depth + 1) =>
             {
                 Ok(())
+            }
+            (Type::Readonly(source), Type::Readonly(target)) => {
+                self.check_assignable_inner(source, target, depth + 1, resolving)
+            }
+            (source, Type::Readonly(target)) => {
+                self.check_assignable_inner(source, target, depth + 1, resolving)
             }
             (Type::StringLiteral(_), Type::Primitive(super::PrimitiveType::String)) => Ok(()),
             (Type::StringLiteral(source), Type::StringLiteral(target)) if source == target => {

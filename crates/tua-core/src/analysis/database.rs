@@ -755,6 +755,7 @@ impl Visitor for ReferencedAnonymousFunctionCollector {
 
 fn collect_runtime_type_names(ty: &Type, names: &mut BTreeSet<String>) {
     match ty {
+        Type::Readonly(inner) => collect_runtime_type_names(inner, names),
         Type::Alias(name) => {
             names.insert(name.clone());
         }

@@ -153,6 +153,16 @@ and snapshots exceeding 50,000 entries fall back to normal builds. A malformed,
 obsolete, or missing cache is a miss; cache write failures do not fail compilation.
 The cache can be removed independently of `build/` and the ownership manifest.
 
+Use `tua build --build-report` to explain cache hits, bypasses, unavailable or
+invalid records, identity changes, and added/removed/changed fingerprints. Reports
+are opt-in on stderr; normal stdout and failure semantics stay unchanged. Up to
+eight changed paths are shown. The report includes wall-clock durations for asset
+pipelines, cache probing, combined discovery/analysis/emission, cache publication,
+and total time. These are instrumented build durations, not CPU samples or runtime
+frame timings. A fresh or repaired output tree can prevent publication until a
+subsequent stable build; the report explains this explicitly. `--no-cache` can be
+combined with the report for comparison. No absolute timing threshold is enforced.
+
 Configured [asset pipelines](asset-pipelines.md) run or restore their cached
 outputs before source discovery, so generated `.tua` and `.d.tua` modules use
 the same checking and emission path as handwritten source.

@@ -351,6 +351,7 @@ fn type_is_reasonably_shallow(ty: &Type, depth: usize) -> bool {
         return false;
     }
     match ty {
+        Type::Readonly(inner) => type_is_reasonably_shallow(inner, depth + 1),
         Type::Union(types) | Type::Tuple(types) => types
             .iter()
             .all(|ty| type_is_reasonably_shallow(ty, depth + 1)),

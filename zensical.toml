@@ -46,6 +46,7 @@ nav = [
     { "Behavior Trees" = "behavior-trees.md" },
     { "Entity Component Systems" = "ecs.md" },
     { "Object Pooling" = "object-pooling.md" },
+    { "Bounded Queues" = "bounded-queues.md" },
     { "Audio" = "audio.md" },
     { "Localization" = "localization.md" },
   ] },

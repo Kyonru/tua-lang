@@ -1,0 +1,16 @@
+-- Feature: opt-in typed bounded FIFO with snapshot-bounded drains.
+local Queue = require("tuaboundedqueue")
+
+type Event = { amount: number }
+local initial: Event[] = {}
+local pending = Queue.new(8, initial)
+local total = 0
+
+assert(pending.push({ amount = 12 }))
+assert(pending.push({ amount = 3 }))
+pending.drain(8, function(event)
+  total += event.amount
+end)
+assert(total == 15 and pending.count() == 0)
+
+return { total = total }

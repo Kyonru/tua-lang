@@ -239,3 +239,16 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   interpolated strings, or Luau generics.
 - Invented package managers, runtime type objects, decorators, async/promises,
   DOM APIs, or executable plugins.
+
+- `require("tuaboundedqueue")` is an opt-in typed bounded FIFO. Use
+  `Queue.new(capacity, typedInitialArray)` with dot methods `push`, `pop`,
+  `count`, `capacity`, `rejected`, `clear`, and `drain(limit, visitor)`.
+  `push` returns false when full; `pop` returns the payload or nil. Nil
+  payloads are forbidden, false is valid. Drains defer new entries, return
+  zero when nested, and stop on clear; callbacks must not yield.
+
+- `Readonly<T>` is a built-in deep read-only view of records and collections.
+  Mutable inputs are accepted; nested reads/iteration retain read-only payload
+  types. Writes, standard table mutation, and mutable parameter escapes fail.
+  It erases without copies or freezing mutable aliases; `any` and untyped Lua
+  are trust boundaries. Keep explicit copies for time-isolated snapshots.

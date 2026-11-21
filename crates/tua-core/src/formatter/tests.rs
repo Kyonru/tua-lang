@@ -1970,3 +1970,13 @@ fn compact_middle_branch_does_not_wrap_under_added_block_indentation() {
         output
     );
 }
+
+#[test]
+fn continued_conditions_inside_callbacks_do_not_promote_closed_parentheses() {
+    let source = "visit(function(id, depth)\n  if depth > 0 and (best == 0 or depth < best\n    or (depth == best and id < 7)) then\n    best = depth\n  end\nend)\n";
+    assert_eq!(format(source), source);
+    assert_eq!(format(&format(source)), source);
+    let nested = "visit(function()\n  while ready and (first\n    or second) do\n    visit(function()\n      if first and (second\n        or third) then\n        act()\n      end\n    end)\n  end\nend)\n";
+    assert_eq!(format(nested), nested);
+    assert_eq!(format(&format(nested)), nested);
+}

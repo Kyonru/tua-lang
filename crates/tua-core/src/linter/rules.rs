@@ -1365,6 +1365,7 @@ fn table_indexer_issue(
     usage: TableIndexerUse,
 ) -> Option<TableIndexerIssue> {
     match environment.resolve_aliases(ty) {
+        Type::Readonly(inner) => table_indexer_issue(environment, &inner, usage),
         Type::Any | Type::Union(_) => None,
         Type::GenericParameter { .. }
         | Type::GenericAliasApplication { .. }
@@ -1394,6 +1395,7 @@ fn table_indexer_issue(
 
 fn dictionary_key_kind(environment: &TypeEnvironment, ty: &Type) -> DictionaryKeyKind {
     match environment.resolve_aliases(ty) {
+        Type::Readonly(inner) => dictionary_key_kind(environment, &inner),
         Type::Primitive(PrimitiveType::Number) => DictionaryKeyKind::Number,
         Type::Primitive(PrimitiveType::String) | Type::StringLiteral(_) => {
             DictionaryKeyKind::String

@@ -37,6 +37,7 @@ pub enum Type {
     Function(FunctionType),
     Table(TableShape),
     Array(Box<Type>),
+    Readonly(Box<Type>),
     Tuple(Vec<Type>),
     Dictionary {
         key: Box<Type>,
@@ -72,6 +73,55 @@ pub(crate) struct GenericClassDefinition {
 }
 
 impl Type {
+    pub fn readonly(ty: Type) -> Self {
+        match ty {
+            Type::Primitive(_)
+            | Type::StringLiteral(_)
+            | Type::Any
+            | Type::Function(_)
+            | Type::Readonly(_) => ty,
+            Type::Union(types) => Type::union(types.into_iter().map(Self::readonly)),
+            _ => Type::Readonly(Box::new(ty)),
+        }
+    }
+
+    /// Whether flow refinement must retain a read-only edge in this contract.
+    /// Aliases should be resolved by the caller. A bounded walk errs on the
+    /// side of preserving the declared contract for unusually large types.
+    pub(crate) fn contains_readonly(&self) -> bool {
+        let mut pending = vec![self];
+        let mut work = 0;
+        while let Some(ty) = pending.pop() {
+            work += 1;
+            if work >= 4096 {
+                return true;
+            }
+            match ty {
+                Type::Readonly(_) => return true,
+                Type::Table(table) => pending.extend(table.fields().map(|(_, field)| &field.ty)),
+                Type::Array(item) => pending.push(item),
+                Type::Dictionary { key, value } => {
+                    pending.push(key);
+                    pending.push(value);
+                }
+                Type::Union(types) | Type::Tuple(types) => pending.extend(types),
+                Type::Function(function) => {
+                    pending.extend(function.parameters.iter().map(|parameter| &parameter.ty));
+                    pending.extend(function.return_types_or_any());
+                    pending.extend(function.vararg_type.as_deref());
+                }
+                Type::GenericAliasApplication { arguments, .. }
+                | Type::GenericClassApplication { arguments, .. } => pending.extend(arguments),
+                Type::Any
+                | Type::Primitive(_)
+                | Type::StringLiteral(_)
+                | Type::Alias(_)
+                | Type::GenericParameter { .. } => {}
+            }
+        }
+        false
+    }
+
     pub fn named(name: impl Into<String>) -> Self {
         let name = name.into();
 
@@ -865,6 +915,11 @@ fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt:
                 fmt_type(&field.ty, formatter, depth + 1)?;
             }
             write!(formatter, " }}")
+        }
+        Type::Readonly(inner) => {
+            write!(formatter, "Readonly<")?;
+            fmt_type(inner, formatter, depth + 1)?;
+            write!(formatter, ">")
         }
         Type::Array(item) if matches!(item.as_ref(), Type::Union(_) | Type::Function(_)) => {
             write!(formatter, "(")?;

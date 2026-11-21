@@ -1035,6 +1035,7 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
     }
 
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => lua_type_field_item(environment, &inner, field),
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
             .find(|item| item.label == field),

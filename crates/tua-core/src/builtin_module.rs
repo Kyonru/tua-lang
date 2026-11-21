@@ -203,6 +203,7 @@ fn infer_module_type(module: &BuiltinModule) -> Type {
 /// boundaries in a project.
 fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<String>) -> Type {
     match ty {
+        Type::Readonly(inner) => Type::readonly(inline_aliases(inner, environment, visiting)),
         Type::Alias(name) => {
             // LOVE's Source is a platform type, not a helper-local class.
             // Expanding its recursive method graph makes this module's public
