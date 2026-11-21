@@ -2677,3 +2677,35 @@ fn generic_substitution_preserves_nested_function_binders() {
     assert_eq!(nested.generic_parameters, vec![inner]);
     assert_eq!(nested.return_types_or_any(), &[inner_type]);
 }
+
+#[test]
+fn shared_builtin_locals_do_not_cache_shadowed_domain_modules() {
+    let domains = crate::semantic_domains::BuiltinDomainRegistry::with_features(true, true);
+    for name in ["ECS", "ecs", "Save", "I18n"] {
+        for source in [
+            format!("local {name} = {{custom=1}}\n"),
+            "local _n = 1\n".to_owned(),
+            format!("local {name} = {{custom=2}}\n"),
+        ] {
+            let parsed = parse_tua_source("src/domain_cache.tua", source.clone()).unwrap();
+            let (environment, diagnostics) =
+                build_type_environment_with_domain_registry(&parsed, domains);
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            assert_eq!(
+                environment.local(name).is_none(),
+                source.contains("custom"),
+                "only unshadowed names belong in the shared catalog: {name}: {source}"
+            );
+            if source.contains("custom") {
+                let model = crate::semantic::SemanticModel::new(&parsed, &environment);
+                let Type::Table(value) = model
+                    .type_of_local_assignment(name, crate::SourcePosition { line: 2, column: 1 })
+                    .expect("lexical binding")
+                else {
+                    panic!("expected table");
+                };
+                assert!(value.field("custom").is_some(), "{name}: {source}");
+            }
+        }
+    }
+}

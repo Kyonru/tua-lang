@@ -40,6 +40,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Keep shadowed ECS, Save, and I18n bindings out of the shared built-in catalog,
+  preventing source-order-dependent checking and editor types.
+
 - Distinguish comparisons in inline function bodies from generic headers, preventing
   later annotations from being erased and reported as unrelated parse errors.
 

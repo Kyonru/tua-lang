@@ -2123,20 +2123,25 @@ pub(crate) fn build_type_environment_with_domain_registry(
                 && module.name != crate::builtin_module::AUDIO_DESIGN.name
         })
         .count();
-    let can_share_locals = locals.is_empty()
-        && builtin_locals.len() == eager_global_count
-        && !parsed
-            .source
-            .contains(crate::builtin_module::AUDIO_DESIGN.name)
-        && !parsed.source.contains(crate::builtin_module::LOG.name);
-    let domain_locals = domains
+    let mut domain_locals = domains
         .builtin_locals()
         .into_iter()
         .filter(|(name, _)| {
             name != crate::save::MODULE_NAME || parsed.raw.language == ParsedLanguage::Tua
         })
-        .filter(|(name, _)| !locals.contains_key(name) && !declared.contains(name))
         .collect::<Vec<_>>();
+    // The shared cache must contain the complete domain catalog. A source
+    // that shadows ECS/Save/I18n must neither seed nor reuse that cache.
+    let can_share_locals = locals.is_empty()
+        && domain_locals
+            .iter()
+            .all(|(name, _)| !declared.contains(name))
+        && builtin_locals.len() == eager_global_count
+        && !parsed
+            .source
+            .contains(crate::builtin_module::AUDIO_DESIGN.name)
+        && !parsed.source.contains(crate::builtin_module::LOG.name);
+    domain_locals.retain(|(name, _)| !locals.contains_key(name) && !declared.contains(name));
     let locals = builtin_locals
         .into_iter()
         .chain(domain_locals)
