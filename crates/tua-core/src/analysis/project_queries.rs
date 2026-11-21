@@ -1605,6 +1605,11 @@ impl AnalysisSnapshot {
                 }
             }
             TuaType::Applied {
+                name, arguments, ..
+            } if name == "Readonly" && arguments.len() == 1 => self
+                .project_type_from_tua_type(parsed, &arguments[0])
+                .map(Type::readonly),
+            TuaType::Applied {
                 name,
                 arguments,
                 name_span,
@@ -2487,6 +2492,9 @@ impl AnalysisSnapshot {
             Type::Tuple(items) => Some(Type::union(items.clone())),
             Type::Dictionary { value, .. } => Some(value.as_ref().clone()),
             _ => match self.resolve_expected_type(parsed, origin_path, ty) {
+                Type::Readonly(inner) => self
+                    .expected_table_element_type(parsed, origin_path, &inner)
+                    .map(Type::readonly),
                 Type::Array(item) => Some(*item),
                 Type::Tuple(items) => Some(Type::union(items)),
                 Type::Dictionary { value, .. } => Some(*value),
@@ -2529,6 +2537,12 @@ impl AnalysisSnapshot {
         field: &str,
     ) -> Option<TableField> {
         match self.resolve_expected_type(parsed, origin_path, ty) {
+            Type::Readonly(inner) => self
+                .expected_field_for_type(parsed, origin_path, &inner, field)
+                .map(|mut field| {
+                    field.ty = Type::readonly(field.ty);
+                    field
+                }),
             Type::Table(table) => table.semantic_field(field).cloned(),
             Type::Dictionary { key, value }
                 if dictionary_key_accepts_field(key.as_ref(), field) =>
@@ -2604,6 +2618,11 @@ impl AnalysisSnapshot {
             .type_database
             .resolve_type(&self.module_graph, origin_path, ty)
         {
+            Type::Readonly(inner) => self
+                .table_types_matching_literal(origin_path, &inner, field, literal)
+                .into_iter()
+                .map(Type::readonly)
+                .collect(),
             Type::Union(types) => types
                 .iter()
                 .flat_map(|ty| self.table_types_matching_literal(origin_path, ty, field, literal))
@@ -3212,6 +3231,10 @@ fn builtin_type_name(ty: &Type) -> Option<String> {
 
 fn unresolved_expected_table_field(ty: &Type, field: &str) -> Option<TableField> {
     match ty {
+        Type::Readonly(inner) => unresolved_expected_table_field(inner, field).map(|mut field| {
+            field.ty = Type::readonly(field.ty);
+            field
+        }),
         Type::Table(table) => table.semantic_field(field).cloned(),
         Type::Dictionary { key, value } if dictionary_key_accepts_field(key, field) => {
             Some(TableField::required(value.as_ref().clone()))
@@ -3245,6 +3268,7 @@ fn unresolved_expected_table_field(ty: &Type, field: &str) -> Option<TableField>
 
 fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
     match ty {
+        Type::Readonly(inner) => dictionary_key_accepts_field(inner, field),
         Type::Primitive(crate::PrimitiveType::String) => true,
         Type::StringLiteral(value) => value == field,
         Type::Union(types) => types
@@ -3331,6 +3355,7 @@ fn collect_generic_class_identities(
             return;
         }
         match ty {
+            Type::Readonly(inner) => collect(inner, identities, depth + 1),
             Type::GenericClassApplication {
                 identity,
                 arguments,

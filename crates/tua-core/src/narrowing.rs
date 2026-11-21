@@ -1171,6 +1171,7 @@ fn remove_nil(ty: &Type) -> Type {
 
 fn type_contains_primitive(ty: &Type, primitive: PrimitiveType) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_primitive(inner, primitive),
         Type::Primitive(current) => *current == primitive,
         Type::StringLiteral(_) => primitive == PrimitiveType::String,
         Type::Union(types) => types

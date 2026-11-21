@@ -432,6 +432,7 @@ impl<'a> DefinitionResolver<'a> {
         }
 
         match ty {
+            Type::Readonly(inner) => self.field_target(inner, field, depth + 1),
             Type::GenericClassApplication { identity, .. }
                 if identity.module == crate::vfs::normalize_path(&self.parsed.path) =>
             {
@@ -1004,6 +1005,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
         }
 
         match ty {
+            Type::Readonly(inner) => Self::field_target(parsed, inner, field, depth + 1),
             Type::Alias(name) => {
                 if let Some(target) = class_member_target(parsed, name, field, depth + 1) {
                     return Some(target);

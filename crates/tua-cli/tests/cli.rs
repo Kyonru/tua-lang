@@ -7207,3 +7207,43 @@ fn bounded_queue_is_opt_in_and_preserves_project_replacements() {
         custom
     );
 }
+
+#[test]
+fn readonly_contracts_erase_without_copying_or_freezing_aliases() {
+    let Some(lua) = working_lua_runtime() else {
+        return;
+    };
+    let temp = TempDir::new("readonly-erasure");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+type Item = { value: number }
+local item: Item = { value = 1 }
+local view: Readonly<Item> = item
+item.value = 2
+assert(view.value == 2)
+assert(rawequal(item, view))
+local rows: Readonly<Item[]> = { item }
+for _, row in ipairs(rows) do assert(row.value == 2) end
+print("readonly erasure passed")
+"#,
+    )
+    .unwrap();
+    let built = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(built.status.success(), "{built:?}");
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).unwrap();
+    assert!(!emitted.contains("Readonly"), "{emitted}");
+    let result = Command::new(lua)
+        .arg("build/main.lua")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stdout).contains("readonly erasure passed"));
+}

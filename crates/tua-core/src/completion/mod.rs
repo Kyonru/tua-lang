@@ -1268,7 +1268,7 @@ fn complete_type_names(
 }
 
 fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
-    ["any", "boolean", "nil", "number", "string"]
+    ["any", "boolean", "nil", "number", "string", "Readonly"]
         .into_iter()
         .chain(asset::builtin_type_names().iter().copied())
         .chain(lua::love_type_names().iter().copied())
@@ -2598,6 +2598,15 @@ fn collect_love_object_fields(
     }
 
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => collect_love_object_fields(
+            parsed,
+            environment,
+            &inner,
+            prefix,
+            separator,
+            separator_span,
+            completions,
+        ),
         Type::Alias(name) => {
             for item in lua::type_field_items(&name, prefix) {
                 insert_love_object_item(completions, parsed, item, separator, separator_span);
@@ -2664,6 +2673,7 @@ fn collect_table_fields_inner(
     }
 
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => collect_table_fields_inner(environment, &inner, fields, depth + 1),
         Type::Table(table) => collect_shape_fields(environment, &table, fields),
         application @ Type::GenericClassApplication { .. } => {
             if let Some(Type::Table(table)) = environment.generic_class_members(&application) {
@@ -2811,6 +2821,15 @@ fn complete_required_module_fields(
 
 fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
     match ty {
+        Type::Readonly(inner) => {
+            let mut nested = BTreeMap::new();
+            collect_export_fields(inner, &mut nested);
+            fields.extend(
+                nested
+                    .into_iter()
+                    .map(|(name, ty)| (name, Type::readonly(ty))),
+            );
+        }
         Type::Table(table) => {
             fields.extend(
                 table
@@ -3068,6 +3087,9 @@ fn love_conf_receiver_type(
 fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
     for field in fields {
         ty = match ty {
+            Type::Readonly(inner) => {
+                Type::readonly(field_chain_type(*inner, std::slice::from_ref(field))?)
+            }
             Type::Table(table) => table.semantic_field(field)?.ty.clone(),
             Type::Union(types) => {
                 let mut resolved = Vec::new();

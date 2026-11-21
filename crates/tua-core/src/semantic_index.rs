@@ -430,6 +430,10 @@ fn field_target(
     }
 
     match ty {
+        Type::Readonly(inner) => field_target(parsed, inner, field, depth + 1).map(|mut target| {
+            target.ty = Type::readonly(target.ty);
+            target
+        }),
         Type::Alias(name) => {
             if let Some(target) = class_member_source_target(parsed, name, field) {
                 return Some(FieldTarget {

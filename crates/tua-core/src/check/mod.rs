@@ -459,6 +459,20 @@ impl<'a> Checker<'a> {
                 );
             }
             ast::Stmt::FunctionDeclaration(function) => {
+                let mut receiver = function
+                    .name()
+                    .names()
+                    .iter()
+                    .map(token_text)
+                    .collect::<Vec<_>>();
+                if function.name().method_name().is_none() {
+                    receiver.pop();
+                }
+                if let Some(ty) = self.resolve_field_chain_type(&receiver) {
+                    if self.is_readonly(&ty) {
+                        self.report_readonly_mutation(function.name());
+                    }
+                }
                 self.check_love_callback_declaration(function);
                 self.record_function_declaration_type(function);
 
@@ -852,6 +866,9 @@ impl<'a> Checker<'a> {
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
         let expressions = assignment.expressions().iter().collect::<Vec<_>>();
         for (index, variable) in assignment.variables().iter().enumerate() {
+            if self.check_readonly_assignment(variable) {
+                continue;
+            }
             let slot = assignment_expression_for_local(&expressions, index);
             let expression = slot.filter(|(_, index)| *index == 0).map(|(expr, _)| expr);
             if let Some(name) = directly_assigned_name(variable) {
@@ -938,6 +955,9 @@ impl<'a> Checker<'a> {
     }
 
     fn check_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
+        if self.check_readonly_assignment(assignment.lhs()) {
+            return;
+        }
         let source = self.infer_expression(assignment.rhs());
         let target = self.infer_var_assignment_target(assignment.lhs());
 
@@ -994,6 +1014,9 @@ impl<'a> Checker<'a> {
         self.forget_return_guards(&name);
 
         let flow_type = match (&ty, &target) {
+            (_, Some(target)) if self.environment.resolve_aliases(target).contains_readonly() => {
+                Some(target.clone())
+            }
             (Some(source), Some(target))
                 if !matches!(source, Type::Any) && self.context.is_assignable(source, target) =>
             {
@@ -1202,7 +1225,9 @@ impl<'a> Checker<'a> {
         self.record_known_table_field_type(
             root,
             field,
-            if self.stable_inferred_locals {
+            if self.stable_inferred_locals
+                || target.is_some_and(|ty| self.environment.resolve_aliases(ty).contains_readonly())
+            {
                 target.cloned().unwrap_or_else(|| widen_inferred_type(&ty))
             } else {
                 widen_inferred_type(&ty)
@@ -2277,6 +2302,7 @@ impl<'a> Checker<'a> {
         self.check_asset_loader_call(function_call);
         self.check_dot_love_method_call(function_call);
         self.check_shader_send_call(function_call);
+        self.check_readonly_builtin_mutation(function_call);
 
         // Keep checker locals on the same built-in runtime type path as hover
         // and completion. Otherwise a `require` initializer becomes `any`
@@ -4087,6 +4113,82 @@ impl<'a> Checker<'a> {
             .map(|function| function.return_types_or_any())
     }
 
+    fn is_readonly(&self, ty: &Type) -> bool {
+        match self.environment.resolve_aliases(ty) {
+            Type::Readonly(_) => true,
+            Type::Union(types) => types.iter().any(|ty| self.is_readonly(ty)),
+            _ => false,
+        }
+    }
+
+    fn report_readonly_mutation(&mut self, node: &impl Node) {
+        let position = node_position(node);
+        self.diagnostics.push(
+            Diagnostic::new(
+                &self.parsed.path,
+                position.line,
+                position.column,
+                DiagnosticSeverity::Error,
+                "cannot mutate a read-only value",
+            )
+            .with_code(DiagnosticCode::TYPE_MISMATCH),
+        );
+    }
+
+    fn check_readonly_assignment(&mut self, var: &Var) -> bool {
+        let Var::Expression(expression) = var else {
+            return false;
+        };
+        let mut suffixes = expression.suffixes().cloned().collect::<Vec<_>>();
+        if !matches!(suffixes.pop(), Some(Suffix::Index(_))) {
+            return false;
+        }
+        let receiver = expression.clone().with_suffixes(suffixes);
+        let Some(ty) = self.infer_var_expression(&receiver) else {
+            return false;
+        };
+        if !self.is_readonly(&ty) {
+            return false;
+        }
+        self.report_readonly_mutation(var);
+        true
+    }
+
+    fn check_readonly_builtin_mutation(&mut self, call: &FunctionCall) {
+        let Some(parts) = field_chain_before_first_call(call) else {
+            return;
+        };
+        let mutator = match parts.as_slice() {
+            [root, member] if root == "table" => {
+                matches!(member.as_str(), "insert" | "remove" | "sort" | "move")
+            }
+            [name] => matches!(name.as_str(), "rawset" | "setmetatable"),
+            _ => false,
+        };
+        if !mutator
+            || self.infer_named_value(&parts[0]).is_some()
+            || self.environment.function(&parts.join(".")).is_some()
+        {
+            return;
+        }
+        let Some(arguments) = call_arguments(call) else {
+            return;
+        };
+        // table.move writes its fifth argument, or the first when omitted.
+        let index = if parts.as_slice() == ["table", "move"] && arguments.len() >= 5 {
+            4
+        } else {
+            0
+        };
+        if let Some(CallArgument::Expression(argument)) = arguments.get(index) {
+            if let Some(ty) = self.infer_expression(argument) {
+                if self.is_readonly(&ty) {
+                    self.report_readonly_mutation(argument);
+                }
+            }
+        }
+    }
+
     fn infer_var_assignment_target(&mut self, var: &Var) -> Option<Type> {
         match var {
             Var::Name(name) => self.infer_named_assignment_target(&token_text(name)),
@@ -5027,6 +5129,7 @@ fn lua_type_field_item(
     }
 
     match resolve_aliases(ty, environment, 0) {
+        Type::Readonly(inner) => lua_type_field_item(environment, &inner, field),
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
             .find(|item| item.label == field),
@@ -5567,6 +5670,7 @@ fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Ty
 
 fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> {
     match resolve_aliases(ty, environment, 0) {
+        Type::Readonly(inner) => array_element_type(environment, &inner).map(Type::readonly),
         Type::Array(item) => Some(*item),
         Type::Tuple(items) => Some(union_types(items)),
         Type::Union(types) => union_types_optional(
@@ -5589,6 +5693,8 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
 
 fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Type, Type)> {
     match resolve_aliases(ty, environment, 0) {
+        Type::Readonly(inner) => pair_key_value_types(environment, &inner)
+            .map(|(key, value)| (Type::readonly(key), Type::readonly(value))),
         Type::Array(item) => Some((Type::number(), *item)),
         Type::Tuple(items) => Some((Type::number(), union_types(items))),
         Type::Dictionary { key, value } => Some((*key, *value)),
@@ -5636,6 +5742,8 @@ fn iterator_metamethod_pair_types(
     name: &str,
 ) -> Option<(Type, Type)> {
     match resolve_aliases(ty, environment, 0) {
+        Type::Readonly(inner) => iterator_metamethod_pair_types(environment, &inner, name)
+            .map(|(key, value)| (Type::readonly(key), Type::readonly(value))),
         Type::Table(table) => table
             .metatable_facts()
             .and_then(|facts| facts.metamethod(name))
@@ -6011,6 +6119,7 @@ fn collect_unresolved_aliases(
     aliases: &mut BTreeSet<String>,
 ) {
     match ty {
+        Type::Readonly(inner) => collect_unresolved_aliases(inner, environment, aliases),
         Type::Alias(name) => {
             if environment.alias(name).is_none() {
                 aliases.insert(name.clone());
@@ -6053,6 +6162,7 @@ fn collect_unresolved_aliases(
 
 fn type_contains_any_alias(ty: &Type, aliases: &BTreeSet<String>) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_any_alias(inner, aliases),
         Type::Alias(name) => aliases.contains(name),
         Type::Union(types) | Type::Tuple(types) => {
             types.iter().any(|ty| type_contains_any_alias(ty, aliases))
@@ -6089,6 +6199,7 @@ fn type_contains_any_alias(ty: &Type, aliases: &BTreeSet<String>) -> bool {
 
 fn type_contains_string_literal(ty: &Type) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_string_literal(inner),
         Type::StringLiteral(_) => true,
         Type::Union(types) => types.iter().any(type_contains_string_literal),
         Type::Function(function) => {
@@ -6134,6 +6245,7 @@ fn expression_has_bracket_index(expression: &Expression) -> bool {
 
 fn type_contains_lua_enum_alias(ty: &Type) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_lua_enum_alias(inner),
         Type::Alias(name) => !lua::enum_value_items(name, "").is_empty(),
         Type::Union(types) => types.iter().any(type_contains_lua_enum_alias),
         Type::Function(function) => {

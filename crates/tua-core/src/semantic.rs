@@ -2773,6 +2773,10 @@ fn resolve_table_field_type_inner(
         return resolve_table_field_type_inner(environment, &body, field, depth + 1);
     }
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => {
+            resolve_table_field_type_inner(environment, &inner, field, depth + 1)
+                .map(Type::readonly)
+        }
         Type::Table(table) => table.semantic_field(field).map(|field| field.value_type()),
         application @ Type::GenericAliasApplication { .. } => environment
             .generic_alias_body(&application)
@@ -2800,6 +2804,7 @@ fn resolve_table_field_type_inner(
 
 fn type_contains_generic_alias_application(ty: &Type) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_generic_alias_application(inner),
         Type::GenericAliasApplication { .. } => true,
         Type::Array(item) => type_contains_generic_alias_application(item),
         Type::Dictionary { key, value } => {
@@ -2842,6 +2847,7 @@ pub(crate) fn resolve_index_type(
     key: &Type,
 ) -> Option<Type> {
     match resolve_aliases(environment, collection, 0) {
+        Type::Readonly(inner) => resolve_index_type(environment, &inner, key).map(Type::readonly),
         Type::Array(item) => is_number_like(key).then_some(*item),
         Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
         Type::Dictionary {
@@ -2898,6 +2904,7 @@ fn resolve_union_operation(
 
 fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> {
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => array_element_type(environment, &inner).map(Type::readonly),
         Type::Array(item) => Some(*item),
         Type::Tuple(items) => Some(union_types(items)),
         Type::Union(types) => union_types_optional(
@@ -2920,6 +2927,8 @@ fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> 
 
 fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Type, Type)> {
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => pair_key_value_types(environment, &inner)
+            .map(|(key, value)| (Type::readonly(key), Type::readonly(value))),
         Type::Array(item) => Some((Type::number(), *item)),
         Type::Tuple(items) => Some((Type::number(), union_types(items))),
         Type::Dictionary { key, value } => Some((*key, *value)),
@@ -2967,6 +2976,8 @@ fn iterator_metamethod_pair_types(
     name: &str,
 ) -> Option<(Type, Type)> {
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => iterator_metamethod_pair_types(environment, &inner, name)
+            .map(|(key, value)| (Type::readonly(key), Type::readonly(value))),
         Type::Table(table) => table
             .metatable_facts()
             .and_then(|facts| facts.metamethod(name))
@@ -3571,6 +3582,7 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
     }
 
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => lua_type_field_item(environment, &inner, field),
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
             .find(|item| item.label == field),
@@ -3994,6 +4006,7 @@ fn call_metamethod_return_types(environment: &TypeEnvironment, ty: &Type) -> Opt
 
 fn call_metamethod_function(environment: &TypeEnvironment, ty: &Type) -> Option<FunctionType> {
     match resolve_aliases(environment, ty, 0) {
+        Type::Readonly(inner) => call_metamethod_function(environment, &inner),
         Type::Function(function) => Some(function),
         Type::Table(table) => table.metatable_facts().and_then(|facts| {
             let mut function = facts.call.clone()?;

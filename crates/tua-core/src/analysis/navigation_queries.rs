@@ -525,6 +525,9 @@ impl AnalysisSnapshot {
             .type_database
             .resolve_type(&self.module_graph, source_path, ty)
         {
+            Type::Readonly(inner) => {
+                self.class_member_definition_for_type(source_path, &inner, member, depth + 1)
+            }
             Type::GenericClassApplication { identity, .. } => {
                 let file = self.file(&identity.module)?;
                 let parsed = file
@@ -749,6 +752,7 @@ impl AnalysisSnapshot {
         ty: &Type,
     ) -> Option<Definition> {
         match ty {
+            Type::Readonly(inner) => self.type_origin_definition(parsed, hir, inner),
             Type::Alias(name) => self.type_alias_definition_for_name(parsed, hir, name),
             Type::Union(types) => {
                 let mut definitions = types

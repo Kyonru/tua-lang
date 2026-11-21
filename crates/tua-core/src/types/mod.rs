@@ -102,6 +102,7 @@ pub(crate) fn contextual_function_type(ty: Type) -> Option<FunctionType> {
 /// assignability still rejects parameters narrowed to one concrete class.
 pub(crate) fn bind_protocol_self(ty: &Type, protocol_name: &str) -> Type {
     match ty {
+        Type::Readonly(inner) => Type::readonly(bind_protocol_self(inner, protocol_name)),
         Type::Alias(name) if name == "Self" => Type::alias(protocol_name),
         Type::GenericAliasApplication {
             reference,
@@ -383,6 +384,8 @@ pub(crate) fn widen_inferred_expression_type(
 
 pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {
+        // A borrowed view is an existing contract, not a fresh mutable literal.
+        Type::Readonly(_) => ty.clone(),
         Type::StringLiteral(_) => Type::string(),
         // Widening can make members equal, as with `"a" | "b"` or records that
         // differ only in literal values; keep one of each.
@@ -465,6 +468,11 @@ pub(crate) fn type_from_tua_type(ty: &TuaType) -> Type {
             id: id.clone(),
             name: name.clone(),
         },
+        TuaType::Applied {
+            name, arguments, ..
+        } if name == "Readonly" && arguments.len() == 1 => {
+            Type::readonly(type_from_tua_type(&arguments[0]))
+        }
         TuaType::Applied {
             name,
             arguments,

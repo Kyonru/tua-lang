@@ -1767,7 +1767,7 @@ return {}
                     || function.return_types_or_any().iter().any(contains_any)
             }
             Type::Table(table) => table.fields().any(|(_, field)| contains_any(&field.ty)),
-            Type::Array(item) => contains_any(item),
+            Type::Array(item) | Type::Readonly(item) => contains_any(item),
             Type::Dictionary { key, value } => contains_any(key) || contains_any(value),
             Type::GenericClassApplication { arguments, .. } => arguments.iter().any(contains_any),
             Type::Primitive(_)
@@ -1782,7 +1782,7 @@ return {}
         match ty {
             Type::Table(_) => true,
             Type::Union(types) | Type::Tuple(types) => types.iter().any(contains_table),
-            Type::Array(item) => contains_table(item),
+            Type::Array(item) | Type::Readonly(item) => contains_table(item),
             Type::Function(_)
             | Type::Dictionary { .. }
             | Type::Primitive(_)

@@ -780,3 +780,33 @@ For a plain `.lua` boundary, add supported LuaDoc annotations or a configured
 declaration-only type library. Those mechanisms are documented in
 [Lua Interoperability](lua-interop.md) and
 [Configuration](configuration.md#declaration-only-type-libraries).
+
+## Read-only borrowed views
+
+`Readonly<T>` is a built-in, deep read-only view of a record, array, tuple, or
+dictionary. A mutable value can be passed to a read-only parameter. Reading nested
+collections or records keeps their read-only restriction, including through
+`ipairs`, `pairs`, inferred locals, generics, and module exports. Scalars and
+functions keep their existing types. `Readonly` takes exactly one type argument;
+its name is reserved.
+
+```tua
+type Modifier = { amount: number }
+local owned: Modifier[] = { { amount = 2 } }
+local borrowed: Readonly<Modifier[]> = owned
+local amount: number = borrowed[1].amount
+-- borrowed[1].amount = 5    -- error: read-only value
+-- table.insert(borrowed, { amount = 3 }) -- error
+```
+
+The checker rejects field/index writes, compound writes, method replacement,
+standard table mutators, and passing a read-only view to a mutable parameter.
+A read-only annotation is erased: there is no copy, proxy, freeze operation, or
+runtime overhead. Mutable aliases still see and can change the same object.
+Functions stored in a record can still have effects; this is not a purity system.
+Untyped Lua and explicit `any` remain trust boundaries. Keep snapshot copies when
+you need temporal isolation, and validate externally supplied content at runtime.
+
+Use this contract for shared definitions and borrowed collections. Use an owned,
+mutable type for code that is meant to change them. See
+[the runnable example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/readonly.tua).

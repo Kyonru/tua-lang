@@ -1406,6 +1406,9 @@ fn forwarded_nested_type(ty: &crate::Type, fields: &[String]) -> Option<crate::T
     let mut current = ty.clone();
     for field in fields {
         current = match current {
+            crate::Type::Readonly(inner) => {
+                crate::Type::readonly(forwarded_nested_type(&inner, std::slice::from_ref(field))?)
+            }
             crate::Type::Table(table) => table.semantic_field(field)?.ty.clone(),
             crate::Type::Union(types) => {
                 let mut resolved = types

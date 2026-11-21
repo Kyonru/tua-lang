@@ -274,8 +274,9 @@ fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
     Some(current)
 }
 
-fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
+pub(crate) fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
     match ty {
+        Type::Readonly(inner) => export_table_field_type(inner, field).map(Type::readonly),
         Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
         Type::Union(types) => {
             let mut resolved = Vec::new();
@@ -1336,6 +1337,14 @@ impl<'a> ExportInferer<'a> {
 
 fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportField>) {
     match ty {
+        Type::Readonly(inner) => {
+            let mut nested = BTreeMap::new();
+            collect_table_fields(inner, &mut nested);
+            fields.extend(nested.into_iter().map(|(name, mut field)| {
+                field.ty = Type::readonly(field.ty);
+                (name, field)
+            }));
+        }
         Type::Table(table) => {
             fields.extend(table.fields().map(|(name, field)| {
                 (
@@ -1506,6 +1515,13 @@ fn resolve_export_aliases_inner(
     visiting: &mut std::collections::BTreeSet<String>,
 ) -> Type {
     match ty {
+        Type::Readonly(inner) => Type::readonly(resolve_export_aliases_inner(
+            parsed,
+            environment,
+            inner,
+            expand_non_class_alias,
+            visiting,
+        )),
         Type::Alias(name) => {
             if environment.alias(name).is_some_and(|resolved| {
                 BuiltinDomainRegistry::with_ecs(true).defines_alias(name, resolved)
@@ -1847,6 +1863,11 @@ fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
         crate::TuaType::Named(name) if name == "identifier" => Type::string(),
         crate::TuaType::Named(name) => Type::named(name),
         crate::TuaType::Parameter { name, .. } => Type::named(name),
+        crate::TuaType::Applied {
+            name, arguments, ..
+        } if name == "Readonly" && arguments.len() == 1 => {
+            Type::readonly(type_from_lua_doc_type(&arguments[0]))
+        }
         crate::TuaType::Applied { name, .. } => Type::named(name),
         crate::TuaType::StringLiteral(value) => Type::string_literal(value),
         crate::TuaType::Union(types) => Type::union(types.iter().map(type_from_lua_doc_type)),

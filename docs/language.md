@@ -292,6 +292,13 @@ definition only to a generated file that uses it. See
 [Game Math Helpers](vectors.md#game-math-helpers) for every signature and
 usage examples.
 
+### Read-only Views
+
+Use `Readonly<T>` for a statically checked, deep borrowed view of records and
+collections. Reads retain payload types; writes and mutable parameter escapes
+are rejected. This annotation erases without freezing mutable aliases or copying
+snapshots. See [read-only contracts](typing.md#read-only-borrowed-views).
+
 ### Feature Guides
 
 Tua's game-focused helpers are documented separately so this page can remain a

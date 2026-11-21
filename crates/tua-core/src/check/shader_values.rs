@@ -254,6 +254,7 @@ fn type_rejected(ty: &Type, shape: Shape, environment: &TypeEnvironment, depth: 
         return false;
     }
     match ty {
+        Type::Readonly(inner) => type_rejected(inner, shape, environment, depth + 1),
         Type::Any => false,
         Type::Union(members) => {
             !members.is_empty()

@@ -1056,6 +1056,7 @@ struct GenericAliasExpansionContext {
 impl GenericAliasExpansionContext {
     fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
         match ty {
+            Type::Readonly(inner) => Type::readonly(self.resolve(environment, inner)),
             Type::GenericClassApplication {
                 identity,
                 name,
@@ -1241,6 +1242,7 @@ fn type_contains_generic_alias_application(ty: &Type, depth: usize) -> bool {
         return false;
     }
     match ty {
+        Type::Readonly(inner) => type_contains_generic_alias_application(inner, depth + 1),
         Type::GenericAliasApplication { .. } => true,
         Type::GenericClassApplication { arguments, .. } => arguments
             .iter()
@@ -1283,6 +1285,7 @@ pub(crate) fn substitute_type_parameters(
     substitutions: &HashMap<crate::parser::TypeParameterId, Type>,
 ) -> Type {
     match ty {
+        Type::Readonly(inner) => Type::readonly(substitute_type_parameters(inner, substitutions)),
         Type::GenericParameter { id, .. } => {
             substitutions.get(id).cloned().unwrap_or_else(|| ty.clone())
         }
@@ -1435,6 +1438,7 @@ fn type_contains_alias_cycle(
     }
 
     match ty {
+        Type::Readonly(inner) => type_contains_alias_cycle(environment, inner, depth + 1, visiting),
         Type::Alias(name) => {
             let Some(alias) = environment.alias(name) else {
                 return false;
@@ -1500,6 +1504,7 @@ impl AliasResolutionContext {
 
         self.depth += 1;
         let resolved = match ty {
+            Type::Readonly(inner) => Type::readonly(self.resolve_from_map(aliases, inner)),
             Type::Alias(name) => {
                 let Some(alias) = aliases.get(name) else {
                     self.depth -= 1;
@@ -2442,6 +2447,14 @@ fn collect_alias_names(
         }
     }
 
+    if names.contains("Readonly") {
+        diagnostics.push(type_diagnostic(
+            &parsed.path,
+            None,
+            "Readonly is a reserved built-in type constructor".to_owned(),
+            DiagnosticCode::TYPE_DUPLICATE_ALIAS,
+        ));
+    }
     names
 }
 
@@ -4885,6 +4898,7 @@ fn guarded_return_types(
 fn type_is_always_truthy(ty: &Type, aliases: &BTreeMap<String, Type>, depth: usize) -> bool {
     const MAX_ALIAS_DEPTH: usize = 16;
     match ty {
+        Type::Readonly(inner) => type_is_always_truthy(inner, aliases, depth + 1),
         Type::Any => false,
         // Aliases outside the map name LOVE and runtime objects.
         Type::Alias(name) => match aliases.get(name) {
@@ -6160,6 +6174,7 @@ fn merge_static_metatable(base: Type, meta: Type) -> Type {
 
 fn function_return_types(aliases: &BTreeMap<String, Type>, ty: &Type) -> Vec<Type> {
     match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Readonly(inner) => function_return_types(aliases, &inner),
         Type::Function(function) => function.return_types_or_any().to_vec(),
         Type::Any => vec![Type::Any],
         Type::Union(types) => {
@@ -6193,6 +6208,7 @@ fn love_object_method_return_types(
     field: &str,
 ) -> Vec<Type> {
     match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Readonly(inner) => love_object_method_return_types(aliases, &inner, field),
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
             .find(|item| item.label == field)
@@ -6484,6 +6500,9 @@ fn resolve_table_field_type_from_map(
     field: &str,
 ) -> Option<Type> {
     match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Readonly(inner) => {
+            resolve_table_field_type_from_map(aliases, &inner, field).map(Type::readonly)
+        }
         Type::Dictionary { key, value } => key_accepts_index(&key, &Type::string_literal(field))
             .then(|| Type::union([*value, Type::nil()])),
         Type::Table(table) => table
@@ -6511,6 +6530,9 @@ fn resolve_index_type_from_map(
     key: &Type,
 ) -> Option<Type> {
     match resolve_aliases_from_map(aliases, collection, 0) {
+        Type::Readonly(inner) => {
+            resolve_index_type_from_map(aliases, &inner, key).map(Type::readonly)
+        }
         Type::Array(item) => is_number_like(key).then_some(*item),
         Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
         Type::Dictionary {
@@ -6932,6 +6954,21 @@ fn resolve_tua_type_with_context(
                     )
                 })
                 .collect::<Vec<_>>();
+            if name == "Readonly" {
+                if arguments.len() == 1 {
+                    return Type::readonly(arguments[0].clone());
+                }
+                diagnostics.push(type_diagnostic(
+                    path,
+                    *application_span,
+                    format!(
+                        "Readonly expects one type argument, found {}",
+                        arguments.len()
+                    ),
+                    DiagnosticCode::TYPE_UNKNOWN_NAME,
+                ));
+                return Type::Any;
+            }
             if let Some(identity) = context.class_bindings.get(name) {
                 Type::GenericClassApplication {
                     identity: identity.clone(),
@@ -7143,6 +7180,14 @@ fn validate_generic_alias_type(
     };
 
     match ty {
+        Type::Readonly(inner) => validate_generic_alias_type(
+            environment,
+            inner,
+            fallback_span,
+            parsed,
+            diagnostics,
+            emitted,
+        ),
         Type::GenericAliasApplication {
             reference,
             arguments,

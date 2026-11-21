@@ -530,6 +530,9 @@ impl ProjectTypeDatabase {
         }
         context.work += 1;
         match ty {
+            Type::Readonly(inner) => {
+                Type::readonly(self.resolve_type_inner(module_graph, source_path, inner, context))
+            }
             Type::GenericClassApplication {
                 identity,
                 name,
@@ -1120,6 +1123,10 @@ impl ProjectTypeDatabase {
         let mut current = self.resolve_type(module_graph, module_path, &entry.field.ty);
         for field in rest {
             current = match current {
+                Type::Readonly(inner) => {
+                    crate::module_index::export_table_field_type(&inner, field)
+                        .map(Type::readonly)?
+                }
                 Type::Table(table) => table.semantic_field(field)?.ty.clone(),
                 Type::Union(types) => {
                     let mut resolved = Vec::new();

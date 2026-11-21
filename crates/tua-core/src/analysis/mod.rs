@@ -1020,6 +1020,7 @@ fn project_local_field_chain_type(
 
 fn project_table_field_type(ty: &Type, field: &str) -> Option<Type> {
     match ty {
+        Type::Readonly(inner) => project_table_field_type(inner, field).map(Type::readonly),
         Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
         Type::Union(types) => {
             let fields = types
@@ -1584,6 +1585,7 @@ fn parameter_type_before_position(
 
 fn receiver_alias_name(ty: &Type) -> Option<String> {
     match ty {
+        Type::Readonly(inner) => receiver_alias_name(inner),
         Type::Alias(name) => Some(name.clone()),
         Type::GenericClassApplication { name, .. } => Some(name.clone()),
         Type::Union(types) => {
@@ -1739,6 +1741,15 @@ fn signal_event_hover(
 
 fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
     match ty {
+        Type::Readonly(inner) => {
+            let mut nested = BTreeMap::new();
+            collect_type_fields(inner, &mut nested);
+            fields.extend(
+                nested
+                    .into_iter()
+                    .map(|(name, ty)| (name, Type::readonly(ty))),
+            );
+        }
         Type::Table(table) => {
             for (name, field) in table.semantic_fields() {
                 if crate::save::is_internal_field(table, &name) {
@@ -2210,6 +2221,7 @@ fn call_arguments(call: &FunctionCall) -> Option<impl Iterator<Item = &Expressio
 
 fn collect_function_parameter_types(ty: &Type, index: usize, types: &mut Vec<Type>) {
     match ty {
+        Type::Readonly(inner) => collect_function_parameter_types(inner, index, types),
         Type::Function(function) => {
             if let Some(parameter) = function.parameters.get(index) {
                 types.push(parameter.ty.clone());
@@ -2269,6 +2281,7 @@ fn string_literal_prefix_before(source: &str, position: SourcePosition) -> Optio
 
 fn collect_string_literal_values(ty: &Type, values: &mut BTreeSet<String>) {
     match ty {
+        Type::Readonly(inner) => collect_string_literal_values(inner, values),
         Type::StringLiteral(value) => {
             values.insert(value.clone());
         }
@@ -2293,6 +2306,7 @@ fn collect_string_literal_values(ty: &Type, values: &mut BTreeSet<String>) {
 
 fn type_contains_string_literal(ty: &Type, literal: &str) -> bool {
     match ty {
+        Type::Readonly(inner) => type_contains_string_literal(inner, literal),
         Type::StringLiteral(value) => value == literal,
         Type::Union(types) => types
             .iter()

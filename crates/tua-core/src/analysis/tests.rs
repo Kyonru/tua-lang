@@ -11817,6 +11817,60 @@ brain.tree:instance(<|signature|>{health=3})
 }
 
 #[test]
+fn readonly_imported_views_keep_checks_hover_and_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/types.d.tua
+export type Item = { value: number, child: { score: number } }
+-- file: src/data.tua
+import type { Item } from "./types"
+local items: Item[] = { { value = 1, child = { score = 2 } } }
+local function read(): Readonly<Item[]> return items end
+return { read = read }
+-- file: src/forward.tua
+return require("data")
+-- file: src/main.tua
+local data = require("forward")
+local rows = data.read()
+local row = rows[1]
+local child = row.child
+local score = child.<|hover|><|complete|>score
+child.score = 3
+rows[1].value = 2
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/data.tua", "src/forward.tua"] {
+        let errors = snapshot
+            .pipeline_diagnostics(path)
+            .into_iter()
+            .filter(|d| d.severity == DiagnosticSeverity::Error)
+            .collect::<Vec<_>>();
+        assert!(errors.is_empty(), "{path}: {errors:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.message.contains("read-only"))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("score: number"), "{hover:?}");
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"score".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn bounded_queue_reexport_keeps_generic_item_types() {
     let fixture = Fixture::parse(
         r#"-- file: src/queue.tua
@@ -11846,4 +11900,57 @@ if item then print(item.<|complete|>value) end
     let labels =
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
     assert!(labels.contains(&"value".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn readonly_reexports_preserve_literal_unions_and_alias_assignability() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/types.tua
+export type Item = { kind: "flat" | "multiply", value: number }
+export type View = Readonly<Item[]>
+export type Reader = { read: () -> Readonly < Item[] > }
+return {}
+-- file: src/producer.tua
+import type { Item, Reader } from "./types"
+local function new(): Reader
+  local items: Item[] = { { kind = "flat", value = 1 } }
+  local function read(): Readonly<Item[]> return items end
+  return { read = read }
+end
+return { new = new }
+-- file: src/forward.tua
+local Producer = require("producer")
+return { instance = Producer.new() }
+-- file: src/main.tua
+import type { Item, View } from "./types"
+local wrapped = require("forward")
+local items: Readonly<Item[]> = wrapped.instance.read()
+local aliased: View = items
+local consumer = require("consumer")
+consumer.consume(items)
+consumer.consume(aliased)
+local function consume(input: Readonly<Item[]>): number return input[1].value end
+consume(items)
+local first = items[1]
+local kind: "flat" | "multiply" = first.kind
+-- file: src/consumer.tua
+import type { Item } from "./types"
+local function consume(items: Readonly<Item[]>): number return items[1].value end
+return { consume = consume }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    for file in fixture.files() {
+        let errors = host
+            .snapshot()
+            .pipeline_diagnostics(&file.path)
+            .into_iter()
+            .filter(|d| d.severity == DiagnosticSeverity::Error)
+            .collect::<Vec<_>>();
+        assert!(errors.is_empty(), "{}: {errors:?}", file.path.display());
+    }
 }

@@ -7961,3 +7961,97 @@ end)
         );
     }
 }
+
+#[test]
+fn readonly_records_and_collections_preserve_borrowed_views() {
+    let prefix = r#"
+type Item = { value: number, child: { score: number } }
+local mutable: Item = { value = 1, child = { score = 2 } }
+local view: Readonly<Item> = mutable
+local items: Readonly<Item[]> = { mutable }
+local dictionary: Readonly<{ [string]: Item }> = { first = mutable }
+"#;
+    check_tua_source(
+        "src/main.tua",
+        format!(
+            r#"{prefix}
+local numberValue: number = view.value
+local child = view.child
+local score: number = child.score
+for _, item in ipairs(items) do local n: number = item.value end
+for _, item in pairs(dictionary) do local n: number = item.value end
+local candidate = dictionary["first"]
+if candidate then local n: number = candidate.value end
+local function consume(value: Readonly<Item>): number return value.value end
+consume(mutable)
+consume(view)
+view = mutable
+local count: number = #items
+"#
+        ),
+    )
+    .expect("read-only views support typed reads and mutable inputs");
+    for invalid in [
+        "view.value = 3",
+        "local owner: { item: Readonly<Item> } = { item = mutable }\nowner = { item = mutable }\nowner.item.value = 3",
+        "local owner: { item: Readonly<Item> } = { item = mutable }\nowner.item = mutable\nowner.item.value = 3",
+        "function view.method() return 1 end",
+        "function view:method() return 1 end",
+        "local function identity<T>(value: T): T return value end\nidentity(view).value = 3",
+        "local function first<T>(values: Readonly<T[]>): Readonly<T> return values[1] end\nfirst(items).value = 3",
+        "view['value'] = 3",
+        "view.child.score += 1",
+        "local child = view.child\nchild.score = 2",
+        "items[1] = mutable",
+        "items[1].value = 2",
+        "dictionary.first = mutable",
+        "for _, item in ipairs(items) do item.value = 2 end",
+        "for _, item in pairs(dictionary) do item.value = 2 end",
+        "local leaked: Item = view",
+        "local function mutate(value: Item) value.value = 2 end\nmutate(view)",
+        "table.insert(items, mutable)",
+        "table.remove(items, 1)",
+        "table.sort(items)",
+        "rawset(view, 'value', 3)",
+        "setmetatable(view, {})",
+        "view = mutable\nview.value = 2",
+    ] {
+        let result = check_tua_source("src/main.tua", format!("{prefix}{invalid}"));
+        assert!(result.is_err(), "must reject: {invalid}");
+    }
+}
+
+#[test]
+fn readonly_constructor_requires_one_argument_and_reserves_its_name() {
+    for source in [
+        "local item: Readonly<number, string> = 1",
+        "local item: Readonly = 1",
+        "type Readonly<T> = T",
+    ] {
+        assert!(
+            check_tua_source("src/main.tua", source).is_err(),
+            "{source}"
+        );
+    }
+    check_tua_source(
+        "src/main.tua",
+        r#"
+type Numeric = number
+local numeric: Readonly<Numeric> = 1
+local copied: number = numeric
+local function first<T>(values: Readonly<T[]>): Readonly<T> return values[1] end
+local items: { value: number }[] = { { value = 1 } }
+local item = first(items)
+type View = Readonly<{ value: number }[]>
+local alias: View = items
+local aliasItem = first(alias)
+local aliasValue: number = aliasItem.value
+local value: number = item.value
+local optional: Readonly<{ value: number }> | nil = item
+if optional then local n: number = optional.value end
+local trust: any = item
+trust.value = 4
+"#,
+    )
+    .unwrap();
+}
