@@ -552,7 +552,10 @@ fn erase_function_generic_protocol_bounds(source: &str) -> Vec<char> {
     let mut index = 0;
 
     while index < chars.len() {
-        if chars[index] != '<' || protected[index] || !function_generic_open(&chars, index) {
+        if chars[index] != '<'
+            || protected[index]
+            || !function_generic_open(&chars, &protected, index)
+        {
             index += 1;
             continue;
         }
@@ -585,13 +588,46 @@ fn erase_function_generic_protocol_bounds(source: &str) -> Vec<char> {
     chars
 }
 
-fn function_generic_open(chars: &[char], open: usize) -> bool {
-    let line_start = chars[..open]
-        .iter()
-        .rposition(|character| matches!(character, '\n' | ';' | '{' | '}'))
-        .map_or(0, |index| index + 1);
-    let header = chars[line_start..open].iter().collect::<String>();
-    header.contains("function")
+fn function_generic_open(chars: &[char], protected: &[bool], open: usize) -> bool {
+    // A generic list follows the function keyword or its declaration name,
+    // never parameters, a return annotation, or an expression in its body.
+    // Scan tokens rather than a line: headers may contain comments/newlines,
+    // and one-line function bodies can contain ordinary comparisons.
+    let mut cursor = open;
+    let mut expect_name = true;
+    let mut saw_name = false;
+    while cursor > 0 {
+        while cursor > 0 && (chars[cursor - 1].is_whitespace() || protected[cursor - 1]) {
+            cursor -= 1;
+        }
+        if cursor == 0 {
+            return false;
+        }
+        if !expect_name && matches!(chars[cursor - 1], '.' | ':') {
+            cursor -= 1;
+            expect_name = true;
+            continue;
+        }
+        // Only the keyword may precede the declaration's first name.
+        let end = cursor;
+        while cursor > 0 && (chars[cursor - 1].is_ascii_alphanumeric() || chars[cursor - 1] == '_')
+        {
+            cursor -= 1;
+        }
+        if cursor == end || chars[cursor].is_ascii_digit() {
+            return false;
+        }
+        let token = chars[cursor..end].iter().collect::<String>();
+        if token == "function" {
+            return !saw_name || !expect_name;
+        }
+        if !expect_name {
+            return false;
+        }
+        saw_name = true;
+        expect_name = false;
+    }
+    false
 }
 
 fn is_optional_field_marker(chars: &[char], index: usize) -> bool {

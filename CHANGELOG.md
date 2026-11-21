@@ -33,6 +33,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Distinguish comparisons in inline function bodies from generic headers, preventing
+  later annotations from being erased and reported as unrelated parse errors.
+
 - Preserve imported literal-union field contracts through assignment and nested
   inferred records/arrays, keeping checking and editor type information aligned.
 

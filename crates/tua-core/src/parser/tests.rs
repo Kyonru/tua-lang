@@ -3039,3 +3039,38 @@ end
         assert_eq!(function.default_parameters[0].expression, expression);
     }
 }
+
+#[test]
+fn comparisons_inside_inline_functions_do_not_erase_later_annotations() {
+    for comparison in ["x < 40", "x <= 40", "x < other", "x < math.huge"] {
+        let source = format!(
+            r#"
+local function less(x: number, other: number): boolean return {comparison} end
+local function identity(value: number): number return value end
+local function valid(depth: number): boolean
+  return depth >= 40 and depth < math.huge
+end
+return less, identity, valid
+"#
+        );
+        let parsed = parse_tua_source("src/comparisons.tua", &source)
+            .expect("comparisons are not generic lists");
+        let lua = crate::emit::emit_lua(&parsed).expect("comparison code emits Lua 5.1");
+        assert!(lua.contains(comparison), "{lua}");
+        assert!(lua.contains("depth >= 40"), "{lua}");
+    }
+}
+
+#[test]
+fn bounded_generic_headers_allow_multiline_names_and_comments() {
+    let source = r#"
+protocol Named { name(): string }
+local function -- function < fake: bound >
+  identity
+  <T: Named>(value: T): T
+  return value
+end
+return identity
+"#;
+    parse_tua_source("src/bounded.tua", source).expect("real generic headers remain supported");
+}
