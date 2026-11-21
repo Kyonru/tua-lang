@@ -632,6 +632,16 @@ impl<'a> SemanticModel<'a> {
 
         if let Some((_, receiver_parts)) = parts.split_last() {
             if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
+                if let Some(function) = crate::behavior_tree::typing::specialized_call(
+                    &receiver_type,
+                    function_call,
+                    |expression| {
+                        self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)
+                            .map(|ty| self.environment.resolve_nested_aliases(&ty))
+                    },
+                ) {
+                    return function.return_types;
+                }
                 if let Some(returns) = input::method_return_types_from_call(
                     self.environment,
                     &receiver_type,
@@ -935,6 +945,27 @@ impl<'a> SemanticModel<'a> {
         if let Some(result) = self.table_remove_result(function_call, &parts, position, 0) {
             function.return_type = Some(result.clone());
             function.return_types = vec![result];
+        }
+
+        if let Some((_, receiver_parts)) = parts
+            .split_last()
+            .filter(|(method, _)| crate::behavior_tree::typing::is_constructor(method))
+        {
+            if let Some(receiver) = self.type_of_field_chain(receiver_parts, position) {
+                if let Some(signature) = crate::behavior_tree::typing::specialized_call(
+                    &receiver,
+                    function_call,
+                    |expression| {
+                        self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                            .map(|ty| self.environment.resolve_nested_aliases(&ty))
+                    },
+                ) {
+                    return Some(typed_function_from_function_type(
+                        parts.last().cloned(),
+                        signature,
+                    ));
+                }
+            }
         }
 
         if self.environment.alias(ecs::WORLD_TYPE).is_some() {

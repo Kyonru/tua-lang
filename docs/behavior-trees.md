@@ -43,7 +43,13 @@ when it spawns, then update the runner through an ECS system. The tree itself is
 shared by every enemy:
 
 ```tua
-local Brain = ECS.component("Brain", { context = "any", runner = "any" })
+type Actor = { wantsEffect: boolean }
+type Runner = {
+  context: Actor,
+  update: (self: Self, dt: number) -> ("success" | "failure" | "running"),
+  cancel: (self: Self) -> nil,
+}
+local Brain = ECS.component("Brain", { context = "Actor", runner = "Runner" })
 local Effect = ECS.component("Effect")
 local world = ECS.world()
 local effects = objectPool({
@@ -52,12 +58,12 @@ local effects = objectPool({
   initial = 32,
 })
 
-local tree = BehaviorTree.new(BehaviorTree.action(function(actor)
+local tree = BehaviorTree.new(BehaviorTree.action(function(actor: Actor)
   actor.wantsEffect = true
   return "success"
 end))
 
-local function spawnEnemy(actor)
+local function spawnEnemy(actor: Actor)
   local entity = world:create()
   world:add(entity, Brain, { context = actor, runner = tree:instance(actor) })
   return entity
@@ -83,10 +89,10 @@ an effect when an action requests it, attach it to an ECS entity, then destroy
 that entity and release the payload when its lifetime ends. Do not pool numeric
 entity IDs or create a tree or runner in `love.update`. The complete,
 [runnable ECS and pool example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/behavior_tree_ecs.tua)
-shows effect release, a prewarmed pool, and headless updates. Its `Brain`
-component uses `any` for the runner and context because the built-in ECS schema
-does not express a behavior runner's context type; annotate the leaf callbacks
-and local context explicitly to retain checking there.
+shows effect release, a prewarmed pool, and headless updates. ECS schemas can
+name local type aliases: the example checks both the actor and runner without
+`any`. The runner alias includes only the methods the system needs; inferred
+runners also expose `reset()`, `maxDepth`, and `maxSteps`.
 
 The brain update path makes one ECS query and one runner update per active
 enemy. Tree nodes and callbacks are allocated once; runner state is per enemy.
@@ -148,6 +154,32 @@ limits are 64 levels and 1,000 node visits per update; `runner.maxDepth` and
 `runner.maxSteps` can be lowered for a game. The runtime has no LOVE dependency
 and can be exercised in headless tests.
 
-Current callback declarations accept a dynamic context. Annotate callback
-parameters in Tua to get member checking within each leaf. Generic context
-propagation through built-in combinators remains a follow-up type-system task.
+## Actor context checking
+
+Annotate the context parameter on a leaf callback (or an action's `enter` or
+`exit` callback). Direct calls through `BehaviorTree`, an alias of the module,
+or its built-in runtime import carry that context through combinators,
+decorators, `new(root)`, and `tree:instance(actor)`. The checker rejects an
+incompatible actor or callback; runner context fields retain their types after
+module exports and re-exports. Completion and call signatures use the same
+contract. Context-free waits and callbacks can be mixed with typed leaves.
+Use one common actor contract for typed leaves in a tree; incompatible leaf
+contracts are rejected rather than widened into a union.
+
+```tua
+type Actor = { health: number }
+local tree = BehaviorTree.new(BehaviorTree.action(function(actor: Actor)
+  actor.health -= 1
+  return "success"
+end))
+local runner = tree:instance({ health = 3 })
+-- tree:instance({ health = "wrong" }) -- type error
+-- runner.context.health = "wrong" -- type error
+```
+
+This is inference for the existing API, not a change to Lua's runtime or general
+generic callback inference. Fully dynamic callbacks remain permissive. For a
+checked tree, supply the root to `new(root)`: constructing an empty tree and
+later calling `setRoot` does not refine the original variable's context type.
+Extracting a constructor into a standalone function also retains its dynamic
+LuaDoc contract. No context witness or type metadata is emitted into Lua.

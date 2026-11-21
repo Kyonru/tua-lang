@@ -1,6 +1,9 @@
 -- Typed, opt-in behavior trees for Tua and LOVE. Independent implementation.
 -- Copyright (c) 2026 Kyonru. MIT License.
 
+-- Tua specializes these dynamic LuaDoc signatures from typed leaf contexts.
+-- The runtime remains context-agnostic; no type metadata is stored on nodes.
+
 ---@alias BehaviorStatus "success" | "failure" | "running"
 ---@class BehaviorNode
 ---@field kind string

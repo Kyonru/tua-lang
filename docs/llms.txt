@@ -194,6 +194,11 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   clear/repopulation. `BehaviorTree.new(...)` supplies
   composable actions, conditions, selectors, sequences, and per-actor runners;
   it can be used from ECS systems without creating a tree per entity or frame.
+  Annotate a leaf's actor parameter to carry its context through combinators,
+  `new(root)`, and `instance(actor)`, including module exports. ECS schema fields
+  can name actor/runner aliases. Context-free waits compose with typed leaves;
+  incompatible actor contracts fail. Empty `new()` plus later `setRoot` and
+  extracted constructor functions retain dynamic context typing.
 - Built-in `Tween` animates numeric fields; `Camera.new(...)` follows and
   transforms a game view; `Rot` provides seeded randomness, maps, paths,
   visibility, noise, colors, grammars, and lighting. These names need no

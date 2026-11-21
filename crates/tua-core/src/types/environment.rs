@@ -445,6 +445,13 @@ impl TypeEnvironment {
         context.resolve(self, ty)
     }
 
+    /// Capture an inferred domain contract before it crosses a module boundary.
+    /// Unlike member lookup, nested aliases must be resolved in the declaring scope.
+    pub(crate) fn resolve_nested_aliases(&self, ty: &Type) -> Type {
+        let expanded = self.resolve_aliases(ty);
+        AliasResolutionContext::default().resolve(self, &expanded)
+    }
+
     /// Projects the substituted instance members for a nominal generic class
     /// application. This is intentionally separate from `resolve_aliases`:
     /// expression and assignment types must retain their class identity.
@@ -1483,6 +1490,10 @@ struct AliasResolutionContext {
 
 impl AliasResolutionContext {
     fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
+        self.resolve_from_map(&environment.aliases, ty)
+    }
+
+    fn resolve_from_map(&mut self, aliases: &BTreeMap<String, Type>, ty: &Type) -> Type {
         if self.depth >= MAX_ALIAS_RESOLUTION_DEPTH {
             return ty.clone();
         }
@@ -1490,7 +1501,7 @@ impl AliasResolutionContext {
         self.depth += 1;
         let resolved = match ty {
             Type::Alias(name) => {
-                let Some(alias) = environment.alias(name) else {
+                let Some(alias) = aliases.get(name) else {
                     self.depth -= 1;
                     return ty.clone();
                 };
@@ -1503,33 +1514,35 @@ impl AliasResolutionContext {
                     .unwrap_or(Type::Any);
                 }
 
-                let resolved = self.resolve(environment, alias);
+                let resolved = self.resolve_from_map(aliases, alias);
                 self.visiting.remove(name);
                 resolved
             }
-            Type::Union(types) => Type::union(types.iter().map(|ty| self.resolve(environment, ty))),
+            Type::Union(types) => {
+                Type::union(types.iter().map(|ty| self.resolve_from_map(aliases, ty)))
+            }
             Type::Function(function) => {
                 let parameters = function
                     .parameters
                     .iter()
                     .map(|parameter| FunctionParameter {
                         name: parameter.name.clone(),
-                        ty: self.resolve(environment, &parameter.ty),
+                        ty: self.resolve_from_map(aliases, &parameter.ty),
                     })
                     .collect::<Vec<_>>();
                 let vararg_type = function
                     .vararg_type
                     .as_deref()
-                    .map(|ty| self.resolve(environment, ty));
+                    .map(|ty| self.resolve_from_map(aliases, ty));
                 let return_types = function
                     .return_types_or_any()
                     .iter()
-                    .map(|ty| self.resolve(environment, ty))
+                    .map(|ty| self.resolve_from_map(aliases, ty))
                     .collect::<Vec<_>>();
                 let guarded = function.guarded_return_types.as_ref().map(|types| {
                     types
                         .iter()
-                        .map(|ty| self.resolve(environment, ty))
+                        .map(|ty| self.resolve_from_map(aliases, ty))
                         .collect()
                 });
                 let overloads = function
@@ -1537,7 +1550,7 @@ impl AliasResolutionContext {
                     .iter()
                     .map(|overload| {
                         let Type::Function(overload) =
-                            self.resolve(environment, &Type::Function(overload.clone()))
+                            self.resolve_from_map(aliases, &Type::Function(overload.clone()))
                         else {
                             unreachable!()
                         };
@@ -1552,7 +1565,8 @@ impl AliasResolutionContext {
                         return_types,
                     )
                     .with_guarded_return_types(guarded)
-                    .with_overloads(overloads),
+                    .with_overloads(overloads)
+                    .with_generic_parameters(function.generic_parameters.clone()),
                 )
             }
             Type::Table(table) => {
@@ -1561,7 +1575,7 @@ impl AliasResolutionContext {
                         (
                             name.to_owned(),
                             TableField {
-                                ty: self.resolve(environment, &field.ty),
+                                ty: self.resolve_from_map(aliases, &field.ty),
                                 optional: field.optional,
                             },
                         )
@@ -1569,11 +1583,13 @@ impl AliasResolutionContext {
                 resolved.copy_semantic_metadata_from(table);
                 Type::Table(resolved)
             }
-            Type::Array(item) => Type::array(self.resolve(environment, item)),
-            Type::Tuple(items) => Type::tuple(items.iter().map(|ty| self.resolve(environment, ty))),
+            Type::Array(item) => Type::array(self.resolve_from_map(aliases, item)),
+            Type::Tuple(items) => {
+                Type::tuple(items.iter().map(|ty| self.resolve_from_map(aliases, ty)))
+            }
             Type::Dictionary { key, value } => Type::dictionary(
-                self.resolve(environment, key),
-                self.resolve(environment, value),
+                self.resolve_from_map(aliases, key),
+                self.resolve_from_map(aliases, value),
             ),
             Type::Primitive(_)
             | Type::Any
@@ -5847,6 +5863,18 @@ fn infer_first_function_call_return_types(
                 query.locals,
                 receiver_parts,
             ) {
+                if let Some(function) = crate::behavior_tree::typing::specialized_call(
+                    &receiver_type,
+                    function_call,
+                    |expression| {
+                        query.type_of(expression).map(|ty| {
+                            AliasResolutionContext::default()
+                                .resolve_from_map(query.context.aliases, &ty)
+                        })
+                    },
+                ) {
+                    return function.return_types;
+                }
                 if let Some(returns) = query.context.domains.method_return_types_from_call(
                     &receiver_type,
                     function_call,

@@ -11721,3 +11721,97 @@ return age
         .collect::<Vec<_>>();
     assert_eq!(errors.len(), 1, "{errors:#?}");
 }
+
+#[test]
+fn behavior_context_contract_survives_imports_and_ecs() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/brain.tua
+export type Actor = { health: number }
+local tree = BehaviorTree.new(BehaviorTree.sequence({
+  BehaviorTree.wait(.1),
+  BehaviorTree.action(function(actor: Actor) actor.health -= 1 return "success" end),
+}))
+return { tree = tree }
+-- file: src/reexport.tua
+return require("brain")
+-- file: src/main.tua
+local brain = require("reexport")
+local runner = brain.tree:instance({health=5})
+local hp = runner.<|hover|>context.health
+print(runner.context.<|complete|>health)
+runner.context.health = "wrong"
+brain.tree:instance({health="wrong"})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"health".to_owned()), "{labels:?}");
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn behavior_context_contract_keeps_typed_ecs_payloads_after_import() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/brain.tua
+export type Actor = { health: number }
+type Runner = {context: Actor, update: (self: Self, dt: number) -> ("success" | "failure" | "running")}
+local Brain = ECS.component("Brain", {runner="Runner"})
+local tree = BehaviorTree.new(BehaviorTree.action(function(actor: Actor) actor.health -= 1 return "success" end))
+return {Brain=Brain, tree=tree}
+-- file: src/main.tua
+local brain = require("brain")
+local world = ECS.world()
+local entity = world:create()
+world:add(entity, brain.Brain, {runner=brain.tree:instance({health=3})})
+local value = world:get(entity, brain.Brain)
+if value then
+  print(value.runner.context.<|complete|>health)
+  value.runner.context.health = "bad"
+end
+brain.tree:instance(<|signature|>{health=3})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"health".to_owned()), "{labels:?}");
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .unwrap();
+    assert!(
+        signature.signatures[0].label.contains("health: number"),
+        "{signature:?}"
+    );
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.severity == DiagnosticSeverity::Error)
+            .count(),
+        1,
+        "{diagnostics:?}"
+    );
+}

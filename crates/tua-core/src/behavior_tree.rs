@@ -1,3 +1,5 @@
+pub(crate) mod typing;
+
 use std::collections::HashMap;
 
 use full_moon::ast::{Call, Expression, Field, FunctionArgs, FunctionCall, Prefix, Stmt, Suffix};

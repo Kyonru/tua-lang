@@ -111,7 +111,7 @@ guides cannot silently omit an example.
 - `src/behavior_tree.tua` demonstrates selectors, sequences, conditions,
   actions, waits, independent runners, and the source-linked static VS Code
   preview. Open it and run **Tua: Preview Behavior Tree**.
-- `src/behavior_tree_ecs.tua` shares one tree across ECS enemies, keeps a
+- `src/behavior_tree_ecs.tua` shares one tree across ECS enemies with typed actor/runner aliases, keeps a
   runner per enemy, and reuses short-lived effect payloads through a prewarmed
   object pool. Its headless update loop also shows cancellation and release.
 - `src/camera.tua` demonstrates the opt-in built-in camera, following a target,

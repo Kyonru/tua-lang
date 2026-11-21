@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Behavior-tree actor contracts flow from annotated leaves and action hooks
+  through combinators, definitions, runners, and module exports. Incompatible
+  contexts are checked; the ECS example uses typed actor and runner schemas.
+
 - Indexed compound-assignment targets capture their receiver and key once, with
   Lua 5.1-compatible lowering and the existing operand type checks.
 

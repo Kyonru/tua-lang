@@ -2700,7 +2700,9 @@ fn collect_shape_fields(
     fields: &mut BTreeMap<String, (String, CompletionKind)>,
 ) {
     for (name, field) in table.semantic_fields() {
-        if crate::save::is_internal_field(table, &name) {
+        if crate::save::is_internal_field(table, &name)
+            || crate::behavior_tree::typing::is_internal_field(table, &name)
+        {
             continue;
         }
         let suffix = if field.optional { " optional" } else { "" };
@@ -2813,7 +2815,10 @@ fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
             fields.extend(
                 table
                     .fields()
-                    .filter(|(name, _)| !crate::save::is_internal_field(table, name))
+                    .filter(|(name, _)| {
+                        !(crate::save::is_internal_field(table, name)
+                            || crate::behavior_tree::typing::is_internal_field(table, name))
+                    })
                     .map(|(name, field)| (name.to_owned(), field.ty.clone())),
             );
         }

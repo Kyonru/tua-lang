@@ -116,6 +116,10 @@ pub(crate) fn module(name: &str) -> Option<&'static BuiltinModule> {
 
 /// The module's export type, inferred once from its LuaDoc with the runtime's
 /// own classes inlined, so no internal type names leak into user code.
+pub(crate) fn matches_module_type(candidate: &Type, module: &BuiltinModule) -> bool {
+    !INFERRING.with(Cell::get) && candidate == &module_type(module)
+}
+
 pub(crate) fn module_type(module: &BuiltinModule) -> Type {
     if module.name == TWEEN_PREFERRED.name {
         return module_type(&TWEEN);

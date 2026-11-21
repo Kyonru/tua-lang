@@ -3110,6 +3110,24 @@ impl<'a> Checker<'a> {
         }
 
         if !fields.is_empty() {
+            if let Some(receiver) = parts
+                .last()
+                .filter(|method| crate::behavior_tree::typing::is_constructor(method))
+                .and_then(|_| self.resolve_field_chain_type(&parts[..parts.len() - 1]))
+            {
+                let model = SemanticModel::new(self.parsed, self.environment);
+                if let Some(signature) = crate::behavior_tree::typing::specialized_call(
+                    &receiver,
+                    function_call,
+                    |expression| {
+                        model
+                            .type_of_expression_return(expression, node_position(expression), 0)
+                            .map(|ty| self.environment.resolve_nested_aliases(&ty))
+                    },
+                ) {
+                    return Some(Callable::Function(signature));
+                }
+            }
             if parts.last().is_some_and(|method| method == "bind") {
                 if let Some(receiver) = self.resolve_field_chain_type(&parts[..parts.len() - 1]) {
                     if crate::save::is_contract(&receiver) {

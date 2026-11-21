@@ -17,6 +17,13 @@ fn behavior_tree_is_typed_bundled_on_use_and_runs_independent_actors() {
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("tua.toml"), "source = \"src\"\n").unwrap();
     fs::write(root.join("src/main.tua"), r#"
+type Actor = { hits: number }
+local typed = BehaviorTree.new(BehaviorTree.sequence({
+  BehaviorTree.wait(0),
+  BehaviorTree.action(function(actor: Actor) actor.hits += 1 return "success" end),
+}))
+local typedRunner = typed:instance({hits=0})
+assert(typedRunner:update(0) == "success" and typedRunner.context.hits == 1)
 local exits = 0
 local tree = BehaviorTree.new()
 tree:setRoot(BehaviorTree.sequence({
@@ -80,6 +87,7 @@ print("behavior-ok")
     assert!(root.join("build/tuabehavior.lua").is_file());
     let emitted = fs::read_to_string(root.join("build/main.lua")).unwrap();
     assert!(emitted.contains("require(\"tuabehavior\")"));
+    assert!(!emitted.contains("$tua_behavior_context"));
     if let Some(lua) = support::lua_executable() {
         let run = Command::new(&lua)
             .arg("main.lua")

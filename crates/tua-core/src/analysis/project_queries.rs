@@ -1173,6 +1173,45 @@ impl AnalysisSnapshot {
                 }
             }
         }
+        if let Some((_, receiver_parts)) = parts
+            .split_last()
+            .filter(|(method, _)| crate::behavior_tree::typing::is_constructor(method))
+        {
+            let receiver = self
+                .project_type_for_field_chain(parsed, receiver_parts)
+                .or_else(|| project_local_field_chain_type(local_types, receiver_parts))
+                .or_else(|| {
+                    let position = node_span(function_call)?.start;
+                    let environment = self.file(&parsed.path)?.environment()?;
+                    SemanticModel::new(parsed, environment)
+                        .type_of_field_chain(receiver_parts, position)
+                });
+            if let Some(receiver) = receiver {
+                if let Some(function) = crate::behavior_tree::typing::specialized_call(
+                    &receiver,
+                    function_call,
+                    |argument| {
+                        self.project_type_for_expression(parsed, argument, 0, local_types)
+                            .or_else(|| {
+                                let environment = self.file(&parsed.path)?.environment()?;
+                                SemanticModel::new(parsed, environment).type_of_expression_return(
+                                    argument,
+                                    node_span(argument)?.start,
+                                    0,
+                                )
+                            })
+                            .map(|ty| {
+                                self.file(&parsed.path)
+                                    .and_then(|file| file.environment())
+                                    .map(|environment| environment.resolve_nested_aliases(&ty))
+                                    .unwrap_or(ty)
+                            })
+                    },
+                ) {
+                    return function.return_types.get(return_index).cloned();
+                }
+            }
+        }
         if self.config_for_path(&parsed.path).ecs.enabled
             && parts.len() > 1
             && parts

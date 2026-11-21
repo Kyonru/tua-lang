@@ -11,7 +11,13 @@ type EnemyContext = {
 
 type Flash = { x: number, y: number, age: number }
 
-local Brain = ECS.component("Brain", { context = "any", runner = "any" })
+-- ECS schemas can name local type aliases, including the runner's context.
+type EnemyRunner = {
+  context: EnemyContext,
+  update: (self: Self, dt: number) -> ("success" | "failure" | "running"),
+  cancel: (self: Self) -> nil,
+}
+local Brain = ECS.component("Brain", { context = "EnemyContext", runner = "EnemyRunner" })
 local FlashEffect = ECS.component("FlashEffect", {
   x = "number", y = "number", age = "number",
 })
@@ -46,7 +52,7 @@ local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
 }))
 
 local brains = ECS.system(world, { Brain }, function(_, brain, dt)
-  local actor: EnemyContext = brain.context
+  local actor = brain.context
   actor.cooldown = math.max(0, actor.cooldown - dt)
   brain.runner:update(dt)
   if actor.fire then
