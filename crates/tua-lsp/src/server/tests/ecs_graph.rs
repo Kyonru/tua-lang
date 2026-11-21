@@ -11,12 +11,13 @@ fn ecs_graph_returns_components_system_access_queries_and_insights() {
 local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
 local Sprite = ecs.component("Sprite", { image = "Image" })
 local Health = ecs.component("Health", { value = "number" })
+local Tag = ecs.component("Tag")
 local world = ecs.world()
 local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
   position.x += velocity.x * dt
   local scratch = { x = position.x }
 end)
-local crowded = world:query({ Position, Velocity, Sprite, Health })
+local crowded = world:query({ Position, Velocity, Sprite, Health, Tag })
 "#,
     );
 
@@ -40,7 +41,7 @@ local crowded = world:query({ Position, Velocity, Sprite, Health })
         .expect("insights should be an array");
 
     assert!(result["analysisRevision"].as_u64().is_some());
-    assert_eq!(components.len(), 4);
+    assert_eq!(components.len(), 5);
     assert_eq!(systems.len(), 1);
     assert_eq!(queries.len(), 2);
     assert_eq!(systems[0]["name"], "movement");

@@ -29,6 +29,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Cache reusable ECS query bindings while preserving live membership, smallest-store
+  selection, and nested clear/rebuild behavior. ECS Explorer allocation hints now
+  describe wide queries as allocating per invocation, not per matched entity.
+
 - Rebuild and isolate each VS Code LÖVE debug session on Restart so an ending
   session cannot remove the next game's debugger bootstrap or source maps.
 - Keep generated build assets and source-root-prefixed duplicates out of LOVE

@@ -34,6 +34,8 @@ function ecs.world()
     _nextEntity = 0,
     _alive = {},
     _stores = {},
+    _storeVersion = 0,
+    _queries = setmetatable({}, { __mode = "k" }),
   }, World)
 end
 
@@ -45,6 +47,7 @@ function World:_store(component, create)
   if store == nil and create then
     store = { values = {}, count = 0 }
     self._stores[component] = store
+    self._storeVersion = self._storeVersion + 1
   end
 
   return store
@@ -150,6 +153,12 @@ function World:clear()
 
   self._alive = {}
   self._stores = {}
+  self._storeVersion = self._storeVersion + 1
+  -- Release obsolete bindings immediately, even for queries never used again.
+  -- Active calls keep their own emptied snapshot until they return.
+  for query in pairs(self._queries) do
+    query._stores, query._values, query._storeVersion = nil, nil, nil
+  end
 end
 
 local Query = {}
@@ -158,27 +167,31 @@ Query.__index = Query
 -- Returns each component's value table, in query order, plus the smallest one,
 -- which drives iteration. Returns nil when a component was never added.
 local function queryValues(query)
-  local components = query.components
   local world = query.world
-  local values = {}
-  local driver = nil
-  local driverCount = nil
-
-  for index = 1, #components do
-    local store = world:_store(components[index], false)
-
-    if store == nil then
-      return nil, nil
+  local stores, values = query._stores, query._values
+  if query._storeVersion ~= world._storeVersion then
+    -- Publish new arrays, never rewrite an active outer call's bindings.
+    stores, values = {}, {}
+    for index = 1, #query.components do
+      local store = world:_store(query.components[index], false)
+      if store == nil then
+        stores, values = false, false
+        break
+      end
+      stores[index], values[index] = store, store.values
     end
+    query._stores, query._values = stores, values
+    query._storeVersion = world._storeVersion
+  end
+  if stores == false then return nil, nil end
 
-    values[index] = store.values
-
+  local driver, driverCount
+  for index = 1, #stores do
+    local store = stores[index]
     if driverCount == nil or store.count < driverCount then
-      driver = store.values
-      driverCount = store.count
+      driver, driverCount = store.values, store.count
     end
   end
-
   return values, driver
 end
 
@@ -295,7 +308,9 @@ function World:query(components)
     copied[index] = components[index]
   end
 
-  return setmetatable({ world = self, components = copied }, Query)
+  local query = setmetatable({ world = self, components = copied }, Query)
+  self._queries[query] = true
+  return query
 end
 
 function Query:each(visit)

@@ -502,16 +502,16 @@ impl EcsVisitor<'_> {
     }
 
     fn record_wide_query_insight(&mut self, subject_id: &str, span: SourceSpan, count: usize) {
-        if count <= 3 {
+        if count <= 4 {
             return;
         }
 
         self.index.insights.push(EcsInsight {
             id: format!("{subject_id}:wide-query"),
             kind: EcsInsightKind::WideQueryAllocation,
-            title: "Wide query allocates per match".to_owned(),
+            title: "Wide query allocates per invocation".to_owned(),
             message: format!(
-                "The bundled ECS runtime creates a temporary values table for each entity matched by this {count}-component query. Split the query only when profiling shows allocation pressure."
+                "The bundled ECS runtime creates one temporary argument buffer per invocation of this {count}-component query, not per matched entity. Split the query only when profiling shows allocation pressure."
             ),
             path: self.path.to_path_buf(),
             span,
@@ -795,12 +795,13 @@ mod tests {
 local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
 local Sprite = ecs.component("Sprite", { image = "Image" })
 local Health = ecs.component("Health", { value = "number" })
+local Tag = ecs.component("Tag")
 local world = ecs.world()
 local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
   position.x += velocity.x * dt
   local scratch = { x = position.x }
 end)
-local crowded = world:query({ Position, Velocity, Sprite, Health })
+local crowded = world:query({ Position, Velocity, Sprite, Health, Tag })
 "#
             .to_owned(),
         )
@@ -808,7 +809,7 @@ local crowded = world:query({ Position, Velocity, Sprite, Health })
         let file = index(&parsed);
         let graph = ecs_graph([&file]);
 
-        assert_eq!(graph.components.len(), 4);
+        assert_eq!(graph.components.len(), 5);
         assert_eq!(graph.systems.len(), 1);
         assert_eq!(graph.queries.len(), 2);
         assert_eq!(

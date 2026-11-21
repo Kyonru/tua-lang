@@ -272,6 +272,74 @@ do
   world:add(nextId, position, first)
   check(read(id) == nil and read(nextId) == first, 'reader survives world clear and repopulation')
 end
+-- Cached queries bind missing stores lazily and read current membership/payloads.
+for width = 1, 6 do
+  local world, components = ecs.world(), {}
+  for i = 1, width do components[i] = ecs.component('Cached' .. i) end
+  local query = world:query(components)
+  check(query:count() == 0, 'query before stores exist')
+  local first, second = world:create(), world:create()
+  for i, component in ipairs(components) do
+    world:add(first, component, i)
+    if i < width then world:add(second, component, i + 10) end
+  end
+  check(query:count() == 1, 'partially populated stores')
+  world:add(second, components[width], false)
+  local visits = 0
+  query:each(function(id, ...)
+    local values = {...}
+    visits = visits + 1
+    check(values[width] == (id == first and width or false), 'live false payload')
+    -- Reentrant invocation must not corrupt the caller argument list.
+    if id == first then check(query:count() == 2, 'nested warmed query') end
+    local expected = id == first and 1 or 11
+    if id == second and width == 1 then expected = false end
+    check(values[1] == expected, 'nested arguments preserved')
+  end)
+  check(visits == 2, 'both current members visited')
+  world:remove(first, components[1])
+  check(query:count() == 1, 'remove after warmup')
+  world:add(first, components[1], false)
+  check(query:count() == 2, 'readd after warmup')
+  local outer, inner = 0, 0
+  query:each(function()
+    outer = outer + 1
+    world:clear()
+    local replacement = world:create()
+    for _, component in ipairs(components) do world:add(replacement, component, 99) end
+    query:each(function(id, ...)
+      inner = inner + 1
+      check(id == replacement, 'nested rebuild uses new identity')
+      for _, value in ipairs({...}) do check(value == 99, 'nested rebuild uses new payload') end
+    end)
+  end)
+  check(outer == 1 and inner == 1, 'nested clear cannot redirect outer snapshot')
+  check(query:count() == 1, 'query survives repeated clear')
+end
+
+-- Cached bindings must select the smallest current store, not the initial one.
+do
+  local world, a, b = ecs.world(), ecs.component('A'), ecs.component('B')
+  local id = world:create()
+  world:add(id, a, 1); world:add(id, b, 2)
+  local query = world:query({a, b})
+  query:count()
+  for _ = 1, 10 do world:add(world:create(), a, 1) end
+  local originalPairs, selected = pairs
+  pairs = function(value)
+    if value == world._stores[b].values then selected = true end
+    return originalPairs(value)
+  end
+  query:each(function() end)
+  pairs = originalPairs
+  check(selected, 'driver follows changing counts')
+  -- A live query must not keep obsolete store tables alive after clear.
+  local old = setmetatable({world._stores[a], world._stores[b]}, {__mode='v'})
+  world:clear()
+  collectgarbage('collect')
+  check(old[1] == nil and old[2] == nil, 'clear releases obsolete cached stores')
+end
+
 if failures > 0 then
   io.stderr:write(failures .. " ECS runtime check(s) failed\n")
   os.exit(1)

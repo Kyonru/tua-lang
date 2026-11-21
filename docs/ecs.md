@@ -189,6 +189,14 @@ end)
 print(visible:count())
 ```
 
+Reuse queries: their component-store bindings are cached, while each invocation
+chooses the smallest store using current counts and reads live membership and
+payloads. Creating a store or clearing the world invalidates the cache. A clear
+releases obsolete bindings immediately; nested iterations keep independent
+snapshots. Queries with five or more components use one argument buffer per
+invocation, not per entity. Keep component definitions and the query's component
+list fixed after creation.
+
 Use `world:clear()` when leaving a scene and discarding every entity.
 
 Query and system callbacks may update their component values, remove
