@@ -39,8 +39,8 @@ impl BuildCache {
     pub(super) fn prepare(
         workspace: &ProjectWorkspace,
         pipeline_diagnostics: &[Diagnostic],
-    ) -> Option<Self> {
-        Self::try_prepare(workspace, pipeline_diagnostics).ok()
+    ) -> io::Result<Self> {
+        Self::try_prepare(workspace, pipeline_diagnostics)
     }
 
     fn try_prepare(
@@ -96,46 +96,84 @@ impl BuildCache {
         })
     }
 
-    pub(super) fn hit(&self) -> Option<String> {
-        let file = fs::File::open(&self.path).ok()?;
+    pub(super) fn hit(&self) -> Result<String, String> {
+        let file = fs::File::open(&self.path).map_err(|e| format!("record unavailable: {e}"))?;
         let mut bytes = Vec::new();
         file.take(MAX_RECORD_BYTES + 1)
             .read_to_end(&mut bytes)
-            .ok()?;
+            .map_err(|e| format!("record unreadable: {e}"))?;
         if bytes.len() as u64 > MAX_RECORD_BYTES {
-            return None;
+            return Err("record size limit".into());
         }
-        let saved: Record = serde_json::from_slice(&bytes).ok()?;
-        if saved.version != VERSION
-            || saved.identity != self.record.identity
-            || saved.files != self.record.files
-        {
-            return None;
+        let saved: Record =
+            serde_json::from_slice(&bytes).map_err(|_| "invalid cache record".to_owned())?;
+        if saved.version != VERSION {
+            return Err("cache format changed".into());
         }
-        Some(format!(
+        if saved.identity != self.record.identity {
+            return Err("compiler, target, configuration or pipeline identity changed".into());
+        }
+        let changed = saved
+            .files
+            .keys()
+            .chain(self.record.files.keys())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .filter(|path| saved.files.get(*path) != self.record.files.get(*path))
+            .map(|path| {
+                let kind = if !saved.files.contains_key(path) {
+                    "added"
+                } else if !self.record.files.contains_key(path) {
+                    "removed"
+                } else {
+                    "changed"
+                };
+                format!(
+                    "{kind} {:?}",
+                    path.strip_prefix(self.workspace.root()).unwrap_or(path)
+                )
+            })
+            .collect::<Vec<_>>();
+        if !changed.is_empty() {
+            return Err(format!(
+                "{} file fingerprint(s): {}{}",
+                changed.len(),
+                changed
+                    .iter()
+                    .take(8)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                if changed.len() > 8 { ", ..." } else { "" }
+            ));
+        }
+        Ok(format!(
             "{}up to date ({} cached file(s))",
             saved.diagnostics, saved.emitted
         ))
     }
 
-    pub(super) fn save(mut self, emitted: usize, diagnostics: String) {
-        // Cache failure is an optimization miss, never a failed compilation.
-        let _ = self.try_save(emitted, diagnostics);
+    pub(super) fn save(mut self, emitted: usize, diagnostics: String) -> String {
+        match self.try_save(emitted, diagnostics) {
+            Ok(true) => "saved".into(),
+            Ok(false) => "not saved: inputs/outputs changed during build".into(),
+            Err(error) => format!("not saved: {error}"),
+        }
     }
 
-    fn try_save(&mut self, emitted: usize, diagnostics: String) -> io::Result<()> {
+    fn try_save(&mut self, emitted: usize, diagnostics: String) -> io::Result<bool> {
         let after = snapshot(&self.workspace)?;
         // The saved snapshot must describe both the inputs checked and the
         // successful outputs. Saving pre-build corruption would accept that
         // same corruption as a hit if a user later reintroduced it.
         if after != self.record.files {
-            return Ok(());
+            return Ok(false);
         }
         self.record.emitted = emitted;
         self.record.diagnostics = diagnostics;
         let bytes = serde_json::to_vec(&self.record).map_err(io::Error::other)?;
         if bytes.len() as u64 > MAX_RECORD_BYTES {
-            return Ok(());
+            return Ok(false);
         }
         let guard = OutputGuard::for_root(self.workspace.root());
         guard
@@ -145,7 +183,8 @@ impl BuildCache {
         guard
             .check(&self.path)
             .map_err(|e| io::Error::other(e.message))?;
-        crate::atomic_fs::write(&self.path, bytes)
+        crate::atomic_fs::write(&self.path, bytes)?;
+        Ok(true)
     }
 }
 

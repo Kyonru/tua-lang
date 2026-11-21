@@ -90,7 +90,7 @@ pub(crate) fn run_build(
     loaded: LoadedConfig,
     emit_on_error: bool,
 ) -> Result<String, CliError> {
-    run_build_with_cache(cwd, loaded, emit_on_error, true)
+    run_build_with_cache(cwd, loaded, emit_on_error, true, false)
 }
 
 pub(crate) fn run_build_with_cache(
@@ -98,7 +98,9 @@ pub(crate) fn run_build_with_cache(
     loaded: LoadedConfig,
     emit_on_error: bool,
     use_cache: bool,
+    report: bool,
 ) -> Result<String, CliError> {
+    let trace = BuildReport::new(report);
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     OutputGuard::new(&workspace).map_err(|diagnostic| {
@@ -106,13 +108,35 @@ pub(crate) fn run_build_with_cache(
     })?;
     // Importers retain their existing content cache and always run before the
     // build snapshot, so changed/generated inputs cannot be hidden by a hit.
+    let phase = std::time::Instant::now();
     let pipeline = run_asset_pipelines(cwd, &loaded.config);
+    trace.phase("asset pipelines", phase);
+    let phase = std::time::Instant::now();
     let cache = (use_cache && !emit_on_error && !has_errors(&pipeline.diagnostics))
-        .then(|| cache::BuildCache::prepare(&workspace, &pipeline.diagnostics))
-        .flatten();
-    if let Some(message) = cache.as_ref().and_then(cache::BuildCache::hit) {
-        return Ok(message);
+        .then(|| cache::BuildCache::prepare(&workspace, &pipeline.diagnostics));
+    let cache = match cache {
+        Some(Ok(cache)) => Some(cache),
+        Some(Err(error)) => {
+            trace.note(&format!("cache unavailable: {error}"));
+            None
+        }
+        None => {
+            trace.note("cache bypassed: disabled, emit-on-error or pipeline errors");
+            None
+        }
+    };
+    if let Some(cache) = &cache {
+        match cache.hit() {
+            Ok(message) => {
+                trace.note("cache hit");
+                trace.phase("cache probe", phase);
+                return Ok(message);
+            }
+            Err(reason) => trace.note(&format!("cache miss: {reason}")),
+        }
     }
+    trace.phase("cache probe", phase);
+    let phase = std::time::Instant::now();
     let outcome = build_project_after_pipelines(
         cwd,
         loaded,
@@ -121,6 +145,7 @@ pub(crate) fn run_build_with_cache(
         false,
         pipeline.diagnostics,
     )?;
+    trace.phase("discovery, analysis and emission", phase);
     if has_errors(&outcome.diagnostics) {
         Err(CliError::from_diagnostics(
             "project build failed",
@@ -135,7 +160,12 @@ pub(crate) fn run_build_with_cache(
             } else {
                 format!("{diagnostics}\n")
             };
-            cache.save(outcome.emitted, diagnostics);
+            let phase = std::time::Instant::now();
+            trace.note(&format!(
+                "cache {}",
+                cache.save(outcome.emitted, diagnostics)
+            ));
+            trace.phase("cache publication", phase);
         }
         Ok(format_success(
             "built",
@@ -954,4 +984,34 @@ fn format_success(verb: &str, emitted: usize, diagnostics: Vec<Diagnostic>) -> S
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+// Opt-in wall durations, not a CPU profiler. Drop also reports failed builds.
+struct BuildReport {
+    enabled: bool,
+    start: std::time::Instant,
+}
+impl BuildReport {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            start: std::time::Instant::now(),
+        }
+    }
+    fn note(&self, message: &str) {
+        if self.enabled {
+            eprintln!("build report: {message}");
+        }
+    }
+    fn phase(&self, name: &str, start: std::time::Instant) {
+        self.note(&format!(
+            "{name}: {:.3} ms wall",
+            start.elapsed().as_secs_f64() * 1000.0
+        ));
+    }
+}
+impl Drop for BuildReport {
+    fn drop(&mut self) {
+        self.phase("total", self.start);
+    }
 }

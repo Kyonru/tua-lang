@@ -32,6 +32,7 @@ Options:
   --workspace PATH  With api or mcp, load PATH instead of the current directory
   --emit-on-error   With build, emit parseable/lowerable files even if errors exist
   --no-cache        With build, bypass the persistent successful-build cache
+  --build-report    With build, explain cache decisions and phase wall times on stderr
   --check           With fmt, report files that would change without writing
   --strict          With lint, enable all lint diagnostics
   --deny-warnings   With check, fail when warning diagnostics are present
@@ -65,6 +66,7 @@ pub struct CommandOptions {
     pub dev_no_launch: bool,
     pub emit_on_error: bool,
     pub no_cache: bool,
+    pub build_report: bool,
     pub package: Box<PackageOptions>,
     pub fmt_check: bool,
     pub lint_strict: bool,
@@ -126,7 +128,7 @@ pub fn command_help(command: CommandName) -> &'static str {
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
         CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
-        CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error] [--no-cache]\n\n--no-cache bypasses the persistent successful-build cache.\n",
+        CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error] [--no-cache] [--build-report]\n\n--no-cache bypasses the persistent successful-build cache.\n--build-report explains cache decisions and reports phase durations on stderr.\n",
         CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos|web|custom:<name>] [--love PATH] [--web-player PATH] [--name NAME] [--identifier ID]\n  tua package --list-targets\n",
         CommandName::Traceback => "tua traceback - remap generated Lua traceback lines\n\nUsage:\n  tua traceback [--maps PATH] [FILE]\n",
         CommandName::Watch => "tua watch - rebuild when source files change\n\nUsage:\n  tua watch\n",
@@ -215,6 +217,7 @@ where
             }
             "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
             "--no-cache" if command == CommandName::Build => options.no_cache = true,
+            "--build-report" if command == CommandName::Build => options.build_report = true,
             "--love" if matches!(command, CommandName::Dev | CommandName::Check) => {
                 index += 1;
                 let Some(path) = args.get(index) else {

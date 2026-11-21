@@ -31,7 +31,13 @@ pub fn run_command(
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
-            run_build_with_cache(cwd, loaded, options.emit_on_error, !options.no_cache)
+            run_build_with_cache(
+                cwd,
+                loaded,
+                options.emit_on_error,
+                !options.no_cache,
+                options.build_report,
+            )
         }
         CommandName::Package => {
             let loaded =

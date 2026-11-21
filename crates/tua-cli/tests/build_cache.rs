@@ -382,3 +382,35 @@ fn live_editor_completion_statistics_do_not_invalidate_builds() {
     assert!(p.success(&[]).contains("up to date"));
     assert_eq!(modified(&output), timestamp);
 }
+
+#[test]
+fn reports_cache_decisions_without_changing_build_semantics() {
+    let p = Project::new("report");
+    let output = p.build(&["--build-report"]);
+    assert!(output.status.success());
+    let report = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        report.contains("cache miss: record unavailable"),
+        "{report}"
+    );
+    assert!(
+        report.contains("not saved: inputs/outputs changed"),
+        "{report}"
+    );
+    assert!(report.contains("total:") && report.contains("ms wall"));
+    p.success(&[]);
+    let hit = p.build(&["--build-report"]);
+    assert!(String::from_utf8(hit.stderr).unwrap().contains("cache hit"));
+    p.write("src/main.tua", "print(43)\n");
+    let miss = p.build(&["--build-report"]);
+    let report = String::from_utf8(miss.stderr).unwrap();
+    assert!(
+        report.contains("changed") && report.contains("main.tua"),
+        "{report}"
+    );
+    let bypass = p.build(&["--no-cache", "--build-report"]);
+    assert!(String::from_utf8(bypass.stderr)
+        .unwrap()
+        .contains("cache bypassed"));
+    assert!(p.build(&[]).stderr.is_empty());
+}

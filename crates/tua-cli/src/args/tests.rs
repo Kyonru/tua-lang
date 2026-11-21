@@ -380,3 +380,12 @@ fn build_accepts_no_cache_without_changing_other_commands() {
     );
     assert!(parse_args(["check", "--no-cache"]).is_err());
 }
+
+#[test]
+fn build_report_is_opt_in_and_build_only() {
+    let parsed = parse_args(["build", "--build-report", "--no-cache"]).unwrap();
+    assert!(
+        matches!(parsed, CliAction::Command { name: CommandName::Build, options } if options.build_report && options.no_cache)
+    );
+    assert!(parse_args(["check", "--build-report"]).is_err());
+}
