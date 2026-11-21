@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- `tua build` persistently reuses successful unchanged builds, validating compiler,
+  configuration, input and output contents and replaying warnings. `--no-cache`
+  forces the normal build path; changed inputs still receive a full build.
+
 - Shared formatter defaults separate crowded statements and expand multiline
   runtime tables one field per line, preserving compact simple expressions and
   Lua call-disambiguating separators. CLI and editor formatting use the same layout.

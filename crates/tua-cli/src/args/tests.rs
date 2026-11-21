@@ -365,3 +365,18 @@ fn parses_test_coverage_destination() {
     assert!(parse_args(["test", "--coverage"]).is_err());
     assert!(parse_args(["build", "--coverage", "coverage.json"]).is_err());
 }
+
+#[test]
+fn build_accepts_no_cache_without_changing_other_commands() {
+    assert_eq!(
+        parse_args(["build", "--no-cache"]),
+        Ok(CliAction::Command {
+            name: CommandName::Build,
+            options: CommandOptions {
+                no_cache: true,
+                ..CommandOptions::default()
+            },
+        })
+    );
+    assert!(parse_args(["check", "--no-cache"]).is_err());
+}

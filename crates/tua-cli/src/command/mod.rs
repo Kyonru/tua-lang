@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::args::{CommandName, CommandOptions};
-use crate::build::run_build;
+use crate::build::run_build_with_cache;
 use crate::check::run_check;
 use crate::dev::run_dev;
 use crate::error::CliError;
@@ -31,7 +31,7 @@ pub fn run_command(
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
-            run_build(cwd, loaded, options.emit_on_error)
+            run_build_with_cache(cwd, loaded, options.emit_on_error, !options.no_cache)
         }
         CommandName::Package => {
             let loaded =

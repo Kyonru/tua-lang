@@ -31,6 +31,7 @@ pub(crate) struct ShaderDependency {
     pub(crate) module: String,
 }
 
+mod cache;
 pub(crate) mod ownership;
 mod watch;
 
@@ -89,28 +90,59 @@ pub(crate) fn run_build(
     loaded: LoadedConfig,
     emit_on_error: bool,
 ) -> Result<String, CliError> {
-    let outcome = build_project(cwd, loaded, emit_on_error)?;
+    run_build_with_cache(cwd, loaded, emit_on_error, true)
+}
 
+pub(crate) fn run_build_with_cache(
+    cwd: impl AsRef<Path>,
+    loaded: LoadedConfig,
+    emit_on_error: bool,
+    use_cache: bool,
+) -> Result<String, CliError> {
+    let cwd = cwd.as_ref();
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    OutputGuard::new(&workspace).map_err(|diagnostic| {
+        CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
+    })?;
+    // Importers retain their existing content cache and always run before the
+    // build snapshot, so changed/generated inputs cannot be hidden by a hit.
+    let pipeline = run_asset_pipelines(cwd, &loaded.config);
+    let cache = (use_cache && !emit_on_error && !has_errors(&pipeline.diagnostics))
+        .then(|| cache::BuildCache::prepare(&workspace, &pipeline.diagnostics))
+        .flatten();
+    if let Some(message) = cache.as_ref().and_then(cache::BuildCache::hit) {
+        return Ok(message);
+    }
+    let outcome = build_project_after_pipelines(
+        cwd,
+        loaded,
+        emit_on_error,
+        &[],
+        false,
+        pipeline.diagnostics,
+    )?;
     if has_errors(&outcome.diagnostics) {
         Err(CliError::from_diagnostics(
             "project build failed",
             sorted_diagnostics(outcome.diagnostics),
         ))
     } else {
+        if let Some(cache) = cache {
+            let diagnostics =
+                format_diagnostics_for_cli(&sorted_diagnostics(outcome.diagnostics.clone()));
+            let diagnostics = if diagnostics.is_empty() {
+                diagnostics
+            } else {
+                format!("{diagnostics}\n")
+            };
+            cache.save(outcome.emitted, diagnostics);
+        }
         Ok(format_success(
             "built",
             outcome.emitted,
             outcome.diagnostics,
         ))
     }
-}
-
-pub(crate) fn build_project(
-    cwd: impl AsRef<Path>,
-    loaded: LoadedConfig,
-    emit_on_error: bool,
-) -> Result<BuildOutcome, CliError> {
-    build_project_excluding(cwd.as_ref(), loaded, emit_on_error, &[], false)
 }
 
 pub(crate) fn build_project_excluding(
@@ -124,7 +156,29 @@ pub(crate) fn build_project_excluding(
     OutputGuard::new(&workspace).map_err(|diagnostic| {
         CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
     })?;
-    let pipeline_outcome = run_asset_pipelines(cwd, &loaded.config);
+    let pipeline = run_asset_pipelines(cwd, &loaded.config);
+    build_project_after_pipelines(
+        cwd,
+        loaded,
+        emit_on_error,
+        additional_excluded_outputs,
+        include_tests,
+        pipeline.diagnostics,
+    )
+}
+
+fn build_project_after_pipelines(
+    cwd: &Path,
+    loaded: LoadedConfig,
+    emit_on_error: bool,
+    additional_excluded_outputs: &[&Path],
+    include_tests: bool,
+    pipeline_diagnostics: Vec<Diagnostic>,
+) -> Result<BuildOutcome, CliError> {
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    OutputGuard::new(&workspace).map_err(|diagnostic| {
+        CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
+    })?;
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
@@ -144,7 +198,7 @@ pub(crate) fn build_project_excluding(
         annotation_mode,
         source_files,
         emit_on_error,
-        pipeline_outcome.diagnostics,
+        pipeline_diagnostics,
     ))
 }
 

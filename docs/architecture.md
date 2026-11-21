@@ -364,6 +364,14 @@ The build path is split by responsibility:
 5. Runtime traceback mapping consumes compiler provenance instead of guessing
    line offsets from generated text.
 
+Before this full pipeline, the CLI can reuse a persistent successful-build
+record after running asset pipelines and validating content fingerprints for the
+compiler, configuration, project tree, declaration libraries, and output tree.
+The record replays diagnostics but contains no serialized compiler semantics.
+Only matching pre/post-build snapshots are published; a cache failure falls back
+to the ordinary pipeline. Changed-input builds still create a fresh analysis host.
+See [build caching](cli.md#build) for limits and `--no-cache`.
+
 The VS Code LOVE debug command consumes those build artifacts rather than
 adding debugger semantics to the compiler or language server. It launches an
 external Lua debug adapter against generated Lua and lets the adapter resolve

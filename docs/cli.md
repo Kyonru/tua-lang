@@ -120,6 +120,39 @@ tua build
 Checks the project and writes emitted Lua to the configured output directory.
 Emission is blocked by errors by default.
 
+Successful separate-output builds keep a persistent cache under
+`.tua/cache/build/`. When the compiler binary, configuration, project contents,
+declaration libraries, and output contents match the recorded successful build,
+`tua build` skips analysis and emission and reports `up to date (N cached file(s))`.
+Warnings from that build are replayed. The extension's ordinary Build and Play
+commands use this same fast path after reinstalling an updated compiler/extension.
+
+The cache compares SHA-256 content fingerprints and permissions, not just
+modification times.
+Missing, edited, or new files invalidate it, including source maps, custom output
+modules, and bundled runtimes. Output ownership and cleanup still use the existing
+build manifest. Asset pipelines run or restore their own cache **before** the
+build-cache lookup, so new generated inputs and importer failures remain visible.
+
+This is a conservative **whole-build cache**, not persistent per-file analysis.
+Any changed input runs the normal full check/build; use `watch` or `dev` for
+incremental edits within a running session. The project-tree snapshot deliberately
+includes files outside the immediate import graph, excluding version-control
+metadata and Tua's own build-cache record and live editor completion statistics. Because output files can be
+fallback module/asset inputs, a newly populated output tree is checked on a second
+build before subsequent unchanged builds become hits.
+
+```bash
+tua build --no-cache
+```
+
+`--no-cache` bypasses reads and writes of this build cache; it does not disable
+asset-pipeline caching. `--emit-on-error` also bypasses it. Failed builds are never
+recorded. In-place/overlapping layouts, symlinked project trees, unreadable caches,
+and snapshots exceeding 50,000 entries fall back to normal builds. A malformed,
+obsolete, or missing cache is a miss; cache write failures do not fail compilation.
+The cache can be removed independently of `build/` and the ownership manifest.
+
 Configured [asset pipelines](asset-pipelines.md) run or restore their cached
 outputs before source discovery, so generated `.tua` and `.d.tua` modules use
 the same checking and emission path as handwritten source.
