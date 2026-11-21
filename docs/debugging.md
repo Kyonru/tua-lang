@@ -326,6 +326,23 @@ counts come from `love.graphics.getStats`, and the GC column counts LuaJIT
 samples in GC state. These measurements help correlate a spike; they do not
 prove that a particular callback caused it.
 
+Captures record LÖVE, Lua and LuaJIT versions and the actual JIT enabled state
+at capture start and end. Having LuaJIT or its profiler available does not mean
+JIT compilation is enabled. The view and `.cpuprofile` export retain target,
+build-manifest SHA-256 identity, duration, frame and sample counts, and available
+revision/benchmark context. The manifest hash identifies the emitted file
+manifest; it is not a compiler version or Git revision. Missing metadata in
+older or non-Tua captures remains **unknown**.
+
+GC policy is **unknown** unless the benchmark launcher explicitly supplies it.
+Lua heap samples show retained/current heap size, not cumulative allocation.
+Net heap growth with GC running differs from allocation measured in a separate
+GC-stopped probe. GC samples indicate observed VM activity, not exact GC time.
+Profiled captures include instrumentation overhead; compare performance using
+separate uninstrumented runs. Benchmark callers can supply workload, warm-up
+update count, repetitions and revision through the profiler launch context;
+ordinary interactive captures do not invent these values.
+
 CPU stacks come from LuaJIT's statistical profiler. Click a mapped stack to
 open its `.tua` line, or **Lua** to inspect the generated line. Enable
 `emit_maps = true` for source links. Sampling may miss short work, and JIT

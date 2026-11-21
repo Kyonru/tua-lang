@@ -1,6 +1,7 @@
 "use strict";
 const path = require("node:path");
 const { createSourceMapLookup, lookupSourceLocation, tracebackLocations } = require("../editor/source-maps");
+const { profileMetadata } = require("./metadata");
 const { toCpuProfile } = require("./cpuprofile");
 
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
@@ -88,6 +89,7 @@ function buildProfileModel(report, maps, outputDirectory, budgetMs = 16.67) {
     source: item.location ? stackLocation(item.location, maps, outputDirectory, lookup) : undefined }));
   return {
     reason: report.reason, durationMs: report.durationMs,
+    metadata: profileMetadata(report.metadata),
     frameCount: report.frameCount, retainedFrames: frames.length,
     sampleCount: report.sampleCount, droppedSamples: report.droppedSamples,
     droppedCpuCallbacks: report.sampleEventsDropped || 0,

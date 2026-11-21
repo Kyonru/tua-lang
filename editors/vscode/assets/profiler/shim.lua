@@ -13,6 +13,7 @@ local errorMessage, errorTraceback
 local originalUpdate, originalDraw
 local trace, traceError
 local input, inputError
+local jitEnabledStart
 
 local function clock()
   return love and love.timer and love.timer.getTime and love.timer.getTime() or os.clock()
@@ -32,6 +33,44 @@ local function quote(value)
   end) .. '"'
 end
 
+local function jitEnabled()
+  if not jit or type(jit.status) ~= "function" then return nil end
+  local ok, enabled = pcall(jit.status)
+  if ok and type(enabled) == "boolean" then return enabled end
+end
+
+local function optionalText(value)
+  return type(value) == "string" and #value <= 512 and quote(value) or '"unknown"'
+end
+
+local function metadataJson()
+  local context = options.context or {}
+  local loveVersion = "unknown"
+  if love and type(love.getVersion) == "function" then
+    local ok, major, minor, patch = pcall(love.getVersion)
+    if ok then loveVersion = tostring(major) .. "." .. tostring(minor) .. "." .. tostring(patch) end
+  end
+  local enabled = jitEnabled()
+  local benchmark = context.benchmark
+  local benchmarkJson = "null"
+  if type(benchmark) == "table" then
+    benchmarkJson = '{"workload":' .. optionalText(benchmark.workload) ..
+      ',"revision":' .. optionalText(benchmark.revision) ..
+      ',"warmupUpdates":' .. number(benchmark.warmupUpdates) ..
+      ',"repetitions":' .. number(benchmark.repetitions) .. '}'
+  end
+  return '{"mode":"profiled","loveVersion":' .. quote(loveVersion) ..
+    ',"luaVersion":' .. optionalText(_VERSION) ..
+    ',"luaJitVersion":' .. optionalText(jit and jit.version) ..
+    ',"jitEnabledStart":' .. (jitEnabledStart == nil and "null" or tostring(jitEnabledStart)) ..
+    ',"jitEnabledEnd":' .. (enabled == nil and "null" or tostring(enabled)) ..
+    ',"target":' .. optionalText(context.target) ..
+    ',"buildIdentity":' .. optionalText(context.buildIdentity) ..
+    ',"revision":' .. optionalText(context.revision) ..
+    ',"gcPolicy":' .. optionalText(context.gcPolicy) ..
+    ',"benchmark":' .. benchmarkJson .. '}'
+end
+
 local function writeReport(reason)
   if ended then return end
   ended = true
@@ -43,6 +82,7 @@ local function writeReport(reason)
   local now = clock()
   local parts = {
     '{"version":1,"reason":', quote(reason),
+    ',"metadata":', metadataJson(),
     ',"durationMs":', number(startTime and (now - startTime) * 1000 or 0),
     ',"frameCount":', tostring(frameCount),
     ',"sampleCount":', tostring(sampleCount),
@@ -149,6 +189,7 @@ end
 
 local function start()
   startTime = clock()
+  jitEnabledStart = jitEnabled()
   local ok, value = pcall(require, "jit.profile")
   if not ok or type(value) ~= "table" or type(value.start) ~= "function" then
     profileError = "LuaJIT statistical profiler is unavailable in this LÖVE runtime"

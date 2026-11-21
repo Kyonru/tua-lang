@@ -1,5 +1,7 @@
 "use strict";
 const fs = require("node:fs");
+const { createHash } = require("node:crypto");
+const { profileMetadata } = require("./metadata");
 const os = require("node:os");
 const path = require("node:path");
 const { luaString } = require("../inspector/launcher");
@@ -31,12 +33,25 @@ function temporaryGame(outputDirectory, prefix) {
   } catch (error) { fs.rmSync(root, { force: true, recursive: true }); throw error; }
 }
 
-function createProfileLauncher(outputDirectory, shimPath, durationSeconds, traceCategories = [], inputSeed) {
+function createProfileLauncher(outputDirectory, shimPath, durationSeconds, traceCategories = [], inputSeed, context = {}) {
   if (!Array.isArray(traceCategories) || traceCategories.some(category => !TRACE_CATEGORIES.has(category))) {
     throw new Error("invalid performance trace category");
   }
   if (inputSeed !== undefined && (!Number.isSafeInteger(inputSeed) || inputSeed < 1 || inputSeed > 2147483647)) {
     throw new Error("invalid input recording seed");
+  }
+  const metadata = profileMetadata(context);
+  // The existing build manifest fingerprints emitted files. Label this hash as
+  // manifest identity: it is not a compiler version or a source revision.
+  try {
+    const manifest = fs.readFileSync(path.join(outputDirectory, ".tua-build-manifest.json"));
+    metadata.buildIdentity = `manifest-sha256:${createHash("sha256").update(manifest).digest("hex")}`;
+  } catch { /* Non-Tua and legacy builds may have no manifest. */ }
+  const contextLua = ["target", "buildIdentity", "revision", "gcPolicy"]
+    .map(key => `${key} = ${luaString(metadata[key])}`);
+  if (metadata.benchmark) {
+    const b = metadata.benchmark;
+    contextLua.push(`benchmark = { workload = ${luaString(b.workload)}, revision = ${luaString(b.revision)}, warmupUpdates = ${b.warmupUpdates ?? "nil"}, repetitions = ${b.repetitions ?? "nil"} }`);
   }
   const game = temporaryGame(outputDirectory, "tua-profile-");
   const reportPath = path.join(game.root, "report.json");
@@ -44,7 +59,7 @@ function createProfileLauncher(outputDirectory, shimPath, durationSeconds, trace
   try {
     const bootstrap = [
       "-- Tua development-only profiler launcher. The build is untouched.",
-      `local profiler = assert(loadfile(${luaString(shimPath)}))(${luaString(reportPath)}, ${luaString(stopPath)}, ${durationSeconds}, { tracePath = ${luaString(path.join(path.dirname(shimPath), "trace.lua"))}, trace = { ${traceCategories.map(category => `[${luaString(category)}] = true`).join(", ")} }, inputPath = ${luaString(path.join(path.dirname(shimPath), "input.lua"))}, inputSeed = ${inputSeed === undefined ? "nil" : inputSeed} })`,
+      `local profiler = assert(loadfile(${luaString(shimPath)}))(${luaString(reportPath)}, ${luaString(stopPath)}, ${durationSeconds}, { context = { ${contextLua.join(", ")} }, tracePath = ${luaString(path.join(path.dirname(shimPath), "trace.lua"))}, trace = { ${traceCategories.map(category => `[${luaString(category)}] = true`).join(", ")} }, inputPath = ${luaString(path.join(path.dirname(shimPath), "input.lua"))}, inputSeed = ${inputSeed === undefined ? "nil" : inputSeed} })`,
       "profiler.beforeGame()",
       "local loaded, results = xpcall(function()",
       `  return { assert(loadfile(${luaString(game.originalMain)}))() }`,

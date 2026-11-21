@@ -194,3 +194,43 @@ test("input replay launcher rejects incomplete records and keeps injected data p
   launcher.dispose();
   assert.equal(fs.existsSync(launcher.directory), false);
 });
+
+test("profile metadata preserves disabled JIT, benchmark context, and legacy unknowns", t => {
+  const { root, build } = fixture(t);
+  const reportPath = path.join(root, "context.json");
+  const result = spawnSync("lua", [path.resolve(__dirname, "../fixtures/profiler-shim-mock.lua"), reportPath,
+    path.resolve(__dirname, "../../assets/profiler/shim.lua")], { encoding: "utf8" });
+  if (result.error?.code === "ENOENT") return t.skip("Lua interpreter unavailable");
+  assert.equal(result.status, 0, result.stderr);
+  const report = parseReport(fs.readFileSync(reportPath, "utf8"));
+  assert.equal(report.metadata.jitEnabledStart, false);
+  assert.equal(report.metadata.jitEnabledEnd, false);
+  const model = buildProfileModel(report, [], build);
+  assert.equal(model.metadata.loveVersion, "11.5.0");
+  assert.equal(model.metadata.gcPolicy, "running");
+  assert.equal(model.metadata.benchmark.warmupUpdates, 10);
+  assert.equal(model.cpuProfile.tua.metadata.benchmark.revision, "test");
+  assert.equal(model.cpuProfile.tua.durationMs, report.durationMs);
+  assert.match(renderProfileHtml(model, "nonce"), /JIT disabled at start/u);
+  const legacy = buildProfileModel({ ...report, metadata: undefined }, [], build);
+  assert.equal(legacy.metadata.jitEnabledStart, null);
+  assert.equal(legacy.metadata.gcPolicy, "unknown");
+  assert.equal(legacy.metadata.benchmark, null);
+  assert.match(renderProfileHtml(legacy, "nonce"), /JIT unknown/u);
+  const malformed = buildProfileModel({ ...report, metadata: { jitEnabledStart: "false", benchmark: { repetitions: -1 } } }, [], build);
+  assert.equal(malformed.metadata.jitEnabledStart, null);
+  assert.equal(malformed.metadata.benchmark.repetitions, null);
+});
+
+test("profile launcher fingerprints the existing build manifest without inventing revisions", t => {
+  const { build } = fixture(t);
+  fs.writeFileSync(path.join(build, ".tua-build-manifest.json"), '{"main.lua":123}');
+  const launcher = createProfileLauncher(build, path.resolve(__dirname, "../../assets/profiler/shim.lua"), 1, [], undefined,
+    { target: "love11-luajit", benchmark: { workload: "fixed", warmupUpdates: 600, repetitions: 5, revision: "abc" } });
+  t.after(() => launcher.dispose());
+  const bootstrap = fs.readFileSync(path.join(launcher.directory, "main.lua"), "utf8");
+  const decoded = bootstrap.replace(/\\(\d{3})/gu, (_, code) => String.fromCharCode(Number(code)));
+  assert.match(decoded, /manifest-sha256:[a-f0-9]{64}/u);
+  assert.match(bootstrap, /warmupUpdates = 600/u);
+  assert.match(decoded, /gcPolicy = "unknown"/u);
+});

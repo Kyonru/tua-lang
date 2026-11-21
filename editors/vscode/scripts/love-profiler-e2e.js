@@ -76,6 +76,10 @@ jit.off(love.update, true)
     assert(fs.existsSync(launcher.reportPath), `LÖVE did not write a profile: ${output}`);
     const report = parseReport(fs.readFileSync(launcher.reportPath, "utf8"));
     assert.equal(report.reason, "duration");
+    assert.match(report.metadata.loveVersion, /^\d+\.\d+\.\d+$/u);
+    assert.equal(typeof report.metadata.jitEnabledStart, "boolean");
+    assert.equal(report.metadata.gcPolicy, "unknown");
+    assert.equal(report.metadata.mode, "profiled");
     assert(report.frameCount > 0);
     assert(report.sampleCount > 0, "LuaJIT profiler did not provide CPU samples");
     assert(report.sampleEvents.length > 0, "LuaJIT profiler did not retain timed sample callbacks");

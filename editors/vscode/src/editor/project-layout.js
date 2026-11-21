@@ -56,6 +56,7 @@ async function requestProjectLayout(uri, getClient) {
     configPath: optionalFilePath(response.configUri),
     generatedPath: optionalFilePath(response.generatedUri),
     mainSource: response.mainSource,
+    ...(typeof response.target === "string" ? { target: response.target } : {}),
     moduleName: response.moduleName,
     outputDirectory: filePath(response.outputUri),
     sourceDirectory,

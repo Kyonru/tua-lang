@@ -1,5 +1,6 @@
 "use strict";
 
+const { profileMetadata } = require("./metadata");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { lookupSourceLocation } = require("../editor/source-maps");
@@ -55,6 +56,8 @@ function toCpuProfile(report, maps, outputDirectory, lookup) {
     nodes, startTime, endTime: Math.max(lastUs, Math.round((report.durationMs || 0) * 1000)),
     samples, timeDeltas,
     tua: { source: "LuaJIT statistical profiler", capturedSamples: report.sampleCount,
+      metadata: profileMetadata(report.metadata), durationMs: report.durationMs,
+      capturedFrames: report.frameCount, retainedFrames: report.frames?.length || 0,
       exportedCallbacks: samples.length, droppedCallbacks: report.sampleEventsDropped || 0,
       note: "One timeline point per profiler callback; batched samples are not individually timed. Source lines can be approximate due to JIT inlining." },
   };

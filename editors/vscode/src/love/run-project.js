@@ -145,6 +145,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       budgetMs: options.budgetMs,
       traceCategories: options.traceCategories,
       inputSeed: options.inputSeed,
+      context: { target: layout.target },
       assetsDirectory: path.join(extensionPath, "assets", "profiler"),
       onReport: model => {
         appendOutputLine?.(`[tua] Performance capture ready: ${model.frameCount} frames, ${model.sampleCount} CPU samples.`);

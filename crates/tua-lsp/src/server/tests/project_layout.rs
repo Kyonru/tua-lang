@@ -41,6 +41,7 @@ fn project_layout_uses_canonical_toml_parsing_and_nested_project() {
     );
     assert_eq!(layout["outputUri"], file_uri_from_path(nested.join("dist")));
     assert_eq!(layout["mainSource"], "love/boot.tua");
+    assert_eq!(layout["target"], "love11-luajit");
     assert_eq!(
         layout["generatedUri"],
         file_uri_from_path(nested.join("dist/main.lua"))

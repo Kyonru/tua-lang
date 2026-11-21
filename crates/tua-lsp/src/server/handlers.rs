@@ -1790,6 +1790,7 @@ impl LspServer {
             "sourceUri": uri_from_path(project.primary_source_root()),
             "outputUri": uri_from_path(project.primary_output_root()),
             "mainSource": project.configured_main().to_string_lossy(),
+            "target": project.target().raw,
             "generatedUri": generated_path.as_deref().map(uri_from_path),
             "moduleName": project.module_name_for_path(&path),
             "testSourceUri": uri_from_path(&test_source_root),
