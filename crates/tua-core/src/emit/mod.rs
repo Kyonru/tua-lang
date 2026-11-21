@@ -221,8 +221,15 @@ pub(crate) fn emit_lua_artifact_with_mode_import_resolver_and_environment(
         let operations = lower_class_method_call_operations(&document, parsed);
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_compound_assignment_operations(&document);
-        apply_lowering_operations(&mut document, operations, parsed)?;
+        // Lower innermost assignments first, including assignments inside a
+        // receiver/key function expression. This keeps replacement spans disjoint.
+        loop {
+            let operations = lower_compound_assignment_operations(&document);
+            if operations.is_empty() {
+                break;
+            }
+            apply_lowering_operations(&mut document, operations, parsed)?;
+        }
 
         let operations = crate::sprite::lowering_operations(&document, parsed);
         apply_lowering_operations(&mut document, operations, parsed)?;
@@ -1802,10 +1809,53 @@ fn lower_compound_assignment_operations(
         Some(start..end)
     };
 
+    let ranges = collector
+        .assignments
+        .iter()
+        .filter_map(|assignment| byte_range(assignment))
+        .collect::<Vec<_>>();
+    let mut fresh_index = 0;
+    let mut fresh = || loop {
+        fresh_index += 1;
+        let name = format!("__tua_compound_{fresh_index}");
+        if !output.contains(&name) {
+            break name;
+        }
+    };
     collector
         .assignments
         .into_iter()
         .filter_map(|assignment| {
+            let range = byte_range(&assignment)?;
+            if ranges.iter().any(|inner| inner != &range && inner.start >= range.start && inner.end <= range.end) {
+                return None;
+            }
+            if crate::ast_utils::plain_field_chain_from_var(assignment.lhs()).is_none() {
+                let Var::Expression(target) = assignment.lhs() else { return None; };
+                let ast::Suffix::Index(index) = target.suffixes().last()? else { return None; };
+                let index_range = byte_range(index)?;
+                let lhs_range = byte_range(assignment.lhs())?;
+                let receiver = &output[lhs_range.start..index_range.start];
+                let key = match index {
+                    ast::Index::Dot { name, .. } => format!("\"{}\"", name.token().to_string().trim()),
+                    ast::Index::Brackets { brackets, .. } => {
+                        let (open, close) = brackets.tokens();
+                        output[byte_range(open)?.end..byte_range(close)?.start].to_owned()
+                    },
+                    _ => return None,
+                };
+                let receiver_name = fresh();
+                let key_name = fresh();
+                let operator = compound_binary_operator(assignment.compound_operator())?;
+                let operator_range = byte_range(assignment.compound_operator().token())?;
+                let rhs = byte_range(assignment.rhs())?;
+                return Some(vec![
+                    document.operation(LoweringKind::CompoundAssignment,
+                        lhs_range.start..operator_range.end,
+                        format!("do local {receiver_name} = {receiver}; local {key_name} = {key}; {receiver_name}[{key_name}] = {receiver_name}[{key_name}] {operator} (")),
+                    document.operation(LoweringKind::CompoundAssignment, rhs.end..rhs.end, ") end"),
+                ]);
+            }
             let binary_operator = compound_binary_operator(assignment.compound_operator())?;
             let operator = byte_range(assignment.compound_operator().token())?;
             // A comment on the line above the statement is the target's leading

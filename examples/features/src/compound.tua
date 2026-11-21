@@ -30,7 +30,18 @@ local function tick(amount: number): Stats
   return stats
 end
 
+-- Indexed targets evaluate their receiver/index once and keep the field type.
+local particles: { age: number }[] = { { age = 0 }, { age = 1 } }
+local selected = 0
+local function nextParticle(): number
+  selected += 1
+  return selected
+end
+particles[nextParticle()].age += 0.5
+assert(selected == 1 and particles[1].age == 0.5)
+
 return {
+  particles = particles,
   stats = stats,
   bonus = bonus,
   tick = tick,

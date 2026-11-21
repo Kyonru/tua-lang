@@ -11689,3 +11689,35 @@ export type Result = {{ reason: "a" | "b", nested: {{ mode: "a" | "b" }} }}
         assert!(labels.contains(&"reason".to_owned()) && labels.contains(&"nested".to_owned()));
     }
 }
+
+#[test]
+fn indexed_compound_updates_keep_hover_completion_and_operand_diagnostics() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local rows: { age: number }[] = { { age = 0 } }
+rows[1].age += 0.5
+local age = rows[1].<|complete|><|hover|>age
+rows[1].age += "bad"
+return age
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert_eq!(hover.contents, "age: number");
+    assert!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")))
+            .contains(&"age".to_owned())
+    );
+    let errors = snapshot
+        .diagnostics("src/main.tua")
+        .into_iter()
+        .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert_eq!(errors.len(), 1, "{errors:#?}");
+}

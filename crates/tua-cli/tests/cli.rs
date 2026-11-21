@@ -7057,3 +7057,69 @@ fn dev_output_root_change_prepares_new_location() {
         "2\n"
     );
 }
+
+#[test]
+fn indexed_compound_lowering_evaluates_targets_once_in_lua_order() {
+    let Some(lua) = working_lua_runtime() else {
+        eprintln!("skipping indexed compound runtime oracle: no Lua interpreter available");
+        return;
+    };
+    let temp = TempDir::new("indexed-compound-oracle");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    let source = r#"
+local log = ""
+local value = 10
+local object: any = setmetatable({}, {
+  __index = function(_, key) assert(key == "age"); log = log .. "R"; return value end,
+  __newindex = function(_, key, nextValue) assert(key == "age"); log = log .. "W"; value = nextValue end,
+})
+local function receiver(): any log = log .. "T"; return object end
+local function key(): string log = log .. "K"; return "age" end
+local function rhs(): number log = log .. "V"; object = {}; return 2 end
+local __tua_compound_1 = 100
+receiver()[key()] += rhs() + 1
+assert(log == "TKRVW" and value == 13 and __tua_compound_1 == 100)
+local rows = { { age = 8 }, { age = 100 } }
+local calls = 0
+local function nextIndex(): number calls += 1; return calls end
+rows[nextIndex()].age /= 2
+assert(calls == 1 and rows[1].age == 4 and rows[2].age == 100)
+for i = 1, 2 do rows[i].age *= 2; rows[i].age -= 1; rows[i].age %= 4 end
+assert(rows[1].age == 3 and rows[2].age == 3)
+local function add(...: number) rows[1].age += ... end
+add(5)
+assert(rows[1].age == 8)
+local nested: any = { age = 2 }
+(function() local counts = {0}; counts[1] += 1; assert(counts[1] == 1); return nested end)().age += 2
+assert(nested.age == 4)
+local co = coroutine.create(function() rows[1].age += coroutine.yield("ready") end)
+local ok, message = coroutine.resume(co)
+assert(ok and message == "ready" and rows[1].age == 8)
+assert(coroutine.resume(co, 2))
+assert(rows[1].age == 10)
+print("indexed compound oracle passed")
+"#;
+    fs::write(temp.path().join("src/main.tua"), source).unwrap();
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = Command::new(lua)
+        .arg("build/main.lua")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(String::from_utf8_lossy(&run.stdout).contains("indexed compound oracle passed"));
+}

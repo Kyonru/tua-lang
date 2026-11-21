@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DiagnosticCategory, DiagnosticCode, SourceSpan};
+use crate::{DiagnosticCode, SourceSpan};
 
 #[test]
 fn snapshot_type_aliases_emit_no_runtime_code() {
@@ -2009,32 +2009,30 @@ local text = "sound \"assets/jump.wav\""
 }
 
 #[test]
-fn unsupported_compound_assignment_lhs_emits_lowering_diagnostic() {
-    let diagnostics = emit_tua_source("src/compound.tua", "player[\"hp\"] += 1\n")
-        .expect_err("computed-index compound assignment should not lower");
-
-    assert_eq!(
-        diagnostics[0].code,
-        Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT)
-    );
-    assert_eq!(
-        diagnostics[0].code.unwrap().category(),
-        DiagnosticCategory::LoweringEmission
-    );
-    assert!(diagnostics[0].format_cli().contains("error TL2001"));
-    assert!(diagnostics[0].message.contains("left-hand side"));
+fn indexed_compound_assignment_lowering_captures_receiver_and_key() {
+    let emitted = emit_tua_source(
+        "src/compound.tua",
+        "get_player()[next_key()].hp += amount + 1\n",
+    )
+    .expect("indexed targets should lower to Lua 5.1");
+    assert_eq!(emitted.matches("get_player()").count(), 1, "{emitted}");
+    assert_eq!(emitted.matches("next_key()").count(), 1, "{emitted}");
+    assert!(emitted.contains("( amount + 1) end"), "{emitted}");
 }
 
 #[test]
-fn call_compound_assignment_lhs_emits_lowering_diagnostic() {
-    let diagnostics = emit_tua_source("src/compound.tua", "get_player().hp += 1\n")
-        .expect_err("call-derived compound assignment should not lower");
-
-    assert_eq!(
-        diagnostics[0].code,
-        Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT)
-    );
-    assert!(diagnostics[0].message.contains("left-hand side"));
+fn indexed_compound_lowering_preserves_comments_and_nested_assignments() {
+    let source = r#"-- target comment
+(function() local n = 1; n += 1; return { age = n } end)().age +=
+  -- rhs comment
+  (function() local a = {1}; a[1] *= 2; return a[1] end)() -- trailing comment
+"#;
+    let emitted = emit_tua_source("src/nested_compound.tua", source).expect("nested updates emit");
+    assert!(!emitted.contains("+="), "{emitted}");
+    assert!(!emitted.contains("*="), "{emitted}");
+    for comment in ["-- target comment", "-- rhs comment", "-- trailing comment"] {
+        assert_eq!(emitted.matches(comment).count(), 1, "{emitted}");
+    }
 }
 
 #[test]
@@ -2882,4 +2880,30 @@ fn save_runtime_is_injected_only_for_unshadowed_tua_references() {
     let unused = emit_tua_source("src/profile.tua", "return {score = 0}\n")
         .expect("ordinary Tua should emit");
     assert!(!unused.contains("tuasave"), "{unused}");
+}
+
+#[test]
+fn indexed_compound_assignment_keeps_rhs_source_provenance() {
+    let emitted = emit_tua_source_artifact(
+        "src/indexed-lines.tua",
+        "local rows = {1}\nrows[1] +=\n  missing_value()\n",
+    )
+    .expect("indexed update should emit");
+    let line = emitted
+        .code
+        .lines()
+        .position(|line| line.contains("missing_value"))
+        .unwrap();
+    assert_eq!(emitted.provenance[line].source_span.start.line, 3);
+}
+
+#[test]
+fn indexed_compound_assignment_preserves_comments_inside_key() {
+    let emitted = emit_tua_source(
+        "src/commented-index.tua",
+        "values[-- key comment\n nextKey() -- after key\n] += 1\n",
+    )
+    .expect("key comments should survive capture");
+    assert!(emitted.contains("-- key comment"), "{emitted}");
+    assert!(emitted.contains("-- after key"), "{emitted}");
 }

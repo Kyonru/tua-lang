@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Indexed compound-assignment targets capture their receiver and key once, with
+  Lua 5.1-compatible lowering and the existing operand type checks.
+
 - LÖVE performance captures and CPU-profile exports retain runtime/JIT state,
   target and build-manifest identity, measurement context, and optional benchmark
   provenance while keeping unavailable fields explicitly unknown.

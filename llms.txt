@@ -27,7 +27,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;
   aliases, shapes, optional fields, arrays, dictionaries, unions,
   literals, enums, function types, defaults, varargs, multiple returns, and
-  runtime `is`; compound assignment; metatable-style classes and inheritance;
+  runtime `is`; compound assignment (names, fields, and indexed targets with
+  single evaluation of receiver/key); metatable-style classes and inheritance;
   mixed Lua/Tua modules, static imports, type-only modules, generated modules,
   and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,
   asset helpers, sprite sheets, Signals, stores, state machines, Baton input,
@@ -129,7 +130,9 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - Ordinary functions remain Lua:
   `function name(args): Return ... end` and
   `local function name(args): Return ... end`.
-- `+=`, `-=`, `*=`, `/=`, and `%=` work on names and plain field chains.
+- `+=`, `-=`, `*=`, `/=`, and `%=` work on names, field chains, and indexed
+  targets such as `items[nextIndex()].age`. Indexed receivers and keys evaluate
+  once; lowering uses scoped Lua 5.1 locals without wrapping the RHS in a function.
 - Classes use `class Name { ... }`, `open class Base { ... }`, or
   `final class Child extends Base { ... }`. Bodies support typed fields and
   defaults, `init(...) { ... }`, methods `name(args): Return { ... }`,

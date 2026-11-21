@@ -7860,6 +7860,29 @@ local read = world:reader(Position)
 }
 
 #[test]
+fn indexed_compound_assignments_check_receiver_fields_and_operand_types() {
+    check_tua_source(
+        "src/indexed.tua",
+        r#"
+local rows: { age: number }[] = { { age = 2 } }
+rows[1].age += 2
+local values: number[] = { 10 }
+values[1] /= 2
+"#,
+    )
+    .expect("typed indexed numeric updates should check");
+    let diagnostics = check_tua_source(
+        "src/indexed_bad.tua",
+        r#"
+local rows: { age: number }[] = { { age = 2 } }
+rows[1].age += "bad"
+"#,
+    )
+    .expect_err("indexed compound updates must not bypass type checking");
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn mixed_record_inference_widens_authored_literals_but_keeps_read_contracts() {
     check_tua_source(
         "src/mixed.tua",

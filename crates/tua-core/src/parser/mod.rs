@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use full_moon::ast::luau::{
     IndexedTypeInfo, TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo,
 };
-use full_moon::ast::{self, LuaVersion};
+use full_moon::ast::{self, LuaVersion, Suffix, Var};
 use full_moon::node::Node;
 use full_moon::visitors::Visitor;
 
@@ -21,16 +21,17 @@ use crate::{Diagnostic, DiagnosticCode};
 pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
-    CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionSignatureParameter,
-    FunctionTypeParameter, GenericDeclarationId, GenericDeclarationKind, GenericParameter,
-    GenericProtocolBound, LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind,
-    LuaDocAs, LuaDocCast, LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField,
-    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard,
-    LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
-    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, NormalizedSource,
-    ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
-    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasId,
-    TypeAliasKind, TypeImport, TypeImportBinding, TypeParameterId, TypedSourceModel,
+    CompoundAssignment, CompoundAssignmentTarget, CompoundOperator, FunctionAnnotation,
+    FunctionSignatureParameter, FunctionTypeParameter, GenericDeclarationId,
+    GenericDeclarationKind, GenericParameter, GenericProtocolBound, LocalAnnotation, LuaDocAlias,
+    LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast, LuaDocClass, LuaDocDeprecated,
+    LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta,
+    LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam, LuaDocParseOptions,
+    LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg,
+    LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault, ParameterOptional,
+    ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType,
+    TuaType, TypeAlias, TypeAliasId, TypeAliasKind, TypeImport, TypeImportBinding, TypeParameterId,
+    TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -2158,13 +2159,19 @@ fn compound_assignment_from_ast(
         )
     })?;
 
-    let lhs = plain_field_chain_from_var(assignment.lhs()).ok_or_else(|| {
-        diagnostic_for_node(
+    let lhs = if let Some(parts) = plain_field_chain_from_var(assignment.lhs()) {
+        CompoundAssignmentTarget::FieldChain(parts)
+    } else if matches!(assignment.lhs(), Var::Expression(expression)
+        if matches!(expression.suffixes().last(), Some(Suffix::Index(_))))
+    {
+        CompoundAssignmentTarget::Indexed(assignment.lhs().to_string().trim().to_owned())
+    } else {
+        return Err(diagnostic_for_node(
             path,
             assignment.lhs(),
-            "invalid compound assignment left-hand side: expected a name or plain field chain",
-        )
-    })?;
+            "invalid compound assignment left-hand side: expected an assignable variable or index",
+        ));
+    };
 
     Ok(CompoundAssignment {
         lhs,

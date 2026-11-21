@@ -2561,46 +2561,66 @@ end
     let assignments = &parsed.compound_assignments;
 
     assert_eq!(assignments.len(), 6);
-    assert_eq!(assignments[0].lhs, parts(&["x"]));
+    assert_eq!(
+        assignments[0].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["x"]))
+    );
     assert_eq!(assignments[0].operator, CompoundOperator::Add);
     assert_eq!(assignments[0].operator.as_sugar(), "+=");
     assert_eq!(assignments[0].operator.as_binary(), "+");
     assert_eq!(assignments[0].rhs, "2");
 
-    assert_eq!(assignments[1].lhs, parts(&["player", "hp"]));
+    assert_eq!(
+        assignments[1].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["player", "hp"]))
+    );
     assert_eq!(assignments[1].operator, CompoundOperator::Subtract);
     assert_eq!(assignments[1].rhs, "amount");
 
-    assert_eq!(assignments[2].lhs, parts(&["world", "player", "hp"]));
+    assert_eq!(
+        assignments[2].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["world", "player", "hp"]))
+    );
     assert_eq!(assignments[2].operator, CompoundOperator::Multiply);
     assert_eq!(assignments[2].rhs, "scale");
 
-    assert_eq!(assignments[3].lhs, parts(&["x"]));
+    assert_eq!(
+        assignments[3].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["x"]))
+    );
     assert_eq!(assignments[3].operator, CompoundOperator::Divide);
     assert_eq!(assignments[3].rhs, "2");
 
-    assert_eq!(assignments[4].lhs, parts(&["player", "hp"]));
+    assert_eq!(
+        assignments[4].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["player", "hp"]))
+    );
     assert_eq!(assignments[4].operator, CompoundOperator::Modulo);
     assert_eq!(assignments[4].rhs, "4");
 
-    assert_eq!(assignments[5].lhs, parts(&["score"]));
+    assert_eq!(
+        assignments[5].lhs,
+        CompoundAssignmentTarget::FieldChain(parts(&["score"]))
+    );
     assert_eq!(assignments[5].operator, CompoundOperator::Add);
     assert_eq!(assignments[5].rhs, "1");
 }
 
 #[test]
-fn rejects_computed_index_compound_assignment_lhs() {
-    assert_compound_lhs_error("player[\"hp\"] += 1\n");
-}
-
-#[test]
-fn rejects_call_compound_assignment_lhs() {
-    assert_compound_lhs_error("get_player().hp += 1\n");
-}
-
-#[test]
-fn rejects_expression_compound_assignment_lhs() {
-    assert_compound_lhs_error("(player).hp += 1\n");
+fn parses_indexed_compound_assignment_targets() {
+    for source in [
+        "player[\"hp\"] += 1",
+        "get_player().hp += 1",
+        "(player).hp += 1",
+        "rows[next_index()].age += dt",
+    ] {
+        let parsed =
+            parse_tua_source("src/compound.tua", source).expect("assignable indexes should parse");
+        assert!(matches!(
+            &parsed.compound_assignments[0].lhs,
+            CompoundAssignmentTarget::Indexed(_)
+        ));
+    }
 }
 
 #[test]
@@ -2760,19 +2780,6 @@ fn malformed_backtick_after_string_is_a_recoverable_syntax_error() {
 
 fn parts(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|part| (*part).to_owned()).collect()
-}
-
-fn assert_compound_lhs_error(source: &str) {
-    let diagnostics = parse_tua_source("src/compound.tua", source)
-        .expect_err("complex compound assignment targets should produce diagnostics");
-
-    assert_eq!(
-        diagnostics[0].code,
-        Some(DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT)
-    );
-    assert!(diagnostics[0].message.contains("left-hand side"));
-    assert!(diagnostics[0].line >= 1);
-    assert!(diagnostics[0].column >= 1);
 }
 
 proptest! {

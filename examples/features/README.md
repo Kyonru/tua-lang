@@ -37,7 +37,7 @@ guides cannot silently omit an example.
   and optional parameters, inferred return hovers, call checking, and
   table-field mutation.
 - `src/compound.tua` covers `+=`, `-=`, `*=`, `/=`, and `%=` lowering for
-  locals and field chains.
+  locals, field chains, and indexed targets with single-evaluation receiver/index behavior.
 - `src/inference.tua` covers local type inlay hints, inferred function return
   hovers, parameter-name hints, field-chain inference from annotated locals,
   native function type aliases and fields with named parameters and typed

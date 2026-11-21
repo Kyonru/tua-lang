@@ -962,7 +962,8 @@ Supported operators:
 Supported left-hand sides:
 
 - simple names, such as `score`;
-- plain field chains, such as `player.hp` or `world.player.hp`.
+- plain field chains, such as `player.hp` or `world.player.hp`;
+- indexed targets, such as `items[index].age`, `values[nextKey()]`, or `getPlayer().hp`.
 
 ```tua
 score += 5
@@ -983,7 +984,20 @@ When the target's type defines the operator through a metatable, the
 right-hand side is checked against that operator. For a `Vec2`,
 `velocity *= 0.98` is valid and `velocity += 2` is an error.
 
-Complex left-hand sides such as calls and computed indexes are rejected.
+Indexed targets capture their receiver and final key once, before reading the old
+value and evaluating the right-hand side. The update writes back to that captured
+location even if the right-hand side changes the original variable or index.
+Generated temporaries are scoped and avoid names already present in the source.
+They introduce no function call, so varargs and coroutine yields retain their context.
+A bare call such as `getPlayer() += 1` is not an assignable target.
+
+```tua
+items[nextIndex()].age += dt
+```
+
+This evaluates `nextIndex()` once. The emitter uses ordinary Lua 5.1 locals and a
+`do ... end` block for the captured location. Operand type checking, comments,
+and source-map provenance remain available for indexed updates.
 
 ## Boundaries
 

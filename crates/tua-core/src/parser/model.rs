@@ -502,8 +502,14 @@ pub struct TableFieldType {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CompoundAssignmentTarget {
+    FieldChain(Vec<String>),
+    Indexed(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompoundAssignment {
-    pub lhs: Vec<String>,
+    pub lhs: CompoundAssignmentTarget,
     pub operator: CompoundOperator,
     pub rhs: String,
     pub span: Option<SourceSpan>,
