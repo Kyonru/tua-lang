@@ -5,8 +5,9 @@ icon: lucide/wand-sparkles
 # Formatter
 
 Use the formatter to keep indentation, spacing, quotes, and line endings
-consistent. It formats parseable Tua source using the project's `[format]`
-settings. Type checking and linting are separate commands.
+consistent. Its default layout separates crowded statements and expands multiline
+tables into one field per line. It formats parseable Tua source using the
+project's `[format]` settings. Type checking and linting are separate commands.
 
 ## Format In VS Code
 
@@ -32,8 +33,10 @@ tua fmt
 tua fmt --check
 ```
 
-`tua fmt` rewrites project `.tua` files. `tua fmt --check` is the non-mutating
-CI form: it exits unsuccessfully and lists files whose formatted output differs
+`tua fmt` rewrites project `.tua` files, including the configured typed test root.
+It does not automatically format `.lua` assets; a separate project with
+`extension = "lua"` can use the same formatter for authored Lua files.
+`tua fmt --check` is the non-mutating CI form: it exits unsuccessfully and lists files whose formatted output differs
 from the source. The language server exposes the same formatter for document,
 range, and on-type formatting.
 
@@ -56,6 +59,34 @@ normal field indentation; a subtraction continued from the previous line uses
 continuation indentation. Grouped expressions keep a space after `and`, `or`,
 and `not`, as in `ready and (not stopped)`, while function calls stay compact
 as `run(value)`.
+
+Consecutive statements on one line are separated onto their own lines. An inline
+block containing several statements is expanded with its body and closing keyword
+on separate lines. Optional separators between those statements are removed; a
+semicolon before a parenthesized call is retained where it disambiguates Lua call
+syntax. Long inline bodies expand before argument wrapping. Small single-action
+guards and simple callbacks can remain compact.
+
+Multiline runtime tables have one field per line and a separate closing brace.
+Small nested tables may stay compact. Expanding statements inside a table callback
+also expands the enclosing table in the same pass. These are shared defaults in
+the CLI and language server, not project-specific lint rules or an opt-in preset.
+
+For example, crowded setup and a multiline record become:
+
+```lua
+local count = 0
+local enabled = true
+local options = {
+  count = count,
+  enabled = enabled,
+  offset = { x = 1, y = 2 },
+}
+if enabled then
+  count += 1
+  print(count)
+end
+```
 
 String and comment contents are never reformatted. This includes nonblank
 lines inside long-bracket strings, block comments, and escaped multiline short
@@ -110,9 +141,10 @@ outer table cannot be wrapped safely, the formatter leaves it intact rather
 than expanding an inner call on its own. The
 formatter currently expands comma-separated call arguments and table fields;
 it does not yet reflow long binary expressions, method chains, comments,
-strings, or single-argument calls. It also leaves a block that opens and closes
-on one line, such as `function(a, b) return a end`, intact rather than splitting
-its header from its `end`. Reflowing these forms is not currently supported.
+strings, or single-argument calls. Short single-statement blocks, such as
+`function(a, b) return a end`, stay compact. Multiple statements are split using
+parsed block boundaries; comments and lowered constructs whose original boundaries
+cannot be mapped safely retain their existing layout.
 
 Formatting requires parseable source. A leading UTF-8 byte-order mark is
 accepted, as LuaJIT accepts it, and removed from formatted output.

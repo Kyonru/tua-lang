@@ -1494,10 +1494,9 @@ fn wraps_the_outermost_group_first() {
 consume({ alpha = 1, beta = 2, gamma = 3, delta = 4 })
 local rows = { lookup(alpha, beta), lookup(gamma, delta) }
 "#;
-    let expected = r#"each(
-  { 1, 2, 3 },
-  function(value) print(value) end
-)
+    let expected = r#"each({ 1, 2, 3 }, function(value)
+  print(value)
+end)
 consume({
   alpha = 1,
   beta = 2,
@@ -1525,21 +1524,30 @@ local rows = {
 }
 
 #[test]
-fn does_not_wrap_inside_one_line_blocks() {
+fn expands_long_inline_blocks_before_wrapping_groups() {
     let source = r#"local handler = function(first_param, second_param) return first_param end
 local obj = { run = function(self, first, second) return first end }
 if ready then start(first_param, second_param, third_param) end
 run(function(first, second) return first end, first_param, second_param)
 local after = 1
 "#;
-    let expected = r#"local handler = function(first_param, second_param) return first_param end
-local obj = { run = function(self, first, second) return first end }
-if ready then start(first_param, second_param, third_param) end
-run(
-  function(first, second) return first end,
+    let expected = r#"local handler = function(
   first_param,
   second_param
 )
+  return first_param
+end
+local obj = {
+  run = function(self, first, second)
+    return first
+  end,
+}
+if ready then
+  start(first_param, second_param, third_param)
+end
+run(function(first, second)
+  return first
+end, first_param, second_param)
 local after = 1
 "#;
     let options = FormatOptions {
@@ -1773,7 +1781,7 @@ fn closes_call_and_table_indentation_after_multiline_literal_suffixes() {
         "if ready then\n  --[[\ncomment\n]] end\nprint(2)\n",
     ] {
         let output = format(source);
-        assert_eq!(output, source);
+        assert_eq!(output, source.replace("]]}", "]],\n}"));
         assert_eq!(format(&output), output);
     }
 }
@@ -1783,7 +1791,8 @@ fn closes_table_argument_indentation_when_call_ends_mid_line() {
     let source = "local low = AudioDesign.render({ waveform = \"sine\", frequency = 220, duration = 0.3,\n  gain = 0.25, envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 } })\nlocal high = AudioDesign.render({ waveform = \"sine\", frequency = 660, duration = 0.2,\n  gain = 0.25, envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 } })\nlocal nextValue = 3\n";
 
     let output = format(source);
-    assert_eq!(output, source);
+    let expected = "local low = AudioDesign.render({\n  waveform = \"sine\",\n  frequency = 220,\n  duration = 0.3,\n  gain = 0.25,\n  envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 },\n})\nlocal high = AudioDesign.render({\n  waveform = \"sine\",\n  frequency = 660,\n  duration = 0.2,\n  gain = 0.25,\n  envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 },\n})\nlocal nextValue = 3\n";
+    assert_eq!(output, expected);
     assert_eq!(format(&output), output);
 }
 
@@ -1802,6 +1811,10 @@ fn inline_middle_branches_close_their_own_conditional_indentation() {
             .collect::<Vec<_>>()
             .join("\n");
         let actual = format(&source);
+        let expected = expected.replace(
+            "else local callback = function() return 2 end; x = callback() end",
+            "else\n    local callback = function() return 2 end\n    x = callback()\n  end",
+        );
         assert_eq!(actual, expected, "branch: {branch}");
         assert_eq!(format(&actual), actual, "idempotence: {branch}");
     }
@@ -1856,4 +1869,104 @@ fn preserves_literal_whitespace_on_multiline_opening_lines() {
             );
         }
     }
+}
+
+#[test]
+fn final_parameter_closes_header_state_before_later_wrapped_calls() {
+    let source = r#"local function empty(first: number,
+  second: number)
+end
+local function render()
+  for _, row in ipairs(rows) do
+    for _, cell in ipairs(row.cells) do
+      output = output .. string.format("%s %s %s", string.sub(cell.description, 1, 80), cell.label, cell.value)
+    end
+  end
+end
+"#;
+    let output = format(source);
+    assert!(
+        output.contains("        cell.value\n      )\n    end"),
+        "{output}"
+    );
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn expands_crowded_statements_and_their_inline_block() {
+    let source = "local a=1; local b=2\nif ready then a=3; b=4; return a+b end\n";
+    let expected =
+        "local a = 1\nlocal b = 2\nif ready then\n  a = 3\n  b = 4\n  return a + b\nend\n";
+    assert_eq!(format(source), expected);
+    assert_eq!(format(expected), expected);
+}
+
+#[test]
+fn statement_layout_preserves_literals_and_ambiguous_call_separators() {
+    let source = "local text = [=[a;b]=]; local quote = \";\"\ncall(); (factory())()\n";
+    let output = format(source);
+    assert!(output.contains("[=[a;b]=]\nlocal quote"), "{output}");
+    assert!(output.contains("call();\n(factory())()"), "{output}");
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn multiline_tables_have_one_field_per_line_and_keep_small_children_compact() {
+    let source = "local config = { first = 1, second = 2,\n  pair = { 3, 4 } }\n";
+    let expected = "local config = {\n  first = 1,\n  second = 2,\n  pair = { 3, 4 },\n}\n";
+    assert_eq!(format(source), expected);
+    assert_eq!(format(expected), expected);
+}
+
+#[test]
+fn expanding_callback_statements_expands_their_enclosing_table_in_one_pass() {
+    let source = "local callbacks = { run = function() a(); b() end, count = 2 }\n";
+    let output = format(source);
+    assert!(output.contains("local callbacks = {\n"), "{output}");
+    assert!(
+        output.contains("function()\n    a()\n    b()\n  end,"),
+        "{output}"
+    );
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn long_inline_branch_calls_expand_before_argument_wrapping() {
+    let source = "if kind == 1 then first()\nelseif kind == 2 then world:add(entity, Component, { first = 1, second = 2, third = 3, fourth_parameter = 4 })\nend\n";
+    let output = format(source);
+    assert!(
+        output.contains("elseif kind == 2 then\n  world:add"),
+        "{output}"
+    );
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn table_in_for_header_uses_one_continuation_indent() {
+    let source =
+        "for _, value in ipairs({\n  \"first\",\n  \"second\",\n}) do\n  consume(value)\nend\n";
+    assert_eq!(format(source), source);
+    assert_eq!(format(&format(source)), source);
+}
+
+#[test]
+fn inline_expansion_measures_canonical_spacing() {
+    let source = "if ready then world:add(entity,Component,{first=1,second=2,third=3,fourth=4,fifth=5}) end\n";
+    let output = format(source);
+    assert!(output.starts_with("if ready then\n"), "{output}");
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn compact_middle_branch_does_not_wrap_under_added_block_indentation() {
+    let source = "local handler = function() if first then run()\nelseif second then world:add(entity, Component, { size = 1, image = 1, age = 2 })\nend end\n";
+    let options = FormatOptions {
+        line_width: 80,
+        ..FormatOptions::default()
+    };
+    let output = format_tua_source("src/main.tua", source, &options).unwrap();
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).unwrap(),
+        output
+    );
 }

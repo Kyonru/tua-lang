@@ -1,3 +1,5 @@
+mod layout;
+
 use std::{borrow::Cow, collections::BTreeSet, path::Path};
 
 use full_moon::{ast, node::Node, visitors::Visitor};
@@ -127,6 +129,13 @@ pub fn format_tua_source_on_type(
 }
 
 pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> String {
+    if let Some(source) = layout::expand_layout(parsed, options) {
+        // Rebuild source positions after inserting line breaks. If a lowered
+        // construct cannot be mapped safely, retain its original layout.
+        if let Ok(expanded) = parse_tua_source(&parsed.path, source) {
+            return Formatter::new(options, source_layout(&expanded)).format(&expanded.source);
+        }
+    }
     Formatter::new(options, source_layout(parsed)).format(&parsed.source)
 }
 
@@ -808,6 +817,8 @@ impl<'a> Formatter<'a> {
         let split_header_indent = usize::from(
             split_header.is_some()
                 && paren_indent == 0
+                // A table in a control header already supplies its own indent.
+                && self.brace_depth == 0
                 && (!closes_split_header
                     || (!split_header.is_some_and(|header| header.is_bare_closer(code))
                         && !closes_paren)),
@@ -830,14 +841,6 @@ impl<'a> Formatter<'a> {
 
         self.update_paren_state(code, continuation_indent);
         self.line_number += 1;
-        if closes_function_header {
-            self.multiline_function_header_depths.pop();
-            // The parameter list no longer contributes a parenthesis level
-            // inside the body. Keep only enclosing calls suppressed.
-            if let Some(block) = self.suppressed_paren_blocks.last_mut() {
-                block.depth = self.paren_depth;
-            }
-        }
         self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
         let closed_brace_blocks = self
             .brace_block_depths
@@ -952,6 +955,19 @@ impl<'a> Formatter<'a> {
                         b')' => {
                             self.paren_depth = self.paren_depth.saturating_sub(1);
                             self.open_parens.pop();
+                            // A header can close after its final parameter, not only
+                            // on a line beginning with `)`. Retire its state at the
+                            // actual closing token so later calls cannot inherit it.
+                            while self
+                                .multiline_function_header_depths
+                                .last()
+                                .is_some_and(|depth| *depth > self.paren_depth)
+                            {
+                                self.multiline_function_header_depths.pop();
+                                if let Some(block) = self.suppressed_paren_blocks.last_mut() {
+                                    block.depth = self.paren_depth;
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1677,6 +1693,17 @@ fn line_opens_keyword_block(code: &str) -> bool {
 /// `function(a, b) return a end`, must not be split: the wrapped header would
 /// open a block whose `end` sits on a line that does not close it.
 fn wrap_keeps_one_line_blocks(line: &str, wrapped: &str) -> bool {
+    let code = code_before_comment(line.trim());
+    // A middle branch can contain an inline body without its closing `end`.
+    // Do not wrap a call under that header: its indentation belongs to the body,
+    // not the branch. Long bodies are expanded by the parsed layout pass first.
+    if (starts_with_word(&code, "elseif")
+        && code_contains_word(&code, "then")
+        && !code.trim_end().ends_with("then"))
+        || (starts_with_word(&code, "else") && code.trim() != "else")
+    {
+        return false;
+    }
     let opens_keyword_block = |code: &str| {
         let code = code_before_comment(code.trim());
         line_can_open_block(&code) && line_opens_keyword_block(&code)

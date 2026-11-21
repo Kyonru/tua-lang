@@ -191,3 +191,23 @@ fn formatting_differences_do_not_publish_lint_diagnostics() {
         "unexpected diagnostics: {diagnostics:#?}"
     );
 }
+
+#[test]
+fn formatting_uses_shared_readable_statement_and_table_defaults() {
+    let temp = TempProject::new("formatting-readable-defaults");
+    let source = "local a=1; local b=2\nreturn { a = a,\n b = b }\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    temp.write("tua.toml", "source = \"src\"\n");
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(formatting_request(2, &uri));
+    let expected = "local a = 1\nlocal b = 2\nreturn {\n  a = a,\n  b = b,\n}\n";
+    assert_eq!(
+        response_with_id(server.output(), 2)["result"][0]["newText"],
+        expected
+    );
+    server.send(did_change(&uri, expected, 2));
+    server.send(formatting_request(3, &uri));
+    assert_eq!(response_with_id(server.output(), 3)["result"], json!([]));
+}

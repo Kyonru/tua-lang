@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Shared formatter defaults separate crowded statements and expand multiline
+  runtime tables one field per line, preserving compact simple expressions and
+  Lua call-disambiguating separators. CLI and editor formatting use the same layout.
+
 - Behavior-tree actor contracts flow from annotated leaves and action hooks
   through combinators, definitions, runners, and module exports. Incompatible
   contexts are checked; the ECS example uses typed actor and runner schemas.
@@ -39,6 +43,12 @@ language or editor behavior, and migration notes call out those changes.
   then verify its saved Tua MCP entry. Keep manual settings as a fallback.
 
 ### Fixed
+
+- Formatting long inline branches and tables inside control-flow headers stays
+  stable across repeated formatting passes.
+
+- Close formatter function-header state when the last parameter and closing
+  parenthesis share a line, keeping later wrapped calls stable after one pass.
 
 - Count type aliases and type imports referenced by ECS component schemas as
   used, including transitive alias dependencies and module aliases.

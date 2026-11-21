@@ -154,10 +154,16 @@ fn program_tokens(source: &str) -> Result<Vec<String>, String> {
     };
     let mut texts = Vec::<String>::new();
 
-    for token in tokens
+    let mut meaningful = tokens
         .iter()
         .filter(|token| !token.token_type().is_trivia())
-    {
+        .peekable();
+    while let Some(token) = meaningful.next() {
+        // Statement separators are optional except before a parenthesized call.
+        if token.to_string() == ";" && meaningful.peek().is_none_or(|next| next.to_string() != "(")
+        {
+            continue;
+        }
         let text = match token.token_type() {
             TokenType::Eof => continue,
             TokenType::StringLiteral {
@@ -232,6 +238,12 @@ fn layout_lints(output: &str) -> Vec<Diagnostic> {
 
 fn cases() -> Vec<Case> {
     vec![
+        Case::new("crowded_statements", "local a=1; local b=2\nif ready then a=3; b=4; return a+b end\n")
+            .formats_to("local a = 1\nlocal b = 2\nif ready then\n  a = 3\n  b = 4\n  return a + b\nend\n"),
+        Case::new("readable_multiline_table", "local config = { first = 1, second = 2,\n  pair = { 3, 4 } }\n")
+            .formats_to("local config = {\n  first = 1,\n  second = 2,\n  pair = { 3, 4 },\n}\n"),
+        Case::new("required_statement_separator", "call(); (factory())()\n")
+            .formats_to("call();\n(factory())()\n"),
         Case::new("logical_group_parentheses", "if inside and(not closest or target.depth < closest.depth) then\n  closest = target\nend\n")
             .formats_to("if inside and (not closest or target.depth < closest.depth) then\n  closest = target\nend\n"),
         Case::new("nested_logical_group_parentheses", "local result = a and(not(b) or(c))\nreturn result\n")
@@ -757,10 +769,8 @@ print(a)"#)
         .with(|options| options.final_newline = false),
         Case::new(
             "whitespace_semicolons",
-            r#"local a = 1;
-local b = 2; print(a, b)
-"#,
-        ),
+            "local a = 1;\nlocal b = 2; print(a, b)\n",
+        ).formats_to("local a = 1;\nlocal b = 2\nprint(a, b)\n"),
         Case::new(
             "line_ending_crlf_to_lf",
             "local a = 1\r\nprint(a)\r\n",
@@ -884,10 +894,9 @@ each({ 1, 2, 3 }, function(value) print(value, value, value) end)
 "#,
         )
         .formats_to(r#"local function each(t, f) end
-each(
-  { 1, 2, 3 },
-  function(value) print(value, value, value) end
-)
+each({ 1, 2, 3 }, function(value)
+  print(value, value, value)
+end)
 "#)
         .with(|options| options.line_width = 40),
         Case::new(
@@ -1247,6 +1256,14 @@ local obj = { run = function(self, a, b, c) return a end }
 print(obj:run(first_argument_value, second_argument_value, 3))
 "#,
         )
+        .formats_to(r#"local first_argument_value, second_argument_value = 1, 2
+local obj = {
+  run = function(self, a, b, c)
+    return a
+  end,
+}
+print(obj:run(first_argument_value, second_argument_value, 3))
+"#)
         .with(|options| options.line_width = 50),
         Case::new(
             "mixed_long_string_arg",
