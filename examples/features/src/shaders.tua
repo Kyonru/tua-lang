@@ -6,7 +6,12 @@ local shaders = ShaderScan.new()
 local elapsed = 0
 
 -- Restore uniforms on the compiled candidate before it replaces the old shader.
-shaders.on_compiled = function(name: string, path: string, replacement: Shader, previous: Shader | nil)
+shaders.on_compiled = function(
+  name: string,
+  path: string,
+  replacement: Shader,
+  previous: Shader | nil
+)
   if name == "wave" then replacement:send("time", elapsed) end
 end
 

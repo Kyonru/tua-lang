@@ -39,11 +39,11 @@ local dynamicValueInferred = {
       value = "valid",
       _and = {
         more = {
-          inferred = true
-        }
-      }
-    }
-  }
+          inferred = true,
+        },
+      },
+    },
+  },
 }
 
 -- Feature: type aliases, table shapes, optional fields, and unions.
@@ -381,7 +381,9 @@ local lookupObject = {
 local a =
   "asasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasas"
 local b = {
-  a = 1, c = 4, 4,
+  a = 1,
+  c = 4,
+  4,
   "1",
   1,
   4,
@@ -428,7 +430,7 @@ end
 local outside_function: MetaVector = {
   x = 1,
   y = 2,
-  length = 3
+  length = 3,
 }
 
 print(outside_function.x)

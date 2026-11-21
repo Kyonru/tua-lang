@@ -23,12 +23,16 @@ local panel = Panel.new()
 -- These wrappers bind receivers; they are not implicit protocol conformance.
 type UpdateTask = { update: (dt: number) -> nil }
 local tasks: UpdateTask[] = {
-  { update = function(dt: number)
-    actors[1]:update(dt)
-  end },
-  { update = function(dt: number)
-    panel:tick(dt)
-  end },
+  {
+    update = function(dt: number)
+      actors[1]:update(dt)
+    end,
+  },
+  {
+    update = function(dt: number)
+      panel:tick(dt)
+    end,
+  },
 }
 for _, task in ipairs(tasks) do
   task.update(0.5)
