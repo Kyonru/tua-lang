@@ -25,12 +25,14 @@ const PROFILE_CONTEXT = "tua.loveProfileCapturing";
 
 function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand, activity, inspector, extensionPath }) {
   const activeExecutions = new Set();
+  const terminals = new Set();
   const activeRunIds = new Map();
   const pendingRunIds = new Set();
   const runIdsByConfiguration = new Map();
   const endedTasks = new WeakSet();
   const endedProcesses = new WeakSet();
   let nextRun = 0;
+  let shuttingDown = false;
   let lastRun = {};
   let currentCapture;
   let lastReplay;
@@ -111,6 +113,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   }
 
   async function runLoveProject(options) {
+    if (shuttingDown) return undefined;
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage("Trust this workspace before running LOVE project tasks.");
       return undefined;
@@ -122,6 +125,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     }
 
     const layout = await activeProjectLayout(options.getClient);
+    if (shuttingDown) return undefined;
     if (!layout) {
       vscode.window.showWarningMessage(projectSelectionMessage("running"));
       return undefined;
@@ -134,10 +138,8 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     let instances;
     try { instances = options.instances === undefined ? undefined : normalizeInstances(options.instances); }
     catch (error) { vscode.window.showErrorMessage(error.message); return undefined; }
-    if (options.restart) {
-      for (const execution of activeExecutions) execution.terminate();
-      activeExecutions.clear();
-    }
+    if (options.restart) await stopActiveRuns();
+    if (shuttingDown) return undefined;
     lastRun = { configurationName: options.configurationName, instances, title: options.title, showConsole: options.showConsole };
 
     const capture = options.profileDuration === undefined ? undefined : new ProfileCapture({
@@ -198,6 +200,11 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
       runIds.push(runId);
     }
     const task = createLoveProjectTask({
+      onCreateTerminal(terminal) {
+        terminals.add(terminal);
+        terminal.onDidClose(() => terminals.delete(terminal));
+        if (shuttingDown) void terminal.close();
+      },
       configurationName: options.configurationName,
       runId,
       instances,
@@ -219,6 +226,7 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
     try { execution = await vscode.tasks.executeTask(task); }
     catch (error) { capture?.finish(); throw error; }
     finally { pendingRunIds.delete(runId); }
+    if (shuttingDown) { execution.terminate(); return undefined; }
     if (!endedTasks.has(execution)) activeRunIds.set(execution, runId);
     if (!endedTasks.has(execution) && !endedProcesses.has(execution)) activeExecutions.add(execution);
     await setRunningContext(activeExecutions.size > 0);
@@ -231,33 +239,46 @@ function registerLoveProjectRunner({ appendOutputLine, getClient, getServerComma
   }
 
   async function stopLoveProject() {
-    if (activeExecutions.size === 0) {
+    if (activeExecutions.size === 0 && terminals.size === 0) {
       await setRunningContext(false);
       vscode.window.showInformationMessage("No Tua LOVE project is currently running.");
       return false;
     }
 
-    for (const execution of activeExecutions) execution.terminate();
-    activeExecutions.clear();
+    await stopActiveRuns();
     await setRunningContext(false);
     return true;
   }
 
-  return vscode.Disposable.from(...disposables, { dispose() {
+  async function stopActiveRuns() {
+    // Task termination is asynchronous. Stop owned terminals directly and wait
+    // for child exit before restarting or disposing inspector launch files.
+    const closing = [...terminals].map(terminal => terminal.close());
     for (const execution of activeExecutions) execution.terminate();
     activeExecutions.clear();
+    await Promise.all(closing);
+  }
+
+  async function shutdown() {
+    shuttingDown = true;
+    await stopActiveRuns();
+  }
+
+  const disposable = vscode.Disposable.from(...disposables, { dispose() {
+    void shutdown();
     activeRunIds.clear();
     pendingRunIds.clear();
     runIdsByConfiguration.clear();
     void vscode.commands.executeCommand("setContext", PROFILE_CONTEXT, false);
   } });
+  return { shutdown, dispose: () => disposable.dispose() };
 }
 
 function runTerminalKey(configuration) {
   return createHash("sha256").update(JSON.stringify(configuration)).digest("hex").slice(0, 16);
 }
 
-function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture, replay, replayInputPath }) {
+function createLoveProjectTask({ onCreateTerminal, appendOutputLine, layout, loveCommand, tuaCommand, activity, showConsole = false, instances, title = TASK_NAME, runId, configurationName, inspector, capture, replay, replayInputPath }) {
   const terminalOptions = {
     activity,
     inspector,
@@ -274,7 +295,11 @@ function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaComma
     tuaCommand,
   };
   const execution = new vscode.CustomExecution(
-    async () => new LoveProjectTerminal(terminalOptions),
+    async () => {
+      const terminal = new LoveProjectTerminal(terminalOptions);
+      onCreateTerminal?.(terminal);
+      return terminal;
+    },
   );
   const task = new vscode.Task(
     {
@@ -387,21 +412,31 @@ class LoveProjectTerminal {
   }
 
   open() {
-    void this.run();
+    if (!this.stopped && !this.finished) void this.run();
   }
 
   close() {
+    if (this.closing) return this.closing;
     this.stopped = true;
     this.killActiveProcess();
-    for (const child of this.children) child.close();
-    this.finish(1);
+    const children = this.children.map(child => child.close());
+    // Give cooperative shutdown a chance, but do not leave detached games
+    // behind when the editor reloads. Never delete launch files on this timer.
+    const deadline = this.activeProcess ? setTimeout(() => this.killActiveProcess("SIGKILL"), 1000) : undefined;
+    deadline?.unref();
+    if (!this.activeProcess && !children.length) this.finish(1);
+    this.closing = Promise.all([this.processCompletion, ...children]).then(() => {
+      clearTimeout(deadline);
+      this.finish(1);
+    });
+    return this.closing;
   }
 
   async run() {
     this.writeLine(`[tua] Building project in ${this.cwd}`);
     const buildCode = await this.runProcess(this.tuaCommand, ["build"]);
 
-    if (this.finished) {
+    if (this.finished || this.stopped) {
       return;
     }
 
@@ -446,7 +481,7 @@ class LoveProjectTerminal {
       this.finish(1);
       return 1;
     }
-    if (this.finished) return 1;
+    if (this.finished || this.stopped) return 1;
     const loveCode = await this.runProcess(this.loveCommand, [launchDirectory, ...this.args], { onStart: () => this.activity?.update(this.session, "running") });
 
     if (!this.finished) {
@@ -458,7 +493,7 @@ class LoveProjectTerminal {
   runProcess(command, args, { onStart } = {}) {
     this.writeLine(`$ ${formatCommand(command, args)}`);
 
-    return new Promise((resolve) => {
+    return this.processCompletion = new Promise((resolve) => {
       let settled = false;
       let child;
 
@@ -575,18 +610,18 @@ class LoveProjectTerminal {
     this.writeEmitter.fire(`${line}\r\n`);
   }
 
-  killActiveProcess() {
-    if (!this.activeProcess || this.activeProcess.killed) {
+  killActiveProcess(signal = "SIGTERM") {
+    if (!this.activeProcess) {
       return;
     }
 
     const child = this.activeProcess;
     if (Number.isInteger(child.pid) && process.platform !== "win32") {
-      try { process.kill(-child.pid, "SIGTERM"); return; } catch { /* Already exited or not a process group. */ }
+      try { process.kill(-child.pid, signal); return; } catch { /* Already exited or not a process group. */ }
     }
     if (Number.isInteger(child.pid) && process.platform === "win32") {
       childProcess.execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => child.kill());
-    } else child.kill();
+    } else child.kill(signal);
   }
 
   finish(code) {

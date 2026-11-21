@@ -525,7 +525,15 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert.strictEqual(groupTask.name, "Local players");
     assert.notStrictEqual(groupTask.definition.runId, state.executedTasks.at(-2).task.definition.runId);
     const terminationsBeforeRestart = state.taskTerminations.length;
+    const closeGroup = groupTerminal.close.bind(groupTerminal);
+    let previousGameExited = false;
+    groupTerminal.close = async () => {
+      await delay(20);
+      await closeGroup();
+      previousGameExited = true;
+    };
     await state.commands.get("tua.restartLoveProject")();
+    assert(previousGameExited, "Restart must await the old game before launching its replacement");
     assert.strictEqual(state.taskTerminations.length, terminationsBeforeRestart + 2, "restart must terminate every tracked normal run");
     const restartedGroup = await state.executedTasks.at(-1).task.execution.callback();
     assert.deepStrictEqual(restartedGroup.instances, players, "restart preserves per-player arguments");
@@ -1469,7 +1477,21 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "CPU export should guide users when there is no completed LÖVE capture",
     );
 
+    state.setActiveDocument(loveDocument);
+    await state.commands.get("tua.runLoveProject")();
+    const shutdownTerminal = await state.executedTasks.at(-1).task.execution.callback();
+    const closeTerminal = shutdownTerminal.close.bind(shutdownTerminal);
+    let gameShutdownComplete = false;
+    shutdownTerminal.close = async () => {
+      await delay(20);
+      await closeTerminal();
+      gameShutdownComplete = true;
+    };
     await extension.deactivate();
+    assert(gameShutdownComplete, "deactivate must await game shutdown before inspector disposal");
+    const tasksAfterShutdown = state.executedTasks.length;
+    await state.commands.get("tua.runLoveProject")();
+    assert.strictEqual(state.executedTasks.length, tasksAfterShutdown, "deactivating extensions must not start another game");
 
     assert.strictEqual(state.clients[1].stops, 1, "deactivate should stop the active client");
   } finally {

@@ -126,3 +126,53 @@ test("a player failure is reported without stopping its peers", async t => {
   await running;
   assert.equal(sessions[0].code, 3);
 });
+
+
+test("inspected game keeps its launch directory until the stopped process exits",
+  { skip: process.platform === "win32" && "Windows taskkill does not deliver cooperative SIGTERM" }, async t => {
+  const { ActivityStore } = require("../../src/workspace/activity-store");
+  const { InspectorSessions } = require("../../src/inspector/sessions");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-stop-inspected-"));
+  const output = path.join(root, "build"); fs.mkdirSync(output);
+  fs.writeFileSync(path.join(output, "main.lua"), "-- game fixture");
+  fs.writeFileSync(path.join(output, "index.js"), `
+    const fs = require('node:fs'), path = require('node:path');
+    process.on('SIGTERM', () => setTimeout(() => {
+      console.log(fs.existsSync(path.join(__dirname, 'main.lua')) ? 'source-present' : 'source-missing');
+      process.exit(0);
+    }, 150));
+    console.log('ready'); setInterval(() => {}, 1000);
+  `);
+  const activity = new ActivityStore();
+  const inspector = new InspectorSessions({ activity, enabled: () => true,
+    assetsDirectory: path.resolve(__dirname, "../../assets/inspector") });
+  const terminal = new LoveProjectTerminal({ activity, inspector, cwd: root,
+    outputDirectory: output, loveCommand: process.execPath });
+  const lines = []; terminal.onDidWrite(line => lines.push(line));
+  t.after(async () => { await terminal.close(); inspector.dispose(); activity.dispose(); fs.rmSync(root, { recursive: true, force: true }); });
+  const running = terminal.runGame();
+  await until(() => lines.some(line => line.includes('ready')));
+  const directory = inspector.entries.get(terminal.session.id).launcher.directory;
+  const stopped = terminal.close();
+  assert(fs.existsSync(directory), "stop is a request, not proof the child has exited");
+  await stopped; await running;
+  assert(lines.some(line => line.includes('source-present')));
+  assert(!lines.some(line => line.includes('source-missing')));
+  assert.equal(terminal.activeProcess, undefined);
+  assert(!fs.existsSync(directory), "release the mirror after process exit");
+});
+
+
+test("stop waits for forced exit when a player ignores SIGTERM", {
+  skip: process.platform === "win32" && "Windows taskkill already forces exit",
+}, async t => {
+  const { terminal, sessions } = fixture(t, [{ name: "Host", args: [] }],
+    "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1000)");
+  const running = terminal.run();
+  await until(() => sessions[1]?.lines.includes("ready"));
+  const closing = terminal.close();
+  assert.equal(terminal.close(), closing, "repeated stop shares completion");
+  await closing; await running;
+  assert(terminal.finished && terminal.children[0].finished);
+  assert.equal(terminal.children[0].activeProcess, undefined);
+});

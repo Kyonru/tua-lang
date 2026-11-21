@@ -943,6 +943,7 @@ function registerBuiltinDocumentProvider(outputChannel) {
 }
 
 async function deactivate() {
+  await loveDevex?.shutdown?.();
   debugLogger?.flush();
   await editorDevex?.flushStats?.();
 

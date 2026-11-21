@@ -224,6 +224,13 @@ release build. Use it alongside breakpoints and the static project explorers.
    need a restart.
 4. Use **Select Runtime Player** when running multiple players.
 
+A normal **Run** started with the Play button belongs to the editor session.
+Reloading or closing the editor stops that game before removing its temporary
+inspector files. Stop/restart also waits for process exit; a game that ignores
+termination is forced to exit after a short grace period. Start a new Run after
+reloading the editor. In-game LÖVE restarts keep the same inspector folder while
+the process remains alive.
+
 Inspection is off by default (`tua.runtimeInspector.enabled = false`). Custom
 Lua debug configurations need `tuaProject: true` for Tua launch preparation.
 

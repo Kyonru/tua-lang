@@ -9,9 +9,10 @@ const { registerSpritePreviewFeature } = require("./sprite-preview");
 
 function registerLoveDevex(options) {
   const assetExplorer = registerAssetExplorerFeature(options);
+  const runner = registerLoveProjectRunner(options);
   const disposable = vscode.Disposable.from(
     registerLoveProjectDebugger(options),
-    registerLoveProjectRunner(options),
+    runner,
     registerGameCommands(options),
     registerSpritePreviewFeature(options),
     assetExplorer,
@@ -19,6 +20,7 @@ function registerLoveDevex(options) {
 
   return {
     refreshAssets: assetExplorer.refreshAssets,
+    shutdown: () => runner.shutdown(),
     dispose: () => disposable.dispose(),
   };
 }
