@@ -156,7 +156,14 @@ impl AnalysisSnapshot {
                         .map(|definition| definition.span),
                 });
 
-                let widened = widen_inferred_type(&inferred.ty);
+                let widened = semantic
+                    .local_initializer_expression(&root.text, position)
+                    .map_or_else(
+                        || inferred.ty.clone(),
+                        |expression| {
+                            crate::types::widen_inferred_expression_type(&inferred.ty, expression)
+                        },
+                    );
                 if widened != inferred.ty {
                     steps.push(TypeExplanationStep {
                         kind: TypeExplanationStepKind::Widening,

@@ -7858,3 +7858,21 @@ local read = world:reader(Position)
         );
     }
 }
+
+#[test]
+fn mixed_record_inference_widens_authored_literals_but_keeps_read_contracts() {
+    check_tua_source(
+        "src/mixed.tua",
+        r#"
+type Report = { mode: "a" | "b" }
+local typed: Report = { mode = "a" }
+local copied = { mode = typed.mode, label --[[field comment]] = "idle" }
+copied.label = "running"
+local labelOnly = { ["label" --[[key comment]]] = "idle" }
+labelOnly.label = "running"
+local function consume(value: Report) return value end
+consume(copied)
+"#,
+    )
+    .expect("literal widening should respect each field's initializer");
+}

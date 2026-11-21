@@ -33,6 +33,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Preserve imported literal-union field contracts through assignment and nested
+  inferred records/arrays, keeping checking and editor type information aligned.
+
 - Cache reusable ECS query bindings while preserving live membership, smallest-store
   selection, and nested clear/rebuild behavior. ECS Explorer allocation hints now
   describe wide queries as allocating per invocation, not per matched entity.

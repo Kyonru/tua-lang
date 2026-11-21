@@ -37,9 +37,9 @@ use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRe
 use crate::types::{
     build_type_environment_with_domain_registry, contextual_function_type,
     deduplicate_inferred_types, has_leading_lua_doc_type, instantiate_generic_function,
-    instantiate_generic_function_from_context, widen_inferred_type, AssignabilityFailure,
-    AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback, MetatableFacts,
-    TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    instantiate_generic_function_from_context, widen_inferred_expression_type, widen_inferred_type,
+    AssignabilityFailure, AssignabilityFailureKind, FunctionParameter, FunctionType, IndexFallback,
+    MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
     MAX_GENERIC_CALL_INSTANTIATIONS_PER_FILE,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
@@ -739,7 +739,10 @@ impl<'a> Checker<'a> {
             let ty = if has_annotation || has_environment_type || preserve_literal_unions {
                 ty
             } else {
-                widen_inferred_type(&ty)
+                assignment_expression_for_local(&expressions, index).map_or_else(
+                    || ty.clone(),
+                    |(expression, _)| widen_inferred_expression_type(&ty, expression),
+                )
             };
             self.insert_scoped_local(name.clone(), ty.clone());
             // Even dynamic declarations mask contracts in enclosing scopes.
@@ -976,7 +979,12 @@ impl<'a> Checker<'a> {
         target: Option<Type>,
         expression: Option<&Expression>,
     ) {
-        if self.record_table_field_assignment_type(variable, ty.clone(), expression) {
+        if self.record_table_field_assignment_type(
+            variable,
+            ty.clone(),
+            target.as_ref(),
+            expression,
+        ) {
             return;
         }
 
@@ -1168,6 +1176,7 @@ impl<'a> Checker<'a> {
         &mut self,
         variable: &Var,
         ty: Option<Type>,
+        target: Option<&Type>,
         expression: Option<&Expression>,
     ) -> bool {
         let Some(parts) = plain_field_chain_from_var(variable) else {
@@ -1193,7 +1202,11 @@ impl<'a> Checker<'a> {
         self.record_known_table_field_type(
             root,
             field,
-            widen_inferred_type(&ty),
+            if self.stable_inferred_locals {
+                target.cloned().unwrap_or_else(|| widen_inferred_type(&ty))
+            } else {
+                widen_inferred_type(&ty)
+            },
             is_self_index,
             false,
         );

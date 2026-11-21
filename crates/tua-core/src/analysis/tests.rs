@@ -11616,3 +11616,76 @@ fn ecs_reader_exports_refresh_when_imported_schema_changes() {
         .iter()
         .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)));
 }
+
+#[test]
+fn imported_record_literal_contracts_survive_mutation_and_inferred_returns() {
+    for extension in ["tua", "d.tua"] {
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/main.tua
+import type {{ Result }} from "types"
+local factory = require("bridge")
+local function resolve(skip: boolean): Result
+  local result: Result = {{ reason = "a", nested = {{ mode = "a" }} }}
+  if skip then return result end
+  result.reason = "b"
+  result.reason = "a"
+  return result
+end
+local first, second = factory.make()
+local copied = first
+local function consume(value: Result) return value end
+consume(first)
+consume(second)
+consume(copied)
+local gathered = {{ first, second }}
+local copiedRecord = {{ reason = first.reason, nested = first.nested }}
+local function consumeAll(values: Result[]) return values end
+consumeAll(gathered)
+consume(copiedRecord)
+local result = resolve(false)
+result.reason = "b"
+local reason = result.<|complete|><|hover|>reason
+local invalid: Result = {{ reason = "c", nested = {{ mode = "a" }} }}
+result.reason = "c"
+return reason, invalid
+-- file: src/bridge.tua
+return require("factory")
+-- file: src/factory.tua
+import type {{ Result }} from "types"
+local function make(): (Result, Result)
+  return {{ reason = "a", nested = {{ mode = "a" }} }}, {{ reason = "b", nested = {{ mode = "b" }} }}
+end
+return {{ make = make }}
+-- file: src/types.{extension}
+export type Reason = "a" | "b"
+export type Result = {{ reason: "a" | "b", nested: {{ mode: "a" | "b" }} }}
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let fast = host.fast_diagnostics(Path::new("src/main.tua"));
+        assert!(
+            !fast
+                .iter()
+                .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{fast:#?}"
+        );
+        let snapshot = host.snapshot();
+        let diagnostics = snapshot.diagnostics("src/main.tua");
+        let mismatches = diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .collect::<Vec<_>>();
+        assert_eq!(mismatches.len(), 2, "{diagnostics:#?}");
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position("hover"))
+            .unwrap();
+        assert_eq!(hover.contents, "(field) reason: \"a\" | \"b\"");
+        let labels =
+            completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+        assert!(labels.contains(&"reason".to_owned()) && labels.contains(&"nested".to_owned()));
+    }
+}

@@ -35,7 +35,8 @@ use super::model::{
 };
 use super::{
     deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
-    instantiate_generic_function, widen_inferred_type, FunctionParameter, TypeContext,
+    instantiate_generic_function, widen_inferred_expression_type, widen_inferred_type,
+    FunctionParameter, TypeContext,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5231,7 +5232,10 @@ fn infer_local_assignment_types(
             _ => false,
         } || crate::sprite::direct_type_is_sprite_player(&ty);
         let ty = if context.parsed.raw.language == ParsedLanguage::Tua && !preserve_literal_unions {
-            widen_inferred_type(&ty)
+            assignment_expression_for_local(&expressions, index).map_or_else(
+                || ty.clone(),
+                |(expression, _)| widen_inferred_expression_type(&ty, expression),
+            )
         } else {
             ty
         };
@@ -5301,6 +5305,12 @@ fn infer_table_field_assignment_type(
         return true;
     };
 
+    // Existing Tua fields have a stable contract, including imported literal unions.
+    if context.parsed.raw.language == ParsedLanguage::Tua
+        && matches!(locals.get(root), Some(Type::Table(table)) if table.field(field).is_some())
+    {
+        return true;
+    }
     insert_table_field_type(locals, root, field, ty, is_self_index, false);
     true
 }
@@ -6744,7 +6754,7 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.token().to_string().trim().to_owned()
 }
 
-fn unquote_string(value: &str) -> String {
+pub(super) fn unquote_string(value: &str) -> String {
     value
         .trim()
         .strip_prefix(['"', '\''])

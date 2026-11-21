@@ -306,6 +306,81 @@ pub(crate) fn has_leading_lua_doc_type(parsed: &ParsedSource, line: usize) -> bo
         })
 }
 
+/// Widen newly authored literals, not contracts obtained from another value.
+/// A call/member read can carry a declared union deep inside a returned record;
+/// recursively widening that record destroys its writable and callable contract.
+pub(crate) fn widen_inferred_expression_type(
+    ty: &Type,
+    expression: &full_moon::ast::Expression,
+) -> Type {
+    use full_moon::ast::{Expression, Field};
+    match expression {
+        Expression::String(_) => widen_inferred_type(ty),
+        Expression::Parentheses { expression, .. } => {
+            widen_inferred_expression_type(ty, expression)
+        }
+        Expression::TableConstructor(constructor) => match ty {
+            Type::Table(table) => {
+                let values = constructor
+                    .fields()
+                    .iter()
+                    .filter_map(|field| match field {
+                        Field::NameKey { key, value, .. } => {
+                            Some((key.token().to_string().trim().to_owned(), value))
+                        }
+                        Field::ExpressionKey {
+                            key: Expression::String(key),
+                            value,
+                            ..
+                        } => Some((environment::unquote_string(&key.token().to_string()), value)),
+                        _ => None,
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                let mut result = TableShape::from_fields(table.fields().map(|(name, field)| {
+                    let ty = values.get(name).map_or_else(
+                        || field.ty.clone(),
+                        |value| widen_inferred_expression_type(&field.ty, value),
+                    );
+                    (
+                        name.to_owned(),
+                        TableField {
+                            ty,
+                            optional: field.optional,
+                        },
+                    )
+                }));
+                result.copy_semantic_metadata_from(table);
+                Type::Table(result)
+            }
+            Type::Array(item) => {
+                let items = constructor
+                    .fields()
+                    .iter()
+                    .filter_map(|field| match field {
+                        Field::NoKey(value) | Field::ExpressionKey { value, .. } => {
+                            Some(widen_inferred_expression_type(item, value))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let mut items = deduplicate_inferred_types(items);
+                match items.len() {
+                    0 => ty.clone(),
+                    1 => Type::array(items.remove(0)),
+                    _ => Type::array(Type::union(items)),
+                }
+            }
+            Type::Union(members) => Type::union(
+                members
+                    .iter()
+                    .map(|member| widen_inferred_expression_type(member, expression)),
+            ),
+            _ => widen_inferred_type(ty),
+        },
+        _ => ty.clone(),
+    }
+}
+
 pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {
         Type::StringLiteral(_) => Type::string(),

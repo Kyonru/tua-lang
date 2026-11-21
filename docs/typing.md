@@ -419,6 +419,12 @@ local state = "idle"   -- string, not the exact literal "idle"
 state = "running"      -- accepted
 ```
 
+Widening applies to new literal values, not declared contracts read from existing
+values. A local initialized from a typed call or field retains its literal unions,
+including inside nested records or an inferred array of those records. Assigning
+another permitted literal to a record field preserves the field's union; assigning
+an unsupported literal remains an error. These rules also apply across module imports.
+
 The binding keeps that contract across branches and loops. A shadowing `local`
 creates a new binding rather than changing the outer one. Native annotations
 and LuaDoc local contracts belong to that declaration: reusing its name in
