@@ -878,10 +878,18 @@ impl<'a> Formatter<'a> {
 
         if line_opens_block(code) || closes_split_header {
             if self.paren_depth > 0 {
-                self.indent_level += paren_indent;
+                // A continued condition may close its own parentheses on this
+                // line. Only still-open groups belong to the following body.
+                let promoted_indent = if closes_split_header {
+                    self.paren_levels(self.paren_depth)
+                        .saturating_sub(self.paren_levels(suppressed_paren_depth))
+                } else {
+                    paren_indent
+                };
+                self.indent_level += promoted_indent;
                 self.suppressed_paren_blocks.push(SuppressedParenBlock {
                     depth: self.paren_depth,
-                    promoted_indent: paren_indent,
+                    promoted_indent,
                 });
                 if function_parameter_list_is_open(code) {
                     self.multiline_function_header_depths.push(self.paren_depth);
