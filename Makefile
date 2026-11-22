@@ -126,10 +126,10 @@ rust-audit: ## Audit locked Rust dependencies against the RustSec advisory datab
 	$(CARGO) audit
 
 .PHONY: verify
-verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: native-replay-tool-test fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: native-replay-tool-test fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -543,3 +543,7 @@ extension-smoke: extension-install extension-open-example ## Install the extensi
 
 .PHONY: extension-smoke-features
 extension-smoke-features: extension-install extension-open-features ## Install the extension and open examples/features.
+
+.PHONY: native-replay-tool-test
+native-replay-tool-test: ## Check the opt-in native replay tool without a graphics host.
+	PYTHONPATH=scripts python3 -m unittest scripts/love_replay_test.py

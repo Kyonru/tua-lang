@@ -13,6 +13,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Opt-in native LÖVE scenario runner with scripted input, isolated test saves,
+  PNG/video capture, outcome assertions and compiler/runtime provenance.
+
 - `tua build` persistently reuses successful unchanged builds, validating compiler,
   configuration, input and output contents and replaying warnings. `--no-cache`
   forces the normal build path; changed inputs still receive a full build.

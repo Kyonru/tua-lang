@@ -287,3 +287,72 @@ as an incomplete inventory.
 Test Explorer cancellation first requests process termination. On Unix, a child
 that ignores that request is forcibly stopped after a one-second grace period
 so the next queued test run can proceed. Windows uses process-tree termination.
+
+## Native LÖVE Scenarios And Video
+
+For graphics and input checks, the repository includes the opt-in development
+script `scripts/love_replay.py` (Python 3.11+, a Tua compiler and native LÖVE).
+It builds the project, copies its output into a disposable directory, and runs
+scripted input against the real game callbacks. Ordinary builds do not include
+the runner. Run this from a Tua repository checkout:
+
+```sh
+python3 scripts/love_replay.py --project examples/pause-input \
+  --tua target/release/tua --love /path/to/love \
+  --scenario-module scenario --frames 60 --fps 30 \
+  --output /tmp/pause-replay --video
+```
+
+The output directory must be new. `--capture` saves PNG frames; `--video` also
+encodes `replay.mp4` using an installed `ffmpeg`. Audio is not recorded. Without
+either option, the scenario still renders and verifies behavior. Projects need
+a `main.lua` entry point in their configured build output inside the project.
+
+Use `--scenario-module` for a typed module in a dedicated test/example project,
+or `--scenario /path/to/check.lua` for an external authored Lua scenario. The
+module returns these hooks:
+
+```lua
+return {
+  setup = function(context)
+    -- Runs after love.load.
+  end,
+  beforeFrame = function(context)
+    if context.frame == 2 then context.key("space", true) end
+    if context.frame == 3 then context.key("space", false) end
+  end,
+  afterFrame = function(context)
+    -- Assert game-specific observable state after love.update.
+  end,
+  verify = function(context)
+    assert(context.frame == 60)
+    -- Add outcome assertions: completion alone does not validate gameplay.
+  end,
+}
+```
+
+`verify` is required; the other hooks are optional. Context contains `frame`,
+`time`, `dt`, and `seed`; `key(name, down)` controls polling and key callbacks,
+and `pointer(x, y, down)` controls the mouse and button 1. Physical keyboard,
+mouse, touch and controller callback events are ignored; joystick polling,
+external I/O and custom event loops are outside this runner's contract. Closing
+the window aborts the run. Games must use the normal LÖVE update/draw loop.
+
+Each run has a unique save identity, including while `conf.lua` executes;
+project calls to change that identity are redirected. Test saves are cleaned
+up afterward. This isolation covers `love.filesystem`, not arbitrary `io` writes
+or network access: run trusted projects and scenarios. Game shutdown callbacks
+are not called; put test teardown in `verify` where needed.
+
+`runtime.log`, `build.log` and `provenance.json` record failures as well as
+success. Provenance includes compiler identity/hash, project revision and dirty
+state, scenario hash, LÖVE/Lua versions, JIT status, seed and fixed timestep. A
+nonzero exit, timeout, missing verification or incomplete capture fails the run.
+
+Fixed timestep and seeded Lua/LÖVE random sources improve repeatability; they
+do not make asynchronous work or all physics/GPU behavior deterministic. These
+are functional recordings, **not CPU, rendered-FPS or latency benchmarks**. GC
+policy remains project-controlled and is reported as unknown. The
+[pause/input example](https://github.com/Kyonru/tua-lang/tree/main/examples/pause-input)
+checks paused gameplay, advancing UI, held input, command priority and practice
+mode gating using existing Tua features.
