@@ -145,6 +145,7 @@ pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> S
 struct SourceLayout {
     table_value_start_lines: BTreeSet<usize>,
     closed_middle_block_lines: BTreeSet<usize>,
+    closed_control_header_lines: BTreeSet<usize>,
 }
 
 fn source_layout(parsed: &ParsedSource) -> SourceLayout {
@@ -153,8 +154,45 @@ fn source_layout(parsed: &ParsedSource) -> SourceLayout {
         source_lines: Vec<&'a str>,
         layout: SourceLayout,
     }
+    impl Values<'_> {
+        fn closed_header(
+            &mut self,
+            header: &full_moon::tokenizer::TokenReference,
+            end: &full_moon::tokenizer::TokenReference,
+        ) {
+            let source_line = |token: &full_moon::tokenizer::TokenReference| {
+                let position = token.token().start_position();
+                self.parsed
+                    .raw
+                    .parser_position_origin(SourcePosition {
+                        line: position.line(),
+                        column: position.character(),
+                    })
+                    .filter(|origin| !origin.class_generated)
+                    .map(|origin| origin.source_position.line)
+            };
+            if let (Some(header), Some(end)) = (source_line(header), source_line(end)) {
+                if header == end {
+                    self.layout.closed_control_header_lines.insert(header);
+                }
+            }
+        }
+    }
     impl Visitor for Values<'_> {
+        fn visit_while(&mut self, statement: &ast::While) {
+            self.closed_header(statement.do_token(), statement.end_token());
+        }
+        fn visit_numeric_for(&mut self, statement: &ast::NumericFor) {
+            self.closed_header(statement.do_token(), statement.end_token());
+        }
+        fn visit_generic_for(&mut self, statement: &ast::GenericFor) {
+            self.closed_header(statement.do_token(), statement.end_token());
+        }
         fn visit_if(&mut self, statement: &ast::If) {
+            self.closed_header(statement.then_token(), statement.end_token());
+            for branch in statement.else_if().into_iter().flatten() {
+                self.closed_header(branch.then_token(), statement.end_token());
+            }
             // A middle branch may close its owning conditional on the same
             // line. Consult that conditional's end token, not any nested end.
             let source_position = |token: &full_moon::tokenizer::TokenReference| {
@@ -876,7 +914,14 @@ impl<'a> Formatter<'a> {
             self.indent_level = self.indent_level.saturating_sub(suppressed.promoted_indent);
         }
 
-        if line_opens_block(code) || closes_split_header {
+        // Finishing a split header only opens a body if that body has not
+        // already ended on this line. Use the owning AST end, not a nested end.
+        let opens_split_body = closes_split_header
+            && !self
+                .layout
+                .closed_control_header_lines
+                .contains(&self.source_line);
+        if line_opens_block(code) || opens_split_body {
             if self.paren_depth > 0 {
                 // A continued condition may close its own parentheses on this
                 // line. Only still-open groups belong to the following body.

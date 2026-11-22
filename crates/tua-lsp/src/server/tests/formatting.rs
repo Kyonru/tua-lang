@@ -211,3 +211,19 @@ fn formatting_uses_shared_readable_statement_and_table_defaults() {
     server.send(formatting_request(3, &uri));
     assert_eq!(response_with_id(server.output(), 3)["result"], json!([]));
 }
+
+#[test]
+fn formatting_preserves_scope_after_split_compact_guard() {
+    let temp = TempProject::new("formatting-split-guard");
+    let source = "local function allowed(a: boolean, b: boolean): boolean\n  if not a\n    or not b then return false end\n  return true\nend\nlocal after = 1\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    temp.write("tua.toml", "source = \"src\"\n");
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(formatting_request(2, &uri));
+    assert!(response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}

@@ -2043,3 +2043,26 @@ fn indented_inline_condition_expands_body_before_wrapping() {
     );
     assert_eq!(lua_tokens(source), lua_tokens(&output));
 }
+
+#[test]
+fn split_compact_guards_do_not_indent_following_statements() {
+    for operator in ["or", "and"] {
+        for comment in ["", " -- explain"] {
+            let source = format!("local function allowed(a: boolean, b: boolean): boolean\n  if not a{comment}\n    {operator} not b then return false end\n  return true\nend\n\nlocal after = 1\n");
+            assert_eq!(format(&source), source);
+            assert_eq!(format(&format(&source)), source);
+        }
+    }
+    for source in [
+        "while ready\n  and active do break end\nlocal after = 1\n",
+        "for i = 1,\n  3 do act(i) end\nlocal after = 1\n",
+        "for _, value in\n  ipairs(values) do act(value) end\nlocal after = 1\n",
+        "visit(function()\n  if ready\n    and active then act() end\n  finish()\nend)\nlocal after = 1\n",
+        "if ready then\n  act()\nelseif active\n  and fallback then act() end\nlocal after = 1\n",
+        "if ready\n  and active then visit(function() end)\n  finish()\nend\nlocal after = 1\n",
+    ] {
+        assert_eq!(format(source), source);
+        assert_eq!(format(&format(source)), source);
+        assert_eq!(lua_tokens(source), lua_tokens(&format(source)));
+    }
+}
