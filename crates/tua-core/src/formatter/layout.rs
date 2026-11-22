@@ -28,7 +28,14 @@ pub(super) fn expand_layout(parsed: &ParsedSource, options: &FormatOptions) -> O
         }
         fn span(&self, node: &impl Node) -> Option<(usize, usize)> {
             let start = self.offset(node.start_position()?)?;
-            let end = self.offset(node.end_position()?)?;
+            // Some AST node ranges end at the expression inside an index,
+            // excluding its closing bracket. Layout edits need the complete
+            // token extent, or an inline block's `end` is left on its body.
+            let end = self.offset(
+                node.tokens()
+                    .map(|token| token.token().end_position())
+                    .max_by_key(|position| position.bytes())?,
+            )?;
             (start < end).then_some((start, end))
         }
         fn separator(&self, left: usize, right: usize) -> bool {

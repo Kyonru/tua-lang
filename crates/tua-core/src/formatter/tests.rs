@@ -2066,3 +2066,36 @@ fn split_compact_guards_do_not_indent_following_statements() {
         assert_eq!(lua_tokens(source), lua_tokens(&format(source)));
     }
 }
+
+#[test]
+fn expanded_blocks_include_closing_index_tokens() {
+    for expression in [
+        "values[i]",
+        "values[keys[i]]",
+        "values[i].field",
+        "values[i](key)",
+    ] {
+        let source = format!("function roll()\n  for i = 1, count do prepare(); total = total + {expression} end\n  return total\nend\nlocal after = true\n");
+        let expected = format!("function roll()\n  for i = 1, count do\n    prepare()\n    total = total + {expression}\n  end\n  return total\nend\nlocal after = true\n");
+        let output = format(&source);
+        assert_eq!(output, expected);
+        assert_eq!(format(&output), output);
+    }
+}
+
+#[test]
+fn procedural_runtime_layout_settles_in_one_pass() {
+    let source = include_str!("../../../../vendor/runtime/tuarot.lua");
+    let output = format(source);
+    assert_eq!(format(&output), output);
+    assert!(output.contains("\nRot.Dice = Dice\n"));
+    assert!(output.contains("\nRot.StringGenerator = StringGenerator\n"));
+    // Layout removes optional semicolons and inserts trailing table commas.
+    let significant = |text: &str| {
+        lua_tokens(text)
+            .into_iter()
+            .filter(|token| token != ";" && token != ",")
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(significant(source), significant(&output));
+}
