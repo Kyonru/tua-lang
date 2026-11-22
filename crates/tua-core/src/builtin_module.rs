@@ -222,6 +222,30 @@ fn inline_aliases(ty: &Type, environment: &TypeEnvironment, visiting: &mut Vec<S
             };
             visiting.push(name.clone());
             let mut inlined = inline_aliases(definition, environment, visiting);
+            if name == "RotRng" {
+                if let Type::Table(table) = &mut inlined {
+                    // LuaDoc method binders are deliberately unsupported. These
+                    // methods are assigned ordinary generic free functions by
+                    // the runtime; use those annotations as the shared contract.
+                    for (method, implementation) in
+                        [("choice", "rngChoice"), ("shuffle", "rngShuffle")]
+                    {
+                        if let Some(contract) = environment
+                            .function(implementation)
+                            .and_then(|function| function.as_type())
+                        {
+                            table.insert(
+                                method,
+                                crate::types::TableField::required(inline_aliases(
+                                    &contract,
+                                    environment,
+                                    visiting,
+                                )),
+                            );
+                        }
+                    }
+                }
+            }
             visiting.pop();
             if name == "Tween" {
                 if let Type::Table(table) = &mut inlined {
@@ -786,5 +810,82 @@ tween.update(0.016)
                 .map(|completion| &completion.label)
                 .collect::<Vec<_>>()
         );
+    }
+}
+
+#[cfg(test)]
+mod rng_collection_tests {
+    #[test]
+    fn rng_collections_reject_non_arrays_and_keep_boolean_payloads() {
+        crate::check_tua_source("src/main.tua", "local rng = Rot.Rng.new(42)\nlocal values: boolean[] = { false }\nlocal _picked: boolean = rng:choice(values)\nlocal _shuffled: boolean[] = rng:shuffle(values)\n").unwrap();
+        for method in ["choice", "shuffle"] {
+            let source = format!("local rng = Rot.Rng.new(42)\nlocal _value = rng:{method}(12)\n");
+            assert!(crate::check_tua_source("src/main.tua", &source).is_err());
+        }
+    }
+
+    #[test]
+    fn rng_collections_editor_queries_preserve_elements() {
+        let source = "type Item = { id: string }\nlocal items: Item[] = { { id = \"rifle\" } }\nlocal rng = Rot.Rng.new(42)\nlocal chosen = rng:choice(items)\nprint(chosen.id)\n";
+        let hover = crate::hover_tua_source(
+            "src/main.tua",
+            source,
+            crate::SourcePosition {
+                line: 5,
+                column: 14,
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(hover.contents.contains("string"), "{}", hover.contents);
+        let completion = crate::complete_tua_source(
+            "src/main.tua",
+            source,
+            crate::SourcePosition {
+                line: 5,
+                column: 14,
+            },
+        )
+        .unwrap();
+        assert!(
+            completion.iter().any(|item| item.label == "id"),
+            "{completion:?}"
+        );
+        let signatures = crate::signature_help_tua_source(
+            "src/main.tua",
+            source,
+            crate::SourcePosition {
+                line: 4,
+                column: 32,
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            signatures
+                .signatures
+                .iter()
+                .any(|signature| signature.label.contains("Item")
+                    || signature.label.contains("string")),
+            "{signatures:?}"
+        );
+    }
+
+    #[test]
+    fn rng_collections_preserve_element_types() {
+        for call in ["rng:choice(items)", "rng:shuffle(items)[1]"] {
+            let prefix = "type Item = { id: string }\nlocal items: Item[] = { { id = \"rifle\" } }\nlocal rng = Rot.Rng.new(42)\n";
+            let valid = format!("{prefix}local value = {call}\nlocal _id: string = value.id\n");
+            crate::check_tua_source("src/main.tua", &valid).expect("element type survives");
+            let invalid = format!("{prefix}local value = {call}\nlocal _id: number = value.id\n");
+            let errors = crate::check_tua_source("src/main.tua", &invalid)
+                .expect_err("wrong field type rejected");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.message.contains("expected number, found string")),
+                "{errors:?}"
+            );
+        }
     }
 }

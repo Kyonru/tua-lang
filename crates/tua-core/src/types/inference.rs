@@ -293,6 +293,16 @@ fn collect_constraints(
             depth + 1,
         );
     }
+    // An explicitly dynamic input supplies dynamic nested elements too. This
+    // also lets the fast, pre-import pass defer to project-aware inference.
+    if matches!(actual, Type::Any) {
+        let mut parameters = HashSet::new();
+        collect_generic_parameters(pattern, binders, &mut parameters, depth + 1);
+        for parameter in parameters {
+            substitutions.entry(parameter).or_insert(Type::Any);
+        }
+        return Ok(());
+    }
     match (pattern, actual) {
         (Type::GenericParameter { id, name }, actual) if binders.contains(id) => {
             if let Some(previous) = substitutions.get(id) {

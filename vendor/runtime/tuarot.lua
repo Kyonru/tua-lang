@@ -135,16 +135,21 @@ function Rng:float(min, max)
   return min + self:next() * (max - min)
 end
 
----@param values any[]
----@return any
-function Rng:choice(values)
+-- The generic free functions also supply compiler-visible method contracts.
+---@generic T
+---@param self RotRng
+---@param values T[]
+---@return T
+local function rngChoice(self, values)
   assert(#values > 0, "cannot choose from an empty list")
   return values[self:int(1, #values)]
 end
 
----@param values any[]
----@return any[]
-function Rng:shuffle(values)
+---@generic T
+---@param self RotRng
+---@param values T[]
+---@return T[]
+local function rngShuffle(self, values)
   local result = {}
   for i, value in ipairs(values) do result[i] = value end
   for i = #result, 2, -1 do
@@ -153,6 +158,9 @@ function Rng:shuffle(values)
   end
   return result
 end
+
+Rng.choice = rngChoice
+Rng.shuffle = rngShuffle
 
 Rot.Rng = Rng
 

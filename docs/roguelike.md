@@ -31,6 +31,12 @@ local total, rolls = Rot.Dice.roll("3d6+2", rng)
 local nextItem = rng:choice({ "potion", "scroll", "key" })
 ```
 
+`choice(values)` preserves the array's element type and returns an existing
+entry; it raises an error for an empty array. `shuffle(values)` preserves the
+element type and returns a fresh, shallowly shuffled array without changing the
+input. Record fields remain typed through exported arrays and namespace imports.
+Both methods use the shared checker and editor inference.
+
 Dice expressions support `dM`, `NdM`, and an optional signed integer bonus.
 Each die count is limited to 1,000 and the side count to one billion.
 

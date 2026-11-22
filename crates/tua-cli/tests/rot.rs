@@ -147,3 +147,64 @@ fn unused_roguelike_runtime_is_not_copied() {
         .unwrap()
         .contains("tuarot"));
 }
+
+#[test]
+fn rng_collections_keep_imported_payloads_and_runtime_identity() {
+    let project = Project::new();
+    fs::write(
+        project.path().join("src/items.tua"),
+        r#"export type Item = { id: string }
+local items: Item[] = { { id = "rifle" }, { id = "cannon" } }
+return { items = items }
+"#,
+    )
+    .unwrap();
+    let source = r#"local module = require("items")
+local items = module.items
+local rng = Rot.Rng.new(42)
+local selected = rng:choice(items)
+local _id: string = selected.id
+local shuffled = rng:shuffle(items)
+local _other: string = shuffled[1].id
+assert(selected == items[1] or selected == items[2])
+assert(shuffled ~= items and #shuffled == #items)
+assert(items[1].id == "rifle" and items[2].id == "cannon")
+assert(shuffled[1] ~= shuffled[2])
+local empty: string[] = {}
+assert(not pcall(function() rng:choice(empty) end))
+assert(#rng:shuffle(empty) == 0)
+"#;
+    fs::write(project.path().join("src/main.tua"), source).unwrap();
+    let build = project.run("build");
+    assert!(
+        build.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    if let Some(lua) = lua_runtime() {
+        let output = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(project.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    fs::write(
+        project.path().join("src/main.tua"),
+        source
+            .replace("local _id: string", "local _id: number")
+            .replace("local _other: string", "local _other: number"),
+    )
+    .unwrap();
+    let check = project.run("check");
+    assert!(!check.status.success());
+    assert!(
+        String::from_utf8_lossy(&check.stderr).contains("expected number, found string"),
+        "{check:?}"
+    );
+}

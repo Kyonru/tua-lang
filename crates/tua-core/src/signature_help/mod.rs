@@ -219,15 +219,18 @@ impl<'a> SignatureResolver<'a> {
         function: &TypedFunction,
         context: &CallContext,
     ) -> TypedFunction {
-        if function.generic_parameters.is_empty() || context.is_method_call {
+        if function.generic_parameters.is_empty() {
             return function.clone();
         }
         let Some(Type::Function(scheme)) = function.as_type() else {
             return function.clone();
         };
-        let Some(arguments) = self.generic_call_arguments(context) else {
+        let Some(mut arguments) = self.generic_call_arguments(context) else {
             return function.clone();
         };
+        if context.is_method_call {
+            arguments.insert(0, self.method_receiver_type(context));
+        }
         let Ok(instantiated) =
             instantiate_generic_function(&scheme, &arguments, &self.environment.to_type_context())
         else {
