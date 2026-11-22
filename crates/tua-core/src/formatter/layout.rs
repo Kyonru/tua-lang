@@ -117,13 +117,23 @@ pub(super) fn expand_layout(parsed: &ParsedSource, options: &FormatOptions) -> O
             let line_end = self.parsed.source[first..]
                 .find('\n')
                 .map_or(self.parsed.source.len(), |i| first + i);
-            let long_inline_body = !self.parsed.source[line_start..first].trim().is_empty()
-                && normalize_spacing(
-                    self.parsed.source[line_start..line_end].trim(),
-                    self.options.quote_style,
-                )
+            let source_line = &self.parsed.source[line_start..line_end];
+            let indentation = source_line
                 .chars()
-                .count()
+                .take_while(|character| character.is_whitespace())
+                .map(|character| {
+                    if character == '\t' {
+                        self.options.indent_width
+                    } else {
+                        1
+                    }
+                })
+                .sum::<usize>();
+            let long_inline_body = !self.parsed.source[line_start..first].trim().is_empty()
+                && indentation
+                    + normalize_spacing(source_line.trim(), self.options.quote_style)
+                        .chars()
+                        .count()
                     > self.options.line_width;
             if !long_inline_body
                 && !spans

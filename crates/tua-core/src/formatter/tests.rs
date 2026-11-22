@@ -2027,3 +2027,19 @@ fn condition_wrapping_preserves_grouping_strings_comments_and_continuations() {
     assert_eq!(lua_tokens(source), lua_tokens(&output));
     assert_eq!(format(&output), output);
 }
+
+#[test]
+fn indented_inline_condition_expands_body_before_wrapping() {
+    let source = "local function select()\n  for _, entry in ipairs(entries) do\n    if entry.category == \"candidate\" and isReady and availableCount > 0 then return entry end\n  end\nend\n";
+    let options = FormatOptions {
+        line_width: 90,
+        ..FormatOptions::default()
+    };
+    let output = format_tua_source("src/main.tua", source, &options).unwrap();
+    assert!(output.contains("then\n      return entry\n"), "{output}");
+    assert_eq!(
+        format_tua_source("src/main.tua", &output, &options).unwrap(),
+        output
+    );
+    assert_eq!(lua_tokens(source), lua_tokens(&output));
+}
