@@ -1366,6 +1366,9 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
     }
 
     let keeps_blocks = |wrapped: &String| wrap_keeps_one_line_blocks(line, wrapped);
+    if let Some(wrapped) = break_long_condition(line, indent, options).filter(keeps_blocks) {
+        return wrapped;
+    }
     let table = || break_long_table(line, indent, options).filter(keeps_blocks);
     let call = || break_long_call(line, indent, options).filter(keeps_blocks);
     // Split the outermost group first. Expanding a table passed as an
@@ -1381,6 +1384,62 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
     };
 
     wrapped.unwrap_or(inline)
+}
+
+/// Split control conditions at outer logical operators before considering call
+/// arguments. Tokenization preserves strings/comments and grouped precedence.
+fn break_long_condition(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {
+    let continuation = starts_with_word(line, "and") || starts_with_word(line, "or");
+    if !continuation
+        && !["if", "elseif", "while", "until"]
+            .iter()
+            .any(|word| starts_with_word(line, word))
+    {
+        return None;
+    }
+    let full_moon::tokenizer::LexerResult::Ok(tokens) =
+        full_moon::tokenizer::Lexer::new(line, full_moon::LuaVersion::luau()).collect()
+    else {
+        return None;
+    };
+    let mut depth = 0usize;
+    let mut cuts = vec![0];
+    for token in tokens {
+        if let full_moon::tokenizer::TokenType::Symbol { symbol } = token.token_type() {
+            match symbol.to_string().as_str() {
+                "(" | "[" | "{" => depth += 1,
+                ")" | "]" | "}" => depth = depth.checked_sub(1)?,
+                "then" | "do" if depth == 0 => break,
+                "and" | "or" if depth == 0 && token.start_position().bytes() > 0 => {
+                    cuts.push(token.start_position().bytes());
+                }
+                _ => {}
+            }
+        }
+    }
+    if cuts.len() == 1 {
+        return None;
+    }
+    cuts.push(line.len());
+    let continued_indent = if continuation {
+        indent.to_owned()
+    } else {
+        format!("{indent}{}", indent_unit(options))
+    };
+    let mut output = String::new();
+    for (index, pair) in cuts.windows(2).enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        let part = line[pair[0]..pair[1]].trim();
+        let prefix = if index == 0 {
+            indent
+        } else {
+            &continued_indent
+        };
+        output.push_str(&break_long_groups(part, prefix, options));
+    }
+    Some(output)
 }
 
 fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {

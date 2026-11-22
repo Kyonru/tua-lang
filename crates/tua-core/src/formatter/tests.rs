@@ -1980,3 +1980,50 @@ fn continued_conditions_inside_callbacks_do_not_promote_closed_parentheses() {
     assert_eq!(format(nested), nested);
     assert_eq!(format(&format(nested)), nested);
 }
+
+#[test]
+fn long_compound_conditions_wrap_before_short_calls_in_one_pass() {
+    for header in ["if", "elseif", "while", "until"] {
+        let condition = "ready and not hasHit(projectile, entity) and habitat.canHit(entity) and habitat.isFlying(entity) == flags[index]";
+        let source = match header {
+            "elseif" => format!("if first then\n  act()\nelseif {condition} then\n  act()\nend\n"),
+            "while" => format!("while {condition} do\n  act()\nend\n"),
+            "until" => format!("repeat\n  act()\nuntil {condition}\n"),
+            _ => format!("visit(function()\n  if {condition}\n    and lookup(entity) == position then\n    act()\n  end\nend)\n"),
+        };
+        let output = format(&source);
+        assert!(
+            output.contains("not hasHit(projectile, entity)"),
+            "{output}"
+        );
+        assert_eq!(format(&output), output, "{header}");
+        assert_eq!(lua_tokens(&source), lua_tokens(&output));
+    }
+}
+
+fn lua_tokens(source: &str) -> Vec<String> {
+    full_moon::tokenizer::Lexer::new(source, full_moon::LuaVersion::lua51())
+        .collect()
+        .unwrap()
+        .into_iter()
+        .filter(|token| {
+            !matches!(
+                token.token_type(),
+                full_moon::tokenizer::TokenType::Whitespace { .. }
+                    | full_moon::tokenizer::TokenType::SingleLineComment { .. }
+                    | full_moon::tokenizer::TokenType::MultiLineComment { .. }
+            )
+        })
+        .map(|token| token.to_string())
+        .collect()
+}
+
+#[test]
+fn condition_wrapping_preserves_grouping_strings_comments_and_continuations() {
+    let source = "if predicate(\"and or\", [=[or]=]) and (left or right) and extremelyLongConditionNameThatExceedsThePreferredWidth then -- and keep\n  act()\nend\n";
+    let output = format(source);
+    assert!(output.contains("(left or right)"));
+    assert!(output.contains("-- and keep"));
+    assert_eq!(lua_tokens(source), lua_tokens(&output));
+    assert_eq!(format(&output), output);
+}
