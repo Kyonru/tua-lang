@@ -12030,3 +12030,5 @@ mod import_expressions;
 mod module_shadowing;
 
 mod reassignment_contracts;
+
+mod save_callbacks;

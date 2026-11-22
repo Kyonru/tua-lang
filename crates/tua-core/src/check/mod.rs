@@ -1762,10 +1762,17 @@ impl<'a> Checker<'a> {
                 self.infer_expression_return(expression, return_index)
             }
             Expression::Function(function) => {
-                let ty = crate::types::inferred_function_type_from_body(
+                let captured = self
+                    .scoped_locals
+                    .iter()
+                    .flat_map(|scope| scope.iter())
+                    .map(|(name, ty)| (name.clone(), ty.clone()))
+                    .collect();
+                let ty = crate::types::inferred_function_type_from_body_with_locals(
                     self.parsed,
                     self.environment,
                     function.body(),
+                    &captured,
                 );
                 let Type::Function(signature) = &ty else {
                     unreachable!("function bodies always produce function types")

@@ -4386,6 +4386,15 @@ pub(crate) fn inferred_function_type_from_body(
     environment: &TypeEnvironment,
     body: &ast::FunctionBody,
 ) -> Type {
+    inferred_function_type_from_body_with_locals(parsed, environment, body, &BTreeMap::new())
+}
+
+pub(crate) fn inferred_function_type_from_body_with_locals(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    body: &ast::FunctionBody,
+    captured: &BTreeMap<String, Type>,
+) -> Type {
     if body.return_type().is_some() {
         return super::function_type_from_body_with_metadata(parsed, body);
     }
@@ -4395,7 +4404,7 @@ pub(crate) fn inferred_function_type_from_body(
         .map(|(name, ty)| (name.to_owned(), ty.clone()))
         .collect::<BTreeMap<_, _>>();
     let function_types = function_types_by_name(parsed, environment.functions(), &BTreeMap::new());
-    let locals = environment
+    let mut locals = environment
         .locals()
         .filter_map(|(name, _)| {
             let position = node_span(body)?.start;
@@ -4404,6 +4413,8 @@ pub(crate) fn inferred_function_type_from_body(
                 .map(|ty| (name.to_owned(), ty.clone()))
         })
         .collect::<BTreeMap<_, _>>();
+
+    locals.extend(captured.iter().map(|(name, ty)| (name.clone(), ty.clone())));
 
     let runtime_imports = runtime_import_bindings(parsed);
     let context = InferenceQueryContext::new(
@@ -5581,8 +5592,11 @@ fn infer_expression_return_types(
         Expression::FunctionCall(function_call) => {
             infer_function_call_return_types(query, function_call)
         }
-        Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => query.return_types(expression),
+        // Parenthesized calls produce exactly one Lua value, even in the final return slot.
+        Expression::Parentheses { expression, .. } => {
+            query.return_type(expression, 0).into_iter().collect()
+        }
+        Expression::TypeAssertion { expression, .. } => query.return_types(expression),
         _ => query.type_of(expression).into_iter().collect(),
     }
 }

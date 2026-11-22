@@ -8055,3 +8055,29 @@ trust.value = 4
     )
     .unwrap();
 }
+
+#[test]
+fn callback_forwarded_save_returns_preserve_tuple_arity() {
+    let prefix = r#"
+local contract = Save.contract({
+  slot = "profile", version = 1,
+  schema = Save.record({ count = Save.number(0) }),
+})
+type Storage = { load: () -> ({ count: number } | nil, SaveIssue | nil) }
+"#;
+    for body in [
+        "return contract:load()",
+        "local saved, issue = contract:load(); return saved, issue",
+    ] {
+        let source =
+            format!("{prefix}\nlocal storage: Storage = {{ load = function() {body} end }}");
+        check_tua_source("src/main.tua", source).expect("a final call forwards both results");
+    }
+    let source = format!(
+        "{prefix}\nlocal storage: Storage = {{ load = function() return (contract:load()) end }}"
+    );
+    assert!(
+        check_tua_source("src/main.tua", source).is_err(),
+        "parentheses collapse multiple returns"
+    );
+}
