@@ -23,6 +23,7 @@ const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { shaderEnvironment } = require("./setup/shader-tools");
 const { registerSetup } = require("./setup");
+const { readCompilerInfo, compilerInfoLines } = require("./setup/compiler-info");
 const { registerAgentTools } = require("./setup/agent-tools");
 const { registerEditorAgentTools } = require("./agents/editor-tools");
 const { registerRuntimeInspector } = require("./inspector/view");
@@ -295,6 +296,12 @@ async function startLanguageServer() {
 
   outputChannel.appendLine(`Tua language server version: ${preflight.version || "unknown"}`);
   currentServerInfo.version = preflight.version;
+  const probedServer = currentServerInfo;
+  void readCompilerInfo(serverCommand, cwd).then(info => {
+    if (currentServerInfo !== probedServer) return;
+    probedServer.buildInfo = info;
+    for (const line of compilerInfoLines(info)) outputChannel?.appendLine(line);
+  });
 
   const languageClient = loadLanguageClient();
   if (!languageClient) {
@@ -817,6 +824,7 @@ function debugInfoText() {
     `Server state: ${currentServerInfo?.state || "unknown"}`,
     `Server path: ${currentServerInfo?.command || configuredServerPath(extensionContext)}`,
     `Server version: ${currentServerInfo?.version || "unknown"}`,
+    ...compilerInfoLines(currentServerInfo?.buildInfo),
   ];
 
   if (currentServerInfo?.cwd) {

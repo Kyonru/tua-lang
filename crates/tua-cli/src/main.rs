@@ -33,6 +33,13 @@ fn run_main() -> ExitCode {
             print!("{}", command_help(command));
             ExitCode::SUCCESS
         }
+        Ok(CliAction::VersionJson) => {
+            println!(
+                "{}",
+                serde_json::to_string(&tua_cli::build_info()).expect("serializable build info")
+            );
+            ExitCode::SUCCESS
+        }
         Ok(CliAction::Version) => {
             println!("{}", version_text());
             ExitCode::SUCCESS

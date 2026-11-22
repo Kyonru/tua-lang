@@ -101,6 +101,12 @@ pub(crate) fn run_build_with_cache(
     report: bool,
 ) -> Result<String, CliError> {
     let trace = BuildReport::new(report);
+    if report {
+        trace.note(&format!(
+            "compiler: {}",
+            serde_json::to_string(&crate::build_info()).expect("serializable build info")
+        ));
+    }
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     OutputGuard::new(&workspace).map_err(|diagnostic| {

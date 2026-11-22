@@ -389,3 +389,17 @@ fn build_report_is_opt_in_and_build_only() {
     );
     assert!(parse_args(["check", "--build-report"]).is_err());
 }
+
+#[test]
+fn structured_version_is_explicit_and_rejects_extra_arguments() {
+    assert_eq!(
+        parse_args(["--version", "--json"]).unwrap(),
+        CliAction::VersionJson
+    );
+    assert_eq!(
+        parse_args(["-V", "--json"]).unwrap(),
+        CliAction::VersionJson
+    );
+    assert!(parse_args(["build", "--version", "--json"]).is_err());
+    assert!(parse_args(["--version", "--json", "extra"]).is_err());
+}

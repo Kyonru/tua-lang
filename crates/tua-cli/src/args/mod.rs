@@ -8,7 +8,7 @@ tua - typed Lua tooling for LuaJIT/LÖVE projects
 Usage:
   tua <command> [options]
   tua --help
-  tua --version
+  tua --version [--json]
 
 Commands:
   init      Create a default tua.toml and src/ directory
@@ -54,6 +54,7 @@ pub enum CliAction {
     Help,
     CommandHelp(CommandName),
     Version,
+    VersionJson,
     Command {
         name: CommandName,
         options: CommandOptions,
@@ -161,6 +162,12 @@ where
     }
 
     if args.iter().any(|arg| arg == "-V" || arg == "--version") {
+        if args.iter().any(|arg| arg == "--json") {
+            if args.len() != 2 || !matches!(args[0].as_str(), "-V" | "--version") {
+                return Err(CliError::usage("usage: tua --version [--json]"));
+            }
+            return Ok(CliAction::VersionJson);
+        }
         return Ok(CliAction::Version);
     }
 

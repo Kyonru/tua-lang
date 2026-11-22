@@ -400,3 +400,18 @@ print a JSON report (`love.canValidate`, `love.version`, and
 project, and can briefly open LÖVE’s graphics window. Each backend is bounded
 by a timeout; unavailable tools are reported in JSON rather than as command
 failure. `TUA_LOVE` and `TUA_GLSLANG` select trusted executables.
+
+## Compiler build identity
+
+`tua --version` keeps its one-line version output. `tua --version --json` reports
+schema version 1, package version, build-time Git revision and dirty state,
+compiler target triple/profile, and SHA-256 of the executable being run.
+Unavailable Git/hash fields are JSON null; an archive build does not invent a
+revision. The revision describes the compiler build, not the current game checkout.
+A dirty build's revision alone does not identify its source; compare its hash.
+`tua build --build-report` includes the same compiler information alongside its
+existing cache decisions and phase timings. Normal builds remain unchanged.
+
+The extension probes this optional capability without blocking language-server
+startup. Its output channel and **Tua: Copy Debug Info** show the selected
+compiler's provenance. Older compilers remain supported and report unknown fields.

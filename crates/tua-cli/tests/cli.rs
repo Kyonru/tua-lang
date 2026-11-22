@@ -7249,6 +7249,29 @@ print("readonly erasure passed")
 }
 
 #[test]
+fn structured_version_identifies_the_actual_executable_without_a_project() {
+    use sha2::{Digest, Sha256};
+    let output = tua().args(["--version", "--json"]).output().unwrap();
+    assert!(output.status.success());
+    let info: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(info["schemaVersion"], 1);
+    assert_eq!(info["version"], env!("CARGO_PKG_VERSION"));
+    assert!(info["target"]
+        .as_str()
+        .is_some_and(|target| !target.is_empty()));
+    let hash = format!(
+        "{:x}",
+        Sha256::digest(fs::read(env!("CARGO_BIN_EXE_tua")).unwrap())
+    );
+    assert_eq!(info["executableSha256"], hash);
+    let ordinary = tua().arg("--version").output().unwrap();
+    assert_eq!(
+        String::from_utf8(ordinary.stdout).unwrap(),
+        format!("tua {}\n", env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn busted_assertions_accept_imported_records_and_reject_nil_at_runtime() {
     if !Command::new("busted")
         .arg("--version")

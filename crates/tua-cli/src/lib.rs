@@ -3,6 +3,7 @@ mod args;
 mod asset_pipeline;
 mod atomic_fs;
 mod build;
+mod build_info;
 mod check;
 mod command;
 mod dev;
@@ -24,6 +25,7 @@ pub use api::{run_api_command, run_mcp_command};
 pub use args::{
     command_help, parse_args, version_text, CliAction, CommandName, CommandOptions, HELP,
 };
+pub use build_info::{build_info, BuildInfo};
 pub use command::{run_command, run_lsp_command, run_watch_command};
 pub use error::CliError;
 pub use testing::TestOptions;
