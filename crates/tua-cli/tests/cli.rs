@@ -7441,3 +7441,81 @@ fn fmt_explicit_and_stdin_paths_reject_symlinks() {
     assert!(!output.status.success());
     assert_eq!(fs::read_to_string(&target).unwrap(), "local value=1\n");
 }
+
+#[test]
+fn nullable_ecs_wrappers_build_and_run_across_modules() {
+    let temp = TempDir::new("nullable-ecs-wrappers");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("src/components.tua"),
+        r#"local Position = ECS.component("Position", { x = "number" })
+return { Position = Position }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/access.tua"),
+        r#"local C = require("components")
+local world = ECS.world()
+local read = world:reader(C.Position)
+local function lookup(id: number)
+  local value = read(id)
+  if value and value.x < 0 then return nil end
+  return value
+end
+local function direct(id: number)
+  local value = world:get(id, C.Position)
+  if value and value.x < 0 then return nil end
+  return value
+end
+return { world = world, lookup = lookup, direct = direct }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local C = require("components")
+local access = require("access")
+local world = access.world
+local id = world:create()
+assert(access.lookup(id) == nil)
+world:add(id, C.Position, { x = 12 })
+local value = access.lookup(id)
+assert(value)
+assert(value.x == 12)
+world:add(id, C.Position, { x = -1 })
+assert(access.lookup(id) == nil)
+assert(access.direct(id) == nil)
+world:remove(id, C.Position)
+assert(access.lookup(id) == nil)
+world:clear()
+local fresh = world:create()
+world:add(fresh, C.Position, { x = 42 })
+local current = access.direct(fresh)
+assert(current)
+assert(current.x == 42)
+world:destroy(fresh)
+assert(access.lookup(fresh) == nil)
+"#,
+    )
+    .unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    if Command::new("lua")
+        .arg("-v")
+        .output()
+        .is_ok_and(|out| out.status.success())
+    {
+        let result = Command::new("lua")
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+    }
+}

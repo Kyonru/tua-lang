@@ -36,7 +36,15 @@ if position then
   position.x += 1
 end
 
+-- Feature: nullable wrapper returns are inferred, including early guards.
+local function visiblePosition(id: number)
+  local value = readPosition(id)
+  if value and value.x < 0 then return nil end
+  return value
+end
+
 return {
+  visiblePosition = visiblePosition,
   Position = Position,
   Velocity = Velocity,
   Sprite = Sprite,

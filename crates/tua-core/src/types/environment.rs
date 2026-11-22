@@ -41,6 +41,7 @@ use super::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeEnvironment {
+    domains: BuiltinDomainRegistry,
     path: PathBuf,
     aliases: Arc<BTreeMap<String, Type>>,
     builtin_aliases: Arc<BTreeMap<String, Type>>,
@@ -2053,10 +2054,20 @@ pub(crate) fn build_type_environment_with_domain_registry(
         });
     }
 
-    let inference_locals = locals
-        .iter()
-        .filter(|(name, _)| !local_contracts.names.contains(*name))
-        .map(|(name, ty)| (name.clone(), ty.clone()))
+    let declared = crate::builtin_module::declared_names(parsed);
+    let inference_locals = domains
+        .builtin_locals()
+        .into_iter()
+        .filter(|(name, _)| {
+            !declared.contains(name)
+                && (name != crate::save::MODULE_NAME || parsed.raw.language == ParsedLanguage::Tua)
+        })
+        .chain(
+            locals
+                .iter()
+                .filter(|(name, _)| !local_contracts.names.contains(*name))
+                .map(|(name, ty)| (name.clone(), ty.clone())),
+        )
         .collect();
     let function_origins = function_origins(parsed, &functions);
     let inferred_returns = infer_function_return_types(
@@ -2065,6 +2076,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
         &inference_locals,
         &functions,
         &local_contracts,
+        domains,
     );
 
     for (index, function) in functions.iter_mut().enumerate() {
@@ -2183,6 +2195,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
     };
 
     let environment = TypeEnvironment {
+        domains,
         path: parsed.path.clone(),
         aliases,
         builtin_aliases: shared_aliases,
@@ -4262,6 +4275,7 @@ fn push_doc_conflict(diagnostics: &mut Vec<Diagnostic>, diagnostic: Diagnostic) 
 
 #[derive(Clone, Copy)]
 struct FunctionReturnQuery<'a> {
+    domains: BuiltinDomainRegistry,
     local_contracts: &'a LocalContracts,
     parsed: &'a ParsedSource,
     aliases: &'a BTreeMap<String, Type>,
@@ -4308,6 +4322,11 @@ impl<'a> InferenceQueryContext<'a> {
         }
     }
 
+    fn with_domains(mut self, domains: BuiltinDomainRegistry) -> Self {
+        self.domains = domains;
+        self
+    }
+
     fn with_assert_overridden(mut self, overridden: bool) -> Self {
         self.assert_overridden = overridden;
         self
@@ -4350,6 +4369,7 @@ fn infer_function_return_types(
     locals: &BTreeMap<String, Type>,
     functions: &[TypedFunction],
     local_contracts: &LocalContracts,
+    domains: BuiltinDomainRegistry,
 ) -> BTreeMap<FunctionInferenceKey, InferredReturns> {
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_declaration(parsed, functions);
@@ -4362,6 +4382,7 @@ fn infer_function_return_types(
         let function_types = function_types_by_name(parsed, functions, &returns);
 
         let query = FunctionReturnQuery {
+            domains,
             parsed,
             local_contracts,
             aliases,
@@ -4426,6 +4447,7 @@ pub(crate) fn inferred_function_type_from_body_with_locals(
         &runtime_imports,
         environment.table_remove_is_overridden(),
     )
+    .with_domains(environment.domains)
     .with_assert_overridden(environment.assert_overridden);
     infer_function_type_from_context(parsed, body, context, &locals)
 }
@@ -4717,6 +4739,7 @@ fn collect_function_return_types(
         query.runtime_imports,
         query.table_remove_overridden,
     )
+    .with_domains(query.domains)
     .with_assert_overridden(query.assert_overridden);
 
     for stmt in block.stmts() {
@@ -4743,6 +4766,7 @@ fn collect_function_return_types(
                     query.runtime_imports,
                     query.table_remove_overridden,
                 )
+                .with_domains(query.domains)
                 .with_assert_overridden(query.assert_overridden);
 
                 if let Some(return_types) =
@@ -4778,6 +4802,7 @@ fn collect_function_return_types(
                     query.runtime_imports,
                     query.table_remove_overridden,
                 )
+                .with_domains(query.domains)
                 .with_assert_overridden(query.assert_overridden);
 
                 if let Some(return_types) =
@@ -4872,11 +4897,14 @@ fn infer_block_return_types(
         &mut has_unresolved_return,
     );
 
-    if returns.is_empty() {
-        if has_unresolved_return {
-            return None;
-        }
+    // A known branch must not hide a return whose dependencies are unresolved.
+    // Leave the contract open for the shared/project resolver instead of publishing
+    // a partial result (for example `nil` from an ECS lookup's early guard).
+    if has_unresolved_return {
+        return None;
+    }
 
+    if returns.is_empty() {
         // A body with no return statements and a reachable end implicitly
         // returns Lua nil. Do not treat an unconditional loop as a nil result;
         // Tua has no `never` type for bodies that cannot complete normally.
@@ -5122,7 +5150,17 @@ fn collect_return_types_in_block(
         {
             returns.push(return_types);
         } else {
-            *has_unresolved_return = true;
+            // A direct self-call contributes the same result as the base cases.
+            // Keep that existing fixed-point behavior; other unresolved calls
+            // must not be mistaken for a branch that returns nothing.
+            let recursive = return_stmt.returns().len() == 1
+                && matches!(return_stmt.returns().iter().next(),
+                    Some(Expression::FunctionCall(call))
+                        if field_chain_before_first_call(call).is_some_and(|parts|
+                            parts.len() == 1 && parts[0] == context.current_function));
+            if !recursive {
+                *has_unresolved_return = true;
+            }
         }
     }
 }

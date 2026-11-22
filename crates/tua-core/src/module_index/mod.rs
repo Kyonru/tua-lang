@@ -21,8 +21,8 @@ use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::source_text::function_name_table_field;
 use crate::types::{
     build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
-    inferred_function_type_from_body, FunctionParameter, FunctionType, TableField, Type,
-    TypeEnvironment, TypedFunction,
+    inferred_function_type_from_body, inferred_function_type_from_body_with_locals,
+    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
 };
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
@@ -746,7 +746,8 @@ impl<'a> ExportInferer<'a> {
                             parameter_documentation: Vec::new(),
                         });
 
-                    if function_returns_only_any(&entry.ty) && !function_returns_only_any(&inferred)
+                    if function_returns_unresolved(&entry.ty)
+                        && !function_returns_unresolved(&inferred)
                     {
                         entry.ty = inferred;
                     }
@@ -784,9 +785,20 @@ impl<'a> ExportInferer<'a> {
                 }
             }
             ast::Stmt::LocalFunction(function) => {
+                let inferred = self
+                    .environment
+                    .map(|environment| {
+                        inferred_function_type_from_body_with_locals(
+                            self.parsed,
+                            environment,
+                            function.body(),
+                            &self.locals,
+                        )
+                    })
+                    .unwrap_or_else(|| function_type_from_body(function.body()));
                 self.locals
                     .entry(token_text(function.name()))
-                    .or_insert_with(|| function_type_from_body(function.body()));
+                    .or_insert(inferred);
             }
             ast::Stmt::If(if_stmt) => self.collect_conditional_members(if_stmt),
             _ => {}
@@ -1121,6 +1133,13 @@ impl<'a> ExportInferer<'a> {
             .and_then(|environment| environment.function(&name))
         {
             let ty = self.resolve_export_type(&typed_function_type(function));
+            if function_returns_unresolved(&ty) {
+                if let Some(inferred) = self.locals.get(&name) {
+                    if !function_returns_unresolved(inferred) {
+                        return Some(inferred.clone());
+                    }
+                }
+            }
 
             self.locals.insert(name.clone(), ty.clone());
 
@@ -1396,15 +1415,19 @@ fn normalized_export_path(name: &str) -> Vec<String> {
         .collect()
 }
 
-fn function_returns_only_any(ty: &Type) -> bool {
+fn function_returns_unresolved(ty: &Type) -> bool {
     let Type::Function(function) = ty else {
         return false;
     };
 
-    function
-        .return_types_or_any()
-        .iter()
-        .all(|ty| *ty == Type::Any)
+    fn unresolved(ty: &Type) -> bool {
+        match ty {
+            Type::Any => true,
+            Type::Union(types) => types.iter().any(unresolved),
+            _ => false,
+        }
+    }
+    function.return_types_or_any().iter().any(unresolved)
 }
 
 fn enrich_self_index_constructor_returns(

@@ -300,3 +300,22 @@ local ECS = require("project_ecs")
 
 The current component schema diagnostics target clear static calls. Dynamic
 component construction remains permissive.
+
+### Nullable Lookup Wrappers
+
+A wrapper around a bound reader or `world:get` infers the component payload
+plus `nil`, including early-return guards and imported component schemas.
+The contract survives module exports and re-exports, so callers retain field
+completion and type checking:
+
+```tua
+local readPosition = world:reader(Position)
+local function visiblePosition(id: number)
+  local value = readPosition(id)
+  if value and value.x < 0 then return nil end
+  return value
+end
+```
+
+Guard a nullable result before accessing its fields. An explicit return
+annotation remains useful when defining a public API.

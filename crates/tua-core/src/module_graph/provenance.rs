@@ -390,19 +390,22 @@ fn function_return_forwards(
 }
 
 #[derive(Default)]
-struct ReaderCalls(bool);
-impl Visitor for ReaderCalls {
+struct ComponentAccessCalls(bool);
+impl Visitor for ComponentAccessCalls {
     fn visit_function_call(&mut self, call: &full_moon::ast::FunctionCall) {
-        self.0 |= crate::ast_utils::field_chain_before_first_call(call)
-            .is_some_and(|parts| parts.last().is_some_and(|part| part == "reader"));
+        self.0 |= crate::ast_utils::field_chain_before_first_call(call).is_some_and(|parts| {
+            parts
+                .last()
+                .is_some_and(|part| crate::ecs::is_component_access_method(part))
+        });
     }
 }
 
 impl ModuleGraph {
     /// Reuse normal semantic/export inference with indexed imports. File-local
-    /// inference cannot specialize a reader whose component comes from another
+    /// inference cannot specialize component access whose schema comes from another
     /// module. No project code or filesystem lookup is needed here.
-    pub(super) fn enrich_reader_exports(
+    pub(super) fn enrich_component_access_exports(
         &mut self,
         inputs: &[ModuleGraphInput<'_>],
         forwards: &[RuntimeExportForward],
@@ -413,10 +416,7 @@ impl ModuleGraph {
                 let (Some(parsed), Some(_)) = (input.parsed, input.environment) else {
                     return false;
                 };
-                if !parsed.source.contains("reader") {
-                    return false;
-                }
-                let mut calls = ReaderCalls::default();
+                let mut calls = ComponentAccessCalls::default();
                 calls.visit_ast(&parsed.ast);
                 calls.0
             })

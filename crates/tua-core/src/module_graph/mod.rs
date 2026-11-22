@@ -327,7 +327,7 @@ impl ModuleGraph {
             .flatten()
             .collect::<Vec<_>>();
         graph.propagate_runtime_export_forwards(&forwards);
-        graph.enrich_reader_exports(&inputs, &forwards);
+        graph.enrich_component_access_exports(&inputs, &forwards);
         let class_returns_changed = graph.enrich_imported_class_returns(&inputs);
         graph.propagate_runtime_export_forwards(&forwards);
         if class_returns_changed {

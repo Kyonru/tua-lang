@@ -100,7 +100,7 @@ guides cannot silently omit an example.
   LuaJIT guidance for table-shape drift, hot-loop dynamic writes, and the
   `any` escape hatch. The feature is disabled by default, so the example
   remains buildable without warnings.
-- `src/ecs.tua` demonstrates Tua's zero-setup ECS: component schemas, typed
+- `src/ecs.tua` demonstrates Tua's zero-setup ECS and inferred nullable lookup wrappers: component schemas, typed
   component readers for repeated indexed access,
   world/entity/query/system APIs, component diagnostics, and a system update
   over matching position and velocity data. Builds include `tuaecs.lua` only

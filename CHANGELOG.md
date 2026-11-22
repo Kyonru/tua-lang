@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Nullable ECS lookup wrappers retain payload types across early guards, imported
+  schemas and re-exports, including completion and argument/field diagnostics.
+
 ### Added
 
 - `tua build` persistently reuses successful unchanged builds, validating compiler,

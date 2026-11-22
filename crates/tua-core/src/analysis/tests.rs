@@ -12032,3 +12032,84 @@ mod module_shadowing;
 mod reassignment_contracts;
 
 mod save_callbacks;
+
+#[test]
+fn nullable_ecs_wrappers_preserve_returns_across_guards_and_reexports() {
+    for accessor in ["read(id)", "world:get(id, C.Position)"] {
+        let reader = if accessor == "read(id)" {
+            "local read = world:reader(C.Position)"
+        } else {
+            ""
+        };
+        let fixture = Fixture::parse(&format!(
+            r#"-- file: src/components.tua
+local Position = ECS.component("Position", {{ x = "number" }})
+return {{ Position = Position }}
+-- file: src/access.tua
+local C = require("components")
+local world = ECS.world()
+{reader}
+local function get(id: number)
+  local value = {accessor}
+  if value and value.x < 0 then return nil end
+  return value
+end
+return {{ get = get }}
+-- file: src/exports.tua
+return require("access")
+-- file: src/main.tua
+local access = require("exports")
+local p = access.get(<|signature|>1)
+print(<|payload|>p)
+if p then
+  print(p.<|field|>x)
+  p.x = "wrong"
+end
+local bad = access.get("wrong")
+"#
+        ));
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, &file.source);
+        }
+        let snapshot = host.snapshot();
+        let errors = snapshot.pipeline_diagnostics("src/access.tua");
+        assert!(
+            !errors
+                .iter()
+                .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{accessor}: {errors:?}"
+        );
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position("payload"))
+            .unwrap();
+        assert!(
+            hover.contents.contains("x: number") && hover.contents.contains("nil"),
+            "{accessor}: {hover:?}"
+        );
+        let fields =
+            completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+        assert!(fields.contains(&"x".to_owned()), "{accessor}: {fields:?}");
+        let signature = snapshot
+            .signature_help("src/main.tua", fixture.position("signature"))
+            .unwrap();
+        assert!(
+            signature.signatures[0].label.contains("number"),
+            "{signature:?}"
+        );
+        let errors = snapshot.pipeline_diagnostics("src/main.tua");
+        assert!(
+            errors
+                .iter()
+                .any(|d| d.message.contains("p.x") && d.message.contains("string")),
+            "{errors:?}"
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|d| d.message.contains("expected number, found string")),
+            "{errors:?}"
+        );
+    }
+}
