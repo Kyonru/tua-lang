@@ -1,0 +1,75 @@
+-- Independent input instances keep edge detection current even while paused.
+local globalInput = input({ controls = { pause = { "key:escape" } } })
+local playInput = input({ controls = { fire = { "key:space" } } })
+local menuInput = input({ controls = { confirm = { "key:space" } } })
+local debugInput = input({ controls = { upgrade = { "key:u" } } })
+local gameplayTweens = Tween.group()
+local uiTweens = Tween.group()
+local marker = { x = 0 }
+local menu = { opacity = 0 }
+local menuTween = uiTweens:to(menu, 0.15, { opacity = 0 })
+local state = {
+  paused = false,
+  practice = false,
+  gameplayTime = 0,
+  uiTime = 0,
+  shots = 0,
+  confirms = 0,
+  upgrades = 0,
+}
+
+local function pause(value: boolean)
+  state.paused = value
+  menuTween:stop()
+  menuTween = uiTweens:to(menu, 0.15, { opacity = value and 1 or 0 })
+end
+
+local function reset(practice: boolean)
+  gameplayTweens = Tween.group()
+  uiTweens = Tween.group()
+  state.paused = false
+  state.practice = practice
+  state.gameplayTime = 0
+  state.uiTime = 0
+  state.shots = 0
+  state.confirms = 0
+  state.upgrades = 0
+  marker.x = 0
+  menu.opacity = 0
+  menuTween = uiTweens:to(menu, 0.15, { opacity = 0 })
+  gameplayTweens:to(marker, 10, { x = 400 })
+end
+
+local function update(dt: number)
+  globalInput:update()
+  playInput:update()
+  menuInput:update()
+  debugInput:update()
+  state.uiTime += dt
+  uiTweens:update(dt)
+
+  -- Route global commands first. A pause transition consumes this frame.
+  if globalInput:pressed("pause") then
+    pause(not state.paused)
+    return
+  end
+  if state.paused then
+    if menuInput:pressed("confirm") then state.confirms += 1 end
+    return
+  end
+
+  -- Explicit mode gates prevent debug upgrades from altering normal runs.
+  if state.practice and debugInput:pressed("upgrade") then state.upgrades += 1 end
+  if playInput:pressed("fire") then state.shots += 1 end
+  state.gameplayTime += dt
+  gameplayTweens:update(dt)
+end
+
+return {
+  state = state,
+  marker = marker,
+  menu = menu,
+  reset = reset,
+  pause = pause,
+  update = update,
+}

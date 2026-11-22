@@ -389,7 +389,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full build-love-save build-love-tua build-audio-system build-features build-project-model build-starfall ## Compile all bundled examples.
+build-examples: build-pause-input build-love-minimal build-love-full build-love-save build-love-tua build-audio-system build-features build-project-model build-starfall ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -547,3 +547,7 @@ extension-smoke-features: extension-install extension-open-features ## Install t
 .PHONY: native-replay-tool-test
 native-replay-tool-test: ## Check the opt-in native replay tool without a graphics host.
 	PYTHONPATH=scripts python3 -m unittest scripts/love_replay_test.py
+
+.PHONY: build-pause-input
+build-pause-input: ## Check formatting and compile the pause/input routing example.
+	cd examples/pause-input && $(TUA) fmt --check && $(TUA) build

@@ -1,0 +1,8 @@
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+
+[diagnostics]
+rules = false
+undefined_variables = true

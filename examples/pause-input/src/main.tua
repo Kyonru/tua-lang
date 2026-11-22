@@ -1,0 +1,26 @@
+local model = require("state")
+function love.load()
+  love.window.setMode(640, 360)
+  love.window.setTitle("Tua: pause and input routing")
+  model.reset(false)
+end
+function love.update(dt: number)
+  model.update(dt)
+end
+function love.focus(focused: boolean)
+  if not focused then model.pause(true) end
+end
+function love.draw()
+  local state = model.state
+  love.graphics.clear(0.06, 0.08, 0.13)
+  love.graphics.setColor(0.9, 0.94, 1)
+  love.graphics.print("ESC: pause | SPACE: fire / menu confirm", 24, 24)
+  love.graphics.print("Gameplay time: " .. string.format("%.2f", state.gameplayTime), 24, 60)
+  love.graphics.print("UI time: " .. string.format("%.2f", state.uiTime), 24, 84)
+  love.graphics.print("Shots: " .. state.shots .. " | Menu confirms: " .. state.confirms, 24, 108)
+  love.graphics.print("Practice upgrades: " .. state.upgrades, 24, 132)
+  love.graphics.setColor(0.35, 0.8, 0.7)
+  love.graphics.rectangle("fill", 24 + model.marker.x, 185, 24, 24)
+  love.graphics.setColor(0.8, 0.7, 0.95, model.menu.opacity)
+  love.graphics.print("PAUSED - UI continues, gameplay stops", 24, 260)
+end

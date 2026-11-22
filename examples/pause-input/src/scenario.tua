@@ -1,0 +1,68 @@
+-- This module is only loaded explicitly by the development replay runner.
+type Context = {
+  frame: number,
+  dt: number,
+  time: number,
+  seed: number,
+  key: (key: string, down: boolean) -> nil,
+}
+local model = require("state")
+local frozenTime = 0
+local frozenX = 0
+local uiBeforePause = 0
+local function beforeFrame(context: Context)
+  local frame = context.frame
+  if frame == 2 then context.key("space", true) end
+  if frame == 3 then context.key("space", false) end
+  if frame == 4 then context.key("u", true) end
+  if frame == 5 then
+    context.key("u", false)
+    context.key("escape", true)
+    frozenTime = model.state.gameplayTime
+    frozenX = model.marker.x
+    uiBeforePause = model.state.uiTime
+  end
+  if frame == 6 then context.key("escape", false) end
+  if frame == 8 then context.key("space", true) end
+  if frame == 16 then
+    assert(model.state.gameplayTime == frozenTime)
+    assert(model.marker.x == frozenX)
+    assert(model.state.uiTime > uiBeforePause)
+    assert(model.menu.opacity == 1)
+    assert(model.state.shots == 1)
+    assert(model.state.confirms == 1)
+    assert(model.state.upgrades == 0)
+    context.key("escape", true)
+  end
+  if frame == 17 then context.key("escape", false) end
+  if frame == 18 then
+    assert(model.state.shots == 1)
+    assert(model.state.gameplayTime <= frozenTime + 2 * context.dt + 0.00001)
+    context.key("space", false)
+  end
+  if frame == 19 then context.key("space", true) end
+  if frame == 20 then
+    assert(model.state.shots == 2)
+    context.key("space", false)
+    model.reset(true)
+  end
+  if frame == 21 then context.key("u", true) end
+  if frame == 22 then context.key("u", false) end
+  if frame == 23 then
+    context.key("escape", true)
+    context.key("space", true)
+  end
+  if frame == 24 then
+    context.key("escape", false)
+    context.key("space", false)
+  end
+end
+local function verify(context: Context)
+  assert(context.frame >= 24)
+  assert(model.state.practice)
+  assert(model.state.paused)
+  assert(model.state.upgrades == 1)
+  assert(model.state.shots == 0)
+  assert(model.state.confirms == 0)
+end
+return { beforeFrame = beforeFrame, verify = verify }

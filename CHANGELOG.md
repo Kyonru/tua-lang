@@ -13,6 +13,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Runnable pause/input routing example using existing input instances and tween
+  groups, with native checks for held keys, mode gating and independent clocks.
+
 - Opt-in native LÖVE scenario runner with scripted input, isolated test saves,
   PNG/video capture, outcome assertions and compiler/runtime provenance.
 

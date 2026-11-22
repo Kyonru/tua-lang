@@ -100,6 +100,11 @@ end
 
 `Tween.remove(t)` and `t:stop()` both stop a tween early.
 
+For a runnable pause menu with separate input routing and a native scenario,
+see [pause-input](https://github.com/Kyonru/tua-lang/tree/main/examples/pause-input).
+Poll input while paused to keep press/release edges current; gate gameplay
+updates separately from UI updates.
+
 ## What Tua Checks
 
 Tua types `Tween` from the runtime's own LuaDoc, so it checks how you call it:
