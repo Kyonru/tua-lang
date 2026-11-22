@@ -134,7 +134,7 @@ impl ShaderWorker {
         let now = Instant::now();
         if !server.shaders.enabled
             || server.shaders.busy
-            || !server.shaders.due.is_some_and(|due| due <= now)
+            || server.shaders.due.is_none_or(|due| due > now)
         {
             return;
         }

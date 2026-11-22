@@ -288,10 +288,10 @@ impl ProjectWorkspace {
     }
 
     pub fn is_production_path(&self, path: &Path) -> bool {
-        !self
+        !(self
             .test_source_root()
             .is_some_and(|root| path.starts_with(root))
-            && !(self.config.test.exclude_specs && self.is_spec_path(path))
+            || self.config.test.exclude_specs && self.is_spec_path(path))
     }
 
     pub fn output_roots(&self) -> &[PathBuf] {

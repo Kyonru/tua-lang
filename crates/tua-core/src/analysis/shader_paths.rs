@@ -39,7 +39,7 @@ impl Visitor for ShaderScanPaths<'_> {
         let Some(Expression::FunctionCall(call)) = local.expressions().iter().next() else {
             return;
         };
-        if !field_chain_before_first_call(call).is_some_and(|parts| parts == ["ShaderScan", "new"])
+        if field_chain_before_first_call(call).is_none_or(|parts| parts != ["ShaderScan", "new"])
             || !asset::loader_binding_is_builtin(scope, call)
         {
             return;

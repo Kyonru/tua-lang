@@ -3174,9 +3174,9 @@ impl AnalysisSnapshot {
             .and_then(|parsed| self.module_graph.module(&parsed.path))
             .is_some_and(|module| !module.require_edges.is_empty());
 
-        (has_type_imports || has_runtime_imports)
-            && (has_type_imports
-                || file
+        has_type_imports
+            || (has_runtime_imports
+                && file
                     .semantics()
                     .map(|semantics| semantics.environment_diagnostics.is_empty())
                     .or_else(|| {
