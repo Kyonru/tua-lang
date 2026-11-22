@@ -854,7 +854,7 @@ pub(super) fn fast_diagnostics_for_source(
             .push(crate::i18n::MODULE_NAME.to_owned());
     }
     let project_types_required = !parsed.type_imports.is_empty()
-        || !crate::module_index::require_bindings_for_parsed_source(&parsed).is_empty();
+        || !crate::module_link::module_specifier_literals(&parsed.source).is_empty();
     diagnostics.extend(
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
             &parsed,

@@ -1062,7 +1062,7 @@ impl AnalysisSnapshot {
             Expression::FunctionCall(function_call) => {
                 if function_call
                     .suffixes()
-                    .filter(|suffix| matches!(suffix, full_moon::ast::Suffix::Call(_)))
+                    .skip_while(|suffix| !matches!(suffix, full_moon::ast::Suffix::Call(_)))
                     .count()
                     > 1
                 {
@@ -1097,6 +1097,18 @@ impl AnalysisSnapshot {
                 Some(crate::types::infer_or_type(&left, &right))
             }
             Expression::Var(var) if return_index == 0 => {
+                if let ast::Var::Expression(value) = var {
+                    if crate::ast_utils::var_expression_call_prefix(value).is_some() {
+                        let call = FunctionCall::new(value.prefix().clone())
+                            .with_suffixes(value.suffixes().cloned().collect());
+                        return self.project_type_for_expression(
+                            parsed,
+                            &Expression::FunctionCall(call),
+                            0,
+                            local_types,
+                        );
+                    }
+                }
                 let parts = plain_field_chain_from_var(var)?;
 
                 self.project_type_for_field_chain(parsed, &parts)
@@ -1118,6 +1130,21 @@ impl AnalysisSnapshot {
         local_types: &BTreeMap<String, Type>,
     ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
+        if return_index == 0
+            && parts.as_slice() == ["require"]
+            && !self
+                .file(&parsed.path)?
+                .scope()?
+                .has_non_builtin_binding_at("require", node_span(function_call)?.start)
+        {
+            let module = crate::bundled_runtime::required_module_from_call(function_call)?;
+            let path = self.indexed_module_path_for_specifier(parsed, &module)?;
+            let ty = self.indexed_module_value_type(path)?;
+            return Some(
+                self.type_database
+                    .resolve_type(&self.module_graph, path, &ty),
+            );
+        }
         if return_index == 0
             && parts.as_slice() == [crate::store::CONSTRUCTOR_NAME]
             && parsed.raw.language == crate::ParsedLanguage::Tua
@@ -3123,17 +3150,16 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn project_type_check_required(&self, file: &AnalysisFile) -> bool {
-        let has_type_imports = file
+        let parsed = file
             .parsed
             .as_ref()
             .ok()
             .map(Arc::as_ref)
-            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed))
-            .is_some_and(|parsed| !parsed.type_imports.is_empty());
-        let has_runtime_imports = file
-            .hir()
-            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.hir))
-            .is_some_and(|hir| !hir.require_bindings.is_empty());
+            .or_else(|| file.degraded_semantics.as_ref().map(|facts| &facts.parsed));
+        let has_type_imports = parsed.is_some_and(|parsed| !parsed.type_imports.is_empty());
+        let has_runtime_imports = parsed
+            .and_then(|parsed| self.module_graph.module(&parsed.path))
+            .is_some_and(|module| !module.require_edges.is_empty());
 
         (has_type_imports || has_runtime_imports)
             && (has_type_imports

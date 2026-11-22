@@ -2326,6 +2326,17 @@ impl<'a> Checker<'a> {
             return vec![ty];
         }
 
+        if let Some(module) = crate::bundled_runtime::required_module_from_call(function_call) {
+            if !self
+                .scope
+                .has_non_builtin_binding_at("require", node_position(function_call))
+            {
+                if let Some(ty) = self.environment.required_module_type(&module) {
+                    return vec![ty.clone()];
+                }
+            }
+        }
+
         if let Some(ty) = self.setmetatable_return_type(function_call) {
             return vec![ty];
         }

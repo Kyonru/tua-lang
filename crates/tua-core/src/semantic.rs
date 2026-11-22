@@ -469,14 +469,6 @@ impl<'a> SemanticModel<'a> {
             return Vec::new();
         }
         let first = self.return_types_of_first_call(function_call, position, depth);
-        if function_call
-            .suffixes()
-            .filter(|s| matches!(s, Suffix::Call(_)))
-            .count()
-            == 1
-        {
-            return first;
-        }
         crate::types::resolve_chained_call_returns(self.alias_map(), function_call, first)
     }
 

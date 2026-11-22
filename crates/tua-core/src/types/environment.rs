@@ -5706,6 +5706,18 @@ pub(crate) fn resolve_chained_call_returns(
                     .into_iter()
                     .collect()
             }
+            Suffix::Index(Index::Brackets { expression, .. }) => {
+                let key = match expression {
+                    Expression::String(value) => {
+                        Type::string_literal(unquote_string(&value.to_string()))
+                    }
+                    Expression::Number(_) => Type::number(),
+                    _ => return Vec::new(),
+                };
+                resolve_index_type_from_map(aliases, current, &key)
+                    .into_iter()
+                    .collect()
+            }
             Suffix::Call(Call::AnonymousCall(_)) => function_return_types(aliases, current),
             Suffix::Call(Call::MethodCall(method)) => {
                 let name = token_text(method.name());
