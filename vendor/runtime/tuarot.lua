@@ -120,7 +120,10 @@ end
 ---@return number
 function Rng:int(min, max)
   min, max = integer(min, "min"), integer(max, "max")
-  assert(max >= min and max - min <= 2147483646, "integer range exceeds the seeded RNG's supported range")
+  assert(
+    max >= min and max - min <= 2147483646,
+    "integer range exceeds the seeded RNG's supported range"
+  )
   return min + math.floor(self:next() * (max - min + 1))
 end
 
@@ -156,9 +159,18 @@ Rot.Rng = Rng
 ---@type RotColorModule
 local Color = {}
 local namedColors = {
-  black = { 0, 0, 0 }, white = { 1, 1, 1 }, red = { 1, 0, 0 }, green = { 0, 0.5, 0 },
-  blue = { 0, 0, 1 }, yellow = { 1, 1, 0 }, cyan = { 0, 1, 1 }, magenta = { 1, 0, 1 },
-  orange = { 1, 0.647, 0 }, purple = { 0.5, 0, 0.5 }, gray = { 0.5, 0.5, 0.5 }, grey = { 0.5, 0.5, 0.5 },
+  black = { 0, 0, 0 },
+  white = { 1, 1, 1 },
+  red = { 1, 0, 0 },
+  green = { 0, 0.5, 0 },
+  blue = { 0, 0, 1 },
+  yellow = { 1, 1, 0 },
+  cyan = { 0, 1, 1 },
+  magenta = { 1, 0, 1 },
+  orange = { 1, 0.647, 0 },
+  purple = { 0.5, 0, 0.5 },
+  gray = { 0.5, 0.5, 0.5 },
+  grey = { 0.5, 0.5, 0.5 },
   transparent = { 0, 0, 0, 0 },
 }
 
@@ -175,7 +187,12 @@ function Color.parse(value)
     end
     assert(#hex == 6 or #hex == 8, "hex color must have 3, 6, or 8 digits")
     local r, g, b, a = hex:match("^(%x%x)(%x%x)(%x%x)(%x?%x?)$")
-    return { r = tonumber(r, 16) / 255, g = tonumber(g, 16) / 255, b = tonumber(b, 16) / 255, a = a ~= "" and tonumber(a, 16) / 255 or 1 }
+    return {
+      r = tonumber(r, 16) / 255,
+      g = tonumber(g, 16) / 255,
+      b = tonumber(b, 16) / 255,
+      a = a ~= "" and tonumber(a, 16) / 255 or 1,
+    }
   end
   local rgb = namedColors[value:lower()]
   assert(rgb, "unknown color name: " .. value)
@@ -189,14 +206,24 @@ end
 function Color.mix(a, b, amount)
   assert(finite(amount), "amount must be finite")
   amount = clamp(amount, 0, 1)
-  return { r = a.r + (b.r - a.r) * amount, g = a.g + (b.g - a.g) * amount, b = a.b + (b.b - a.b) * amount, a = a.a + (b.a - a.a) * amount }
+  return {
+    r = a.r + (b.r - a.r) * amount,
+    g = a.g + (b.g - a.g) * amount,
+    b = a.b + (b.b - a.b) * amount,
+    a = a.a + (b.a - a.a) * amount,
+  }
 end
 
 ---@param a RotColorValue
 ---@param b RotColorValue
 ---@return RotColorValue
 function Color.add(a, b)
-  return { r = clamp(a.r + b.r, 0, 1), g = clamp(a.g + b.g, 0, 1), b = clamp(a.b + b.b, 0, 1), a = clamp(a.a + b.a, 0, 1) }
+  return {
+    r = clamp(a.r + b.r, 0, 1),
+    g = clamp(a.g + b.g, 0, 1),
+    b = clamp(a.b + b.b, 0, 1),
+    a = clamp(a.a + b.a, 0, 1),
+  }
 end
 
 ---@param a RotColorValue
@@ -223,9 +250,15 @@ function Dice.roll(expression, rng)
   assert(sides, "invalid dice expression")
   count, sides = tonumber(count == "" and "1" or count), tonumber(sides)
   bonus = tonumber(bonus == "" and "0" or bonus) * (sign == "-" and -1 or 1)
-  assert((sign == "" or expression:match("[+-]%s*%d+%s*$")) and count >= 1 and count <= 1000 and sides >= 1 and sides <= 1000000000 and finite(bonus), "dice expression is invalid or exceeds supported limits")
+  assert(
+    (sign == "" or expression:match("[+-]%s*%d+%s*$")) and count >= 1 and count <= 1000 and sides >= 1 and sides <= 1000000000 and finite(bonus),
+    "dice expression is invalid or exceeds supported limits"
+  )
   local rolls, total = {}, bonus
-  for i = 1, count do rolls[i] = rng:int(1, sides); total = total + rolls[i] end
+  for i = 1, count do
+    rolls[i] = rng:int(1, sides)
+    total = total + rolls[i]
+  end
   return total, rolls
 end
 
@@ -251,13 +284,19 @@ end
 ---@param walkable boolean
 function Grid:set(x, y, walkable)
   x, y = integer(x, "x"), integer(y, "y")
-  assert(x >= 1 and y >= 1 and x <= self.width and y <= self.height and type(walkable) == "boolean", "invalid grid coordinate or value")
+  assert(
+    x >= 1 and y >= 1 and x <= self.width and y <= self.height and type(walkable) == "boolean",
+    "invalid grid coordinate or value"
+  )
   self.cells[(y - 1) * self.width + x] = walkable
 end
 
 local function makeGrid(width, height, initial)
   width, height = integer(width, "width"), integer(height, "height")
-  assert(width >= 1 and height >= 1 and width * height <= 250000, "grid dimensions exceed supported limits")
+  assert(
+    width >= 1 and height >= 1 and width * height <= 250000,
+    "grid dimensions exceed supported limits"
+  )
   local grid = { width = width, height = height, cells = {} }
   for i = 1, width * height do grid.cells[i] = initial end
   return setmetatable(grid, Grid)
@@ -279,9 +318,18 @@ end
 ---@return RotGrid grid with true cells walkable
 function Map.generate(width, height, algorithm, rng)
   width, height = integer(width, "width"), integer(height, "height")
-  assert(width >= 3 and height >= 3 and width * height <= 250000, "maze dimensions exceed supported limits")
-  assert(algorithm == "arena" or algorithm == "binaryTree" or algorithm == "sidewinder", "unsupported map algorithm")
-  assert(type(rng) == "table" and type(rng.next) == "function", "map generation requires a seeded RNG")
+  assert(
+    width >= 3 and height >= 3 and width * height <= 250000,
+    "maze dimensions exceed supported limits"
+  )
+  assert(
+    algorithm == "arena" or algorithm == "binaryTree" or algorithm == "sidewinder",
+    "unsupported map algorithm"
+  )
+  assert(
+    type(rng) == "table" and type(rng.next) == "function",
+    "map generation requires a seeded RNG"
+  )
   local grid = makeGrid(width, height, false)
   if algorithm == "arena" then return grid end
   local maxX, maxY = width - 1, height - 1
@@ -294,7 +342,10 @@ function Map.generate(width, height, algorithm, rng)
         local choices = {}
         if y > 2 then choices[#choices + 1] = { x, y - 1 } end
         if x > 2 then choices[#choices + 1] = { x - 1, y } end
-        if #choices > 0 then local chosen = rng:choice(choices); grid:set(chosen[1], chosen[2], true) end
+        if #choices > 0 then
+          local chosen = rng:choice(choices)
+          grid:set(chosen[1], chosen[2], true)
+        end
       end
     end
   elseif algorithm == "sidewinder" then
@@ -339,7 +390,9 @@ local function heapPop(heap)
   local index = 1
   while index * 2 <= #heap do
     local child = index * 2
-    if child + 1 <= #heap and heap[child + 1].priority < heap[child].priority then child = child + 1 end
+    if child + 1 <= #heap and heap[child + 1].priority < heap[child].priority then
+      child = child + 1
+    end
     if heap[child].priority >= last.priority then break end
     heap[index], index = heap[child], child
   end
@@ -349,11 +402,16 @@ end
 
 local function search(grid, startX, startY, goalX, goalY, passable, heuristic)
   local height, width = grid.height, grid.width
-  assert(width > 0 and height * width <= 250000, "grid must not be empty or exceed supported limits")
+  assert(
+    width > 0 and height * width <= 250000,
+    "grid must not be empty or exceed supported limits"
+  )
   startX, startY = integer(startX, "startX"), integer(startY, "startY")
   goalX, goalY = integer(goalX, "goalX"), integer(goalY, "goalY")
   assert(type(passable) == "function", "passable callback must be a function")
-  local function valid(x, y) return x >= 1 and y >= 1 and x <= width and y <= height and passable(grid:get(x, y), x, y) end
+  local function valid(x, y)
+    return x >= 1 and y >= 1 and x <= width and y <= height and passable(grid:get(x, y), x, y)
+  end
   if not valid(startX, startY) or not valid(goalX, goalY) then return nil end
   local start = (startY - 1) * width + startX
   local goal = (goalY - 1) * width + goalX
@@ -363,10 +421,20 @@ local function search(grid, startX, startY, goalX, goalY, passable, heuristic)
     local current = item.id
     if not closed[current] and item.cost == dist[current] then
       if current == goal then
-      local result, id = {}, goal
-      while id do local x = (id - 1) % width + 1; local y = math.floor((id - 1) / width) + 1; result[#result + 1] = { x = x, y = y }; if id == start then break end; id = previous[id] end
-      for i = 1, math.floor(#result / 2) do result[i], result[#result - i + 1] = result[#result - i + 1], result[i] end
-      return result, dist[goal]
+        local result, id = {}, goal
+        while id do
+          local x = (id - 1) % width + 1
+          local y = math.floor((id - 1) / width) + 1
+          result[#result + 1] = { x = x, y = y }
+          if id == start then
+            break
+          end
+          id = previous[id]
+        end
+        for i = 1, math.floor(#result / 2) do
+          result[i], result[#result - i + 1] = result[#result - i + 1], result[i]
+        end
+        return result, dist[goal]
       end
       closed[current] = true
       local x, y = (current - 1) % width + 1, math.floor((current - 1) / width) + 1
@@ -396,7 +464,9 @@ end
 function Path.astar(grid, startX, startY, goalX, goalY, passable)
   assert(type(grid) == "table" and type(grid.get) == "function", "grid must be a RotGrid")
   passable = passable or function(cell) return cell == true end
-  return search(grid, startX, startY, goalX, goalY, passable, function(x, y) return math.abs(goalX - x) + math.abs(goalY - y) end)
+  return search(grid, startX, startY, goalX, goalY, passable, function(x, y)
+    return math.abs(goalX - x) + math.abs(goalY - y)
+  end)
 end
 
 ---Find a shortest four-way route with Dijkstra's algorithm.
@@ -424,8 +494,14 @@ local function lineVisible(x0, y0, x1, y1, opaque)
   local err = dx - dy
   while x0 ~= x1 or y0 ~= y1 do
     local twice = 2 * err
-    if twice > -dy then err = err - dy; x0 = x0 + sx end
-    if twice < dx then err = err + dx; y0 = y0 + sy end
+    if twice > -dy then
+      err = err - dy
+      x0 = x0 + sx
+    end
+    if twice < dx then
+      err = err + dx
+      y0 = y0 + sy
+    end
     if x0 == x1 and y0 == y1 then return true end
     if opaque(x0, y0) then return false end
   end
@@ -441,8 +517,14 @@ end
 ---@param opaque fun(x: number, y: number): boolean
 ---@return RotGrid cells indexed by x and y
 function FOV.compute(width, height, originX, originY, radius, opaque)
-  width, height, radius = integer(width, "width"), integer(height, "height"), integer(radius, "radius")
-  assert(width > 0 and height > 0 and width * height <= 250000 and radius >= 0 and radius <= 64, "FOV dimensions exceed supported limits")
+  width, height, radius = integer(
+    width,
+    "width"
+  ), integer(height, "height"), integer(radius, "radius")
+  assert(
+    width > 0 and height > 0 and width * height <= 250000 and radius >= 0 and radius <= 64,
+    "FOV dimensions exceed supported limits"
+  )
   assert(type(opaque) == "function", "opaque callback is required")
   originX, originY = integer(originX, "originX"), integer(originY, "originY")
   local visible = makeGrid(width, height, false)
@@ -450,7 +532,9 @@ function FOV.compute(width, height, originX, originY, radius, opaque)
   for y = math.max(1, originY - radius), math.min(height, originY + radius) do
     for x = math.max(1, originX - radius), math.min(width, originX + radius) do
       local dx, dy = x - originX, y - originY
-      if dx * dx + dy * dy <= radius * radius and lineVisible(originX, originY, x, y, opaque) then visible:set(x, y, true) end
+      if dx * dx + dy * dy <= radius * radius and lineVisible(originX, originY, x, y, opaque) then
+        visible:set(x, y, true)
+      end
     end
   end
   return visible
@@ -461,7 +545,16 @@ Rot.FOV = FOV
 ---@type RotNoiseModule
 local Noise = {}
 Noise.__index = Noise
-local gradients = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 0.707, 0.707 }, { -0.707, 0.707 }, { 0.707, -0.707 }, { -0.707, -0.707 } }
+local gradients = {
+  { 1, 0 },
+  { -1, 0 },
+  { 0, 1 },
+  { 0, -1 },
+  { 0.707, 0.707 },
+  { -0.707, 0.707 },
+  { 0.707, -0.707 },
+  { -0.707, -0.707 },
+}
 
 ---Create deterministic 2D simplex noise with a seeded permutation.
 ---@param seed number
@@ -469,7 +562,10 @@ local gradients = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 0.707, 0.707 }, 
 function Noise.new(seed)
   local rng, permutation = Rng.new(seed), {}
   for i = 0, 255 do permutation[i] = i end
-  for i = 255, 1, -1 do local j = rng:int(0, i); permutation[i], permutation[j] = permutation[j], permutation[i] end
+  for i = 255, 1, -1 do
+    local j = rng:int(0, i)
+    permutation[i], permutation[j] = permutation[j], permutation[i]
+  end
   for i = 0, 255 do permutation[i + 256] = permutation[i] end
   return setmetatable({ permutation = permutation }, Noise)
 end
@@ -496,7 +592,11 @@ function Noise:sample(x, y)
     t = t * t
     return t * t * (gradient[1] * dx + gradient[2] * dy)
   end
-  return clamp(70 * (corner(x0, y0, { 0, 0 }) + corner(x1, y1, { i1, j1 }) + corner(x2, y2, { 1, 1 })), -1, 1)
+  return clamp(
+    70 * (corner(x0, y0, { 0, 0 }) + corner(x1, y1, { i1, j1 }) + corner(x2, y2, { 1, 1 })),
+    -1,
+    1
+  )
 end
 
 Rot.Noise = Noise
@@ -511,8 +611,14 @@ local StringGenerator = {}
 ---@param maxDepth? number
 ---@return string
 function StringGenerator.generate(grammar, start, rng, maxDepth)
-  assert(type(grammar) == "table" and type(start) == "string", "grammar and start rule are required")
-  assert(type(rng) == "table" and type(rng.next) == "function", "grammar generation requires a seeded RNG")
+  assert(
+    type(grammar) == "table" and type(start) == "string",
+    "grammar and start rule are required"
+  )
+  assert(
+    type(rng) == "table" and type(rng.next) == "function",
+    "grammar generation requires a seeded RNG"
+  )
   maxDepth = maxDepth or 32
   maxDepth = integer(maxDepth, "maxDepth")
   assert(maxDepth >= 0 and maxDepth <= 256, "maxDepth must be between 0 and 256")
@@ -540,7 +646,9 @@ ColorGrid.__index = ColorGrid
 ---@return RotColorValue
 function ColorGrid:get(x, y)
   x, y = integer(x, "x"), integer(y, "y")
-  if x < 1 or y < 1 or x > self.width or y > self.height then return { r = 0, g = 0, b = 0, a = 1 } end
+  if x < 1 or y < 1 or x > self.width or y > self.height then
+    return { r = 0, g = 0, b = 0, a = 1 }
+  end
   return self.cells[(y - 1) * self.width + x]
 end
 
@@ -558,21 +666,45 @@ end
 ---@return RotColorGrid
 function Lighting.compute(width, height, lights, opaque)
   width, height = integer(width, "width"), integer(height, "height")
-  assert(width > 0 and height > 0 and width * height <= 65536, "lighting dimensions exceed supported limits")
-  assert(type(lights) == "table" and #lights <= 256 and (opaque == nil or type(opaque) == "function"), "lights or optional opacity callback are invalid")
+  assert(
+    width > 0 and height > 0 and width * height <= 65536,
+    "lighting dimensions exceed supported limits"
+  )
+  assert(
+    type(lights) == "table" and #lights <= 256 and (opaque == nil or type(opaque) == "function"),
+    "lights or optional opacity callback are invalid"
+  )
   local result = makeColorGrid(width, height)
   for _, light in ipairs(lights) do
-    assert(finite(light.x) and finite(light.y) and finite(light.radius) and light.radius >= 0, "light needs finite x, y, and non-negative radius")
+    assert(
+      finite(light.x) and finite(light.y) and finite(light.radius) and light.radius >= 0,
+      "light needs finite x, y, and non-negative radius"
+    )
     assert(light.radius <= 64, "light radius exceeds the supported limit")
-    if opaque then assert(light.radius <= 32 and #lights <= 16, "occlusion is limited to 16 lights with radius at most 32") end
+    if opaque then
+      assert(
+        light.radius <= 32 and #lights <= 16,
+        "occlusion is limited to 16 lights with radius at most 32"
+      )
+    end
     local color = type(light.color) == "string" and Color.parse(light.color) or light.color
-    assert(type(color) == "table" and finite(color.r) and finite(color.g) and finite(color.b) and finite(color.a), "light color must have finite r, g, b, and a channels")
-    local minX, maxX = math.max(1, math.floor(light.x - light.radius)), math.min(width, math.ceil(light.x + light.radius))
-    local minY, maxY = math.max(1, math.floor(light.y - light.radius)), math.min(height, math.ceil(light.y + light.radius))
+    assert(
+      type(color) == "table" and finite(color.r) and finite(color.g) and finite(color.b) and finite(color.a),
+      "light color must have finite r, g, b, and a channels"
+    )
+    local minX, maxX = math.max(
+      1,
+      math.floor(light.x - light.radius)
+    ), math.min(width, math.ceil(light.x + light.radius))
+    local minY, maxY = math.max(
+      1,
+      math.floor(light.y - light.radius)
+    ), math.min(height, math.ceil(light.y + light.radius))
     for y = minY, maxY do
       for x = minX, maxX do
         local distance = math.sqrt((x - light.x) ^ 2 + (y - light.y) ^ 2)
-        if distance <= light.radius and (not opaque or lineVisible(math.floor(light.x), math.floor(light.y), x, y, opaque)) then
+        if distance <= light.radius
+          and (not opaque or lineVisible(math.floor(light.x), math.floor(light.y), x, y, opaque)) then
           local amount = light.radius == 0 and (distance == 0 and color.a or 0) or (1 - distance / light.radius) * color.a
           local cell = result:get(x, y)
           cell.r = clamp(cell.r + color.r * amount, 0, 1)
