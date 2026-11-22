@@ -1,4 +1,5 @@
 "use strict";
+const { causalTraceNodes } = require("./causal-trace");
 
 const compareKeys = new Intl.Collator(undefined, { numeric: true }).compare;
 
@@ -79,6 +80,8 @@ function presentObject(object, prefix, previous) {
           : valueNodes(data.state, prefix + "/state"))
         : (Object.hasOwn(data, "state") ? [row(prefix, "state", "Value", data.state)] : []);
       const changed = children.filter(node => node.change).length;
+      const causal = causalTraceNodes(data.state, prefix);
+      if (causal) children.unshift(causal);
       const fieldCount = data.state && typeof data.state === "object" ? Object.keys(data.state).length : children.length;
       summary = `${fieldCount} ${fieldCount === 1 ? "field" : "fields"}${changed ? ` · ${changed} changed` : ""}`;
       for (const [key, label] of [["updates", "Updates"], ["subscribers", "Subscribers"], ["watchers", "Field watchers"]]) {

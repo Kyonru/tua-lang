@@ -488,3 +488,35 @@ assignment code and you need to see the exact Lua executed by LOVE.
 | A `.tua` breakpoint remains unbound                                     | Confirm `emit_maps = true`, then stop and start the Tua launch configuration or command again. |
 | The session runs stale generated code                                   | Use the debugger Restart button or start the Tua launch configuration again to rebuild.       |
 | The debug build fails                                                   | Run **Tua: Focus Output** and fix the reported build diagnostics before relaunching.           |
+
+## Causal traces in the Runtime Inspector
+
+To answer “which attack created this effect, and why was it suppressed?”, opt a
+normal store into the **Causal trace** presentation by adding
+`inspectionKind = "causal-trace/v1"` to its state. Enable runtime inspection and
+its Stores category, then expand that store. This is a presentation convention,
+not a new runtime dependency or automatic gameplay event recorder.
+
+The state contains `epoch` (increment on reset), `enabled`, `overwritten`, and
+an `events` array. Each event supplies nonnegative integer `sequence` and
+`parentId` (zero means no parent), positive integer `attackId` and `rootId`,
+and optional `phase`, `reason`, `sourceKind`, `sourceId`, `targetId` and `value`.
+`phase = "suppressed"` highlights a rejected trigger. Grouping follows only
+these recorded root/parent relationships. It does not infer damage or causality
+from source code or event order. The existing creation-site action still opens
+the store's source; the raw fields remain available underneath the trace.
+
+Optional `stats` is an array of provenance strings, with `statRootId` and
+`weaponId` identifying that snapshot's root and source. Keep this evidence
+bounded and copy scalars; do not retain pooled attacks or ECS component tables.
+See the runnable store example in `examples/features/src/store.tua`.
+
+The view uses native VS Code tree controls, keyboard navigation, theme icons and
+high-contrast support. Pause, refresh, session selection and ended/stale snapshot
+labels remain the existing inspector controls. At most 128 events and 32 stat
+lines are presented. Parent traversal is bounded to 16 nodes. Missing parents,
+conflicting evidence, cycles, retention overwrites and invalid/omitted entries
+are labeled explicitly; the runtime transport's existing sampling limits still
+apply. An absent event is not proof that it never occurred. Disable tracing in
+the game to avoid producing diagnostic events; disabling the inspector alone
+does not change gameplay or stop a game's own recorder.

@@ -7,6 +7,7 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { ActivityStore } = require("../src/workspace/activity-store");
 const { InspectorSessions } = require("../src/inspector/sessions");
+const { causalTraceNodes } = require("../src/inspector/causal-trace");
 const { RuntimeOrigins } = require("../src/inspector/origins");
 const origins = new RuntimeOrigins();
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-native-"));
@@ -41,6 +42,12 @@ local pool = objectPool({ create = function() return {} end, initial = 4 })
 local bullet = pool:acquire()
 local makeStore = require("tuastore")
 local store = makeStore({ score = 0 })
+local causal = makeStore({ inspectionKind = "causal-trace/v1", epoch = 1, enabled = true,
+  events = {
+    { sequence = 1, attackId = 1, parentId = 0, rootId = 1, phase = "processing", reason = "primary" },
+    { sequence = 2, attackId = 2, parentId = 1, rootId = 1, phase = "suppressed", reason = "root_limit" }
+  }
+})
 local __tua_input = require("baton").new
 local controls = __tua_input({ controls = { confirm = { "key:space" } } })
 local BehaviorTree = require("tuabehavior")
@@ -64,7 +71,7 @@ function love.update(dt)
   store:get().player = player
   bus:emit("frame")
   -- Keep runtime objects reachable, as a real game does.
-  assert(world and machine.current == "walking" and pool:owns(bullet))
+  assert(world and machine.current == "walking" and pool:owns(bullet) and causal)
 end
 `);
   const originals = new Map(fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name))]));
@@ -89,6 +96,9 @@ end
       assert.equal(object.origin.path, path.join(output, "main.lua"));
       assert(object.origin.line > 0);
     }
+    const causal = causalTraceNodes(kind(player.entry, "stores", "causal").state, "native");
+    assert.equal(causal.children[0].description, "2 attacks · 1 suppressed");
+    assert.equal(causal.children[0].children[0].children[1].children[0].label, "suppressed: root_limit");
     assert.equal(kind(player.entry, "states").current, "walking");
     assert.equal(kind(player.entry, "stores", "store").state.score, 2);
     assert.equal(kind(player.entry, "stores", "store").state.player, player.session.title);

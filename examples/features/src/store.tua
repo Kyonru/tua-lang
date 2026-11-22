@@ -29,7 +29,34 @@ local state = game:get()
 local revision = game:revision()
 stopScore()
 
+-- Feature: optional sampled causality presentation using an ordinary store.
+local trace = store({
+  inspectionKind = "causal-trace/v1",
+  epoch = 1,
+  enabled = true,
+  overwritten = 0,
+  events = {
+    {
+      sequence = 1,
+      attackId = 1,
+      parentId = 0,
+      rootId = 1,
+      phase = "processing",
+      reason = "primary",
+    },
+    {
+      sequence = 2,
+      attackId = 2,
+      parentId = 1,
+      rootId = 1,
+      phase = "suppressed",
+      reason = "root_limit",
+    },
+  },
+})
+
 return {
+  trace = trace,
   game = game,
   -- Go to Definition on state.score opens the initial store field above.
   score = state.score,
