@@ -179,7 +179,7 @@ guides cannot silently omit an example.
   signatures, idempotent unsubscribe functions, and on-demand `tuastore.lua`
   build output. Go to Definition on a field read from `store:get()` opens its
   initial state key.
-- `src/save_contracts.tua` defines a typed save schema and a direct migration;
+- `src/save_contracts.tua` defines a typed save schema and a named migration function;
   the optional `tuasave.lua` runtime is included only when this module is used.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.

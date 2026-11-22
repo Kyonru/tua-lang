@@ -426,7 +426,7 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                 let current = named_field(options, "version").and_then(number_literal);
                 let mut versions = BTreeSet::new();
                 for field in migrations.fields().iter() {
-                    let Field::ExpressionKey { key, value, .. } = field else {
+                    let Field::ExpressionKey { key, .. } = field else {
                         if let Some(span) = node_span(field) {
                             self.report(
                                 span,
@@ -450,11 +450,8 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                             }
                         }
                     }
-                    if !matches!(value, Expression::Function(_)) {
-                        if let Some(span) = node_span(value) {
-                            self.report(span, "migration value must be a function from old data to the current snapshot");
-                        }
-                    }
+                    // Migration callability, arity and result shape are checked by the
+                    // shared expression checker. Named/imported functions are values too.
                 }
             }
         }
@@ -718,5 +715,89 @@ mod tests {
             panic!("nested settings should remain a record");
         };
         assert_eq!(settings.field("enabled").unwrap().ty, Type::boolean());
+    }
+}
+
+#[cfg(test)]
+mod named_migration_tests {
+    fn check(source: String) -> Result<(), Vec<crate::Diagnostic>> {
+        crate::check::check_tua_source_with_diagnostics_config(
+            "src/main.tua",
+            source,
+            &crate::config::DiagnosticsConfig {
+                globals: vec!["Save".to_owned()],
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn named_migrations_use_the_function_contract_not_literal_syntax() {
+        let contract = r#"
+local _profile = Save.contract({
+  slot = "profile", version = 2,
+  schema = Save.record({ count = Save.number(0) }),
+  migrations = { [1] = migrate },
+})
+"#;
+        let valid = format!("local function migrate(old: any): {{ count: number }} return {{ count = old.count }} end\n{contract}");
+        check(valid).unwrap();
+        for declaration in [
+            "local migrate = 42",
+            "local function migrate(old: any): { count: string } return { count = 'wrong' } end",
+            "local function migrate(old: any, required: number): { count: number } return { count = required } end",
+        ] {
+            let diagnostics = check(format!("{declaration}\n{contract}")).expect_err("invalid migration must fail semantic checking");
+            assert!(diagnostics.iter().any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)), "{diagnostics:?}");
+        }
+    }
+    #[test]
+    fn imported_named_migrations_keep_contracts_and_editor_signatures() {
+        let fixture = crate::Fixture::parse(
+            r#"-- file: src/migrations.tua
+local function migrate(old: any): { count: number } return { count = old.count } end
+return { migrate = migrate }
+-- file: src/main.tua
+local migrations = require("migrations")
+local _profile = Save.contract({ slot = "profile", version = 2,
+  schema = Save.record({ count = Save.number(0) }),
+  migrations = { [1] = migrations.<|hover|>migrate },
+})
+local result = migrations.migrate(<|signature|>{ count = 1 })
+"#,
+        );
+        let mut host = crate::AnalysisHost::new();
+        host.set_source_roots([std::path::PathBuf::from("src")]);
+        for file in fixture.files() {
+            host.set_file(&file.path, file.source.clone());
+        }
+        let snapshot = host.snapshot();
+        let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|d| d.severity == crate::DiagnosticSeverity::Error),
+            "{diagnostics:?}"
+        );
+        let hover = snapshot
+            .hover("src/main.tua", fixture.position("hover"))
+            .unwrap();
+        assert!(format!("{hover:?}").contains("count"), "{hover:?}");
+        assert!(snapshot
+            .signature_help("src/main.tua", fixture.position("signature"))
+            .is_some());
+        host.set_file(
+            "src/migrations.tua",
+            fixture
+                .source("src/migrations.tua")
+                .replace("count: number", "count: string"),
+        );
+        let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
     }
 }

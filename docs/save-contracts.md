@@ -65,7 +65,10 @@ end
 
 `Profile:load()` returns `snapshot | nil, issue | nil`. `nil, nil` means no save
 yet. A migration converts directly from an old version to the current schema;
-it runs in a protected call and its result is validated before use. Loading
+it runs in a protected call and its result is validated before use. Migration
+entries may reference a named or imported function, as well as an inline callback.
+Known function signatures are checked against `(old: any) -> Snapshot`; invalid
+return shapes and extra required parameters are rejected. Loading
 does not rewrite files. Use `Profile:save(snapshot)` for an explicit checkpoint.
 `persistence:update(dt)` polls the store revision and writes after the quiet
 `debounce` period or `max_interval` during continuous changes. `flush()` writes
