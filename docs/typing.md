@@ -812,3 +812,19 @@ you need temporal isolation, and validate externally supplied content at runtime
 Use this contract for shared definitions and borrowed collections. Use an owned,
 mutable type for code that is meant to change them. See
 [the runnable example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/readonly.tua).
+
+## Imported values and callback results
+
+A direct export access such as `local items = require("items").items` preserves
+its exported type, as does the literal bracket form `require("items")["items"]`.
+It is a value extracted from the module, not another alias for the whole module.
+An inner local with the same name as an imported module has its own lexical type.
+
+Assigning another value from a typed factory preserves nested literal unions in
+its returned records. This does not permit writing arbitrary strings into those
+union fields.
+
+Callbacks infer the full result list of a final returned call, including captured
+save contracts: `function() return profile:load() end` returns the snapshot and
+issue. Lua parentheses still collapse a call to one value:
+`function() return (profile:load()) end` returns only the snapshot.

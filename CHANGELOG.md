@@ -48,6 +48,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Direct `require("module").field` and literal bracket accesses preserve exported
+  types in project checking and editor queries. Local shadows of module imports
+  keep their lexical contract and completions.
+- Reassigned typed factory results retain nested literal unions. Callback return
+  inference includes captured local types and forwards a final call's multiple
+  results, while parenthesized calls retain Lua's single-result behavior.
+- Save migration entries accept named and imported functions with the same
+  argument and snapshot-result checks as inline callbacks.
+
 - Formatting long inline branches and tables inside control-flow headers stays
   stable across repeated formatting passes.
 
