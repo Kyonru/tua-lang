@@ -249,6 +249,9 @@ impl<'a> Checker<'a> {
                         &reference.resolution,
                         ScopeResolution::Global(global)
                             if global.kind == ScopeGlobalKind::LuaBuiltin
+                                || (reference.name == "assert"
+                                    && environment.has_busted_globals()
+                                    && global.kind == ScopeGlobalKind::Configured)
                     ))
                 .then_some((reference.span.start.line, reference.span.start.column))
             })
@@ -1880,6 +1883,16 @@ impl<'a> Checker<'a> {
                 |name| {
                     if name == "assert" && self.environment.assert_is_overridden() {
                         Some(Type::Any)
+                    } else if name == "assert"
+                        && self.environment.has_busted_globals()
+                        && !self
+                            .scoped_locals
+                            .iter()
+                            .any(|scope| scope.contains_key("assert"))
+                        && self.environment.local("assert").is_none()
+                        && self.environment.function("assert").is_none()
+                    {
+                        None
                     } else {
                         self.infer_named_value(name)
                     }

@@ -225,6 +225,25 @@ pub(crate) fn narrowed_type_at_position(
         narrowed: &'a mut Option<Type>,
     }
     impl<F: Fn(&str) -> Option<Type> + Copy> Visitor for ShortCircuit<'_, F> {
+        fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+            if !node_span(body).is_some_and(|span| contains_position(span, self.position)) {
+                return;
+            }
+            // Anonymous callbacks are expressions, so statement-only block walks
+            // do not visit their local guards. Do not import outer refinements.
+            let mut local = None;
+            collect_narrowed_type_at_position(
+                body.block(),
+                self.aliases,
+                self.name,
+                self.position,
+                self.lookup,
+                &mut local,
+            );
+            if local.is_some() {
+                *self.narrowed = local;
+            }
+        }
         fn visit_expression(&mut self, expression: &Expression) {
             let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
                 return;

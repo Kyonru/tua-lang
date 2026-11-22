@@ -569,6 +569,8 @@ and guard a local when you need a stable value across those operations.
 A call to the builtin `assert(value)` also narrows a local for subsequent
 statements, including completion, hover and inferred returns. Nil comparisons
 such as `assert(value ~= nil)` work too. Reassigning the local ends the guard.
+In configured Busted test sources, the supported LuaAssert `assert(value)` call
+also narrows locals and compound guards, including inside test callbacks.
 Tua does not use shadowed or replaced `assert` functions as guards, or assertions
 with function calls inside their arguments, which could mutate the guarded value.
 

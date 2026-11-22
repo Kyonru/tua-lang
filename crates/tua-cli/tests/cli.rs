@@ -7247,3 +7247,40 @@ print("readonly erasure passed")
     assert!(result.status.success(), "{result:?}");
     assert!(String::from_utf8_lossy(&result.stdout).contains("readonly erasure passed"));
 }
+
+#[test]
+fn busted_assertions_accept_imported_records_and_reject_nil_at_runtime() {
+    if !Command::new("busted")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        eprintln!("skipping real Busted assertion test: backend unavailable");
+        return;
+    }
+    let temp = TempDir::new("test-assertion-record");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::create_dir_all(temp.path().join("tests")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = \"src\"\nout = \"build\"\n[test]\nsource = \"tests\"\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/records.tua"), "export type Record = { value: number }\nlocal function capture(present: boolean): Record | nil\n if present then return { value = 7 } end\n return nil\nend\nlocal function consume(record: Record): number return record.value end\nreturn { capture = capture, consume = consume }\n").unwrap();
+    let source = "local api = require(\"records\")\ndescribe(\"records\", function()\n it(\"narrows\", function()\n  local first, second = api.capture(true), api.capture(true)\n  assert(first and second)\n  assert.are.equal(14, api.consume(first) + api.consume(second))\n end)\nend)\n";
+    let spec = temp.path().join("tests/records_spec.tua");
+    fs::write(&spec, source).unwrap();
+    let output = tua().arg("test").current_dir(temp.path()).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    fs::write(
+        &spec,
+        source.replace("api.capture(true)", "api.capture(false)"),
+    )
+    .unwrap();
+    let output = tua().arg("test").current_dir(temp.path()).output().unwrap();
+    assert!(!output.status.success());
+    assert!(
+        !String::from_utf8_lossy(&output.stderr).contains("TL1003"),
+        "{output:?}"
+    );
+}

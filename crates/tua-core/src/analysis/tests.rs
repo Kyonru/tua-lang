@@ -11954,3 +11954,73 @@ return { consume = consume }
         assert!(errors.is_empty(), "{}: {errors:?}", file.path.display());
     }
 }
+
+#[test]
+fn busted_assertions_narrow_imported_nullable_values_across_editor_surfaces() {
+    let fixture = Fixture::parse("-- file: tests/nullable_spec.tua\nlocal api = require(\"records\")\ndescribe(\"records\", function()\n  it(\"narrows\", function()\n    local first, second = api.capture(true), api.capture(true)\n    assert(first and second)\n    api.consume(first)\n    api.consume(second)\n    print(first.<|complete|>value)\n    local <|hover|>present = first\n  end)\nend)\n");
+    let mut config = ProjectConfig::default();
+    config.test.source = PathBuf::from("tests");
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src"), PathBuf::from("tests")]);
+    host.set_file("src/records.tua", "export type Record = { value: number }\nlocal function capture(present: boolean): Record | nil\n if present then return { value = 7 } end\n return nil\nend\nlocal function consume(record: Record): number return record.value end\nreturn { capture = capture, consume = consume }\n");
+    let path = "tests/nullable_spec.tua";
+    host.set_file(path, fixture.files()[0].source.clone());
+    let snapshot = host.snapshot();
+    let errors = snapshot
+        .pipeline_diagnostics(path)
+        .into_iter()
+        .filter(|d| d.severity == crate::DiagnosticSeverity::Error)
+        .collect::<Vec<_>>();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(
+        completion_labels(&snapshot.completion(path, fixture.position("complete")))
+            .contains(&"value".into())
+    );
+    let hover = snapshot.hover(path, fixture.position("hover")).unwrap();
+    assert!(
+        !hover.contents.contains("nil") && !hover.contents.contains("any"),
+        "{hover:?}"
+    );
+}
+
+#[test]
+fn busted_assertions_do_not_narrow_replaced_shadowed_or_effectful_guards() {
+    for (declaration, assertion, after) in [
+        (
+            "local assert = function(value) return true end",
+            "assert(item)",
+            "",
+        ),
+        (
+            "assert = function(value) return true end",
+            "assert(item)",
+            "",
+        ),
+        (
+            "_G.assert = function(value) return true end",
+            "assert(item)",
+            "",
+        ),
+        ("", "assert(item)", "item = nil"),
+        (
+            "local function mutate() return \"message\" end",
+            "assert(item, mutate())",
+            "",
+        ),
+    ] {
+        let mut config = ProjectConfig::default();
+        config.test.source = PathBuf::from("tests");
+        let mut host = AnalysisHost::with_config(config);
+        host.set_source_roots([PathBuf::from("tests")]);
+        host.set_file("tests/negative_spec.tua", format!("{declaration}\nlocal function consume(item: {{ value: number }}) end\nlocal function test(item: {{ value: number }} | nil)\n {assertion}\n {after}\n consume(item)\nend\n"));
+        let diagnostics = host
+            .snapshot()
+            .pipeline_diagnostics("tests/negative_spec.tua");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+            "{declaration}: {diagnostics:?}"
+        );
+    }
+}

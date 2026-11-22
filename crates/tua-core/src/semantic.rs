@@ -424,8 +424,8 @@ impl<'a> SemanticModel<'a> {
             parts,
             position,
             |name| {
-                if name == "assert" && self.environment.assert_is_overridden() {
-                    Some(Type::Any)
+                if name == "assert" {
+                    self.assertion_guard_lookup(position, 0)
                 } else {
                     self.type_of_name(name, position)
                 }
@@ -1296,6 +1296,18 @@ impl<'a> SemanticModel<'a> {
         lua_type_field_item(self.environment, ty, field)
     }
 
+    // LuaAssert is a callable table in Busted sources, but its supported
+    // unshadowed call has the same truthy continuation as Lua's builtin assert.
+    fn assertion_guard_lookup(&self, position: SourcePosition, depth: usize) -> Option<Type> {
+        if self.environment.assert_is_overridden() {
+            Some(Type::Any)
+        } else if self.environment.has_busted_globals() && self.is_unshadowed_lua_root("assert") {
+            None
+        } else {
+            self.type_of_name_without_narrowing("assert", position, depth)
+        }
+    }
+
     fn type_of_name_at_depth(
         &self,
         name: &str,
@@ -1310,8 +1322,8 @@ impl<'a> SemanticModel<'a> {
             let aliases = self.alias_map();
             if let Some(narrowed) =
                 narrowed_type_at_position(self.parsed, aliases, name, position, |lookup_name| {
-                    if lookup_name == "assert" && self.environment.assert_is_overridden() {
-                        Some(Type::Any)
+                    if lookup_name == "assert" {
+                        self.assertion_guard_lookup(position, depth + 1)
                     } else {
                         self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
                     }
@@ -1359,8 +1371,8 @@ impl<'a> SemanticModel<'a> {
         let aliases = self.alias_map();
         let guard_type =
             narrowed_type_at_position(self.parsed, aliases, guard, position, |lookup_name| {
-                if lookup_name == "assert" && self.environment.assert_is_overridden() {
-                    Some(Type::Any)
+                if lookup_name == "assert" {
+                    self.assertion_guard_lookup(position, depth + 1)
                 } else {
                     self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
                 }
@@ -2209,8 +2221,8 @@ impl<'a> SemanticModel<'a> {
                 &parts,
                 position,
                 |name| {
-                    if name == "assert" && self.environment.assert_is_overridden() {
-                        Some(Type::Any)
+                    if name == "assert" {
+                        self.assertion_guard_lookup(position, depth + 1)
                     } else {
                         self.type_of_name_at_depth(name, position, depth + 1)
                     }
@@ -3127,6 +3139,20 @@ fn collect_local_assignment_values<'a>(
 
         let evaluation_position = value_position(node_start(stmt));
         match stmt {
+            ast::Stmt::FunctionCall(call) => {
+                for expression in function_call_expression_arguments(call) {
+                    if let Expression::Function(function) = expression {
+                        collect_local_assignment_values(
+                            function.body().block(),
+                            name,
+                            position,
+                            include_reassignments,
+                            true,
+                            candidates,
+                        );
+                    }
+                }
+            }
             ast::Stmt::Assignment(assignment) if include_reassignments => {
                 let expressions = assignment.expressions().iter().collect::<Vec<_>>();
 
