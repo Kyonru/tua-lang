@@ -1031,7 +1031,13 @@ impl<'a> Checker<'a> {
         };
 
         match flow_type {
-            Some(ty) => self.insert_scoped_local(name, widen_inferred_type(&ty)),
+            Some(ty) => self.insert_scoped_local(
+                name,
+                expression.map_or_else(
+                    || ty.clone(),
+                    |expression| widen_inferred_expression_type(&ty, expression),
+                ),
+            ),
             None => self.clear_scoped_local(&name),
         }
     }
