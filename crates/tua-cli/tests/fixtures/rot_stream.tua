@@ -1,0 +1,28 @@
+-- Golden states are independent constants, also checked in LÖVE's LuaJIT.
+local legacy = Rot.Rng.new(817)
+for _, state in ipairs({ 13731319, 1001528204, 707699442 }) do
+  assert(legacy:next() == (state - 1) / 2147483646)
+end
+local rewards = Rot.Rng.stream(817, "weapon-rewards")
+local same = Rot.Rng.stream(817, "weapon-rewards")
+local scenery = Rot.Rng.stream(817, "scenery")
+for _, state in ipairs({ 1536414865, 1181264527, 26588774 }) do
+  scenery:next()
+  scenery:next()
+  local value = rewards:next()
+  assert(value == (state - 1) / 2147483646 and value == same:next())
+end
+assert(Rot.Rng.stream(817, "scenery"):next() == (666904362 - 1) / 2147483646)
+assert(Rot.Rng.stream(817, "é"):next() == (1915861205 - 1) / 2147483646)
+assert(Rot.Rng.stream(817, "a\0b"):next() == (565872414 - 1) / 2147483646)
+assert(Rot.Rng.stream(0, "weapon-rewards"):next() == (1441862131 - 1) / 2147483646)
+assert(Rot.Rng.stream(-1, "weapon-rewards"):next() == (1441862131 - 1) / 2147483646)
+assert(Rot.Rng.stream(9007199254740991, "weapon-rewards"):next() == (368930680 - 1) / 2147483646)
+assert(Rot.Rng.stream(-9007199254740991, "weapon-rewards"):next() == (1197131375 - 1) / 2147483646)
+for _, seed in ipairs({ 0 / 0, math.huge, -math.huge, 0.5, 9007199254740992 }) do
+  assert(not pcall(function() Rot.Rng.stream(seed, "invalid") end))
+end
+assert(not pcall(function() Rot.Rng.stream(817, "") end))
+local values: boolean[] = { false }
+assert(Rot.Rng.stream(817, "booleans"):choice(values) == false)
+print("rot-stream-ok")

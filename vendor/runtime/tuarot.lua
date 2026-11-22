@@ -40,6 +40,7 @@
 
 ---@class RotRngModule
 ---@field new fun(seed: number): RotRng
+---@field stream fun(seed: number, name: string): RotRng
 
 ---@class RotColorModule
 ---@field parse fun(value: string): RotColorValue
@@ -107,6 +108,29 @@ function Rng.new(seed)
   seed = integer(seed, "seed") % 2147483647
   if seed <= 0 then seed = seed + 2147483646 end
   return setmetatable({ state = seed }, Rng)
+end
+
+---Derive a repeatable named stream without advancing another generator.
+---Version 1 hashes raw name bytes with exact integer arithmetic on Lua doubles.
+---@param seed number
+---@param name string
+---@return RotRng
+function Rng.stream(seed, name)
+  seed = integer(seed, "seed")
+  assert(math.abs(seed) <= 9007199254740991, "stream seed exceeds the safe integer range")
+  assert(type(name) == "string" and #name > 0, "stream name must be a nonempty string")
+  -- LuaJIT's floor-based % can round large negative seeds differently from
+  -- integer Lua. fmod computes the remainder without that intermediate product.
+  local state = math.fmod(seed, 2147483647)
+  if state < 0 then state = state + 2147483647 end
+  if state == 0 then state = 2147483646 end
+  local label = "tua.rng.v1:" .. name
+  for i = 1, #label do
+    state = (state * 48271 + string.byte(label, i)) % 2147483647
+  end
+  -- Diffuse short suffix differences before the first Park-Miller draw.
+  for _ = 1, 3 do state = (state * 48271) % 2147483647 end
+  return Rng.new(state)
 end
 
 ---@return number

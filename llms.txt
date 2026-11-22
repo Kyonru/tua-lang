@@ -206,6 +206,13 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   values, `ECS` for the acronym, and lower camel case for factory functions
   such as `vec2(...)`, `signal(...)`, and `store(...)`. Existing `ecs` and
   `tween` module spellings remain compatible.
+- `Rot.Rng.new(seed)` keeps its legacy seeded sequence. For separate named
+  streams use `Rot.Rng.stream(seed, "weapon-rewards")`; names are stable,
+  case-sensitive bytes, and seeds must be safe finite integers. Each call returns
+  a fresh generator without advancing any other stream. `rng:choice(T[])` returns
+  an existing `T` (empty input errors); `rng:shuffle(T[])` returns a fresh shallow
+  `T[]`. Typed array elements remain typed through these methods. Named streams
+  are deterministic, not cryptographic or guaranteed disjoint.
 - `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and
   event names. It supports bounded polyphonic voices, priorities, fades,
   snapshots, positional sources, effects, and beat/bar-quantized music; use

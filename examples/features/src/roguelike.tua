@@ -1,4 +1,4 @@
--- Feature: procedural helpers use one explicit seeded random stream.
+-- Feature: procedural helpers use explicit seeded and named random streams.
 -- This module is independent of LOVE and can run with Lua after building.
 local rng = Rot.Rng.new(817)
 local maze = Rot.Map.generate(15, 11, "sidewinder", rng)
@@ -8,5 +8,17 @@ local visible = Rot.FOV.compute(15, 11, 2, 2, 5, function(x, y)
 end)
 local roll = Rot.Dice.roll("2d6+1", rng)
 local color = Rot.Color.parse("#40a0ff")
+local rewards = Rot.Rng.stream(817, "rewards")
+local items: string[] = { "potion", "scroll", "key" }
+local reward: string = rewards:choice(items)
+local shuffled: string[] = rewards:shuffle(items)
 
-return { maze = maze, route = route, visible = visible, roll = roll, color = color }
+return {
+  maze = maze,
+  route = route,
+  visible = visible,
+  roll = roll,
+  color = color,
+  reward = reward,
+  shuffled = shuffled,
+}

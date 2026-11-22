@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod support;
+
 struct Project(PathBuf);
 
 impl Project {
@@ -207,4 +209,83 @@ assert(#rng:shuffle(empty) == 0)
         String::from_utf8_lossy(&check.stderr).contains("expected number, found string"),
         "{check:?}"
     );
+}
+
+#[test]
+fn named_rng_streams_keep_legacy_sequences_and_run_on_emitted_lua() {
+    let project = Project::new();
+    let source = include_str!("fixtures/rot_stream.tua");
+    fs::write(project.path().join("src/main.tua"), source).unwrap();
+    let build = project.run("build");
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    if let Some(lua) = lua_runtime() {
+        let output = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(project.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "rot-stream-ok"
+        );
+    }
+    if let Some(love) = support::love_executable() {
+        fs::rename(
+            project.path().join("build/main.lua"),
+            project.path().join("build/probe.lua"),
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("build/conf.lua"),
+            r#"function love.conf(t)
+  t.window = false
+  t.modules.audio = false
+  t.modules.graphics = false
+  t.modules.joystick = false
+end
+"#,
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("build/main.lua"),
+            r#"function love.load()
+  for _, enabled in ipairs({ false, true }) do
+    if enabled then jit.on() else jit.off() end
+    print("ROT_RUNTIME", love.getVersion(), jit.version, jit.status())
+    love.filesystem.load("probe.lua")()
+  end
+  love.event.quit(0)
+end
+"#,
+        )
+        .unwrap();
+        let child = Command::new(love)
+            .arg(project.path().join("build"))
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let output = support::wait_for_child_output(child, std::time::Duration::from_secs(10));
+        assert!(output.status.success(), "{output:?}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(stdout.matches("rot-stream-ok").count(), 2, "{stdout}");
+        eprintln!("{stdout}");
+    }
+    for source in [
+        "local _rng = Rot.Rng.stream(817, 12)\n",
+        "local _rng = Rot.Rng.stream(\"817\", \"rewards\")\n",
+        "local _rng = Rot.Rng.stream(817)\n",
+    ] {
+        fs::write(project.path().join("src/main.tua"), source).unwrap();
+        assert!(!project.run("check").status.success(), "accepted {source}");
+    }
 }

@@ -37,6 +37,30 @@ element type and returns a fresh, shallowly shuffled array without changing the
 input. Record fields remain typed through exported arrays and namespace imports.
 Both methods use the shared checker and editor inference.
 
+Use `Rot.Rng.stream(seed, name)` to derive separate named streams from a run
+seed. Drawing from one stream never advances another; each call creates a fresh
+stream. This avoids adjacent `seed + N` initial draws clustering near each other:
+
+```tua
+local rewards = Rot.Rng.stream(817, "weapon-rewards")
+local scenery = Rot.Rng.stream(817, "scenery")
+local weapon = rewards:choice({ "rifle", "shotgun" })
+```
+
+The seed must be a finite integer in `[-9007199254740991, 9007199254740991]`;
+the name must be a nonempty string. Names are case-sensitive raw bytes (no Unicode
+normalization). Keep names stable for replay compatibility. Named streams are
+noncryptographic and may collide; they do not guarantee disjoint sequences or
+statistical independence. `Rng.new(seed)` and its existing draw sequences are
+unchanged. Adopting `stream` intentionally changes generated results.
+
+The version-1 derivation is fixed: normalize the seed modulo 2147483647, adding
+2147483646 if nonpositive; fold each byte of `"tua.rng.v1:" .. name` with
+`state = (state * 48271 + byte) % 2147483647`; apply three more multiplies by
+48271 modulo 2147483647, then pass the result to `Rng.new`. Every product stays
+below 2^53, giving identical results on Lua 5.1 doubles, LuaJIT, and Lua 5.4.
+The byte prefix identifies this algorithm; changing it would change replays.
+
 Dice expressions support `dM`, `NdM`, and an optional signed integer bonus.
 Each die count is limited to 1,000 and the side count to one billion.
 
