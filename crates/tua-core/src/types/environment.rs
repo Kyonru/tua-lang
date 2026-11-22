@@ -648,6 +648,18 @@ impl TypeEnvironment {
     ) -> Option<&Type> {
         if self.local_contracts.names.contains(name) {
             self.local_contracts.at_declaration(position)
+        } else if self.exact_module_binding(name).is_some()
+            && self.local_contracts.scope.as_ref().is_some_and(|scope| {
+                scope.declarations().iter().any(|binding| {
+                    binding.name_span.start == position
+                        && !matches!(
+                            binding.kind,
+                            crate::ScopeDeclarationKind::ModuleAlias { .. }
+                        )
+                })
+            })
+        {
+            None
         } else {
             self.local(name)
         }
@@ -662,6 +674,18 @@ impl TypeEnvironment {
         if self.local_contracts.names.contains(name) {
             let binding = self.local_contracts.binding(name, position)?;
             self.local_contracts.at_declaration(binding.name_span.start)
+        } else if self.exact_module_binding(name).is_some()
+            && self
+                .local_contracts
+                .binding(name, position)
+                .is_some_and(|binding| {
+                    !matches!(
+                        binding.kind,
+                        crate::ScopeDeclarationKind::ModuleAlias { .. }
+                    )
+                })
+        {
+            None
         } else {
             self.local(name)
         }

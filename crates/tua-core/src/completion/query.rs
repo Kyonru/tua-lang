@@ -53,8 +53,12 @@ impl<'a> CompletionQuery<'a> {
                 separator,
                 separator_span,
             } => {
-                let module_fields =
-                    complete_required_module_fields(self.parsed, &receiver_parts, prefix.as_str());
+                let module_fields = complete_required_module_fields(
+                    self.parsed,
+                    &receiver_parts,
+                    prefix.as_str(),
+                    position,
+                );
 
                 if !module_fields.is_empty() {
                     module_fields

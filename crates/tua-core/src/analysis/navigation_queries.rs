@@ -2442,6 +2442,18 @@ impl AnalysisSnapshot {
         name: &str,
         position: SourcePosition,
     ) -> Option<HirRequireBinding> {
+        let scope = self.file(&parsed.path)?.scope()?;
+        let parser_position = parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        let declaration = crate::semantic::binding_at(scope, name, parser_position)?;
+        if !matches!(
+            declaration.kind,
+            crate::ScopeDeclarationKind::ModuleAlias { .. }
+        ) {
+            return None;
+        }
         self.file(&parsed.path)?
             .hir()?
             .require_bindings

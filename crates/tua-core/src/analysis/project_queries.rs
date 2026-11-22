@@ -2691,7 +2691,20 @@ impl AnalysisSnapshot {
         let Some((receiver, fields)) = receiver_parts.split_first() else {
             return Vec::new();
         };
-        let Some(module_path) = self.indexed_required_module_path(parsed, receiver) else {
+        // Completion can use repaired syntax while the open file has no normal
+        // semantics. Resolve the lexical alias from that same parsed snapshot.
+        let scope = crate::scope::scope_map_parsed_source(parsed);
+        let parser_position = parsed
+            .raw
+            .parser_position_for_source(position)
+            .unwrap_or(position);
+        let Some(binding) = crate::semantic::binding_at(&scope, receiver, parser_position) else {
+            return Vec::new();
+        };
+        let crate::ScopeDeclarationKind::ModuleAlias { module } = &binding.kind else {
+            return Vec::new();
+        };
+        let Some(module_path) = self.indexed_module_path_for_specifier(parsed, module) else {
             return Vec::new();
         };
 

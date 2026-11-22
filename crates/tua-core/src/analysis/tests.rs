@@ -12026,3 +12026,5 @@ fn busted_assertions_do_not_narrow_replaced_shadowed_or_effectful_guards() {
 }
 
 mod import_expressions;
+
+mod module_shadowing;

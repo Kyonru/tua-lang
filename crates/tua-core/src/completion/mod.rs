@@ -2761,10 +2761,21 @@ fn complete_required_module_fields(
     parsed: &ParsedSource,
     receiver_parts: &[String],
     prefix: &str,
+    position: SourcePosition,
 ) -> Vec<Completion> {
     let Some((receiver, fields)) = receiver_parts.split_first() else {
         return Vec::new();
     };
+    let scope = scope_map_parsed_source(parsed);
+    let parser_position = parsed
+        .raw
+        .parser_position_for_source(position)
+        .unwrap_or(position);
+    if !crate::semantic::binding_at(&scope, receiver, parser_position)
+        .is_some_and(|binding| matches!(binding.kind, ScopeDeclarationKind::ModuleAlias { .. }))
+    {
+        return Vec::new();
+    }
     let Some(exports) = required_module_exports_for_receiver(parsed, receiver) else {
         return Vec::new();
     };
