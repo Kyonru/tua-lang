@@ -7307,3 +7307,137 @@ fn busted_assertions_accept_imported_records_and_reject_nil_at_runtime() {
         "{output:?}"
     );
 }
+
+#[test]
+fn fmt_explicit_paths_use_project_settings_and_leave_unselected_files_untouched() {
+    let temp = TempDir::new("fmt-explicit");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        "source = \"src\"\n[format]\nindent_width = 4\n",
+    )
+    .unwrap();
+    fs::create_dir_all(temp.path().join("scripts")).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let original = "if ready then\nprint(1)\nend\n";
+    fs::write(temp.path().join("scripts/probe.lua"), original).unwrap();
+    fs::write(temp.path().join("src/other.tua"), "local x=1\n").unwrap();
+    let checked = tua()
+        .args(["fmt", "--check", "scripts/probe.lua"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!checked.status.success());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("scripts/probe.lua")).unwrap(),
+        original
+    );
+    let formatted = tua()
+        .args(["fmt", "scripts/probe.lua", "scripts/probe.lua"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(formatted.status.success(), "{formatted:?}");
+    assert!(String::from_utf8_lossy(&formatted.stdout).contains("formatted 1 file"));
+    assert_eq!(
+        fs::read_to_string(temp.path().join("scripts/probe.lua")).unwrap(),
+        "if ready then\n    print(1)\nend\n"
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/other.tua")).unwrap(),
+        "local x=1\n"
+    );
+}
+
+fn fmt_stdin(temp: &TempDir, args: &[&str], source: &[u8]) -> Output {
+    use std::io::Write;
+    let mut child = tua()
+        .args(args)
+        .current_dir(temp.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(source).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn fmt_stdin_emits_exact_source_without_touching_disk() {
+    let temp = TempDir::new("fmt-stdin");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        "[format]\nfinal_newline = false\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("probe.lua"), "unchanged").unwrap();
+    let output = fmt_stdin(
+        &temp,
+        &["fmt", "--stdin-filepath", "probe.lua"],
+        b"local value=1\n",
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(output.stdout, b"local value = 1");
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("probe.lua")).unwrap(),
+        "unchanged"
+    );
+    let check = fmt_stdin(
+        &temp,
+        &["fmt", "--check", "--stdin-filepath", "missing.lua"],
+        b"local value = 1",
+    );
+    assert!(check.status.success() && check.stdout.is_empty());
+    assert!(!temp.path().join("missing.lua").exists());
+    let changed = fmt_stdin(
+        &temp,
+        &["fmt", "--check", "--stdin-filepath", "missing.lua"],
+        b"local value=1",
+    );
+    assert!(!changed.status.success() && changed.stdout.is_empty());
+    let invalid = fmt_stdin(
+        &temp,
+        &["fmt", "--stdin-filepath", "missing.lua"],
+        b"local =",
+    );
+    assert!(!invalid.status.success() && invalid.stdout.is_empty());
+}
+
+#[test]
+fn fmt_explicit_paths_reject_traversal_missing_and_non_source_files() {
+    let temp = TempDir::new("fmt-rejected-paths");
+    fs::write(temp.path().join("data.txt"), "keep").unwrap();
+    for path in ["../escape.lua", "missing.lua", "data.txt", "."] {
+        let output = tua()
+            .args(["fmt", path])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "accepted {path}");
+    }
+    assert_eq!(
+        fs::read_to_string(temp.path().join("data.txt")).unwrap(),
+        "keep"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn fmt_explicit_and_stdin_paths_reject_symlinks() {
+    let temp = TempDir::new("fmt-explicit-symlink");
+    let outside = TempDir::new("fmt-outside");
+    let target = outside.path().join("probe.lua");
+    fs::write(&target, "local value=1\n").unwrap();
+    std::os::unix::fs::symlink(&target, temp.path().join("link.lua")).unwrap();
+    let output = tua()
+        .args(["fmt", "link.lua"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    // Stdin checks the named path before consuming input; send an empty input.
+    let output = fmt_stdin(&temp, &["fmt", "--stdin-filepath", "link.lua"], b"");
+    assert!(!output.status.success());
+    assert_eq!(fs::read_to_string(&target).unwrap(), "local value=1\n");
+}

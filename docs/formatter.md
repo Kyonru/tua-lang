@@ -31,11 +31,27 @@ errors in Problems. See [Troubleshooting](troubleshooting.md#formatting-does-not
 ```bash
 tua fmt
 tua fmt --check
+tua fmt src/main.tua tests/collision.lua
+tua fmt --check tests/collision.lua
+tua fmt --stdin-filepath tests/collision.lua < tests/collision.lua
 ```
 
 `tua fmt` rewrites project `.tua` files, including the configured typed test root.
-It does not automatically format `.lua` assets; a separate project with
-`extension = "lua"` can use the same formatter for authored Lua files.
+Pass explicit paths to format selected `.tua`, `.lua`, or configured-extension
+files with the current project's settings, including files outside the source
+root. Paths must stay within the project; directories, symlinks, and non-source
+files are rejected. Duplicate paths are processed once. Use `--` before a path
+whose name starts with a dash. Without paths, `.lua` assets remain excluded from
+a normal Tua project scan.
+
+`--stdin-filepath PATH` reads source from stdin and writes only formatted source
+to stdout, with no summary or added newline. The path selects the source filename
+for diagnostics and must satisfy the same project/extension rules; it need not
+exist and is never written. Use the current project's `[format]` settings (or
+defaults outside a configured project). Stdin and explicit files cannot be mixed.
+With `--check`, stdin mode emits no source and succeeds only when already
+formatted. Invalid syntax, invalid UTF-8, and input above the source byte limit
+(8 MiB) fail. This supports editor buffers and scripts without temporary projects.
 `tua fmt --check` is the non-mutating CI form: it exits unsuccessfully and lists files whose formatted output differs
 from the source. The language server exposes the same formatter for document,
 range, and on-type formatting.

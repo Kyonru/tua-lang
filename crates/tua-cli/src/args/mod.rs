@@ -70,6 +70,8 @@ pub struct CommandOptions {
     pub build_report: bool,
     pub package: Box<PackageOptions>,
     pub fmt_check: bool,
+    pub fmt_paths: Vec<PathBuf>,
+    pub fmt_stdin_filepath: Option<PathBuf>,
     pub lint_strict: bool,
     pub deny_warnings: bool,
     pub traceback_maps: Option<PathBuf>,
@@ -127,7 +129,7 @@ pub fn command_help(command: CommandName) -> &'static str {
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Actions => "tua actions - add GitHub Actions to a Tua project\n\nUsage:\n  tua actions init\n\nAdds .github/workflows/tua-game.yml without overwriting an existing workflow.\nThe workflow builds a .love archive, uploads an Actions artifact, and creates a draft release for v* tags.\n",
         CommandName::Check => "tua check - parse and type-check the project\n\nUsage:\n  tua check [--deny-warnings] [--love PATH]\n",
-        CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check]\n",
+        CommandName::Fmt => "tua fmt - format project source files\n\nUsage:\n  tua fmt [--check] [PATH ...]\n  tua fmt [--check] --stdin-filepath PATH\n\nExplicit paths accept Tua and Lua files within the current project.\nStdin mode prints only formatted source and never writes files.\n",
         CommandName::Lint => "tua lint - run lint rules\n\nUsage:\n  tua lint [--strict]\n",
         CommandName::Build => "tua build - check and emit Lua output\n\nUsage:\n  tua build [--emit-on-error] [--no-cache] [--build-report]\n\n--no-cache bypasses the persistent successful-build cache.\n--build-report explains cache decisions and reports phase durations on stderr.\n",
         CommandName::Package => "tua package - build and package a LOVE game\n\nUsage:\n  tua package [--target love|windows|macos|web|custom:<name>] [--love PATH] [--web-player PATH] [--name NAME] [--identifier ID]\n  tua package --list-targets\n",
@@ -254,6 +256,31 @@ where
                 }
             }
             "--check" if command == CommandName::Fmt => options.fmt_check = true,
+            "--stdin-filepath" if command == CommandName::Fmt => {
+                index += 1;
+                let path = args
+                    .get(index)
+                    .filter(|path| !path.is_empty() && !path.starts_with('-'))
+                    .ok_or_else(|| CliError::usage("`--stdin-filepath` expects a source path"))?;
+                if options
+                    .fmt_stdin_filepath
+                    .replace(PathBuf::from(path))
+                    .is_some()
+                {
+                    return Err(CliError::usage(
+                        "`--stdin-filepath` can only be supplied once",
+                    ));
+                }
+            }
+            "--" if command == CommandName::Fmt => {
+                options
+                    .fmt_paths
+                    .extend(args[index + 1..].iter().map(PathBuf::from));
+                break;
+            }
+            path if command == CommandName::Fmt && !path.starts_with('-') => {
+                options.fmt_paths.push(PathBuf::from(path));
+            }
             "--strict" if command == CommandName::Lint => options.lint_strict = true,
             "--deny-warnings" if command == CommandName::Check => options.deny_warnings = true,
             "--maps" if command == CommandName::Traceback => {
@@ -341,6 +368,11 @@ where
         index += 1;
     }
 
+    if options.fmt_stdin_filepath.is_some() && !options.fmt_paths.is_empty() {
+        return Err(CliError::usage(
+            "stdin formatting cannot be combined with file paths",
+        ));
+    }
     Ok(CliAction::Command {
         name: command,
         options,

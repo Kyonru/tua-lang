@@ -403,3 +403,32 @@ fn structured_version_is_explicit_and_rejects_extra_arguments() {
     assert!(parse_args(["build", "--version", "--json"]).is_err());
     assert!(parse_args(["--version", "--json", "extra"]).is_err());
 }
+
+#[test]
+fn fmt_accepts_paths_or_stdin_but_not_both() {
+    assert!(
+        matches!(parse_args(["fmt", "--check", "scripts/smoke.lua", "src/main.tua"]),
+        Ok(CliAction::Command { options, .. }) if options.fmt_check && options.fmt_paths.len() == 2)
+    );
+    assert!(
+        matches!(parse_args(["fmt", "--stdin-filepath", "scripts/smoke.lua"]),
+        Ok(CliAction::Command { options, .. }) if options.fmt_stdin_filepath == Some("scripts/smoke.lua".into()))
+    );
+    for args in [
+        vec!["fmt", "--stdin-filepath"],
+        vec!["fmt", "--stdin-filepath", "a.lua", "b.lua"],
+        vec![
+            "fmt",
+            "--stdin-filepath",
+            "a.lua",
+            "--stdin-filepath",
+            "b.lua",
+        ],
+        vec!["check", "--stdin-filepath", "a.lua"],
+    ] {
+        assert!(parse_args(args).is_err());
+    }
+    assert!(
+        matches!(parse_args(["fmt", "--", "-named.lua"]), Ok(CliAction::Command { options, .. }) if options.fmt_paths == vec![std::path::PathBuf::from("-named.lua")])
+    );
+}

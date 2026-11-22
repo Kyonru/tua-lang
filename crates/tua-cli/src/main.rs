@@ -96,21 +96,25 @@ fn run_main() -> ExitCode {
             }
         }
         Ok(CliAction::Command { name, options }) => match env::current_dir() {
-            Ok(cwd) => match run_command(name, options, cwd) {
-                Ok(message) => {
-                    if name == CommandName::Traceback {
-                        print!("{message}");
-                    } else {
-                        println!("{message}");
-                    }
+            Ok(cwd) => {
+                let raw_output = name == CommandName::Traceback
+                    || (name == CommandName::Fmt && options.fmt_stdin_filepath.is_some());
+                match run_command(name, options, cwd) {
+                    Ok(message) => {
+                        if raw_output {
+                            print!("{message}");
+                        } else {
+                            println!("{message}");
+                        }
 
-                    ExitCode::SUCCESS
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("{}", error.format_stderr());
+                        ExitCode::FAILURE
+                    }
                 }
-                Err(error) => {
-                    eprintln!("{}", error.format_stderr());
-                    ExitCode::FAILURE
-                }
-            },
+            }
             Err(error) => {
                 eprintln!("error: failed to read current directory: {error}");
                 ExitCode::FAILURE
