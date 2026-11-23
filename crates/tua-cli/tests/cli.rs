@@ -7560,3 +7560,43 @@ assert(sum({ x = 2 }, nil) == 0)
         assert!(output.status.success(), "{output:?}");
     }
 }
+
+#[test]
+fn historical_save_schemas_validate_emitted_runtime() {
+    let temp = TempDir::new("historical-save-runtime");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = 'src'\nout = 'build'\nmain = 'main.tua'\ntarget = 'lua51'\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local _schema = Save.record({ score = Save.number(0) })\ndofile('oracle.lua')\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/oracle.lua"),
+        include_str!("../../../vendor/tests/save_migrations_test.lua"),
+    )
+    .unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(temp.path().join("build/tuasave.lua").is_file());
+    if Command::new("lua")
+        .arg("-v")
+        .output()
+        .is_ok_and(|out| out.status.success())
+    {
+        let output = Command::new("lua")
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
+}

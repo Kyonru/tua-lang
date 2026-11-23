@@ -1,6 +1,6 @@
 -- Feature: a save contract describes the persistent slice of game state.
-local function migrateV1(old: any): { score: number, musicOn: boolean, unlocked: string[] }
-  return { score = old.points or 0, musicOn = true, unlocked = {} }
+local function migrateV1(old: { points: number }): { score: number, musicOn: boolean, unlocked: string[] }
+  return { score = old.points, musicOn = true, unlocked = {} }
 end
 
 -- This function can be called after LÖVE has initialized its save identity.
@@ -13,6 +13,7 @@ local function makeProfile()
       musicOn = Save.boolean(true),
       unlocked = Save.array(Save.string(), {}),
     }),
+    migration_schemas = { [1] = Save.record({ points = Save.number(0) }) },
     migrations = {
       [1] = migrateV1,
     },

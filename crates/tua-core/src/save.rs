@@ -229,6 +229,7 @@ pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
                         ("version", field(Type::number())),
                         ("schema", field(Type::Any)),
                         ("migrations", TableField::optional(Type::Any)),
+                        ("migration_schemas", TableField::optional(Type::Any)),
                         ("max_bytes", TableField::optional(Type::number())),
                     ]),
                 )],
@@ -255,23 +256,39 @@ pub(crate) fn snapshot_type(contract: &Type) -> Option<Type> {
     table.field(CONTRACT_VALUE).map(|field| field.ty.clone())
 }
 
-pub(crate) fn migration_function_type(snapshot: Type) -> Type {
-    function(vec![("old", Type::Any)], 1, vec![snapshot])
+pub(crate) fn migration_function_type(input: Type, snapshot: Type) -> Type {
+    function(vec![("old", input)], 1, vec![snapshot])
 }
 
-pub(crate) fn migration_functions(call: &FunctionCall) -> Vec<&Expression> {
+pub(crate) fn migration_functions(call: &FunctionCall) -> Vec<(&Expression, Option<&Expression>)> {
     let Some(Expression::TableConstructor(options)) = first_argument(call) else {
         return Vec::new();
     };
     let Some(Expression::TableConstructor(migrations)) = named_field(options, "migrations") else {
         return Vec::new();
     };
+    let historical = match named_field(options, "migration_schemas") {
+        Some(Expression::TableConstructor(table)) => Some(table),
+        _ => None,
+    };
     migrations
         .fields()
         .iter()
-        .filter_map(|field| match field {
-            Field::ExpressionKey { value, .. } => Some(value),
-            _ => None,
+        .filter_map(|field| {
+            let Field::ExpressionKey { key, value, .. } = field else {
+                return None;
+            };
+            let schema = number_literal(key).and_then(|version| {
+                historical?.fields().iter().find_map(|entry| match entry {
+                    Field::ExpressionKey { key, value, .. }
+                        if number_literal(key) == Some(version) =>
+                    {
+                        Some(value)
+                    }
+                    _ => None,
+                })
+            });
+            Some((value, schema))
         })
         .collect()
 }
@@ -302,7 +319,7 @@ pub(crate) fn module_documentation() -> &'static str {
 
 pub(crate) fn builder_documentation(name: &str) -> Option<&'static str> {
     Some(match name {
-        "contract" => "Create a versioned save slot from a record schema. `load()` validates both slots; writes use read-back verification. Set a stable LÖVE save identity first.",
+        "contract" => "Create a versioned save slot from a record schema. `load()` validates both slots; optional `migration_schemas` validate old payloads before migration. Writes use read-back verification. Set a stable LÖVE save identity first.",
         "record" => "Describe a JSON object with named fields. Every required child needs a default; optional children may be omitted.",
         "array" => "Describe a dense JSON array. Supply a child schema and a default array; optional elements are unsupported.",
         "number" => "Describe a finite number. A required record field needs a default.",
@@ -418,6 +435,63 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                             );
                         }
                     }
+                }
+            }
+            if let Some(Expression::TableConstructor(schemas)) =
+                named_field(options, "migration_schemas")
+            {
+                let current = named_field(options, "version").and_then(number_literal);
+                let migrations = match named_field(options, "migrations") {
+                    Some(Expression::TableConstructor(table)) => Some(table),
+                    _ => None,
+                };
+                let mut versions = BTreeSet::new();
+                for entry in schemas.fields().iter() {
+                    let Field::ExpressionKey { key, value, .. } = entry else {
+                        if let Some(span) = node_span(entry) {
+                            self.report(
+                                span,
+                                "historical schemas must use numeric old-version keys",
+                            );
+                        }
+                        continue;
+                    };
+                    if let Some(old) = number_literal(key) {
+                        let invalid =
+                            old < 1.0 || old.fract() != 0.0 || current.is_some_and(|v| old >= v);
+                        if invalid || !versions.insert(old as i64) {
+                            if let Some(span) = node_span(key) {
+                                self.report(span, "historical schema key must be unique and below the current version");
+                            }
+                        }
+                        if migrations.is_some() || named_field(options, "migrations").is_none() {
+                            let found = migrations.is_some_and(|migrations| migrations.fields().iter().any(|entry| matches!(entry,
+                                Field::ExpressionKey { key, .. } if number_literal(key) == Some(old))));
+                            if !found {
+                                if let Some(span) = node_span(key) {
+                                    self.report(
+                                        span,
+                                        "historical schema needs a matching migration",
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if let Expression::FunctionCall(call) = value {
+                        if let Some(parts) = field_chain_before_first_call(call) {
+                            if parts.first().is_some_and(|root| root == MODULE_NAME)
+                                && parts.get(1).is_some_and(|builder| builder != "record")
+                            {
+                                if let Some(span) = node_span(value) {
+                                    self.report(
+                                        span,
+                                        "historical save root schema must use Save.record",
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    self.check_defaults(value, "$", 0);
                 }
             }
             if let Some(Expression::TableConstructor(migrations)) =
@@ -755,15 +829,17 @@ local _profile = Save.contract({
     fn imported_named_migrations_keep_contracts_and_editor_signatures() {
         let fixture = crate::Fixture::parse(
             r#"-- file: src/migrations.tua
-local function migrate(old: any): { count: number } return { count = old.count } end
-return { migrate = migrate }
+export type Legacy = { points: number }
+local function migrate(old: Legacy): { count: number } return { count = old.points } end
+return { migrate = migrate, schema = Save.record({ points = Save.number(0) }) }
 -- file: src/main.tua
 local migrations = require("migrations")
 local _profile = Save.contract({ slot = "profile", version = 2,
   schema = Save.record({ count = Save.number(0) }),
+  migration_schemas = { [1] = migrations.schema },
   migrations = { [1] = migrations.<|hover|>migrate },
 })
-local result = migrations.migrate(<|signature|>{ count = 1 })
+local result = migrations.migrate(<|signature|>{ points = 1 })
 "#,
         );
         let mut host = crate::AnalysisHost::new();
@@ -799,5 +875,45 @@ local result = migrations.migrate(<|signature|>{ count = 1 })
                 .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
             "{diagnostics:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod historical_schema_tests {
+    #[test]
+    fn historical_schema_checks_migration_input_and_configuration() {
+        let contract = r#"
+local schema = Save.record({ points = Save.number(0) })
+local _profile = Save.contract({ slot = "profile", version = 2,
+  schema = Save.record({ score = Save.number(0) }),
+  migration_schemas = { [1] = schema },
+  migrations = { [1] = migrate },
+})
+"#;
+        let check = |declaration: &str, contract: &str| {
+            crate::check::check_tua_source_with_diagnostics_config(
+                "src/main.tua",
+                format!("{declaration}\n{contract}"),
+                &crate::config::DiagnosticsConfig {
+                    globals: vec!["Save".to_owned()],
+                    ..Default::default()
+                },
+            )
+        };
+        let valid = "local function migrate(old: { points: number }): { score: number } return { score = old.points } end";
+        check(valid, contract).unwrap();
+        let wrong = valid.replace("points: number", "points: string");
+        assert!(check(&wrong, contract).is_err());
+        for bad in [
+            contract.replace("[1] = schema", "[2] = schema"),
+            contract.replace("[1] = schema", "[0] = schema"),
+            contract.replace("[1] = schema", "[1.5] = schema"),
+            contract.replace("[1] = schema", "[1] = Save.array(Save.string(), {})"),
+            contract.replace("[1] = schema", "[1] = schema, [1] = schema"),
+            contract.replace("[1] = migrate", "[0] = migrate"),
+            contract.replace("  migrations = { [1] = migrate },", ""),
+        ] {
+            assert!(check(valid, &bad).is_err(), "{bad}");
+        }
     }
 }

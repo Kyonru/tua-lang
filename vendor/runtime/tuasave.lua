@@ -331,10 +331,22 @@ local function inspect(contract)
           slot.error = issue("missing_migration", "no direct migration from version " .. slot.version,
             slot.path, "migrate", true)
         else
-          local migrated, result = pcall(converter, decoded)
-          if migrated then candidate = result
-          else
-            slot.error = issue("migration_failed", tostring(result), slot.path, "migrate", true)
+          local historical = contract.migrationSchemas[slot.version]
+          if historical then
+            local accepted, result = pcall(validate, historical, decoded, "$", {}, 1,
+              { value = 0 }, true)
+            if accepted then candidate = result
+            else
+              slot.error = issue("invalid_migration_input", tostring(result),
+                slot.path, "validate", true)
+            end
+          end
+          if not slot.error then
+            local migrated, result = pcall(converter, candidate)
+            if migrated then candidate = result
+            else
+              slot.error = issue("migration_failed", tostring(result), slot.path, "migrate", true)
+            end
           end
         end
       end
@@ -385,6 +397,18 @@ function Save.contract(options)
       and oldVersion % 1 == 0 and type(converter) == "function",
       "save migrations need direct old-version function entries")
   end
+  local historical = options.migration_schemas
+  if historical == nil then historical = {} end
+  assert(type(historical) == "table", "migration_schemas must be a table")
+  local migrationSchemas = {}
+  for oldVersion, inputSchema in pairs(historical) do
+    assert(type(oldVersion) == "number" and oldVersion >= 1 and oldVersion < version
+      and oldVersion % 1 == 0 and type(migrations[oldVersion]) == "function",
+      "migration_schemas need old-version keys with matching migrations")
+    local copied = copySchema(inputSchema, 1, {}, { value = 0 })
+    assert(copied.kind == "record", "historical save root schema must be a record")
+    migrationSchemas[oldVersion] = copied
+  end
   local initial = defaults(spec, "$")
   validate(spec, initial, "$", {}, 1, { value = 0 }, false)
   local backend = options.backend or loveBackend()
@@ -396,6 +420,7 @@ function Save.contract(options)
     version = version,
     schema = spec,
     migrations = migrations,
+    migrationSchemas = migrationSchemas,
     backend = backend,
     maxBytes = maxBytes,
     generation = 0,

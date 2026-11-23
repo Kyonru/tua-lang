@@ -69,7 +69,43 @@ it runs in a protected call and its result is validated before use. Migration
 entries may reference a named or imported function, as well as an inline callback.
 Known function signatures are checked against `(old: any) -> Snapshot`; invalid
 return shapes and extra required parameters are rejected. Loading
-does not rewrite files. Use `Profile:save(snapshot)` for an explicit checkpoint.
+does not rewrite files.
+
+Optional `migration_schemas` validate historical input before calling a migration:
+
+```tua
+local Profile = Save.contract({
+  slot = "profile",
+  version = 2,
+  schema = Save.record({ score = Save.number(0) }),
+  migration_schemas = {
+    [1] = Save.record({ points = Save.number(0) }),
+  },
+  migrations = {
+    [1] = function(old: { points: number }): { score: number }
+      return { score = old.points }
+    end,
+  },
+})
+```
+
+Each historical schema must be a record and have a matching direct migration for
+an integer version below the current version. Historical descriptors are copied
+when the contract is created. Validation rejects missing/unknown fields, invalid
+values and mismatched JSON arrays/objects; defaults do not repair old data.
+A successful check gives the callback an owned plain-data copy without decoder
+markers. Failure returns `invalid_migration_input` in phase `validate`, does not
+call the migration or rewrite files, and blocks writes under the normal error
+policy. The callback result is still validated against the current schema.
+
+Literal historical entries also check named/imported migration parameter types
+against their input schema; explicitly typed callbacks retain ordinary field
+completion and hover. Computed schema maps retain runtime validation but may have
+less precise static checks. Entries without a historical schema keep the existing
+`old: any` callback behavior, including their original decoded payload. Migrations
+still convert directly to the current version, never through an automatic chain.
+
+Use `Profile:save(snapshot)` for an explicit checkpoint.
 `persistence:update(dt)` polls the store revision and writes after the quiet
 `debounce` period or `max_interval` during continuous changes. `flush()` writes
 synchronously when dirty. `dispose()` does not flush. Call `flush()` before

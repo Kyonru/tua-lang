@@ -2446,10 +2446,20 @@ impl<'a> Checker<'a> {
                             if let Some(ty) = inferred {
                                 if parts.get(1).is_some_and(|member| member == "contract") {
                                     if let Some(snapshot) = crate::save::snapshot_type(&ty) {
-                                        let target = crate::save::migration_function_type(snapshot);
-                                        for migration in
+                                        for (migration, schema) in
                                             crate::save::migration_functions(function_call)
                                         {
+                                            let input = schema
+                                                .and_then(|schema| {
+                                                    self.infer_expression_return(schema, 0)
+                                                })
+                                                .and_then(|ty| crate::save::schema_value(&ty))
+                                                .map(|(value, _)| value)
+                                                .unwrap_or(Type::Any);
+                                            let target = crate::save::migration_function_type(
+                                                input,
+                                                snapshot.clone(),
+                                            );
                                             self.check_expression_assignable_at(
                                                 migration,
                                                 &target,

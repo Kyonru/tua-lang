@@ -70,3 +70,27 @@ fn loaded_save_snapshot_coalesced_into_store_keeps_members_after_edit() {
     server.send(completion_request(4, &uri, source, "state.profile.s"));
     assert_completion_labels(server.output(), 4, ["stamina"]);
 }
+
+#[test]
+fn historical_schema_contract_signature_and_typed_callback_fields() {
+    let project = TempProject::new("historical-save-schema");
+    project.write("tua.toml", "source = 'src'\n");
+    let source = "local function migrate(old: { points: number }): { score: number }\n  return { score = old.points }\nend\nlocal profile = Save.contract({\n  slot = 'profile', version = 2, schema = Save.record({ score = Save.number(0) }),\n  migration_schemas = { [1] = Save.record({ points = Save.number(0) }) },\n  migrations = { [1] = migrate },\n})\n";
+    let uri = project.uri_for("src/main.tua");
+    project.write("src/main.tua", source);
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "old."));
+    server.send(hover_request(3, &uri, source, "old.points"));
+    server.send(signature_help_request(4, &uri, source, "Save.contract("));
+    assert_completion_labels(server.output(), 2, ["points"]);
+    assert_hover_contains(server.output(), 3, "number");
+    let label = &response_with_id(server.output(), 4)["result"]["signatures"][0]["label"];
+    assert!(
+        label
+            .as_str()
+            .is_some_and(|label| label.contains("migration_schemas")),
+        "{label}"
+    );
+}
