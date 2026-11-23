@@ -4,7 +4,20 @@ local runtime, tests = arg[1] or "vendor/runtime", arg[2] or "vendor/tests"
 package.path = runtime .. "/?.lua;" .. tests .. "/?.lua;" .. package.path
 
 local failures = 0
-for _, name in ipairs({ "vector_test", "sprite_test", "tween_test", "camera_test", "hotreload_test", "baton_test", "audio_design_test", "i18n_test", "save_test", "log_test", "log_file_test", "log_screen_test" }) do
+for _, name in ipairs({
+  "vector_test",
+  "sprite_test",
+  "tween_test",
+  "camera_test",
+  "hotreload_test",
+  "baton_test",
+  "audio_design_test",
+  "i18n_test",
+  "save_test",
+  "log_test",
+  "log_file_test",
+  "log_screen_test",
+}) do
   local ok, err = pcall(require, name)
   if ok then
     print("ok   " .. name)

@@ -15,8 +15,13 @@ local MAX_ENTRIES = 100000
 local MAX_GENERATION = 9007199254740991
 
 local function issue(code, message, slot, phase, recoverable)
-  return { code = code, message = message, slot = slot,
-    phase = phase, recoverable = recoverable == true }
+  return {
+    code = code,
+    message = message,
+    slot = slot,
+    phase = phase,
+    recoverable = recoverable == true,
+  }
 end
 
 local function descriptor(kind, default, extra)
@@ -128,7 +133,7 @@ local function validate(spec, input, path, seen, depth, count, decoded)
     error(path .. ": expected plain acyclic " .. kind, 0)
   end
   if decoded and ((kind == "array" and not input[Json.array])
-      or (kind == "record" and not input[Json.object])) then
+    or (kind == "record" and not input[Json.object])) then
     error(path .. ": JSON container does not match " .. kind, 0)
   end
   seen[input] = true
@@ -328,14 +333,18 @@ local function inspect(contract)
         else
           local migrated, result = pcall(converter, decoded)
           if migrated then candidate = result
-          else slot.error = issue("migration_failed", tostring(result), slot.path, "migrate", true) end
+          else
+            slot.error = issue("migration_failed", tostring(result), slot.path, "migrate", true)
+          end
         end
       end
       if not slot.error then
         local accepted, result = pcall(validate, contract.schema, candidate, "$", {}, 1,
           { value = 0 }, slot.version == contract.version)
         if accepted then slot.snapshot = result
-        else slot.error = issue("invalid_snapshot", tostring(result), slot.path, "validate", true) end
+        else
+          slot.error = issue("invalid_snapshot", tostring(result), slot.path, "validate", true)
+        end
       end
     end
     if slot.error then
@@ -382,10 +391,18 @@ function Save.contract(options)
   for _, operation in ipairs({ "info", "read", "write", "remove", "mkdir", "hash" }) do
     assert(type(backend[operation]) == "function", "save backend needs " .. operation)
   end
-  return setmetatable({ slot = slot, version = version, schema = spec,
-    migrations = migrations, backend = backend,
-    maxBytes = maxBytes, generation = 0, initial = initial,
-    inspected = false, pendingUpgrade = false }, Contract)
+  return setmetatable({
+    slot = slot,
+    version = version,
+    schema = spec,
+    migrations = migrations,
+    backend = backend,
+    maxBytes = maxBytes,
+    generation = 0,
+    initial = initial,
+    inspected = false,
+    pendingUpgrade = false,
+  }, Contract)
 end
 
 function Contract:defaults()
@@ -531,9 +548,15 @@ function Binding:update(dt)
 end
 
 function Binding:flush() return flush(self) end
-function Binding:isDirty() self:observe(); return self.dirty end
+function Binding:isDirty()
+  self:observe()
+  return self.dirty
+end
 function Binding:lastIssue() return self.issue end
-function Binding:markDirty() self.dirty = true; self.elapsed = 0 end
+function Binding:markDirty()
+  self.dirty = true
+  self.elapsed = 0
+end
 function Binding:dispose() self.disposed = true end
 
 function Contract:bind(store, options)
@@ -548,10 +571,21 @@ function Contract:bind(store, options)
   assert(type(maxInterval) == "number" and maxInterval > 0 and maxInterval < math.huge,
     "save max_interval must be finite and positive")
   local revision = store:revision()
-  return setmetatable({ contract = self, store = store, select = options.select,
-    observed = revision, dirty = self.pendingUpgrade, issue = self.blocked,
-    debounce = debounce, maxInterval = maxInterval, elapsed = 0, sinceDirty = 0,
-    retry = 0, failures = 0, disposed = false }, Binding)
+  return setmetatable({
+    contract = self,
+    store = store,
+    select = options.select,
+    observed = revision,
+    dirty = self.pendingUpgrade,
+    issue = self.blocked,
+    debounce = debounce,
+    maxInterval = maxInterval,
+    elapsed = 0,
+    sinceDirty = 0,
+    retry = 0,
+    failures = 0,
+    disposed = false,
+  }, Binding)
 end
 
 return Save
