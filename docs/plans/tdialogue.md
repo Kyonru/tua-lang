@@ -17,7 +17,7 @@ Game rendering, commands, input and pause ownership belong to the host.
   owned presentation snapshots. No required LÖVE globals.
 - [x] Typed imported contract and opt-in emitted runtime integration; shared editor
   queries and emitted-Lua regressions.
-- [ ] Renderer seam in the game, persistent conversations, separate temporary
+- [x] Renderer seam in the game, persistent conversations, separate temporary
   policy, independent UI clock and lifecycle.
 - [ ] Shared `.tdialogue` parser/document validation and source locations.
 - [ ] Build/watch integration, dependency invalidation and mapped diagnostics.
@@ -81,3 +81,26 @@ full verification was running. Repeating it after that workload finished passed.
 This is not a latency benchmark or proof of installed-editor UI behavior. No game
 renderer, `.tdialogue` parser, release installation, push or merge is included in
 this slice.
+
+
+## Game renderer integration
+
+The isolated game feature branch now consumes the typed player through a small
+session adapter. Normal conversations wait for explicit advance or choice;
+temporary messages use a separate hold/fade clock and resume after a modal
+conversation. The game retains its renderer, theme controls, shimmer, word entry,
+shadows and elastic sizing. Pause-menu ownership remains independent from the
+conversation's gameplay block. Reset and disposal release presentation resources.
+
+The game integration passes its 46 emitted-Lua regressions, including persistence,
+choice dispatch, independent clocks, temporary channel isolation, zero-hold timing,
+resize, graphics state and owned/borrowed resource lifecycle. A 210-frame native
+LÖVE 11.5 / LuaJIT 2.1.1700008891 replay (JIT disabled) exercises real input,
+640×480 and 1280×720 rendering, pause/resume, blocked firing, mode replacement and
+repeated reset. These are functional checks, not performance measurements.
+
+This proves the renderer seam against the production emitted runtime. The fixture
+still constructs structured data in Tua; the parser, localization, custom editor
+language and richer execution nodes remain pending. The existing headless example
+is unchanged, and no game source/assets have been copied into Tua fixtures. Both
+feature branches remain unmerged pending the user's explicit approval.
