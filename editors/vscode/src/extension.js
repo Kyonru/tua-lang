@@ -339,7 +339,7 @@ async function startLanguageServer() {
     synchronize: {
       configurationSection: "tua",
       fileEvents: [
-        vscode.workspace.createFileSystemWatcher("**/*.{tua,lua}"),
+        vscode.workspace.createFileSystemWatcher("**/*.{tua,lua,tdialogue}"),
         vscode.workspace.createFileSystemWatcher("**/tua.toml"),
       ],
     },

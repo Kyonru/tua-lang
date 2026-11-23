@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 /// Compile the supported `.tdialogue` subset to a module accepted by tuadialogue.
-/// No filesystem access, runtime import, host callbacks or localization lookup.
+/// No filesystem access or project execution during compilation. Character imports
+/// become ordinary runtime requires; project analysis checks their typed exports.
 /// The returned source map uses the same one-based positions as the parser.
 pub fn emit_dialogue_source(
     path: impl AsRef<Path>,
@@ -24,6 +25,16 @@ pub fn emit_dialogue_source(
         code: String::new(),
         provenance: Vec::new(),
     });
+    for (index, import) in document.imports.iter().enumerate() {
+        output.line(
+            &format!(
+                "local __tua_characters_{} = require({})",
+                index + 1,
+                lua_string_literal(&import.module.value)
+            ),
+            import.module.span,
+        );
+    }
     output.line("return {", entry.span);
     output.field("  entry", &entry.value, entry.span);
     output.line("  nodes = {", entry.span);
@@ -42,11 +53,23 @@ pub fn emit_dialogue_source(
             output.field("      kind", "line", origin);
             output.field("      text", &line.text.value, origin);
             if let Some(speaker) = &line.speaker {
-                output.field(
-                    "      speaker",
-                    speakers[speaker.value.as_str()],
-                    speaker.span,
-                );
+                if let Some(name) = speakers.get(speaker.value.as_str()) {
+                    output.field("      speaker", name, speaker.span);
+                } else if let Some((alias, member)) = speaker.value.split_once('.') {
+                    let index = document
+                        .imports
+                        .iter()
+                        .position(|import| import.alias.value == alias)
+                        .expect("validated character alias");
+                    output.line(
+                        &format!(
+                            "      speaker = __tua_characters_{}[{}].name,",
+                            index + 1,
+                            lua_string_literal(member)
+                        ),
+                        speaker.span,
+                    );
+                }
             }
             output.field("      next", &next, origin);
             output.line("    },", origin);

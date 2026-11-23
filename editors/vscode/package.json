@@ -49,7 +49,8 @@
     "onDebugDynamicConfigurations",
     "onLanguage:tua",
     "workspaceContains:**/tua.toml",
-    "workspaceContains:**/*.tua"
+    "workspaceContains:**/*.tua",
+    "onLanguage:tdialogue"
   ],
   "scripts": {
     "build": "esbuild src/extension.js --bundle --minify --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
@@ -2091,6 +2092,17 @@
           "LÖVE Shader",
           "love-glsl"
         ]
+      },
+      {
+        "id": "tdialogue",
+        "aliases": [
+          "Tua Dialogue",
+          "tdialogue"
+        ],
+        "extensions": [
+          ".tdialogue"
+        ],
+        "configuration": "./tdialogue-language-configuration.json"
       }
     ],
     "grammars": [
@@ -2103,6 +2115,11 @@
         "language": "love-glsl",
         "scopeName": "source.love-glsl",
         "path": "./syntaxes/love-glsl.tmLanguage.json"
+      },
+      {
+        "language": "tdialogue",
+        "scopeName": "text.tdialogue",
+        "path": "./syntaxes/tdialogue.tmLanguage.json"
       }
     ],
     "semanticTokenScopes": [

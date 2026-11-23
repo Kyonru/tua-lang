@@ -48,7 +48,81 @@ pub struct DialogueSection {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CharacterImport {
+    pub alias: DialogueName,
+    pub module: DialogueName,
+}
+
+/// The same directive parser serves strict validation and incomplete editor buffers.
+pub(crate) fn character_import(
+    raw: &str,
+    number: usize,
+) -> Option<Result<CharacterImport, String>> {
+    let text = raw.trim();
+    let rest = text.strip_prefix("@characters ")?;
+    let parsed = (|| {
+        let (alias, quoted) = rest
+            .split_once(char::is_whitespace)
+            .ok_or("expected `@characters Alias \"project.module\"`")?;
+        if !identifier(alias) || alias.contains(['.', '-']) {
+            return Err("character import alias must be a simple identifier");
+        }
+        let quoted = quoted.trim();
+        let module = quoted
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .ok_or("character module must be quoted")?;
+        if !module
+            .split('.')
+            .all(|part| identifier(part) && !part.contains('-'))
+        {
+            return Err("character module must be an extensionless project module name");
+        }
+        let prefix = raw.chars().count() - raw.trim_start().chars().count();
+        let alias_column = prefix + "@characters ".len() + 1;
+        let module_column = raw
+            .find('"')
+            .map(|offset| raw[..offset].chars().count() + 2)
+            .unwrap();
+        Ok(CharacterImport {
+            alias: DialogueName {
+                value: alias.into(),
+                span: span(number, alias_column, alias.chars().count()),
+            },
+            module: DialogueName {
+                value: module.into(),
+                span: span(number, module_column, module.chars().count()),
+            },
+        })
+    })();
+    Some(parsed.map_err(str::to_owned))
+}
+
+pub(crate) fn character_imports(source: &str) -> Vec<CharacterImport> {
+    source
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| character_import(line, index + 1)?.ok())
+        .collect()
+}
+
+pub(crate) fn character_module_specifiers(
+    source: &str,
+) -> Vec<crate::module_link::ModuleSpecifierLiteral> {
+    character_imports(source)
+        .into_iter()
+        .map(|import| crate::module_link::ModuleSpecifierLiteral {
+            module: import.module.value,
+            span: import.module.span,
+            kind: crate::module_link::ModuleSpecifierKind::Require,
+            type_only: false,
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub imports: Vec<CharacterImport>,
     pub speakers: Vec<DialogueSpeaker>,
     /// The first section is the entry. Sections never implicitly fall through.
     pub sections: Vec<DialogueSection>,
@@ -65,6 +139,7 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            imports: Vec::new(),
             speakers: Vec::new(),
             sections: Vec::new(),
         },
@@ -183,7 +258,27 @@ impl Parser<'_> {
             self.abandon_id();
             return;
         }
-        if let Some(rest) = syntax.strip_prefix("@character ") {
+        if let Some(import) = character_import(raw, number) {
+            self.abandon_id();
+            if !self.document.sections.is_empty() {
+                self.error(at, "declare character imports before the first label");
+                return;
+            }
+            match import {
+                Ok(import) => {
+                    if self
+                        .document
+                        .imports
+                        .iter()
+                        .any(|previous| previous.alias.value == import.alias.value)
+                    {
+                        self.error(import.alias.span, "duplicate character import alias");
+                    }
+                    self.document.imports.push(import);
+                }
+                Err(message) => self.error(at, message),
+            }
+        } else if let Some(rest) = syntax.strip_prefix("@character ") {
             self.abandon_id();
             self.speaker(rest, at);
         } else if syntax.starts_with('[') {
@@ -436,6 +531,20 @@ impl Parser<'_> {
             .iter()
             .map(|s| s.id.value.as_str())
             .collect();
+        for speaker in &self.document.speakers {
+            if self.document.imports.iter().any(|import| {
+                speaker.id.value == import.alias.value
+                    || speaker
+                        .id
+                        .value
+                        .starts_with(&format!("{}.", import.alias.value))
+            }) {
+                errors.push((
+                    speaker.id.span,
+                    "local speaker conflicts with a character import alias".into(),
+                ));
+            }
+        }
         for section in &self.document.sections {
             if section.lines.is_empty() {
                 errors.push((
@@ -454,7 +563,18 @@ impl Parser<'_> {
             }
             for line in &section.lines {
                 if let Some(speaker) = &line.speaker {
-                    if !speakers.contains(speaker.value.as_str()) {
+                    let imported = speaker
+                        .value
+                        .split_once('.')
+                        .is_some_and(|(alias, member)| {
+                            !member.contains('.')
+                                && self
+                                    .document
+                                    .imports
+                                    .iter()
+                                    .any(|import| import.alias.value == alias)
+                        });
+                    if !speakers.contains(speaker.value.as_str()) && !imported {
                         errors.push((speaker.span, format!("unknown speaker `{}`", speaker.value)));
                     }
                 }
@@ -485,6 +605,10 @@ pub(crate) fn parse_module_source(
     path: &Path,
     source: &str,
 ) -> Result<crate::ParsedSource, Vec<Diagnostic>> {
-    parse_dialogue_source(path, source)?;
-    crate::parse_lua_source(path, "return {}")
+    // Syntax diagnostics and the authored model are cached separately by analysis.
+    // Keep an opaque Lua body even during incomplete edits, so dependency edges
+    // and typed asset exports remain available without inventing Lua symbols.
+    let mut parsed = crate::parse_lua_source(path, "return {}")?;
+    parsed.dialogue_imports = character_imports(source);
+    Ok(parsed)
 }

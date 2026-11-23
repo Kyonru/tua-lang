@@ -1,0 +1,9 @@
+type Character = {
+  name: string,
+  portrait: string?,
+}
+
+local Guide: Character = { name = "Harbor guide" }
+local Captain: Character = { name = "Captain" }
+
+return { Guide = Guide, Captain = Captain }

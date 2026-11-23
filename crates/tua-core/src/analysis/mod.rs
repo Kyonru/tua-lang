@@ -99,6 +99,7 @@ use crate::{scope_map_parsed_source, scope_map_parsed_source_with_globals};
 mod asset_queries;
 mod audio_queries;
 mod database;
+mod dialogue_queries;
 mod ecs_queries;
 mod editor_queries;
 mod host;

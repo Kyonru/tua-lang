@@ -1006,3 +1006,58 @@ fn dialogue_builtin_exposes_typed_snapshot_hover() {
     server.send(hover_request(2, &uri, source, "view.generation"));
     assert_hover_contains(server.output(), 2, "generation");
 }
+
+#[test]
+fn dialogue_shared_characters_have_editor_queries_and_safe_formatting() {
+    let temp = TempProject::new("dialogue-characters");
+    temp.write("tua.toml", "source = 'src'\n");
+    let characters = "return { Guide = { name = 'Guide' } }\n";
+    temp.write("src/characters.tua", characters);
+    let source = "@dialogue 1\n@characters Cast \"characters\"\n[start]\n// @id hello\nCast.Guide: Hello (end)\n";
+    temp.write("src/intro.tdialogue", source);
+    let uri = temp.uri_for("src/intro.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(hover_request(2, &uri, source, "Cast.Guide"));
+    assert_hover_contains(server.output(), 2, "name: string");
+    server.send(completion_request(3, &uri, source, "Cast."));
+    assert_completion_labels(server.output(), 3, ["Guide"]);
+    let completion = &response_with_id(server.output(), 3)["result"][0];
+    assert_eq!(completion["textEdit"]["newText"], "Guide");
+    assert_eq!(
+        completion["textEdit"]["range"]["start"],
+        json!({"line": 4, "character": 5})
+    );
+    assert_eq!(
+        completion["textEdit"]["range"]["end"],
+        json!({"line": 4, "character": 10})
+    );
+    server.send(definition_request(4, &uri, source, "Cast.Guide", 6));
+    let response = response_with_id(server.output(), 4);
+    assert!(
+        response.to_string().contains("characters.tua"),
+        "{response}"
+    );
+    server.send(
+        json!({"jsonrpc":"2.0", "id":5, "method":"textDocument/formatting", "params":{
+            "textDocument":{"uri":uri}, "options":{"tabSize":2,"insertSpaces":true}
+        }}),
+    );
+    assert_eq!(response_with_id(server.output(), 5)["result"], json!([]));
+    let character_uri = temp.uri_for("src/characters.tua");
+    server.send(did_open(&character_uri, characters));
+    server.send(did_change(
+        &character_uri,
+        "return { Traveler = { name = 'Traveler' } }",
+        2,
+    ));
+    server.send(completion_request(6, &uri, source, "Cast."));
+    assert_completion_labels(server.output(), 6, ["Traveler"]);
+    let incomplete = source.replace("Cast.Guide: Hello (end)", "Cast.");
+    server.send(did_change(&uri, &incomplete, 2));
+    server.send(completion_request(7, &uri, &incomplete, "Cast."));
+    assert_completion_labels(server.output(), 7, ["Traveler"]);
+}

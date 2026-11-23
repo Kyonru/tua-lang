@@ -12,3 +12,17 @@ assert(player:choose("intro.yes"))
 assert(player:advance())
 assert(player:snapshot().state == "completed")
 player:dispose()
+
+-- Both authored scenes share typed character definitions.
+local arrival = require("arrival")
+local departure = require("departure")
+local arrivalPlayer = Dialogue.new(arrival)
+arrivalPlayer:start()
+local arrivalNode = arrivalPlayer:snapshot().node
+assert(arrivalNode and arrivalNode.speaker == "Harbor guide")
+arrivalPlayer:dispose()
+local departurePlayer = Dialogue.new(departure)
+departurePlayer:start()
+local departureNode = departurePlayer:snapshot().node
+assert(departureNode and departureNode.speaker == "Harbor guide")
+departurePlayer:dispose()

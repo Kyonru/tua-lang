@@ -421,6 +421,17 @@ fn build_analysis_file(
             diagnostics.extend(degraded.environment_diagnostics.iter().cloned());
         }
     }
+    let dialogue_model = OnceLock::new();
+    if kind == AnalysisSourceKind::Dialogue {
+        let model = match crate::dialogue_asset::parse_dialogue_source(path, &source) {
+            Ok(model) => Some(Arc::new(model)),
+            Err(errors) => {
+                diagnostics.extend(errors);
+                None
+            }
+        };
+        let _ = dialogue_model.set(model);
+    }
     let assets = {
         let _profile = profile::span_for_path("analysis.assets.metadata", path);
 
@@ -507,11 +518,7 @@ fn build_analysis_file(
         let _profile = profile::span_for_path("analysis.index.requires", path);
         let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
-        if kind == AnalysisSourceKind::Dialogue {
-            Vec::new()
-        } else {
-            module_links_tua_source(path, source.clone())
-        }
+        module_links_tua_source(path, source.clone())
     };
     let symbols = {
         let _profile = profile::span_for_path("analysis.index.symbols", path);
@@ -585,7 +592,7 @@ fn build_analysis_file(
         })
         .unwrap_or_default();
     AnalysisFile(Arc::new(AnalysisFileData {
-        dialogue_model: OnceLock::new(),
+        dialogue_model,
         source,
         kind,
         parsed,

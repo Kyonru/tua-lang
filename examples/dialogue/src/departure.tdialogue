@@ -1,0 +1,8 @@
+@dialogue 1
+@characters Cast "characters"
+
+[start]
+// @id departure.farewell
+Cast.Guide: Safe travels.
+// @id departure.ready
+Cast.Captain: All aboard! (end)

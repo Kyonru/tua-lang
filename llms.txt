@@ -269,5 +269,11 @@ Use `local document = require("scenes.intro")` for `scenes/intro.tdialogue`, the
 their runtime imports only when referenced; local bindings take precedence.
 Explicit `require("tuadialogue")` / `require("tuaboundedqueue")` remain supported.
 The host owns rendering, input and timing. Text IDs must be project-unique.
-Translations and dedicated dialogue editor tooling are not implemented yet.
+Share characters using ordinary .tua exports with a required string `name` field.
+Before labels, `@characters Cast "dialogue.characters"` imports the module; use
+`Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,
+definition navigation and unsaved edits are supported by the updated extension.
+Extra character fields are host metadata, not player snapshot fields. Analysis
+never executes project modules; emitted scripts use ordinary runtime require.
+Translations, script formatting and cross-language rename remain pending.
 See docs/dialogue.md for the supported authoring grammar; do not invent commands.

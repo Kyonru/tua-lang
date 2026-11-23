@@ -872,3 +872,11 @@ a trusted workspace. **Select glslangValidator** saves a machine-scoped
 `tua.shaders.glslangPath`; Restore Shader Associations also restores this
 selection when it has not been changed manually. Changing this path or
 `tua.love.command` restarts the server. LÖVE stays preferred.
+
+## Dialogue scripts
+
+The updated extension registers `.tdialogue` with its own syntax highlighting.
+Shared character references support completion, hover, definition navigation and
+unsaved overlays through the same project analysis as Tua modules. See
+[Dialogue](dialogue.md#share-characters-between-scripts) for the import syntax.
+Script formatting and cross-language rename are not implemented.

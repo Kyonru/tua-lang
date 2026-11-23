@@ -2052,6 +2052,7 @@ fn source_kind_from_extension(path: &Path) -> Option<SourceKind> {
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("lua") => Some(SourceKind::Lua),
         Some("tua") => Some(SourceKind::Tua),
+        Some("tdialogue") => Some(SourceKind::Dialogue),
         _ => None,
     }
 }

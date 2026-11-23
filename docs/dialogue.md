@@ -7,7 +7,8 @@ icon: lucide/messages-square
 The optional `tuadialogue` player handles conversation flow independently of
 rendering, input and timing. It is available in development for the release after
 0.11.0. The `.tdialogue` frontend integrates with project checking, building and
-watching. Dedicated dialogue editor support and translations remain pending.
+watching. Shared character modules support script completion, hover and definition
+navigation in the updated Tua extension. Translations remain pending.
 
 ## Use the player
 
@@ -84,6 +85,53 @@ Choices can target later labels or form loops. A terminal utterance cannot have
 choices, and another utterance after choices or an ending needs a new label.
 Named label starts remain available through `player:start("label")`.
 
+## Share characters between scripts
+
+Define characters as exports of an ordinary typed module, such as
+`src/dialogue/characters.tua`:
+
+```tua
+type Character = { name: string, portrait: string? }
+local Guide: Character = { name = "Harbor guide" }
+local Captain: Character = { name = "Captain" }
+return { Guide = Guide, Captain = Captain }
+```
+
+Import that module before the first label in any number of scripts:
+
+```text
+@dialogue 1
+@characters Cast "dialogue.characters"
+
+[start]
+// @id harbor.welcome
+Cast.Guide: Welcome aboard. (end)
+```
+
+`Cast` is a script-local alias; `Guide` is the module's exported member. Each used
+member must be a record with a required string `name`. Ordinary Tua inference,
+type aliases and module re-exports apply. Missing modules, unknown members,
+optional names and non-string names are `TL5012` errors at the script reference.
+Unrelated module exports are allowed. Alias names must be simple identifiers;
+module names use extensionless dot-separated project paths. Multiple aliases are
+allowed, but cannot collide with local speaker declarations. Existing inline
+`@character Guide "Guide"` declarations remain supported.
+
+The updated VS Code extension recognizes `.tdialogue`, highlights script syntax,
+completes character members after `Cast.`, shows their inferred types and comments
+on hover, and navigates to the exported declaration. These queries also work with
+unsaved character edits and unfinished speaker references. Character modules get
+normal Tua editing support. Script formatting and cross-language rename are not
+implemented; the extension does not apply the Lua formatter to dialogue prose.
+
+Analysis never executes character modules. Emitted scripts load them using normal
+Lua `require` and read each character's `name` when the document module loads.
+A module can initialize a typed name dynamically. Updating a character name does
+not mutate existing player snapshots or invalidate Lua's loaded-module cache.
+Extra fields such as `portrait` remain available to your host through the Tua
+module; the current player passes only the display-name string as `speaker`.
+Renderer customization stays with the host.
+
 ## Whitespace and escaping
 
 Indentation before a statement is ignored. One optional ASCII space following
@@ -129,8 +177,9 @@ existing generated-Lua sibling convention.
 Deleting a source removes its generated module and maps. A dialogue change
 revalidates all project dialogue scripts so duplicate IDs can be detected and
 repaired across files. Build caching includes authored scripts. The language server
-watches dialogue assets on disk; dedicated script highlighting, completions and
-unsaved dialogue editing remain a later milestone. Rebuilding data does not itself
+watches dialogue assets on disk and maintains unsaved dialogue overlays. Shared
+character dependencies participate in normal module invalidation, including
+watch rechecks after character type changes and deletion. Rebuilding data does not itself
 replace a running player's owned document or reload Lua's module cache.
 
 ## Compiler frontend
@@ -140,7 +189,9 @@ speaker/section/line/choice model and source ranges without reading files or
 executing project code. `tua_core::emit::emit_dialogue_source(path, source)`
 validates that model and returns an ordinary Lua data module with per-line source
 provenance. The output is accepted by the same `Dialogue.new(document)` API.
-It contains no runtime import or executable dialogue text.
+It imports shared character modules when declared; dialogue text is always emitted
+as escaped string data. Project-level character type validation uses the shared
+analysis snapshot, while the standalone emitter validates script syntax only.
 
 Diagnostics use `TL5012` and one-based Unicode scalar columns with exclusive
 range ends. Unknown references, duplicate IDs/declarations, incomplete flow and

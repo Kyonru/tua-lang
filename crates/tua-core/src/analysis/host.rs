@@ -1522,6 +1522,10 @@ impl AnalysisHost {
             return Vec::new();
         };
 
+        if file.kind == AnalysisSourceKind::Dialogue {
+            return Vec::new();
+        }
+
         match &file.parsed {
             Ok(parsed) => semantic_tokens_parsed_source(parsed).unwrap_or_default(),
             Err(_) => degraded_semantic_tokens(&path, &file),

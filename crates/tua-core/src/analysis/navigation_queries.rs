@@ -27,6 +27,9 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let _profile = profile::span("analysis.query.definition");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return self.dialogue_definition(path, position);
+        }
         if let Some(definition) = self
             .shader_uniform_definitions(path, position)
             .into_iter()
@@ -2005,6 +2008,9 @@ impl AnalysisSnapshot {
     ) -> Option<RenameTarget> {
         let _profile = profile::span("analysis.query.prepare_rename");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return None;
+        }
 
         if let Some((key, span)) = self.i18n_key_at(path, position) {
             if self
@@ -2058,6 +2064,9 @@ impl AnalysisSnapshot {
     ) -> Option<RenameEdit> {
         let _profile = profile::span("analysis.query.rename");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return None;
+        }
 
         if let Some((key, _)) = self.i18n_key_at(path, position) {
             return self.rename_i18n_key(path, &key, new_name);

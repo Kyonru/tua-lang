@@ -1,0 +1,6 @@
+@dialogue 1
+@characters Cast "characters"
+
+[start]
+// @id arrival.welcome
+Cast.Guide: Welcome to the harbor. (end)

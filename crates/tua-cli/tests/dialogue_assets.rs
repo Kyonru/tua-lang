@@ -150,3 +150,47 @@ fn duplicate_text_ids_are_project_errors_and_in_place_builds_still_work() {
     project.success(&["build"]);
     assert!(project.0.join("src/scenes/intro.lua").is_file());
 }
+
+#[test]
+fn shared_character_modules_build_once_and_validate_each_dialogue_reference() {
+    let project = Project::new();
+    project.write(
+        "src/characters.tua",
+        "return { Guide = { name = 'Shared guide' } }\n",
+    );
+    let source = "@dialogue 1\n@characters Cast \"characters\"\n[start]\n// @id intro.hello\nCast.Guide: Hello (end)\n";
+    project.write("src/scenes/intro.tdialogue", source);
+    project.write(
+        "src/scenes/again.tdialogue",
+        &source.replace("intro.hello", "again.hello"),
+    );
+    project.success(&["check"]);
+    project.success(&["build"]);
+    let emitted = fs::read_to_string(project.0.join("build/scenes/intro.lua")).unwrap();
+    assert!(emitted.contains("require(\"characters\")"), "{emitted}");
+    if Command::new("lua").arg("-v").output().is_ok() {
+        let output = Command::new("lua").args(["-e", "local a = require('scenes.intro'); local b = require('scenes.again'); assert(a.nodes.start.speaker == 'Shared guide'); assert(b.nodes.start.speaker == a.nodes.start.speaker)"]).current_dir(project.0.join("build")).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    project.write(
+        "src/characters.tua",
+        "error('analysis must not run this')\nreturn { Guide = { name = 3 } }\n",
+    );
+    let output = project.run(&["check"]);
+    assert!(!output.status.success());
+    let errors = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(errors.contains("required string `name`"), "{errors}");
+    assert!(!project.run(&["build"]).status.success());
+    assert_eq!(
+        fs::read_to_string(project.0.join("build/scenes/intro.lua")).unwrap(),
+        emitted
+    );
+}

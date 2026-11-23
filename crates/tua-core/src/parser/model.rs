@@ -64,6 +64,7 @@ pub(crate) struct ParserPositionOrigin {
 
 #[derive(Clone, Debug)]
 pub struct ParsedSource {
+    pub(crate) dialogue_imports: Vec<crate::dialogue_asset::CharacterImport>,
     pub raw: RawParsedSource,
     pub typed: TypedSourceModel,
     pub path: PathBuf,
@@ -86,6 +87,7 @@ pub struct ParsedSource {
 impl ParsedSource {
     pub(crate) fn from_raw_and_typed(raw: RawParsedSource, typed: TypedSourceModel) -> Self {
         Self {
+            dialogue_imports: Vec::new(),
             path: raw.path.clone(),
             source: raw.source.clone(),
             ast: raw.ast.clone(),

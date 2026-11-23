@@ -19,7 +19,11 @@ pub fn module_links_tua_source(
     let Ok(project_model) = ProjectModel::load_for_path(path) else {
         return Vec::new();
     };
-    let literals = module_specifier_literals(&source);
+    let literals = if path.extension().is_some_and(|ext| ext == "tdialogue") {
+        crate::dialogue_asset::character_module_specifiers(&source)
+    } else {
+        module_specifier_literals(&source)
+    };
 
     resolve_module_specifier_literals(path, &literals, &project_model).links
 }

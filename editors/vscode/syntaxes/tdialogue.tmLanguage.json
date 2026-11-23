@@ -1,0 +1,63 @@
+{
+  "name": "Tua Dialogue",
+  "scopeName": "text.tdialogue",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.tdialogue",
+      "match": "^\\s*//.*$"
+    },
+    {
+      "begin": "^\\s*(@(?:dialogue|character|characters))\\b",
+      "end": "$",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.tdialogue"
+        }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.tdialogue",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.tdialogue",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "entity.name.type.tdialogue",
+          "match": "\\b[A-Za-z_][A-Za-z_0-9]*\\b"
+        },
+        {
+          "name": "constant.numeric.tdialogue",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    {
+      "name": "entity.name.section.tdialogue",
+      "match": "^\\s*\\[[A-Za-z_][\\w.-]*\\]\\s*$"
+    },
+    {
+      "match": "^\\s*([\\w.-]+)(:)",
+      "captures": {
+        "1": {
+          "name": "variable.other.tdialogue"
+        },
+        "2": {
+          "name": "punctuation.separator.tdialogue"
+        }
+      }
+    },
+    {
+      "name": "keyword.control.tdialogue",
+      "match": "^\\s*->|\\[target:[\\w.-]+\\]|\\(end\\)$"
+    },
+    {
+      "name": "constant.character.escape.tdialogue",
+      "match": "\\\\."
+    }
+  ]
+}

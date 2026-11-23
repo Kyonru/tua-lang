@@ -8,6 +8,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Dialogue scripts can import shared typed character modules with `@characters`.
+  The updated extension adds `.tdialogue` highlighting, character completion,
+  hover and definition navigation, including unsaved edits. Check/build/watch
+  validate character references without executing project code.
+
 - Add typed `Dialogue` and `BoundedQueue` builtins with reference-driven runtime
   imports, lexical shadowing and existing explicit-import compatibility.
 

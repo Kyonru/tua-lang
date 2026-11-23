@@ -12300,3 +12300,142 @@ if item then print(item.<|complete|>value) end
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
     assert!(labels.contains(&"value".to_owned()), "{labels:?}");
 }
+
+#[test]
+fn dialogue_shared_characters_use_typed_exports_and_live_overlays() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/characters.tua
+ type Character = { name: string, portrait: string? }
+ local Guide: Character = { name = "Guide" }
+ return { Guide = Guide, Count = 3 }
+-- file: src/intro.tdialogue
+@dialogue 1
+@characters Cast "characters"
+[start]
+// @id intro.hello
+Cast.<|speaker|>Guide: Hello (end)
+-- file: src/editing.tdialogue
+@dialogue 1
+@characters Cast "characters"
+[start]
+// @id editing.hello
+Cast.G<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/intro.tdialogue");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let completions = snapshot.completion("src/editing.tdialogue", fixture.position("complete"));
+    assert_eq!(completion_labels(&completions), vec!["Guide"]);
+    let hover = snapshot
+        .hover("src/intro.tdialogue", fixture.position("speaker"))
+        .unwrap();
+    assert!(hover.contents.contains("name: string"), "{hover:?}");
+    let definition = snapshot
+        .definition("src/intro.tdialogue", fixture.position("speaker"))
+        .unwrap();
+    assert_eq!(definition.path, PathBuf::from("src/characters.tua"));
+    host.set_file("src/characters.tua", "return { Guide = { name = 42 } }");
+    let changed = host.snapshot().pipeline_diagnostics("src/intro.tdialogue");
+    assert_eq!(changed.len(), 1, "{changed:?}");
+    assert!(
+        changed[0].message.contains("required string `name`"),
+        "{changed:?}"
+    );
+    assert!(snapshot
+        .pipeline_diagnostics("src/intro.tdialogue")
+        .is_empty());
+    host.set_file(
+        "src/characters.tua",
+        "return { Other = { name = 'Other' } }",
+    );
+    let changed = host.snapshot().pipeline_diagnostics("src/intro.tdialogue");
+    assert!(
+        changed
+            .iter()
+            .any(|d| d.message.contains("no export `Guide`")),
+        "{changed:?}"
+    );
+    host.set_file(
+        "src/other.tua",
+        "return { Guide = { name = 'Replacement' } }",
+    );
+    let intro = fixture
+        .files()
+        .iter()
+        .find(|file| file.path == Path::new("src/intro.tdialogue"))
+        .unwrap()
+        .source
+        .replace("\"characters\"", "\"other\"");
+    host.set_file("src/intro.tdialogue", intro);
+    let rebound = host.snapshot().pipeline_diagnostics("src/intro.tdialogue");
+    assert!(rebound.is_empty(), "{rebound:?}");
+    host.remove_file("src/other.tua");
+    let changed = host.snapshot().pipeline_diagnostics("src/intro.tdialogue");
+    assert!(
+        changed
+            .iter()
+            .any(|d| d.message.contains("cannot resolve character module")),
+        "{changed:?}"
+    );
+}
+
+#[test]
+fn dialogue_character_types_reject_optional_or_dynamic_names() {
+    for declaration in [
+        "local Guide: { name: string? } = {}",
+        "local Guide: any = {}",
+        "local Guide = { title = 'Guide' }",
+        "local Guide: { name: string }? = nil",
+    ] {
+        let mut host = AnalysisHost::new();
+        host.set_source_roots([PathBuf::from("src")]);
+        host.set_file(
+            "src/characters.tua",
+            format!("{declaration}\nreturn {{ Guide = Guide }}"),
+        );
+        host.set_file("src/intro.tdialogue", "@dialogue 1\n@characters Cast \"characters\"\n[start]\n// @id intro\nCast.Guide: Hello (end)\n");
+        let diagnostics = host.snapshot().pipeline_diagnostics("src/intro.tdialogue");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("required string `name`")),
+            "{declaration}: {diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn dialogue_characters_resolve_reexported_record_aliases_without_parsing_prose() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/actors.tua", "type Character = { name: string }\nlocal Guide: Character = { name = 'Guide' }\nreturn { Guide = Guide }\n");
+    host.set_file("src/cast.tua", "return require('actors')\n");
+    let source = "@dialogue 1\n@characters Cast \"cast\"\n[start]\n// @id shared\n  Cast.Guide: é🦆 require('missing') is dialogue text. (end)\n";
+    host.set_file("src/intro.tdialogue", source);
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/intro.tdialogue");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let module = snapshot.module_graph.module("src/intro.tdialogue").unwrap();
+    assert_eq!(module.require_edges.len(), 1);
+    assert_eq!(module.require_edges[0].module, "cast");
+    let hover = snapshot
+        .hover("src/intro.tdialogue", SourcePosition { line: 5, column: 9 })
+        .unwrap();
+    assert!(hover.contents.contains("name: string"), "{hover:?}");
+    assert_eq!(hover.span.unwrap().start.column, 3);
+    assert!(snapshot.semantic_tokens("src/intro.tdialogue").is_empty());
+    assert!(host.semantic_tokens("src/intro.tdialogue").is_empty());
+    assert!(snapshot
+        .rename(
+            "src/intro.tdialogue",
+            SourcePosition { line: 5, column: 9 },
+            "Other"
+        )
+        .is_none());
+}

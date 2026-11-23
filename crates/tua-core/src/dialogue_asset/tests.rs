@@ -137,3 +137,24 @@ proptest::proptest! {
         let _ = parse_dialogue_source("random.tdialogue", &source);
     }
 }
+
+#[test]
+fn character_imports_validate_aliases_and_declaration_order() {
+    let source = "@dialogue 1\n@characters Cast \"dialogue.characters\"\n[start]\n// @id hello\nCast.Guide: Hello (end)\n";
+    let model = parse_dialogue_source("scene.tdialogue", source).unwrap();
+    assert_eq!(model.imports[0].module.value, "dialogue.characters");
+    assert_eq!(model.imports[0].module.span.start.column, 19);
+    for invalid in [
+        source.replace("[start]", "@characters Cast \"other\"\n[start]"),
+        source.replace("[start]", "@character Cast.Guide \"Guide\"\n[start]"),
+        source.replace("Cast.Guide:", "Unknown.Guide:"),
+        source.replace("Cast.Guide:", "Cast.Guide.Nested:"),
+        source.replace("dialogue.characters", "../characters"),
+        source.replace("[start]", "[start]\n@characters Other \"characters\""),
+    ] {
+        assert!(
+            parse_dialogue_source("scene.tdialogue", &invalid).is_err(),
+            "{invalid}"
+        );
+    }
+}

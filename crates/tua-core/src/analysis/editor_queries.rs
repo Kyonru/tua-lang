@@ -4,6 +4,9 @@ impl AnalysisSnapshot {
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
         let _profile = profile::span("analysis.query.hover");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return self.dialogue_hover(path, position);
+        }
         if let Some(hover) = self.shader_uniform_hover(path, position) {
             return Some(hover);
         }
@@ -204,6 +207,9 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
+        if file.kind == AnalysisSourceKind::Dialogue {
+            return self.dialogue_completion(path, position);
+        }
         let revision = self.usage_index.revision();
         debug_assert_eq!(revision, self.revision);
 
@@ -657,6 +663,9 @@ impl AnalysisSnapshot {
     ) -> Option<SignatureHelp> {
         let _profile = profile::span("analysis.query.signature_help");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return None;
+        }
         let file = self.file(path)?;
 
         match &file.parsed {
@@ -883,6 +892,9 @@ impl AnalysisSnapshot {
         requested_kinds: &[AssistKind],
     ) -> Vec<Assist> {
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return Vec::new();
+        }
         let Some(parsed) = self.file(path).and_then(|file| file.parsed.as_ref().ok()) else {
             return Vec::new();
         };
@@ -1230,6 +1242,9 @@ impl AnalysisSnapshot {
 
     pub fn semantic_tokens(&self, path: impl AsRef<Path>) -> Vec<SemanticToken> {
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return Vec::new();
+        }
         let Some(file) = self.file(path) else {
             return Vec::new();
         };

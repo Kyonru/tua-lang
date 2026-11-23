@@ -356,6 +356,9 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
+        if file.kind == AnalysisSourceKind::Dialogue {
+            return file.diagnostics.clone();
+        }
         match &file.parsed {
             Ok(_) => Vec::new(),
             Err(diagnostics) => diagnostics.clone(),
@@ -376,6 +379,7 @@ impl AnalysisSnapshot {
         };
         if file.kind == AnalysisSourceKind::Dialogue {
             let mut diagnostics = file.diagnostics.clone();
+            diagnostics.extend(self.dialogue_character_diagnostics(path.as_ref()));
             diagnostics.extend(
                 self.dialogue_project_diagnostics()
                     .get(&normalize_path(path.as_ref()))

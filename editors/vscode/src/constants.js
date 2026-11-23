@@ -88,7 +88,12 @@ const STATUS_SELECTOR = [
 ];
 
 const CONFIG_SELECTOR = [{ scheme: "file", pattern: "**/tua.toml" }];
-const DOCUMENT_SELECTOR = [...STATUS_SELECTOR, ...CONFIG_SELECTOR];
+const DOCUMENT_SELECTOR = [
+  ...STATUS_SELECTOR,
+  ...CONFIG_SELECTOR,
+  { scheme: "file", language: "tdialogue" },
+  { scheme: "file", pattern: "**/*.tdialogue" },
+];
 
 module.exports = {
   COMMANDS,

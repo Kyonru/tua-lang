@@ -237,8 +237,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
         { scheme: "file", pattern: "**/*.tua" },
         { scheme: "untitled", language: "tua" },
         { scheme: "file", pattern: "**/tua.toml" },
+        { scheme: "file", language: "tdialogue" },
+        { scheme: "file", pattern: "**/*.tdialogue" },
       ],
-      "document selector should cover .tua files and tua.toml",
+      "document selector should cover Tua, dialogue scripts and tua.toml",
     );
 
     assert.strictEqual(

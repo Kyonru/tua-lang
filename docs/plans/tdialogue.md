@@ -24,7 +24,8 @@ Game rendering, commands, input and pause ownership belong to the host.
 - [x] Build/watch integration, dependency invalidation and mapped diagnostics.
 - [x] Game demo authored as a compiled script with native renderer verification.
 - [ ] Localization IDs/catalog integration and rich-text placeholder handling.
-- [ ] Editor grammar, diagnostics, completion, navigation and translation coverage.
+- [x] Editor grammar, diagnostics and shared-character completion/navigation.
+- [ ] Translation coverage, cross-language rename and script formatting.
 - [ ] Conditions, local variables, registered commands, waits/cancellation,
   deterministic instruction limits and independent-session integration tests.
 - [ ] Native rendered examples and full cross-repository verification.
@@ -219,3 +220,28 @@ LÖVE queue replay, including bounded overflow, FIFO ordering, suspended clocks,
 queued farewell progression and reset/disposal. Its source/compiler evidence is
 in `docs/audits/2026-11-23/dialogue-queue-validation/`. Installed-extension bundle
 updates and releases are not part of this checkpoint.
+
+## Shared character authoring
+
+Ordinary `.tua` modules now export reusable character records. Scripts declare
+`@characters Cast "dialogue.characters"` and reference `Cast.Guide`. Shared core
+analysis resolves and checks exported members without executing project code;
+emission uses ordinary runtime imports rather than baking in display names.
+Module dependencies participate in build/watch invalidation. The VS Code
+extension registers `.tdialogue` with a dedicated grammar and LSP selector;
+completion, hover, definition navigation and unsaved overlays are implemented.
+Lua formatting is suppressed for scripts. Cross-language rename, localization,
+portrait delivery in snapshots and richer script execution remain follow-ups.
+
+Shared-character validation: 2,115 core tests (one existing ignored), five emitted
+asset tests, 507 LSP tests, 167 CLI integration tests and the other CLI suites pass.
+Watch regressions cover changed character types, deletion and recreation; editor
+regressions cover re-exports, import rebinding, unsaved buffers and completion edit
+ranges. Clippy, model-contract/evaluation gates, 291 extension checks and activation
+smoke, LSP feature smoke, documentation build, JSON and formatting checks pass.
+The first `make verify` stopped at two existing Rot runtime tests with missing or
+unexpected generated output; all four Rot tests pass on an isolated serial rerun.
+The remaining verification stages were then completed separately. The activation
+fixture was updated to expect dialogue selectors and its complete gate rerun.
+No installed VS Code UI validation is claimed. The shared-character headless
+example passes formatting, check/build and emitted Lua execution.

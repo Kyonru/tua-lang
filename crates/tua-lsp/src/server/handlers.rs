@@ -2666,6 +2666,13 @@ impl LspServer {
 
     fn formatting_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
+        if request
+            .path
+            .extension()
+            .is_some_and(|extension| extension == "tdialogue")
+        {
+            return Some(json!([]));
+        }
         let source = self.analysis.document_text(request.uri)?;
         let options = self.format_options_for_path(&request.path);
         let formatted = tua_core::format_tua_source(&request.path, source, &options).ok()?;
@@ -2679,6 +2686,13 @@ impl LspServer {
 
     fn range_formatting_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
+        if request
+            .path
+            .extension()
+            .is_some_and(|extension| extension == "tdialogue")
+        {
+            return Some(json!([]));
+        }
         let range = request
             .params
             .get("range")
@@ -2706,6 +2720,13 @@ impl LspServer {
 
     fn on_type_formatting_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
+        if request
+            .path
+            .extension()
+            .is_some_and(|extension| extension == "tdialogue")
+        {
+            return Some(json!([]));
+        }
         let position = request.position()?;
         let trigger = request.params.get("ch").and_then(Value::as_str)?;
         let source = self.analysis.document_text(request.uri)?;

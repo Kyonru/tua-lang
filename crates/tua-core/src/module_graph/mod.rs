@@ -845,7 +845,24 @@ fn require_edges_for_source(
     parsed: &ParsedSource,
     context: ModuleResolutionContext<'_>,
 ) -> Vec<RequireGraphEdge> {
-    module_specifier_literals(&parsed.source)
+    let literals = if source_path
+        .extension()
+        .is_some_and(|ext| ext == "tdialogue")
+    {
+        parsed
+            .dialogue_imports
+            .iter()
+            .map(|import| crate::module_link::ModuleSpecifierLiteral {
+                module: import.module.value.clone(),
+                span: import.module.span,
+                kind: ModuleSpecifierKind::Require,
+                type_only: false,
+            })
+            .collect()
+    } else {
+        module_specifier_literals(&parsed.source)
+    };
+    literals
         .into_iter()
         .map(|literal| {
             let type_only = parsed.type_imports.iter().any(|import| {

@@ -130,3 +130,22 @@ fn consecutive_lines_use_stable_internal_ids_without_label_collisions() {
         .into_result()
         .unwrap();
 }
+
+#[test]
+fn shared_character_emission_preserves_import_and_speaker_provenance() {
+    let source = "@dialogue 1\n@characters Cast \"characters\"\n[start]\n// @id shared\n  Cast.Guide: Hello (end)\n";
+    let output = emit_dialogue_source("shared.tdialogue", source).unwrap();
+    tua_core::parse_lua_source("shared.lua", &output.code).unwrap();
+    assert_eq!(output.provenance.len(), output.code.lines().count());
+    for (index, line) in output.code.lines().enumerate() {
+        let origin = &output.provenance[index];
+        if line.contains("require(") {
+            assert_eq!(origin.source_span.start.line, 2);
+        }
+        if line.contains("speaker =") {
+            assert_eq!(origin.source_span.start.line, 5);
+            assert_eq!(origin.source_span.start.column, 3);
+            assert!(line.contains("[\"Guide\"].name"));
+        }
+    }
+}
