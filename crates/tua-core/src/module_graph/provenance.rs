@@ -389,15 +389,29 @@ fn function_return_forwards(
         .collect()
 }
 
-#[derive(Default)]
-struct ComponentAccessCalls(bool);
-impl Visitor for ComponentAccessCalls {
+struct ComponentAccessCalls<'a, 'b> {
+    semantic: &'a crate::semantic::SemanticModel<'b>,
+    found: bool,
+}
+
+impl Visitor for ComponentAccessCalls<'_, '_> {
     fn visit_function_call(&mut self, call: &full_moon::ast::FunctionCall) {
-        self.0 |= crate::ast_utils::field_chain_before_first_call(call).is_some_and(|parts| {
-            parts
-                .last()
-                .is_some_and(|part| crate::ecs::is_component_access_method(part))
-        });
+        let Some(parts) = crate::ast_utils::field_chain_before_first_call(call) else {
+            return;
+        };
+        let Some(method) = parts.last() else {
+            return;
+        };
+        if !crate::ecs::is_component_access_method(method) {
+            return;
+        }
+        let Some(position) = node_span(call).map(|span| span.start) else {
+            return;
+        };
+        self.found |= parts
+            .split_last()
+            .and_then(|(_, receiver)| self.semantic.type_of_field_chain(receiver, position))
+            .is_some_and(|receiver| crate::ecs::is_world_type_direct(&receiver));
     }
 }
 
@@ -413,12 +427,19 @@ impl ModuleGraph {
         let candidates = inputs
             .iter()
             .filter(|input| {
-                let (Some(parsed), Some(_)) = (input.parsed, input.environment) else {
+                let (Some(parsed), Some(environment)) = (input.parsed, input.environment) else {
                     return false;
                 };
-                let mut calls = ComponentAccessCalls::default();
+                if crate::module_index::require_bindings_for_parsed_source(parsed).is_empty() {
+                    return false;
+                }
+                let semantic = crate::semantic::SemanticModel::new(parsed, environment);
+                let mut calls = ComponentAccessCalls {
+                    semantic: &semantic,
+                    found: false,
+                };
                 calls.visit_ast(&parsed.ast);
-                calls.0
+                calls.found
             })
             .collect::<Vec<_>>();
         for _ in 0..candidates.len().min(64) {
