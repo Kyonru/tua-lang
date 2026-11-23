@@ -69,5 +69,5 @@ return {
   drawPlayer = drawPlayer,
   drawBullets = drawBullets,
   spawnRing = spawnRing,
-  updateBullets = updateBullets
+  updateBullets = updateBullets,
 }

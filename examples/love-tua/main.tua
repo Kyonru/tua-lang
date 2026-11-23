@@ -16,8 +16,9 @@ local controller = input({
     confirm = { "key:return", "button:a" },
     pause = { "key:escape", "key:p" },
     shoot = {
-      "key:space", "button:b"
-    }
+      "key:space",
+      "button:b",
+    },
   },
   pairs = {
     move = { "left", "right", "up", "down" },

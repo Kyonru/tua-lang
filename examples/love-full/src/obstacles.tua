@@ -19,7 +19,10 @@ local sound = require("sound")
 local particles = require("particles")
 
 local obstacles: ObstaclesModule = {
-  list = {}, spawn_timer = 0, spawn_interval = 2, speed = 1,
+  list = {},
+  spawn_timer = 0,
+  spawn_interval = 2,
+  speed = 1,
 }
 local block = image "assets/block.png"
 

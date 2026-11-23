@@ -38,5 +38,5 @@ return {
   player = player,
   VelocityComponent = VelocityComponent,
   PositionComponent = PositionComponent,
-  RotationComponent = RotationComponent
+  RotationComponent = RotationComponent,
 }
