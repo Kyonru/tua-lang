@@ -15,7 +15,8 @@ Game rendering, commands, input and pause ownership belong to the host.
 - [x] Initial headless runtime: validated owned documents, line/choice/end nodes,
   independent sessions, explicit start/advance/choose, cancellation/disposal and
   owned presentation snapshots. No required LÖVE globals.
-- [ ] Typed public contracts and opt-in emitted runtime integration.
+- [x] Typed imported contract and opt-in emitted runtime integration; shared editor
+  queries and emitted-Lua regressions.
 - [ ] Renderer seam in the game, persistent conversations, separate temporary
   policy, independent UI clock and lifecycle.
 - [ ] Shared `.tdialogue` parser/document validation and source locations.
@@ -26,9 +27,10 @@ Game rendering, commands, input and pause ownership belong to the host.
   deterministic instruction limits and independent-session integration tests.
 - [ ] Native rendered examples and full cross-repository verification.
 
-The initial runtime is internal scaffolding, not a released public API. It accepts
-plain structured data through `Dialogue.new(document)`; no builtin is registered
-and builds do not yet emit it. Each document has an entry ID and a node map. Lines
+The feature-branch API accepts structured data through
+`local Dialogue = require("tuadialogue")` and `Dialogue.new(document)`. This ordinary
+import carries the shared compiler contract and opts into runtime emission; no
+global builtin is required. The API is still under development for the next release. Each document has an entry ID and a node map. Lines
 point to the next node; choices reference targets by stable option IDs. End nodes
 complete playback. No reveal or expiry policy is hidden inside the core.
 
@@ -43,3 +45,39 @@ Validation for the first slice: the bundled plain-Lua runtime suite passes on Lu
 with JIT off and on. Explicit Lua formatting uses the shared release formatter
 and checks one-pass stability. No emitted compiler integration or rendered game
 behavior is claimed yet. Full `make verify` is required when those surfaces change.
+
+## Typed integration
+
+The shared contract checks line/choice/end input records and method arguments.
+`start()` uses the entry node and `start("id")` selects a named node. Imported and
+re-exported snapshots preserve completion/hover/signatures and reject invalid
+assignments. Only the hidden colon receiver uses `any`, following existing runtime
+contracts; document and presentation payloads remain typed.
+
+Snapshots contain an optional presentation node. When present, `text` and `options`
+are always available, defaulting to empty values; speaker and next remain optional.
+This stable presentation shape is distinct from the validated input node union.
+The constructor defensively copies documents, and snapshots remain owned copies.
+
+The optional `start` argument derives from a function declaration, which preserves
+arity metadata that callback-type annotations currently lack. General discriminated
+record-union narrowing and nested optional-record syntax need separate compiler
+follow-up probes; this API does not claim to fix those broader limitations.
+
+Run `examples/dialogue` with the feature compiler for an executable headless host.
+CLI regressions cover omission when unused, project replacements, valid emission,
+wrong argument/field types and invalid node kinds. The emitted runtime runs the
+lifecycle oracle; `.tdialogue` parsing and game renderer integration remain pending.
+
+Typed integration validation: `make verify` passed (2,099 core tests, one existing
+ignored test; 504 LSP tests; CLI suites, Clippy, language evaluations and extension
+checks). The headless example builds and runs from its `build` directory. The
+emitted runtime passes the lifecycle oracle in LÖVE 11.5 / LuaJIT 2.1.1700008891
+with JIT off/on; standalone runtime tests pass on Lua 5.4.8. Explicit formatting
+checks cover the runtime, declaration contract, test and example.
+
+The first LSP feature smoke exceeded its 1,000 ms timing limit (1,042 ms) while
+full verification was running. Repeating it after that workload finished passed.
+This is not a latency benchmark or proof of installed-editor UI behavior. No game
+renderer, `.tdialogue` parser, release installation, push or merge is included in
+this slice.

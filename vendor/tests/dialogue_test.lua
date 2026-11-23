@@ -20,11 +20,12 @@ assert(first:snapshot().state == "idle" and not first:advance())
 first:start()
 source.nodes.hello.text = "external mutation"
 local view = first:snapshot()
-assert(view.node.text == "Hello")
+assert(view.node.text == "Hello" and #view.node.options == 0)
 view.node.text = "renderer mutation"
 assert(first:snapshot().node.text == "Hello")
 assert(not first:choose("leave"))
 assert(first:advance())
+assert(first:snapshot().node.text == "")
 assert(not first:advance() and not first:choose("missing"))
 view = first:snapshot()
 view.node.options[1].target = "done"
@@ -36,6 +37,7 @@ first:start()
 local generation = first:snapshot().generation
 assert(first:cancel() and not first:cancel())
 assert(first:snapshot().generation > generation)
+assert(not pcall(function() first:start(false) end))
 first:start("question")
 assert(first:snapshot().state == "awaiting_choice")
 first:dispose()

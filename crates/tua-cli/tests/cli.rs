@@ -7600,3 +7600,97 @@ fn historical_save_schemas_validate_emitted_runtime() {
         assert!(output.status.success(), "{output:?}");
     }
 }
+
+#[test]
+fn dialogue_is_opt_in_and_preserves_project_replacements() {
+    let temp = TempDir::new("dialogue-opt-in");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src/main.tua"), "return 1\n").unwrap();
+    let unused = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(unused.status.success(), "{unused:?}");
+    assert!(!temp.path().join("build/tuadialogue.lua").exists());
+    let custom = "return { custom = true }\n";
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "return require(\"tuadialogue\")\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/tuadialogue.lua"), custom).unwrap();
+    let replaced = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(replaced.status.success(), "{replaced:?}");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/tuadialogue.lua")).unwrap(),
+        custom
+    );
+}
+
+#[test]
+fn dialogue_contract_checks_types_and_emits_executable_runtime() {
+    let temp = TempDir::new("dialogue-contract");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let source = r#"local Dialogue = require("tuadialogue")
+local player = Dialogue.new({ entry = "hello", nodes = {
+  hello = { kind = "line", text = "Hello", next = "done" },
+  done = { kind = "end" },
+} })
+player:start()
+local snapshot = player:snapshot()
+assert(snapshot.state == "awaiting_advance")
+local node = snapshot.node
+if node then
+  local text: string = node.text
+  assert(text == "Hello")
+end
+assert(player:advance())
+assert(player:snapshot().state == "completed")
+player:dispose()
+dofile("oracle.lua")
+"#;
+    fs::write(temp.path().join("src/main.tua"), source).unwrap();
+    fs::write(
+        temp.path().join("src/oracle.lua"),
+        include_str!("../../../vendor/tests/dialogue_test.lua"),
+    )
+    .unwrap();
+    let result = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    assert!(temp.path().join("build/tuadialogue.lua").exists());
+    if let Some(lua) = working_lua_runtime() {
+        let result = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+    }
+    for invalid in [
+        source.replace("player:start()", "player:start(42)"),
+        source.replace("local text: string", "local text: number"),
+        source.replace("kind = \"end\"", "kind = \"unknown\""),
+    ] {
+        fs::write(temp.path().join("src/main.tua"), invalid).unwrap();
+        let result = tua()
+            .arg("check")
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(
+            !result.status.success(),
+            "accepted invalid contract: {result:?}"
+        );
+    }
+}

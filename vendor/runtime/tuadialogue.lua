@@ -76,6 +76,7 @@ end
 
 function Player:start(entry)
   assert(self.state ~= "disposed", "dialogue is disposed")
+  assert(entry == nil or type(entry) == "string", "entry ID must be a string")
   entry = entry or self.document.entry
   assert(self.document.nodes[entry], "missing entry node")
   self.generation = self.generation + 1
@@ -110,11 +111,16 @@ end
 
 function Player:snapshot()
   local node = self.current and self.document and self.document.nodes[self.current]
+  local presentation = copy(node)
+  if presentation then
+    presentation.text = presentation.text or ""
+    presentation.options = presentation.options or {}
+  end
   return {
     state = self.state,
     generation = self.generation,
     nodeId = self.current,
-    node = copy(node),
+    node = presentation,
   }
 end
 

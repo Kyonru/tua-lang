@@ -12114,3 +12114,46 @@ local bad = access.get("wrong")
         );
     }
 }
+
+#[test]
+fn dialogue_reexport_keeps_snapshot_types_and_method_signatures() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/dialogue.tua
+return require("tuadialogue")
+-- file: src/main.tua
+local Dialogue = require("dialogue")
+local player = Dialogue.new({ entry = "done", nodes = { done = { kind = "end" } } })
+player:start()
+player:choose(42)
+local view = player:snapshot()
+local count: string = view.generation
+local state = view.<|complete|><|hover|>state
+player:choose(<|signature|>"leave")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 2,
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"generation".to_owned()), "{labels:?}");
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("awaiting_choice"), "{hover:?}");
+    assert!(snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .is_some());
+}

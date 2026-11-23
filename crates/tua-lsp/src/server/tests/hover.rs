@@ -978,3 +978,17 @@ fn negative_else_guard_uses_shared_hover_and_completion() {
     assert_completion_labels(server.output(), 2, ["x"]);
     assert_hover_contains(server.output(), 3, "number");
 }
+
+#[test]
+fn dialogue_import_exposes_typed_snapshot_hover() {
+    let temp = TempProject::new("dialogue-hover");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "local Dialogue = require('tuadialogue')\nlocal player = Dialogue.new({ entry = 'end', nodes = { ['end'] = { kind = 'end' } } })\nlocal view = player:snapshot()\nlocal generation = view.generation\n";
+    temp.write("src/main.tua", source);
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "view.generation"));
+    assert_hover_contains(server.output(), 2, "generation");
+}
