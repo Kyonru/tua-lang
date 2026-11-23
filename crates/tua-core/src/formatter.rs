@@ -872,7 +872,8 @@ impl<'a> Formatter<'a> {
             IndentStyle::Spaces => " ".repeat(indent_level * self.options.indent_width),
             IndentStyle::Tabs => "\t".repeat(indent_level),
         };
-        let formatted = break_long_groups(&normalized, &indent, self.options);
+        let formatted =
+            break_long_groups_in_context(&normalized, &indent, self.options, paren_indent > 0);
 
         output.push_str(&formatted);
         output.push('\n');
@@ -1404,6 +1405,15 @@ fn format_short_string(literal: &str, style: QuoteStyle) -> String {
 }
 
 fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> String {
+    break_long_groups_in_context(line, indent, options, false)
+}
+
+fn break_long_groups_in_context(
+    line: &str,
+    indent: &str,
+    options: &FormatOptions,
+    inside_parens: bool,
+) -> String {
     let inline = format!("{indent}{line}");
 
     if inline.chars().count() <= options.line_width {
@@ -1414,7 +1424,9 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
     if let Some(wrapped) = break_long_condition(line, indent, options).filter(keeps_blocks) {
         return wrapped;
     }
-    if let Some(wrapped) = break_long_concatenation(line, indent, options).filter(keeps_blocks) {
+    if let Some(wrapped) =
+        break_long_concatenation(line, indent, options, inside_parens).filter(keeps_blocks)
+    {
         return wrapped;
     }
     let table = || break_long_table(line, indent, options).filter(keeps_blocks);
@@ -1492,7 +1504,12 @@ fn break_long_condition(line: &str, indent: &str, options: &FormatOptions) -> Op
 
 /// Wrap the outer expression before expanding a short call within it. Keep
 /// tokens (including return-list commas and the final multi-return call) intact.
-fn break_long_concatenation(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {
+fn break_long_concatenation(
+    line: &str,
+    indent: &str,
+    options: &FormatOptions,
+    inside_parens: bool,
+) -> Option<String> {
     let full_moon::tokenizer::LexerResult::Ok(tokens) =
         full_moon::tokenizer::Lexer::new(line, full_moon::LuaVersion::luau()).collect()
     else {
@@ -1512,11 +1529,13 @@ fn break_long_concatenation(line: &str, indent: &str, options: &FormatOptions) -
             }
         }
     }
-    if cuts.len() == 1 {
+    // Moving an unfinished call onto a continuation line would also require
+    // moving its following argument lines. Leave that existing group intact.
+    if cuts.len() == 1 || depth != 0 {
         return None;
     }
     cuts.push(line.len());
-    let continued_indent = if line.starts_with("..") {
+    let continued_indent = if line.starts_with("..") || inside_parens {
         indent.to_owned()
     } else {
         format!("{indent}{}", indent_unit(options))
@@ -1534,7 +1553,12 @@ fn break_long_concatenation(line: &str, indent: &str, options: &FormatOptions) -
             && prefix.chars().count() + current.chars().count() + 1 + part.chars().count()
                 > options.line_width
         {
-            rows.push(break_long_groups(&current, prefix, options));
+            rows.push(break_long_groups_in_context(
+                &current,
+                prefix,
+                options,
+                inside_parens,
+            ));
             current.clear();
         }
         if !current.is_empty() {
@@ -1547,7 +1571,12 @@ fn break_long_concatenation(line: &str, indent: &str, options: &FormatOptions) -
     } else {
         &continued_indent
     };
-    rows.push(break_long_groups(&current, prefix, options));
+    rows.push(break_long_groups_in_context(
+        &current,
+        prefix,
+        options,
+        inside_parens,
+    ));
     Some(rows.join("\n"))
 }
 
@@ -1621,10 +1650,11 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
     let last_index = args.len().saturating_sub(1);
     for (index, arg) in args.into_iter().enumerate() {
         let separator = if index == last_index { "" } else { "," };
-        output.push_str(&break_long_groups(
+        output.push_str(&break_long_groups_in_context(
             &format!("{}{separator}", arg.trim()),
             &item_indent,
             options,
+            true,
         ));
         output.push('\n');
     }

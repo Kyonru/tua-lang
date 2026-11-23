@@ -2131,3 +2131,20 @@ fn concatenation_wrapping_preserves_grouping_comments_and_return_tails() {
         );
     }
 }
+
+#[test]
+fn concatenation_in_call_arguments_and_open_calls_settles_in_one_pass() {
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+    for source in [
+        "draw(\n  firstLabel .. tostring(counter) .. secondLabel .. tostring(capacity),\n  20,\n  30\n)\n",
+        "draw(firstLabel .. tostring(counter) .. secondLabel .. tostring(capacity), 20, 30)\n",
+        "local label = label .. formatMessage(\"Long text with several arguments\",\n  firstArgument, secondArgument, thirdArgument)\n",
+    ] {
+        let output = format_tua_source("src/main.tua", source, &options).unwrap();
+        assert_eq!(lua_tokens(source), lua_tokens(&output));
+        assert_eq!(format_tua_source("src/main.tua", &output, &options).unwrap(), output);
+    }
+}
