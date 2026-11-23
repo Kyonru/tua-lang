@@ -5,6 +5,7 @@ player:start()
 local view = player:snapshot()
 local node = view.node
 if node then print(node.text) end
+-- Acknowledge the line before choosing a reply. The first reply here loops back.
 assert(player:advance())
 assert(player:choose("intro.again"))
 assert(player:advance())
@@ -21,9 +22,12 @@ arrivalPlayer:start()
 local arrivalNode = arrivalPlayer:snapshot().node
 assert(arrivalNode and arrivalNode.speaker == "Harbor guide")
 assert(arrivalNode and arrivalNode.portrait == "portraits/guide.png")
+-- The host owns reveal. Until it reports true, only the shown clock can fire.
 local shownEvents = arrivalPlayer:update(0.2, false)
 assert(shownEvents[1].name == "portrait.pulse")
+-- An instant reveal completion starts the second clock at zero.
 arrivalPlayer:update(0, true)
+-- These are event records; this headless host does not load audio or images.
 local revealedEvents = arrivalPlayer:update(0.25, true)
 assert(revealedEvents[1].payload == "welcome")
 arrivalPlayer:dispose()

@@ -1,40 +1,76 @@
-# Headless dialogue example
+# Dialogue: runnable headless examples
 
-`src/intro.tdialogue` is authored separately from the host in `src/main.tua`.
-From this directory, use the current development compiler:
+Run conversations, choices, shared characters and timed events without a LÖVE
+window. This example uses the development dialogue feature intended for the
+release after 0.11.0.
+
+## Run it
+
+From this directory, select your rebuilt development compiler:
 
 ```sh
-/path/to/tua check
-/path/to/tua build
+../../target/release/tua check
+../../target/release/tua build
 cd build
 lua main.lua
 ```
 
-`require("intro")` imports a typed dialogue document. Referencing
-`Dialogue` automatically imports and includes the player runtime only when used. No LÖVE
-host is needed. Replace `print` with a renderer consuming owned snapshots;
-guard the optional snapshot node before reading it. Choices use stable text IDs.
+The host prints `Ready?` and then uses assertions to check the remaining behavior.
+A successful run exits without an assertion error. No image or audio assets are
+required: portrait paths and sound events are data until a graphical host handles
+them. Generated Lua is not committed.
 
-`tua watch` rebuilds changed scripts. Invalid edits report authored locations and
-keep the previous valid output; text IDs must be unique across project scripts.
-See `docs/dialogue.md` for syntax and escaping. Localization, asynchronous commands
-remain pending. The updated extension highlights `.tdialogue` and supports
-shared-character completion, hover and definition navigation. Reveal and temporary
-message policies belong to the host.
+## Read the example in this order
 
-For frontend development, the standalone harness also remains available from the
-repository root:
+| File | What it demonstrates |
+| --- | --- |
+| [intro.tdialogue](src/intro.tdialogue) | Inline character, two choices, a loop and an acknowledged final line |
+| [main.tua](src/main.tua) | Starting players, reading snapshots, choosing by ID and advancing clocks |
+| [characters.tua](src/characters.tua) | Shared typed names and an optional portrait |
+| [arrival.tdialogue](src/arrival.tdialogue) | Shared character, hold/fade hints and both event timing anchors |
+| [departure.tdialogue](src/departure.tdialogue) | Reusing the cast across consecutive lines |
+
+`require("intro")` imports a typed document. Using `Dialogue` automatically
+includes the player runtime. A renderer can consume the same snapshots; guard
+the optional `node` before reading its fields.
+
+## Try a change
+
+- Change Guide's display name in `characters.tua`, rebuild and rerun. Both shared
+  scenes read that export. Update the host's expected-name assertions too.
+- In `arrival.tdialogue`, compare `@event shown 0.2 portrait.pulse` with
+  `@event revealed 0.25 sound.play "welcome"`. The host explicitly reports reveal
+  completion between these two events.
+- Change an event delay and adjust the corresponding `update()` interval to see
+  when it becomes due. Merely passing time to `shown` does not start `revealed`.
+- Type `Cast.` at a speaker position in the updated extension to see completion;
+  hover or go to definition to inspect the shared character.
+
+`portrait.pulse` and `sound.play` are example host-defined names, not built-in
+commands. The host asserts the returned records; it does not animate or play audio.
+The portrait path `portraits/guide.png` is illustrative and is not loaded here.
+
+`tua watch` rebuilds changed scripts. Invalid edits retain the previous valid
+output, and text IDs must be unique across project dialogue files. Restart this
+host after a rebuild to use the new document.
+
+See the [dialogue guide](../../docs/dialogue.md) for complete authoring examples,
+event dispatch, timing rules, pause policies and the API reference. Translations,
+script formatting and cross-language rename remain pending.
+
+## Compiler frontend harness
+
+For frontend development, compile one script from the repository root:
 
 ```sh
 cargo run -q -p tua-core --example dialogue_compile -- examples/dialogue/src/intro.tdialogue > /tmp/intro-dialogue.lua
 ```
 
-After building, `lua asset_host.lua /tmp/intro-dialogue.lua` from this directory
-executes that data using the same bundled player. Generated output stays outside
-source control.
+After building this example, run the standalone data host from this directory:
 
-`characters.tua` exports typed `Guide` and `Captain` records. Both `arrival.tdialogue`
-and `departure.tdialogue` import that module with `@characters Cast "characters"`.
-Type `Cast.` at a speaker position to suggest character exports. The host runs
-both scenes and asserts their shared display name. Extra record fields are host
-metadata; the current snapshot exposes the character's `name` as `speaker`.
+```sh
+lua asset_host.lua /tmp/intro-dialogue.lua
+```
+
+The harness uses the same bundled player. Its generated output stays outside
+source control.

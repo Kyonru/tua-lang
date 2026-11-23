@@ -4,184 +4,449 @@ icon: lucide/messages-square
 
 # Dialogue
 
-The optional `tuadialogue` player handles conversation flow independently of
-rendering, input and wall-clock time. It is available in development for the release after
-0.11.0. The `.tdialogue` frontend integrates with project checking, building and
-watching. Shared character modules support script completion, hover and definition
-navigation in the updated Tua extension. Translations remain pending.
+Write conversations in `.tdialogue` files and play them with the typed `Dialogue`
+builtin. Share character definitions between scenes, attach portraits, and schedule
+custom events while keeping your own renderer and input controls.
 
-## Use the player
+**Availability:** development builds for the release after 0.11.0. Use a compiler
+and extension containing the dialogue feature; the 0.11.0 version label alone is
+not enough to identify one of these development builds.
 
-Use the typed `Dialogue` builtin in Tua:
+| Tua handles | Your game handles |
+| --- | --- |
+| Script parsing, validation and typed imports | Drawing text, names, portraits and choices |
+| Line order, choices and named entry points | Input, text reveal and scrolling |
+| Timed event records | Event handlers: sounds, animations or game actions |
+| Independent player state and clocks | Whether a conversation pauses gameplay |
 
-```tua
-local player = Dialogue.new({
-  entry = "hello",
-  nodes = {
-    hello = { kind = "line", text = "Welcome aboard.", next = "finish" },
-    finish = { kind = "end" },
-  },
-})
-player:start()
-local view = player:snapshot()
-local node = view.node
-if node then print(node.text) end
-player:advance()
-player:dispose()
+Start with [your first conversation](#your-first-conversation), then add
+[shared characters](#share-characters-between-scripts),
+[timed events](#schedule-custom-events), or
+[temporary messages](#conversations-and-temporary-messages).
+
+## Your first conversation
+
+This example runs in a terminal. It needs no LÖVE window, font or image assets.
+
+### 1. Create the project
+
+Use this layout:
+
+```text
+tua.toml
+src/
+  main.tua
+  intro.tdialogue
 ```
 
-Referencing `Dialogue` supplies type checking and editor assistance and injects
-`local Dialogue = require("tuadialogue")` into emitted Lua. Unused files do not
-include the runtime. Local bindings named `Dialogue` take precedence. Ordinary
-Lua callers and existing Tua code can still use the explicit import. A project module with the same name can replace the bundled
-runtime. Documents and snapshots are defensively copied. `start()` selects the
-entry node; `start("label")` selects a named node. `advance()` acknowledges a line;
-`choose("option-id")` selects a choice by stable ID. `cancel()` ends the current
-session; `dispose()` is terminal for that player.
+`tua.toml`:
 
-A snapshot contains `state`, `generation`, `visit`, optional `nodeId` and optional `node`.
-A present node always has `text` and `options`, defaulting to an empty string and
-array. Its `speaker` and `next` fields remain optional. The host owns text reveal,
-layout, choices, pause policy and any optional temporary-message timing. Ordinary
-conversations never expire automatically.
+```toml
+source = "src"
+out = "build"
+main = "main.tua"
+target = "lua51"
+```
 
-## Author a script
+### 2. Write the conversation
 
-The first supported subset requires an explicit version header:
+`src/intro.tdialogue`:
 
 ```text
 @dialogue 1
 @character Guide "Guide"
 
 [start]
-// @id intro.welcome
-Guide: Ready to sail?
+// @id intro.hello
+Guide: Ready?
 // @id intro.yes
--> Yes [target:depart]
-// @id intro.repeat
--> Ask again [target:start]
+-> Yes [target:done]
+// @id intro.again
+-> Again [target:start]
 
-[depart]
-// @id intro.goodbye
-: Good hunting! (end)
+[done]
+// @id intro.bye
+: Goodbye. (end)
 ```
 
-The first label is the entry. Speakers are declared before labels. An utterance
-uses `Speaker: text`; `: text` is narration without a speaker. Each line and
-choice needs a `// @id identifier` annotation. Blank lines and ordinary `//`
-comments may separate the annotation from its text. An ID cannot cross a label,
-speaker declaration or another ID annotation.
+| Syntax | Meaning |
+| --- | --- |
+| `@dialogue 1` | Required format version |
+| `@character Guide "Guide"` | A character ID and its display name |
+| `[start]` | A named entry point; the first label is the default entry |
+| `// @id intro.hello` | Stable text ID, unique across dialogue files in the project |
+| `Guide: Ready?` | A character's spoken line |
+| `: Goodbye.` | Narration without a speaker |
+| `-> Yes [target:done]` | A reply that leads to the `done` label |
+| `(end)` | End this path after the final line is acknowledged |
 
-Identifiers start with an ASCII letter or underscore and then use ASCII letters,
-digits, underscores, dots or hyphens. Text and speaker display names accept
-Unicode. Text IDs must be unique across all valid dialogue documents in the project. Keep IDs stable when wording or order
-changes. Labels and speaker IDs have their own namespaces. `else` and `endif`
-are reserved labels for future structured conditions.
+Keep text IDs stable when editing wording. A choice's ID also identifies it when
+the host calls `choose()`.
 
-Consecutive utterances advance in order within a section. Choices attach to the
-preceding utterance and follow its acknowledgement. A section must finish with
-choices or a line ending in `(end)`; sections do not implicitly fall through.
-Choices can target later labels or form loops. A terminal utterance cannot have
-choices, and another utterance after choices or an ending needs a new label.
-Named label starts remain available through `player:start("label")`.
+### 3. Play it from Tua
 
-## Share characters between scripts
-
-Define characters as exports of an ordinary typed module, such as
-`src/dialogue/characters.tua`:
+`src/main.tua`:
 
 ```tua
-type Character = { name: string, portrait: string? }
-local Guide: Character = { name = "Harbor guide", portrait = "portraits/guide.png" }
+local document = require("intro")
+local player = Dialogue.new(document)
+
+player:start()
+local node = player:snapshot().node
+if node then print(node.text) end
+
+-- Acknowledge "Ready?" to enter the choice node.
+assert(player:advance())
+local choices = player:snapshot().node
+if choices then
+  for _, option in ipairs(choices.options) do
+    print(option.id, option.text)
+  end
+end
+
+-- Select by stable ID, not the displayed text or array index.
+assert(player:choose("intro.yes"))
+local farewell = player:snapshot().node
+if farewell then print(farewell.text) end
+
+-- Even a line marked (end) waits for acknowledgement.
+assert(player:advance())
+assert(player:snapshot().state == "completed")
+player:dispose()
+```
+
+The player does not read the keyboard itself. This host chooses "Yes" directly;
+in a game, call the same methods from your input handlers.
+
+### 4. Build and run
+
+From the project directory, with the development compiler on your path:
+
+```sh
+tua check
+tua build
+cd build
+lua main.lua
+```
+
+The output shows `Ready?`, the two choice IDs and labels, then `Goodbye.`.
+The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
+also demonstrates loops, shared characters and both event clocks.
+
+## Share characters and portraits { #share-characters-between-scripts }
+
+Use an ordinary typed module when several scenes share a cast.
+
+`src/characters.tua`:
+
+```tua
+type Character = { name: string, portrait?: string }
+
+local Guide: Character = {
+  name = "Harbor guide",
+  portrait = "portraits/guide.png",
+}
+
+-- A character can have a name without a portrait.
 local Captain: Character = { name = "Captain" }
+
 return { Guide = Guide, Captain = Captain }
 ```
 
-Import that module before the first label in any number of scripts:
+`src/arrival.tdialogue`:
 
 ```text
 @dialogue 1
-@characters Cast "dialogue.characters"
+@characters Cast "characters"
 
 [start]
-// @id harbor.welcome
-Cast.Guide: Welcome aboard. (end)
-```
-
-`Cast` is a script-local alias; `Guide` is the module's exported member. Each used
-member must be a record with a required string `name`. Ordinary Tua inference,
-type aliases and module re-exports apply. Missing modules, unknown members,
-optional names and non-string names are `TL5012` errors at the script reference.
-Unrelated module exports are allowed. Alias names must be simple identifiers;
-module names use extensionless dot-separated project paths. Multiple aliases are
-allowed, but cannot collide with local speaker declarations. Existing inline
-`@character Guide "Guide"` declarations remain supported.
-
-The updated VS Code extension recognizes `.tdialogue`, highlights script syntax,
-completes character members after `Cast.`, shows their inferred types and comments
-on hover, and navigates to the exported declaration. These queries also work with
-unsaved character edits and unfinished speaker references. Character modules get
-normal Tua editing support. Script formatting and cross-language rename are not
-implemented; the extension does not apply the Lua formatter to dialogue prose.
-
-Analysis never executes character modules. Emitted scripts load them using normal
-Lua `require` and read each character's `name` when the document module loads.
-A module can initialize a typed name dynamically. Updating a character name does
-not mutate existing player snapshots or invalidate Lua's loaded-module cache.
-The optional `portrait` field must be a string (or nil). The emitted node copies
-it alongside the display name (`speaker`); snapshots retain both. A portrait is
-an opaque asset identifier: the host decides how to load and draw it. No images
-are loaded by analysis or the headless player. Other character fields stay in
-the character module.
-Renderer customization stays with the host.
-
-## Timed custom events and presentation duration
-
-Attach metadata immediately after an utterance, before its choices or the next
-utterance. Metadata does not need a text ID:
-
-```text
-Cast.Guide: Welcome aboard. (end)
+// @id arrival.welcome
+Cast.Guide: Welcome to the harbor. (end)
 @timing hold 3 fade 0.35
 @event shown 0.2 portrait.pulse
 @event revealed 0.25 sound.play "welcome"
 ```
 
-`@event <anchor> <seconds> <name> ["payload"]` accepts `shown` (time since line
-entry) and `revealed` (time since the host reports that reveal finished). Delays
-are finite, nonnegative seconds. Names use the identifier grammar; the optional
-quoted string payload defaults to `""` and supports the same escapes as text.
-There are at most 64 events per line. Events contain data, never executable Lua.
-Unknown names are for the host to handle or ignore; no built-in sound or graphics
-command is implied.
+`src/departure.tdialogue` can import the same characters:
 
-After updating your renderer, call `player:update(dt, fullyRevealed)`. It returns
-an array of due `{ name, payload, generation, visit, nodeId }` records. Register
-handlers in your host and dispatch these records yourself. The first `true`
-sample starts the revealed clock at zero; that frame's `dt` is excluded from this
-clock. Call `update(0, true)` when an input instantly finishes reveal. Once reveal
-has been reported, its clock continues even if a later sample is false. Pause
-both the renderer and player updates together to suspend timing.
+```text
+@dialogue 1
+@characters Cast "characters"
 
-Events fire once per line visit. Due events are ordered by their scheduled time,
-then declaration order for ties. Advancing, choosing, restarting, cancelling or
-disposing discards pending events from the old visit. `visit` increases on every
-node entry, including loops; `generation` distinguishes sessions. If a handler
-changes the session, compare those tokens before dispatching the remainder of an
-already-returned batch. Players own independent clocks and document copies.
+[start]
+// @id departure.farewell
+Cast.Guide: Safe travels.
+// @id departure.ready
+Cast.Captain: All aboard! (end)
+```
 
-`@timing hold <seconds> fade <seconds>` is optional, unique per line, and adds
-`hold`/`fade` to its snapshot. Both durations must be finite and nonnegative.
-These are presentation hints: a temporary-message host may hold after reveal,
-then fade; ordinary conversations can continue waiting for acknowledgement.
-The player never automatically advances or pauses gameplay. Portrait rendering,
-reveal speed, event handlers and duration policy remain customizable host concerns.
+`Cast` is a script-local alias. For a nested file such as
+`src/dialogue/characters.tua`, use `@characters Cast "dialogue.characters"`.
 
-Structured documents can supply the same line fields: `portrait?: string`,
-`hold?: number`, `fade?: number`, and
-`events?: { anchor: "shown" | "revealed", delay: number, name: string, payload: string }[]`.
-The runtime validates them and copies them before use. Invalid update arguments
-(negative/nonfinite time or a nonboolean reveal flag) raise an error.
+In the updated extension, typing `Cast.` at a speaker position suggests character
+exports. Hover shows their types and comments; go-to-definition opens the typed
+module. These features also work with unsaved character edits.
+
+### Read character metadata in your renderer
+
+```tua
+local document = require("arrival")
+local player = Dialogue.new(document)
+player:start()
+
+local node = player:snapshot().node
+if node then
+  print(node.speaker or "Narrator")
+  print(node.text)
+  local portrait = node.portrait
+  if portrait then print("Portrait asset:", portrait) end
+end
+
+player:dispose()
+```
+
+A portrait is an **asset identifier string**, not a loaded image. The example can
+print `portraits/guide.png` without that file existing; a graphical host must
+provide the asset and load it. Tua does not select a portrait layout, image loader
+or animation system.
+
+Each used character must have a required string `name`; `portrait` may be a string
+or nil. Other fields remain available in the character module but are not copied
+into dialogue snapshots. Type aliases and module re-exports work normally.
+
+Character metadata is read when the emitted module loads. Each player then owns
+a document copy. Editing a character does not mutate existing players or reload
+Lua's module cache; rebuild and recreate/reload the relevant state in your host.
+
+## Schedule custom events
+
+Events attach to the preceding utterance. Put them before any choices or the next
+utterance; they do not need separate text IDs.
+
+The `arrival.tdialogue` example above contains:
+
+```text
+@event shown 0.2 portrait.pulse
+@event revealed 0.25 sound.play "welcome"
+```
+
+| Part | What it controls |
+| --- | --- |
+| `shown` or `revealed` | Which clock the delay uses |
+| `0.2` or `0.25` | Delay in seconds; finite and nonnegative |
+| `portrait.pulse` or `sound.play` | A name your host handles |
+| `"welcome"` | Optional string payload; defaults to an empty string |
+
+Neither event name has built-in behavior. The player returns data; your host
+chooses what to do with it. Dialogue files never execute arbitrary Lua.
+
+### Choose the right timing anchor
+
+| Anchor | Clock starts when | Useful for |
+| --- | --- | --- |
+| `shown` | The player enters the line | An effect while text is appearing |
+| `revealed` | The host first reports reveal completion | An effect after the full line is readable |
+
+Suppose the line appears at **0.0 seconds** and the host reports reveal completion
+at **1.5 seconds**:
+
+| Time | Result |
+| --- | --- |
+| 0.0 s | Line starts |
+| 0.2 s | `portrait.pulse` becomes due |
+| 1.5 s | The `revealed` clock starts at zero |
+| 1.75 s | `sound.play` becomes due, with payload `"welcome"` |
+
+Delivery happens on an update at or after the scheduled time. The first `true`
+reveal sample excludes that frame's `dt` from the revealed clock. If input skips
+the reveal animation, call `update(0, true)` immediately to mark completion.
+
+### Advance both clocks explicitly
+
+This complete host uses `arrival.tdialogue` from the previous section. It simulates
+reveal completion without needing a renderer:
+
+```tua
+local document = require("arrival")
+local player = Dialogue.new(document)
+player:start()
+
+-- At 0.2 seconds, text is still revealing.
+local shown = player:update(0.2, false)
+assert(#shown == 1 and shown[1].name == "portrait.pulse")
+
+-- Another 1.3 seconds passes; now the host reports full reveal.
+assert(#player:update(1.3, true) == 0)
+
+-- A quarter-second after that report, the second event becomes due.
+local revealed = player:update(0.25, true)
+assert(#revealed == 1 and revealed[1].payload == "welcome")
+
+-- Already-delivered events do not repeat.
+assert(#player:update(1, true) == 0)
+player:dispose()
+```
+
+In a real update loop, update your renderer first, then pass its reveal-complete
+flag to `player:update(dt, fullyRevealed)`. To suspend dialogue, skip updates for
+both renderer and player. Once reveal completion is reported, that clock keeps
+running even if a later sample is false.
+
+### Dispatch events to your handlers
+
+Here is a host that logs the event instead of playing a sound. Replace the handler
+body with your own audio or animation integration:
+
+```tua
+local document = require("arrival")
+local player = Dialogue.new(document)
+local handlers: { [string]: (payload: string) -> nil } = {
+  ["sound.play"] = function(payload: string)
+    print("Requested sound:", payload)
+  end,
+}
+
+local function updateDialogue(dt: number, fullyRevealed: boolean)
+  for _, event in ipairs(player:update(dt, fullyRevealed)) do
+    -- A previous handler might have advanced, restarted or cancelled playback.
+    local current = player:snapshot()
+    if current.generation ~= event.generation or current.visit ~= event.visit then
+      return
+    end
+
+    local handler = handlers[event.name]
+    if handler then handler(event.payload) end
+  end
+end
+
+player:start()
+updateDialogue(0, true)
+updateDialogue(0.25, true)
+player:dispose()
+```
+
+This host ignores names without a handler. Each fired record contains `name`,
+`payload`, `generation`, `visit` and `nodeId`.
+
+There can be up to 64 events per line. Events fire once per visit; revisiting a
+line through a choice loop schedules them again. Due events are ordered by their
+scheduled time, then declaration order for ties. Leaving a line, restarting,
+cancelling or disposing discards its pending events. Already-returned batches
+need the lifecycle guard shown above if handlers can change playback.
+
+## Conversations and temporary messages
+
+The same player can support a story conversation, a radio message during combat,
+a tutorial prompt or a short notification. **Pause policy belongs to your host.**
+Creating a `Dialogue` player never pauses the game by itself.
+
+| Presentation | Typical host policy |
+| --- | --- |
+| Story conversation | Pause gameplay; wait for the player's acknowledgement |
+| Radio conversation | Keep gameplay running; route dialogue input separately |
+| Notification | Keep gameplay running; reveal, hold, fade, then advance |
+
+A line can suggest a notification lifetime:
+
+```text
+@timing hold 3 fade 0.35
+```
+
+A host following this hint uses **reveal → hold for 3 seconds → fade for 0.35
+seconds**. Read `node.hold` and `node.fade` from the snapshot. Both are optional;
+your host chooses defaults when absent. Ordinary conversations may ignore them
+and wait for input instead.
+
+`@timing` does not advance a line or implement fading. There may be one directive
+per line; both values must be finite, nonnegative seconds. Zero is valid. If a
+host dismisses the line before a late event becomes due, that event is discarded.
+
+## Player API at a glance
+
+| Call | Purpose |
+| --- | --- |
+| `Dialogue.new(document)` | Validate and copy a document into a new player |
+| `player:start()` | Start at the document's first label |
+| `player:start("done")` | Start/restart at a named entry point |
+| `player:snapshot()` | Get a defensive copy of current presentation state |
+| `player:update(dt, fullyRevealed)` | Advance event clocks and return due events |
+| `player:advance()` | Acknowledge a line; returns whether it advanced |
+| `player:choose("intro.yes")` | Select a choice by its text ID; returns whether it matched |
+| `player:cancel()` | End the current session; the player can be started again |
+| `player:dispose()` | Release player state; this player cannot be restarted |
+
+A snapshot contains `state`, `generation`, `visit`, optional `nodeId` and optional
+`node`. Always guard `node` before accessing it. A present node has `text` and
+`options`, defaulting to an empty string and array. `speaker`, `portrait`, `next`,
+`hold`, `fade` and `events` are optional. `generation` distinguishes sessions;
+`visit` increases on each node entry, including loops.
+
+Referencing the `Dialogue` builtin automatically includes `tuadialogue` only when
+used. Local bindings named `Dialogue` take precedence. Ordinary Lua can use
+`require("tuadialogue")`; a project module with that name can replace the bundled
+runtime.
+
+### Create a document without a script file
+
+Procedurally generated dialogue can use the same player:
+
+```tua
+local player = Dialogue.new({
+  entry = "hello",
+  nodes = {
+    hello = {
+      kind = "line",
+      text = "Welcome aboard.",
+      speaker = "Guide",
+      next = "finish",
+      events = {
+        { anchor = "shown", delay = 0, name = "greeting", payload = "hello" },
+      },
+    },
+    finish = { kind = "end" },
+  },
+})
+
+player:start()
+for _, event in ipairs(player:update(0, false)) do
+  print(event.name, event.payload)
+end
+player:advance()
+player:dispose()
+```
+
+Structured line nodes also accept `portrait`, `hold` and `fade`. Event payloads
+must be strings in structured documents, including `""` when empty. The runtime
+validates and copies these fields. Negative/nonfinite update times and nonboolean
+reveal flags are errors.
+
+## Authoring rules and common mistakes
+
+- Declare characters/imports before labels. Inline characters and shared imports
+  can coexist, but their aliases must not collide.
+- Give every utterance and choice a project-unique text ID. Metadata directives
+  have no ID of their own. Blank lines/comments may separate an ID from its text;
+  another ID, label or character declaration may not.
+- Consecutive utterances advance in order. End each section with choices or a
+  line marked `(end)`; sections do not fall through implicitly.
+- Put events and timing after their utterance, before choices. A terminal line
+  can have metadata, but cannot have choices or another utterance in that section.
+- Labels, text IDs and event names begin with an ASCII letter or underscore, then
+  use letters, digits, underscores, dots or hyphens. Display text accepts Unicode.
+  Import aliases are simple identifiers. `else` and `endif` are reserved labels.
+
+| Symptom | Check |
+| --- | --- |
+| An event never fires | The host must call `update`; check the reveal flag, handler name and whether the line ended early |
+| `advance()` does nothing | You may be at a choice; use `choose()` with a stable option ID |
+| The final line stays visible | `(end)` still waits for acknowledgement |
+| A portrait does not appear | The host must load and render the snapshot's portrait identifier |
+| A character reference reports `TL5012` | Check the imported module, exported member, required string name and optional string portrait |
+| Edited text still appears unchanged | Rebuild and refresh the running document/player and Lua module cache |
+
+Translations and placeholder validation remain pending. The extension supports
+script highlighting and character completion, hover and navigation; script
+formatting and cross-language rename are not implemented.
 
 ## Whitespace and escaping
 
@@ -198,7 +463,8 @@ names. Escape literal braces and brackets with `\{`, `\}`, `\[` and `\]`.
 `(end)` from ending the line. Unknown or unfinished escapes are errors.
 
 Interpolation, rich-text effects, expressions, conditions, assignments and
-commands are not implemented in this subset. Unescaped braces and brackets in
+inline executable commands are not implemented. Named `@event` metadata is
+supported as described above; its behavior comes from host handlers. Unescaped braces and brackets in
 text are rejected so planned constructs are not silently treated as working
 features. Translations and placeholder validation remain pending; stable text IDs
 and source text are retained in the parsed model for that integration.
