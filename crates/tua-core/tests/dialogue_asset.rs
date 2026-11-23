@@ -149,3 +149,83 @@ fn shared_character_emission_preserves_import_and_speaker_provenance() {
         }
     }
 }
+
+#[test]
+fn dialogue_timing_rejects_invalid_metadata() {
+    let prefix = "@dialogue 1\n[start]\n// @id line\n: Hello (end)\n";
+    for invalid in [
+        "@event later 0 pulse",
+        "@event shown -1 pulse",
+        "@event shown NaN pulse",
+        "@event revealed inf pulse",
+        "@event shown 0 pulse unquoted",
+        "@timing hold -1 fade 0",
+        "@timing hold 1 fade 0\n@timing hold 2 fade 1",
+    ] {
+        assert!(
+            emit_dialogue_source("bad.tdialogue", &format!("{prefix}{invalid}\n")).is_err(),
+            "{invalid}"
+        );
+    }
+    assert!(emit_dialogue_source(
+        "bad.tdialogue",
+        "@dialogue 1\n@event shown 0 pulse\n[start]\n// @id a\n: Hi (end)\n"
+    )
+    .is_err());
+    assert!(emit_dialogue_source(
+        "bad.tdialogue",
+        &format!("{prefix}{}", "@event shown 0 pulse\n".repeat(65))
+    )
+    .is_err());
+}
+
+#[test]
+fn dialogue_portraits_and_both_event_clocks_execute_in_emitted_lua() {
+    let source = r#"@dialogue 1
+@characters Cast "characters"
+[start]
+// @id timed
+Cast.Guide: Hello (end)
+@timing hold 2 fade 0.5
+@event shown 0.2 pulse "hello\nworld"
+@event revealed 0.25 ready
+@event revealed 0.25 tie
+"#;
+    let output = emit_dialogue_source("timed.tdialogue", source).unwrap();
+    full_moon::parse_fallible(&output.code, full_moon::ast::LuaVersion::lua51())
+        .into_result()
+        .unwrap();
+    assert_eq!(output.provenance.len(), output.code.lines().count());
+    let script = format!("local Dialogue = (function()\n{}\nend)()\npackage.preload.characters = function() return {{ Guide = {{ name = 'Guide', portrait = 'guide.png' }} }} end\nlocal document = (function()\n{}\nend)()\n{}",
+        include_str!("../../../vendor/runtime/tuadialogue.lua"), output.code,
+        include_str!("fixtures/dialogue_timed_events.lua"));
+    let mut checked = 0;
+    for interpreter in ["lua", "luajit"] {
+        if Command::new(interpreter).arg("-v").output().is_err() {
+            continue;
+        }
+        let mut child = Command::new(interpreter)
+            .arg("-")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{interpreter}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        checked += 1;
+    }
+    if checked == 0 {
+        eprintln!("SKIP: no standalone Lua interpreter");
+    }
+}

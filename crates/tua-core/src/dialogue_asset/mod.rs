@@ -34,7 +34,25 @@ pub struct DialogueChoice {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DialogueEvent {
+    pub anchor: String,
+    pub delay: String,
+    pub name: String,
+    pub payload: String,
+    pub span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DialogueTiming {
+    pub hold: String,
+    pub fade: String,
+    pub span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueLine {
+    pub events: Vec<DialogueEvent>,
+    pub timing: Option<DialogueTiming>,
     pub speaker: Option<DialogueName>,
     pub text: DialogueText,
     pub end: bool,
@@ -178,6 +196,17 @@ fn identifier(value: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
 }
 
+fn take_word(value: &str) -> (&str, &str) {
+    let value = value.trim();
+    let end = value.find(char::is_whitespace).unwrap_or(value.len());
+    (&value[..end], value[end..].trim())
+}
+
+fn seconds(value: &str) -> Option<String> {
+    let seconds: f64 = value.parse().ok()?;
+    (seconds.is_finite() && seconds >= 0.0).then(|| seconds.to_string())
+}
+
 struct Parser<'a> {
     path: &'a Path,
     document: DialogueSource,
@@ -258,7 +287,11 @@ impl Parser<'_> {
             self.abandon_id();
             return;
         }
-        if let Some(import) = character_import(raw, number) {
+        if let Some(rest) = syntax.strip_prefix("@event ") {
+            self.event(rest, at);
+        } else if let Some(rest) = syntax.strip_prefix("@timing ") {
+            self.timing(rest, at);
+        } else if let Some(import) = character_import(raw, number) {
             self.abandon_id();
             if !self.document.sections.is_empty() {
                 self.error(at, "declare character imports before the first label");
@@ -311,6 +344,89 @@ impl Parser<'_> {
             self.error(at, "unsupported dialogue directive in version-one subset");
         } else {
             self.utterance(text, at);
+        }
+    }
+
+    fn metadata_line(&mut self, at: SourceSpan) -> Option<&mut DialogueLine> {
+        self.abandon_id();
+        if self
+            .document
+            .sections
+            .last()
+            .and_then(|section| section.lines.last())
+            .is_none_or(|line| !line.choices.is_empty())
+        {
+            self.error(
+                at,
+                "line metadata must follow an utterance, before any choices",
+            );
+            return None;
+        }
+        self.document.sections.last_mut()?.lines.last_mut()
+    }
+
+    fn event(&mut self, rest: &str, at: SourceSpan) {
+        let (anchor, rest) = take_word(rest);
+        let (delay, rest) = take_word(rest);
+        let (name, payload) = take_word(rest);
+        let Some(delay) = seconds(delay) else {
+            self.error(at, "event delay must be finite and nonnegative");
+            return;
+        };
+        if !matches!(anchor, "shown" | "revealed") || !identifier(name) {
+            self.error(
+                at,
+                "expected `@event shown|revealed seconds event.name [\"payload\"]`",
+            );
+            return;
+        }
+        let payload = if payload.is_empty() {
+            String::new()
+        } else {
+            let Some(quoted) = payload.strip_prefix('"').and_then(|v| v.strip_suffix('"')) else {
+                self.error(at, "event payload must be a quoted string");
+                return;
+            };
+            let Some(decoded) = self.decode(quoted, at, true) else {
+                return;
+            };
+            decoded
+        };
+        if let Some(line) = self.metadata_line(at) {
+            if line.events.len() >= 64 {
+                self.error(at, "a line supports at most 64 events");
+                return;
+            }
+            line.events.push(DialogueEvent {
+                anchor: anchor.into(),
+                delay,
+                name: name.into(),
+                payload,
+                span: at,
+            });
+        }
+    }
+
+    fn timing(&mut self, rest: &str, at: SourceSpan) {
+        let words: Vec<_> = rest.split_whitespace().collect();
+        if words.len() != 4 || words[0] != "hold" || words[2] != "fade" {
+            self.error(at, "expected `@timing hold seconds fade seconds`");
+            return;
+        }
+        let (Some(hold), Some(fade)) = (seconds(words[1]), seconds(words[3])) else {
+            self.error(at, "hold and fade must be finite and nonnegative");
+            return;
+        };
+        if let Some(line) = self.metadata_line(at) {
+            if line.timing.is_some() {
+                self.error(at, "duplicate timing for this line");
+                return;
+            }
+            line.timing = Some(DialogueTiming {
+                hold,
+                fade,
+                span: at,
+            });
         }
     }
 
@@ -461,6 +577,8 @@ impl Parser<'_> {
             return;
         }
         section.lines.push(DialogueLine {
+            events: Vec::new(),
+            timing: None,
             speaker,
             text,
             end,

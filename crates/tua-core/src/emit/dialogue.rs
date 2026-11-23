@@ -69,7 +69,37 @@ pub fn emit_dialogue_source(
                         ),
                         speaker.span,
                     );
+                    output.line(
+                        &format!(
+                            "      portrait = __tua_characters_{}[{}].portrait,",
+                            index + 1,
+                            lua_string_literal(member)
+                        ),
+                        speaker.span,
+                    );
                 }
+            }
+            if let Some(timing) = &line.timing {
+                output.line(
+                    &format!("      hold = {}, fade = {},", timing.hold, timing.fade),
+                    timing.span,
+                );
+            }
+            if !line.events.is_empty() {
+                output.line("      events = {", origin);
+                for event in &line.events {
+                    output.line(
+                        &format!(
+                            "        {{ anchor = {}, delay = {}, name = {}, payload = {} }},",
+                            lua_string_literal(&event.anchor),
+                            event.delay,
+                            lua_string_literal(&event.name),
+                            lua_string_literal(&event.payload)
+                        ),
+                        event.span,
+                    );
+                }
+                output.line("      },", origin);
             }
             output.field("      next", &next, origin);
             output.line("    },", origin);

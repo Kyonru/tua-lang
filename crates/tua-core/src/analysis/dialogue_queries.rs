@@ -68,7 +68,7 @@ impl AnalysisSnapshot {
                     )),
                     Some(ty) if !is_character(&ty) => {
                         let message = format!(
-                            "character `{}` must be a record with a required string `name`; found {ty}",
+                            "character `{}` must be a record with a required string `name` and optional string `portrait`; found {ty}",
                             speaker.value
                         );
                         diagnostics.push(character_error(path, speaker.span, message));
@@ -192,9 +192,14 @@ impl AnalysisSnapshot {
 fn is_character(ty: &Type) -> bool {
     match ty {
         Type::Readonly(inner) => is_character(inner),
-        Type::Table(shape) => shape
-            .field("name")
-            .is_some_and(|field| !field.optional && is_string(&field.ty)),
+        Type::Table(shape) => {
+            shape
+                .field("name")
+                .is_some_and(|field| !field.optional && is_string(&field.ty))
+                && shape
+                    .field("portrait")
+                    .is_none_or(|field| is_optional_string(&field.ty))
+        }
         _ => false,
     }
 }
@@ -262,4 +267,12 @@ fn character_error(path: &Path, span: SourceSpan, message: String) -> Diagnostic
             span.end.line,
             span.end.column,
         )
+}
+
+fn is_optional_string(ty: &Type) -> bool {
+    match ty {
+        Type::Primitive(PrimitiveType::Nil) => true,
+        Type::Union(types) => types.iter().all(is_optional_string),
+        _ => is_string(ty),
+    }
 }

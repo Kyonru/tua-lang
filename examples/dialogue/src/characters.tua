@@ -3,7 +3,7 @@ type Character = {
   portrait: string?,
 }
 
-local Guide: Character = { name = "Harbor guide" }
+local Guide: Character = { name = "Harbor guide", portrait = "portraits/guide.png" }
 local Captain: Character = { name = "Captain" }
 
 return { Guide = Guide, Captain = Captain }

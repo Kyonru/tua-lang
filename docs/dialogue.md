@@ -5,7 +5,7 @@ icon: lucide/messages-square
 # Dialogue
 
 The optional `tuadialogue` player handles conversation flow independently of
-rendering, input and timing. It is available in development for the release after
+rendering, input and wall-clock time. It is available in development for the release after
 0.11.0. The `.tdialogue` frontend integrates with project checking, building and
 watching. Shared character modules support script completion, hover and definition
 navigation in the updated Tua extension. Translations remain pending.
@@ -39,7 +39,7 @@ entry node; `start("label")` selects a named node. `advance()` acknowledges a li
 `choose("option-id")` selects a choice by stable ID. `cancel()` ends the current
 session; `dispose()` is terminal for that player.
 
-A snapshot contains `state`, `generation`, optional `nodeId` and optional `node`.
+A snapshot contains `state`, `generation`, `visit`, optional `nodeId` and optional `node`.
 A present node always has `text` and `options`, defaulting to an empty string and
 array. Its `speaker` and `next` fields remain optional. The host owns text reveal,
 layout, choices, pause policy and any optional temporary-message timing. Ordinary
@@ -92,7 +92,7 @@ Define characters as exports of an ordinary typed module, such as
 
 ```tua
 type Character = { name: string, portrait: string? }
-local Guide: Character = { name = "Harbor guide" }
+local Guide: Character = { name = "Harbor guide", portrait = "portraits/guide.png" }
 local Captain: Character = { name = "Captain" }
 return { Guide = Guide, Captain = Captain }
 ```
@@ -128,9 +128,60 @@ Analysis never executes character modules. Emitted scripts load them using norma
 Lua `require` and read each character's `name` when the document module loads.
 A module can initialize a typed name dynamically. Updating a character name does
 not mutate existing player snapshots or invalidate Lua's loaded-module cache.
-Extra fields such as `portrait` remain available to your host through the Tua
-module; the current player passes only the display-name string as `speaker`.
+The optional `portrait` field must be a string (or nil). The emitted node copies
+it alongside the display name (`speaker`); snapshots retain both. A portrait is
+an opaque asset identifier: the host decides how to load and draw it. No images
+are loaded by analysis or the headless player. Other character fields stay in
+the character module.
 Renderer customization stays with the host.
+
+## Timed custom events and presentation duration
+
+Attach metadata immediately after an utterance, before its choices or the next
+utterance. Metadata does not need a text ID:
+
+```text
+Cast.Guide: Welcome aboard. (end)
+@timing hold 3 fade 0.35
+@event shown 0.2 portrait.pulse
+@event revealed 0.25 sound.play "welcome"
+```
+
+`@event <anchor> <seconds> <name> ["payload"]` accepts `shown` (time since line
+entry) and `revealed` (time since the host reports that reveal finished). Delays
+are finite, nonnegative seconds. Names use the identifier grammar; the optional
+quoted string payload defaults to `""` and supports the same escapes as text.
+There are at most 64 events per line. Events contain data, never executable Lua.
+Unknown names are for the host to handle or ignore; no built-in sound or graphics
+command is implied.
+
+After updating your renderer, call `player:update(dt, fullyRevealed)`. It returns
+an array of due `{ name, payload, generation, visit, nodeId }` records. Register
+handlers in your host and dispatch these records yourself. The first `true`
+sample starts the revealed clock at zero; that frame's `dt` is excluded from this
+clock. Call `update(0, true)` when an input instantly finishes reveal. Once reveal
+has been reported, its clock continues even if a later sample is false. Pause
+both the renderer and player updates together to suspend timing.
+
+Events fire once per line visit. Due events are ordered by their scheduled time,
+then declaration order for ties. Advancing, choosing, restarting, cancelling or
+disposing discards pending events from the old visit. `visit` increases on every
+node entry, including loops; `generation` distinguishes sessions. If a handler
+changes the session, compare those tokens before dispatching the remainder of an
+already-returned batch. Players own independent clocks and document copies.
+
+`@timing hold <seconds> fade <seconds>` is optional, unique per line, and adds
+`hold`/`fade` to its snapshot. Both durations must be finite and nonnegative.
+These are presentation hints: a temporary-message host may hold after reveal,
+then fade; ordinary conversations can continue waiting for acknowledgement.
+The player never automatically advances or pauses gameplay. Portrait rendering,
+reveal speed, event handlers and duration policy remain customizable host concerns.
+
+Structured documents can supply the same line fields: `portrait?: string`,
+`hold?: number`, `fade?: number`, and
+`events?: { anchor: "shown" | "revealed", delay: number, name: string, payload: string }[]`.
+The runtime validates them and copies them before use. Invalid update arguments
+(negative/nonfinite time or a nonboolean reveal flag) raise an error.
 
 ## Whitespace and escaping
 

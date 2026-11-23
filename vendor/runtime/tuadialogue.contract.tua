@@ -1,6 +1,23 @@
 -- Compiler-visible declaration; runtime implementation lives in tuadialogue.lua.
 type Option = { id: string, text: string, target: string }
-type Node = { kind: "line", text: string, speaker?: string, next: string }
+type Event = { anchor: "shown" | "revealed", delay: number, name: string, payload: string }
+type FiredEvent = {
+  name: string,
+  payload: string,
+  generation: number,
+  visit: number,
+  nodeId: string,
+}
+type Node = {
+  kind: "line",
+  text: string,
+  speaker?: string,
+  portrait?: string,
+  next: string,
+  hold?: number,
+  fade?: number,
+  events?: Event[],
+}
   | { kind: "choice", options: Option[] }
   | { kind: "end" }
 type Document = { entry: string, nodes: { [string]: Node } }
@@ -8,12 +25,17 @@ type PresentationNode = {
   kind: "line" | "choice" | "end",
   text: string,
   speaker?: string,
+  portrait?: string,
+  hold?: number,
+  fade?: number,
+  events?: Event[],
   next?: string,
   options: Option[],
 }
 type Snapshot = {
   state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed",
   generation: number,
+  visit: number,
   nodeId?: string,
   node?: PresentationNode,
 }
@@ -21,7 +43,7 @@ local function start(self: any, entry?: string): nil
   error("declaration only")
 end
 local function new(source: Document): {
-
+  update: (self: any, dt: number, revealed: boolean) -> FiredEvent[],
   advance: (self: any) -> boolean,
   choose: (self: any, id: string) -> boolean,
   cancel: (self: any) -> boolean,

@@ -12391,6 +12391,7 @@ fn dialogue_character_types_reject_optional_or_dynamic_names() {
         "local Guide: { name: string? } = {}",
         "local Guide: any = {}",
         "local Guide = { title = 'Guide' }",
+        "local Guide = { name = 'Guide', portrait = 42 }",
         "local Guide: { name: string }? = nil",
     ] {
         let mut host = AnalysisHost::new();
@@ -12438,4 +12439,50 @@ fn dialogue_characters_resolve_reexported_record_aliases_without_parsing_prose()
             "Other"
         )
         .is_none());
+}
+
+#[test]
+fn dialogue_event_updates_keep_typed_editor_contract_across_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/dialogue.tua
+return Dialogue
+-- file: src/main.tua
+local Library = require("dialogue")
+local player = Library.new({ entry = "done", nodes = { done = { kind = "end" } } })
+local events = player:update(0.2, true)
+local event = events[1]
+local name = event.<|complete|><|hover|>name
+player:update(<|signature|>0, true)
+player:update("bad", true)
+player:update(0, "bad")
+local invalid: number = event.payload
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        3,
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    for name in ["name", "payload", "generation", "visit", "nodeId"] {
+        assert!(labels.contains(&name.to_owned()), "{labels:?}");
+    }
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("string"), "{hover:?}");
+    assert!(snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .is_some());
 }

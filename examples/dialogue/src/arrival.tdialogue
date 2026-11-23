@@ -4,3 +4,6 @@
 [start]
 // @id arrival.welcome
 Cast.Guide: Welcome to the harbor. (end)
+@timing hold 3 fade 0.35
+@event shown 0.2 portrait.pulse
+@event revealed 0.25 sound.play "welcome"

@@ -273,7 +273,13 @@ Share characters using ordinary .tua exports with a required string `name` field
 Before labels, `@characters Cast "dialogue.characters"` imports the module; use
 `Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,
 definition navigation and unsaved edits are supported by the updated extension.
-Extra character fields are host metadata, not player snapshot fields. Analysis
+Character fields other than name/portrait remain host metadata. Analysis
 never executes project modules; emitted scripts use ordinary runtime require.
 Translations, script formatting and cross-language rename remain pending.
+Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
+After an utterance, `@event shown 0.2 event.name "payload"` or
+`@event revealed 0.2 event.name` schedules named data (up to 64 per line).
+`player:update(dt, fullyRevealed)` returns due events with name/payload/generation/visit/nodeId.
+The first true reveal sample starts that clock at zero; advancing/cancelling discards pending events.
+`@timing hold 3 fade 0.35` supplies optional host presentation hints, never automatic advancement.
 See docs/dialogue.md for the supported authoring grammar; do not invent commands.

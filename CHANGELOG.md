@@ -6,6 +6,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Dialogue scripts now pass shared character portraits to snapshots and support
+  `@event shown|revealed` timing plus optional `@timing hold/fade` hints. The typed,
+  renderer-independent player returns once-per-visit events with lifecycle tokens;
+  the extension highlights the new directives. Hosts retain rendering and pause policy.
+
+
 ### Added
 
 - Dialogue scripts can import shared typed character modules with `@characters`.
