@@ -1,9 +1,19 @@
 -- Render each short cue once at load time. audioSystem clones these Sources
 -- when simultaneous voices play; no sample buffer is built in love.update.
-local low = AudioDesign.render({ waveform = "sine", frequency = 220, duration = 0.3,
-  gain = 0.25, envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 } })
-local high = AudioDesign.render({ waveform = "sine", frequency = 660, duration = 0.2,
-  gain = 0.25, envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 } })
+local low = AudioDesign.render({
+  waveform = "sine",
+  frequency = 220,
+  duration = 0.3,
+  gain = 0.25,
+  envelope = { attack = 0.005, decay = 0.2, sustain = 0, release = 0.05 },
+})
+local high = AudioDesign.render({
+  waveform = "sine",
+  frequency = 660,
+  duration = 0.2,
+  gain = 0.25,
+  envelope = { attack = 0.005, decay = 0.13, sustain = 0, release = 0.04 },
+})
 
 local analysis = require("generated.audio.catalog")
 
@@ -104,7 +114,8 @@ function love.draw()
   love.graphics.print(message, 32, 72)
   love.graphics.print("Active voices: " .. snapshot.activeVoices, 32, 118)
   love.graphics.print(
-    "Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: " .. snapshot.rejected,
+    "Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: "
+    .. snapshot.rejected,
     32,
     146
   )
@@ -120,7 +131,8 @@ function love.draw()
     230
   )
   love.graphics.print(
-    "Sample2 detected BPM: " .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"),
+    "Sample2 detected BPM: "
+    .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"),
     32,
     258
   )
