@@ -21,6 +21,7 @@ Game rendering, commands, input and pause ownership belong to the host.
   policy, independent UI clock and lifecycle.
 - [x] Shared `.tdialogue` parser/document validation and source locations.
 - [x] Build/watch integration, dependency invalidation and mapped diagnostics.
+- [x] Game demo authored as a compiled script with native renderer verification.
 - [ ] Localization IDs/catalog integration and rich-text placeholder handling.
 - [ ] Editor grammar, diagnostics, completion, navigation and translation coverage.
 - [ ] Conditions, local variables, registered commands, waits/cancellation,
@@ -156,8 +157,8 @@ Tua imports support hover/completion. Dedicated script grammar, unsaved dialogue
 editing, localization and richer execution remain pending. Contract field locations
 anchor to the asset start because they have no authored Lua field declaration.
 
-Game fixture migration is the next integration step after this upstream gate.
-The game currently continues to exercise the structured-document API.
+The game fixture migration is complete; see the verification checkpoint below.
+Localization and dedicated dialogue editing are the next milestones.
 
 Project integration validation: the workspace Rust suites pass (2,108 core tests,
 one existing ignored test; 505 LSP tests; all CLI suites). The first `make verify`
@@ -171,3 +172,21 @@ LÖVE 11.5 / LuaJIT 2.1.1700008891. Native artifacts and compiler/output hashes 
 recorded locally in `/tmp/tdialogue-project-native/provenance.json`. These are
 correctness checks, not performance measurements. Installed-editor UI validation
 remains pending.
+
+## Game authored-script checkpoint
+
+Game feature commit `5f59118` replaces the structured demo with a `.tdialogue`
+asset loaded through a typed import. The session adapter and renderer are
+unchanged. A short final utterance waits for acknowledgement before completing;
+queued temporary text resumes afterward. No private game source was copied into
+Tua fixtures.
+
+The game passes check (166 sources), 202 typed specs, build (251 outputs), all
+46 Lua regressions, and its required formatting gate. Native LÖVE 11.5.0 /
+LuaJIT 2.1.1700008891 with JIT disabled passes a 210-frame dialogue replay and a
+150-frame practice replay. Captured rendering at 640×480 and 1280×720 was inspected.
+The clean release compiler is `abf6cab7`, SHA-256
+`a996e7e160b8d452c5f2502d298f13ef587bd0fd60a1eafdecc68e1c25a98188`.
+Game evidence lives in its `docs/audits/2026-11-23/dialogue-script-validation/`.
+These are functional checks, not performance benchmarks. Both feature branches
+remain unmerged, with no package version changes or publication.
