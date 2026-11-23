@@ -1886,7 +1886,7 @@ end
 "#;
     let output = format(source);
     assert!(
-        output.contains("        cell.value\n      )\n    end"),
+        output.contains("      output = output\n        .. string.format(\"%s %s %s\", string.sub(cell.description, 1, 80), cell.label, cell.value)\n    end"),
         "{output}"
     );
     assert_eq!(format(&output), output);
@@ -2098,4 +2098,36 @@ fn procedural_runtime_layout_settles_in_one_pass() {
             .collect::<Vec<_>>()
     };
     assert_eq!(significant(source), significant(&output));
+}
+
+#[test]
+fn concatenation_wraps_outer_expression_before_short_calls() {
+    let source = "local function labels()\n  return formatLabel(5, shortcuts) .. \"  \" .. formatLabel(6, shortcuts) .. \"  \" .. formatLabel(7, shortcuts), tail()\nend\n";
+    let output = format(source);
+    assert!(output.contains("formatLabel(5, shortcuts)"), "{output}");
+    assert!(output.contains("\n    .."), "{output}");
+    assert!(output.contains(", tail()"), "{output}");
+    assert_eq!(lua_tokens(source), lua_tokens(&output));
+    assert_eq!(format(&output), output);
+}
+
+#[test]
+fn concatenation_wrapping_preserves_grouping_comments_and_return_tails() {
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+    for source in [
+        "local message = prefix .. formatLabel(5, true) .. \" and .. or \" .. suffix -- keep ..\n",
+        "return prefix .. (middle .. suffix) .. [=[literal .. text]=], tail()\n",
+        "local message = \"é\" .. firstLongOperand .. secondLongOperand .. thirdLongOperand\n",
+        "return prefix .. formatLabel(5, true) .. suffix, prefix .. suffix, ...\n",
+    ] {
+        let output = format_tua_source("src/main.tua", source, &options).unwrap();
+        assert_eq!(lua_tokens(source), lua_tokens(&output));
+        assert_eq!(
+            format_tua_source("src/main.tua", &output, &options).unwrap(),
+            output
+        );
+    }
 }

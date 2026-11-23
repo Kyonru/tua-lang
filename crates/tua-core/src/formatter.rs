@@ -1414,6 +1414,9 @@ fn break_long_groups(line: &str, indent: &str, options: &FormatOptions) -> Strin
     if let Some(wrapped) = break_long_condition(line, indent, options).filter(keeps_blocks) {
         return wrapped;
     }
+    if let Some(wrapped) = break_long_concatenation(line, indent, options).filter(keeps_blocks) {
+        return wrapped;
+    }
     let table = || break_long_table(line, indent, options).filter(keeps_blocks);
     let call = || break_long_call(line, indent, options).filter(keeps_blocks);
     // Split the outermost group first. Expanding a table passed as an
@@ -1485,6 +1488,67 @@ fn break_long_condition(line: &str, indent: &str, options: &FormatOptions) -> Op
         output.push_str(&break_long_groups(part, prefix, options));
     }
     Some(output)
+}
+
+/// Wrap the outer expression before expanding a short call within it. Keep
+/// tokens (including return-list commas and the final multi-return call) intact.
+fn break_long_concatenation(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {
+    let full_moon::tokenizer::LexerResult::Ok(tokens) =
+        full_moon::tokenizer::Lexer::new(line, full_moon::LuaVersion::luau()).collect()
+    else {
+        return None;
+    };
+    let mut depth = 0usize;
+    let mut cuts = vec![0];
+    for token in tokens {
+        if let full_moon::tokenizer::TokenType::Symbol { symbol } = token.token_type() {
+            match symbol.to_string().as_str() {
+                "(" | "[" | "{" => depth += 1,
+                ")" | "]" | "}" => depth = depth.checked_sub(1)?,
+                ".." if depth == 0 && token.start_position().bytes() > 0 => {
+                    cuts.push(token.start_position().bytes());
+                }
+                _ => {}
+            }
+        }
+    }
+    if cuts.len() == 1 {
+        return None;
+    }
+    cuts.push(line.len());
+    let continued_indent = if line.starts_with("..") {
+        indent.to_owned()
+    } else {
+        format!("{indent}{}", indent_unit(options))
+    };
+    let mut rows = Vec::new();
+    let mut current = String::new();
+    for pair in cuts.windows(2) {
+        let part = line[pair[0]..pair[1]].trim();
+        let prefix = if rows.is_empty() {
+            indent
+        } else {
+            &continued_indent
+        };
+        if !current.is_empty()
+            && prefix.chars().count() + current.chars().count() + 1 + part.chars().count()
+                > options.line_width
+        {
+            rows.push(break_long_groups(&current, prefix, options));
+            current.clear();
+        }
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(part);
+    }
+    let prefix = if rows.is_empty() {
+        indent
+    } else {
+        &continued_indent
+    };
+    rows.push(break_long_groups(&current, prefix, options));
+    Some(rows.join("\n"))
 }
 
 fn break_long_table(line: &str, indent: &str, options: &FormatOptions) -> Option<String> {

@@ -1336,6 +1336,11 @@ print(t)
 print(s)
 "#,
         )
+        .formats_to(r#"local s = "aaaaaaaaaaaaaaaaaaaa"
+  .. "bbbbbbbbbbbbbbbbbbbbbbbb"
+  .. "cccccccccccccccccc"
+print(s)
+"#)
         .with(|options| options.line_width = 40),
         Case::new(
             "mixed_elseif_one_line",
