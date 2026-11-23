@@ -14,6 +14,7 @@ for _, name in ipairs({
   "audio_design_test",
   "i18n_test",
   "save_test",
+  "dialogue_test",
   "save_migrations_test",
   "log_test",
   "log_file_test",
