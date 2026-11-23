@@ -39,6 +39,9 @@ fn initialized_registers_watched_files_when_client_supports_dynamic_registration
     let watchers = registration["params"]["registrations"][0]["registerOptions"]["watchers"]
         .as_array()
         .expect("watchers should be an array");
+    assert!(watchers
+        .iter()
+        .any(|watcher| watcher["globPattern"] == "**/*.tdialogue"));
     assert!(
         watchers
             .iter()

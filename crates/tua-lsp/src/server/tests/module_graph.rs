@@ -111,3 +111,36 @@ fn module_graph_returns_dependencies_cycles_reverse_counts_exports_and_inclusion
         .iter()
         .any(|export| export["name"] == "hp" && export["type"] == "number"));
 }
+
+#[test]
+fn dialogue_assets_keep_typed_exports_in_module_graph_and_hover() {
+    let temp = TempProject::new("dialogue-module-graph");
+    let main = "local document = require('intro')\nprint(document.entry)\n";
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write(
+        "src/intro.tdialogue",
+        "@dialogue 1\n[start]\n// @id hello\n: Hello (end)\n",
+    );
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&temp.uri_for("src/main.tua"), main),
+        module_graph_request(2),
+        hover_request(3, &temp.uri_for("src/main.tua"), main, "entry"),
+    ]);
+    let modules = response_with_id(&output, 2)["result"]["graph"]["modules"]
+        .as_array()
+        .unwrap();
+    let asset = modules
+        .iter()
+        .find(|module| module["uri"] == temp.uri_for("src/intro.tdialogue"))
+        .unwrap();
+    assert_eq!(asset["sourceKind"], "dialogue");
+    let fields = asset["exports"].as_array().unwrap();
+    assert!(
+        fields.iter().any(|field| field["name"] == "entry"),
+        "{fields:?}"
+    );
+    let hover = &response_with_id(&output, 3)["result"];
+    assert!(hover.to_string().contains("string"), "{hover}");
+}

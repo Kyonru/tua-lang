@@ -17,6 +17,8 @@ use crate::{
 };
 
 mod builtin_calls;
+mod dialogue;
+pub use dialogue::emit_dialogue_source;
 pub(crate) mod lowering;
 mod vec2_fusion;
 

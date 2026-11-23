@@ -745,6 +745,7 @@ impl AnalysisHost {
         self.refresh_last_good_files(&files);
 
         let snapshot = AnalysisSnapshot {
+            dialogue_diagnostics: Arc::new(OnceLock::new()),
             input_errors: self.input_errors.clone(),
             revision: self.revision,
             config: self.config.clone(),

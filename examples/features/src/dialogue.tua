@@ -1,0 +1,18 @@
+-- Feature: typed headless dialogue; rendering, input and timing belong to the host.
+local Dialogue = require("tuadialogue")
+
+local function createPlayer()
+  return Dialogue.new({
+    entry = "welcome",
+    nodes = {
+      welcome = { kind = "line", text = "Ready?", next = "reply" },
+      reply = {
+        kind = "choice",
+        options = { { id = "yes", text = "Ready.", target = "finish" } },
+      },
+      finish = { kind = "end" },
+    },
+  })
+end
+
+return { createPlayer = createPlayer }

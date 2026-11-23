@@ -1,3 +1,4 @@
+use crate::project_model::module_extensions;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -180,6 +181,7 @@ pub struct ModuleExportEntry {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModuleExportOrigin {
     Tua,
+    Dialogue,
     Lua,
     LuaDoc,
     GeneratedBuiltin,
@@ -979,7 +981,10 @@ fn child_relative_import_candidates(
     let base = normalize_path(parent.join(specifier));
 
     if let Some(file_extension) = base.extension().and_then(|extension| extension.to_str()) {
-        if file_extension != "lua" && file_extension != context.extension {
+        if file_extension != "lua"
+            && file_extension != "tdialogue"
+            && file_extension != context.extension
+        {
             return Err(format!(
                 "import specifier must be extensionless or end in `.{}`/`.lua`",
                 context.extension
@@ -1063,7 +1068,7 @@ fn import_module_candidates_with_declarations(
     let mut candidates = Vec::new();
 
     for extension in extensions {
-        if include_declarations && *extension != "lua" {
+        if include_declarations && !matches!(*extension, "lua" | "tdialogue") {
             candidates.push(base.with_extension(format!("d.{extension}")));
             candidates.push(base.join(format!("init.d.{extension}")));
         }
@@ -1180,7 +1185,15 @@ fn export_entries_for_module(
                 .or_else(|| export_definition_span(hir, public_name))
                 .or_else(|| export.map(|export| export.name_span))
                 .or_else(|| initializer_spans.get(public_name).copied())
-                .or_else(|| returned_class_member_span(parsed?, public_name))?;
+                .or_else(|| returned_class_member_span(parsed?, public_name))
+                // Asset contract fields have no authored Lua declaration. Anchor
+                // them to the asset, rather than dropping their types from re-exports.
+                .or_else(|| {
+                    (source_kind == AnalysisSourceKind::Dialogue).then_some(SourceSpan {
+                        start: crate::SourcePosition { line: 1, column: 1 },
+                        end: crate::SourcePosition { line: 1, column: 1 },
+                    })
+                })?;
             let export_span = export
                 .map(|export| export.name_span)
                 .unwrap_or(definition_span);
@@ -1508,6 +1521,7 @@ fn export_origin(
     match source_kind {
         AnalysisSourceKind::Tua => ModuleExportOrigin::Tua,
         AnalysisSourceKind::Lua => ModuleExportOrigin::Lua,
+        AnalysisSourceKind::Dialogue => ModuleExportOrigin::Dialogue,
     }
 }
 
@@ -1546,16 +1560,6 @@ fn module_relative_path(module: &str, separator: ModulePathSeparator) -> PathBuf
     relative
 }
 
-fn module_extensions(project_extension: &str) -> Vec<&str> {
-    let mut extensions = vec![project_extension];
-
-    if project_extension != "lua" {
-        extensions.push("lua");
-    }
-
-    extensions
-}
-
 fn module_candidates_with_declarations(
     root: &Path,
     relative: &Path,
@@ -1566,7 +1570,7 @@ fn module_candidates_with_declarations(
     let mut candidates = Vec::new();
 
     for extension in extensions {
-        if include_declarations && *extension != "lua" {
+        if include_declarations && !matches!(*extension, "lua" | "tdialogue") {
             candidates.push(base.with_extension(format!("d.{extension}")));
             candidates.push(base.join(format!("init.d.{extension}")));
         }

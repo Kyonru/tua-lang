@@ -1852,6 +1852,7 @@ fn call_hierarchy_outgoing_from_core(
 fn core_source_kind(kind: SourceKind) -> AnalysisSourceKind {
     match kind {
         SourceKind::Lua => AnalysisSourceKind::Lua,
+        SourceKind::Dialogue => AnalysisSourceKind::Dialogue,
         SourceKind::Tua => AnalysisSourceKind::Tua,
     }
 }
@@ -1859,6 +1860,7 @@ fn core_source_kind(kind: SourceKind) -> AnalysisSourceKind {
 fn source_kind_from_vfs(kind: VfsSourceKind) -> SourceKind {
     match kind {
         VfsSourceKind::Lua => SourceKind::Lua,
+        VfsSourceKind::Dialogue => SourceKind::Dialogue,
         VfsSourceKind::Tua => SourceKind::Tua,
     }
 }

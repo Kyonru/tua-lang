@@ -145,7 +145,7 @@ impl PatternCorpusBuildInput {
         project_model: &ProjectModel,
         limits: RetrievalLimits,
     ) -> PatternCorpusBuildOutcome {
-        let table = if self.include_exact {
+        let table = if self.include_exact && self.kind != AnalysisSourceKind::Dialogue {
             match FilePatternTable::build(&self.source, limits) {
                 Ok(table) => Some(Arc::new(table)),
                 Err(error) => {
@@ -159,7 +159,11 @@ impl PatternCorpusBuildInput {
         } else {
             None
         };
-        let literals = module_specifier_literals(&self.source);
+        let literals = if self.kind == AnalysisSourceKind::Dialogue {
+            Vec::new()
+        } else {
+            module_specifier_literals(&self.source)
+        };
         let resolved = resolve_module_specifier_literals(&self.path, &literals, project_model);
         let resolved_targets = resolved
             .links
@@ -172,6 +176,7 @@ impl PatternCorpusBuildInput {
         let parsed = match self.kind {
             AnalysisSourceKind::Tua => parse_tua_source(&self.path, self.source),
             AnalysisSourceKind::Lua => parse_lua_source(&self.path, self.source),
+            AnalysisSourceKind::Dialogue => Err(Vec::new()),
         };
         let statistical = build_statistical
             .then(|| {

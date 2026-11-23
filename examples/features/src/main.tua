@@ -1,3 +1,4 @@
+local Dialogue = require("dialogue")
 local Types = require("types")
 local Functions = require("functions")
 local Compound = require("compound")
@@ -88,4 +89,5 @@ return {
   localization = Localization,
   saveContracts = SaveContracts,
   logging = Logging,
+  dialogue = Dialogue,
 }

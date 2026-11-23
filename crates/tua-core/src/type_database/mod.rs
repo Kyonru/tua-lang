@@ -70,6 +70,7 @@ pub struct ProjectTypeExport {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProjectTypeOrigin {
     Tua,
+    Dialogue,
     LuaDoc,
     ModuleExport,
     Builtin,
@@ -1257,6 +1258,7 @@ fn origin_for_source_kind(kind: AnalysisSourceKind) -> ProjectTypeOrigin {
     match kind {
         AnalysisSourceKind::Tua => ProjectTypeOrigin::Tua,
         AnalysisSourceKind::Lua => ProjectTypeOrigin::LuaDoc,
+        AnalysisSourceKind::Dialogue => ProjectTypeOrigin::Dialogue,
     }
 }
 

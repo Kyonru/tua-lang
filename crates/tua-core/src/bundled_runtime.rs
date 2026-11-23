@@ -16,6 +16,13 @@ pub struct BundledRuntime {
 
 pub const RUNTIMES: &[BundledRuntime] = &[
     BundledRuntime {
+        module: "tuadialogue",
+        file_name: "tuadialogue.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue.lua"),
+        dependencies: &[],
+        explicit_import: true,
+    },
+    BundledRuntime {
         module: "tuaboundedqueue",
         file_name: "tuaboundedqueue.lua",
         source: || include_str!("../../../vendor/runtime/tuaboundedqueue.lua"),

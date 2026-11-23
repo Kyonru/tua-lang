@@ -19,6 +19,8 @@ mod control_flow;
 pub mod definition;
 mod deprecation;
 pub mod diagnostic;
+mod dialogue;
+pub mod dialogue_asset;
 pub mod document_highlight;
 pub mod document_symbol;
 mod ecs;

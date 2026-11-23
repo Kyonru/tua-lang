@@ -117,6 +117,9 @@ pub(super) fn build_degraded_file_semantics(
     config: &ProjectConfig,
     busted_test_source: bool,
 ) -> Option<DegradedFileSemantics> {
+    if kind == AnalysisSourceKind::Dialogue {
+        return None;
+    }
     let parsed = parse_degraded_analysis_source(path, source, kind).ok()?;
     let hir = lower_parsed_source(&parsed);
     let (environment, environment_diagnostics) =
@@ -172,6 +175,9 @@ pub(super) fn parse_degraded_analysis_source(
     source: &str,
     kind: AnalysisSourceKind,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
+    if kind == AnalysisSourceKind::Dialogue {
+        return parse_analysis_source(path, source.to_owned(), kind);
+    }
     let protocol_header_ranges = if kind == AnalysisSourceKind::Tua && source.contains("protocol") {
         crate::classes::editor_protocol_header_ranges(source)
     } else {
@@ -191,7 +197,9 @@ pub(super) fn parse_degraded_analysis_source(
         AnalysisSourceKind::Tua => {
             crate::parser::parse_tua_source_for_analysis_recovery(path, source.clone())
         }
-        AnalysisSourceKind::Lua => parse_analysis_source(path, source.clone(), kind),
+        AnalysisSourceKind::Lua | AnalysisSourceKind::Dialogue => {
+            parse_analysis_source(path, source.clone(), kind)
+        }
     };
     let Err(diagnostics) = parsed else {
         return parsed;
@@ -215,10 +223,12 @@ pub(super) fn parse_degraded_analysis_source(
                     Err(next_errors) => errors = next_errors,
                 }
             }
-            AnalysisSourceKind::Lua => match parse_analysis_source(path, recovered.clone(), kind) {
-                Ok(parsed) => return Ok(parsed),
-                Err(next_errors) => errors = next_errors,
-            },
+            AnalysisSourceKind::Lua | AnalysisSourceKind::Dialogue => {
+                match parse_analysis_source(path, recovered.clone(), kind) {
+                    Ok(parsed) => return Ok(parsed),
+                    Err(next_errors) => errors = next_errors,
+                }
+            }
         }
     }
     Err(errors)

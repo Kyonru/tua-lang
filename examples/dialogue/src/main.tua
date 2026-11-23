@@ -1,0 +1,15 @@
+-- A headless host; a graphical renderer consumes the same owned snapshots.
+local Dialogue = require("tuadialogue")
+local document = require("intro")
+local player = Dialogue.new(document)
+player:start()
+local view = player:snapshot()
+local node = view.node
+if node then print(node.text) end
+assert(player:advance())
+assert(player:choose("intro.again"))
+assert(player:advance())
+assert(player:choose("intro.yes"))
+assert(player:advance())
+assert(player:snapshot().state == "completed")
+player:dispose()

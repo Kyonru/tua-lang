@@ -116,35 +116,37 @@ fn change_set_extracts_config_from_uniform_batch() {
 }
 
 #[test]
-fn deleted_tua_sources_remove_lua_and_source_map_outputs() {
-    let root = temp_dir("remove-source-outputs");
-    let source = root.join("src/main.tua");
-    let output = root.join("build/main.lua");
-    let source_map = root.join("build/main.lua.map.json");
-    let debugger_source_map = root.join("build/main.lua.map");
+fn deleted_compiled_sources_remove_lua_and_source_map_outputs() {
+    for extension in ["tua", "tdialogue"] {
+        let root = temp_dir("remove-source-outputs");
+        let source = root.join(format!("src/main.{extension}"));
+        let output = root.join("build/main.lua");
+        let source_map = root.join("build/main.lua.map.json");
+        let debugger_source_map = root.join("build/main.lua.map");
 
-    fs::create_dir_all(source.parent().expect("source should have a parent"))
-        .expect("source directory should be created");
-    fs::create_dir_all(output.parent().expect("output should have a parent"))
-        .expect("output directory should be created");
-    fs::write(&output, "return 1\n").expect("output should be written");
-    fs::write(&source_map, "{}\n").expect("source map should be written");
-    fs::write(&debugger_source_map, "{}\n").expect("debugger source map should be written");
+        fs::create_dir_all(source.parent().expect("source should have a parent"))
+            .expect("source directory should be created");
+        fs::create_dir_all(output.parent().expect("output should have a parent"))
+            .expect("output directory should be created");
+        fs::write(&output, "return 1\n").expect("output should be written");
+        fs::write(&source_map, "{}\n").expect("source map should be written");
+        fs::write(&debugger_source_map, "{}\n").expect("debugger source map should be written");
 
-    let loaded = LoadedConfig {
-        path: root.join(CONFIG_FILE),
-        config: tua_core::ProjectConfig::default(),
-        found: true,
-    };
-    let outcome = remove_deleted_outputs(&root, &loaded, &[source]);
+        let loaded = LoadedConfig {
+            path: root.join(CONFIG_FILE),
+            config: tua_core::ProjectConfig::default(),
+            found: true,
+        };
+        let outcome = remove_deleted_outputs(&root, &loaded, &[source]);
 
-    assert_eq!(outcome.removed, 3);
-    assert!(outcome.diagnostics.is_empty());
-    assert!(!output.exists());
-    assert!(!source_map.exists());
-    assert!(!debugger_source_map.exists());
+        assert_eq!(outcome.removed, 3);
+        assert!(outcome.diagnostics.is_empty());
+        assert!(!output.exists());
+        assert!(!source_map.exists());
+        assert!(!debugger_source_map.exists());
 
-    fs::remove_dir_all(root).expect("temp directory should be removed");
+        fs::remove_dir_all(root).expect("temp directory should be removed");
+    }
 }
 
 fn temp_file(name: &str, contents: &[u8]) -> PathBuf {

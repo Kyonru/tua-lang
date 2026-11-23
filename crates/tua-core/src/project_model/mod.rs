@@ -404,6 +404,10 @@ impl ProjectWorkspace {
         let path = path.as_ref();
         let extension = path.extension().and_then(|extension| extension.to_str());
 
+        if extension == Some("tdialogue") {
+            return Some(VfsSourceKind::Dialogue);
+        }
+
         if extension.is_some_and(|extension| extension == self.config.extension) {
             return Some(VfsSourceKind::Tua);
         }
@@ -516,7 +520,8 @@ impl ProjectWorkspace {
         let extensions = module_extensions(&self.config.extension);
 
         if let Some(extension) = base.extension().and_then(|extension| extension.to_str()) {
-            if extension != "lua" && extension != self.config.extension {
+            if extension != "lua" && extension != "tdialogue" && extension != self.config.extension
+            {
                 return None;
             }
         }
@@ -645,13 +650,13 @@ fn module_relative_path(module: &str, separator: ModulePathSeparator) -> PathBuf
     relative
 }
 
-fn module_extensions(project_extension: &str) -> Vec<&str> {
+pub(crate) fn module_extensions(project_extension: &str) -> Vec<&str> {
     let mut extensions = vec![project_extension];
-
-    if project_extension != "lua" {
-        extensions.push("lua");
+    for extension in ["tdialogue", "lua"] {
+        if !extensions.contains(&extension) {
+            extensions.push(extension);
+        }
     }
-
     extensions
 }
 
@@ -669,7 +674,7 @@ fn module_candidates_with_declarations(
     let mut candidates = Vec::new();
 
     for extension in extensions {
-        if include_declarations && *extension != "lua" {
+        if include_declarations && !matches!(*extension, "lua" | "tdialogue") {
             candidates.push(base.with_extension(format!("d.{extension}")));
             candidates.push(base.join(format!("init.d.{extension}")));
         }
@@ -715,7 +720,7 @@ fn import_module_candidates_with_declarations(
     let mut candidates = Vec::new();
 
     for extension in extensions {
-        if include_declarations && *extension != "lua" {
+        if include_declarations && !matches!(*extension, "lua" | "tdialogue") {
             candidates.push(base.with_extension(format!("d.{extension}")));
             candidates.push(base.join(format!("init.d.{extension}")));
         }

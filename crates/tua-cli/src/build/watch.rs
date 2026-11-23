@@ -58,17 +58,21 @@ impl WatchBuildSession {
             &session.workspace,
             source_files
                 .iter()
-                .filter(|source_file| source_file.kind == SourceKind::Tua)
+                .filter(|source_file| source_file.kind.is_compiled())
                 .map(|source_file| source_file.path.clone()),
         );
 
         for source_file in source_files {
             match source_file.kind {
-                SourceKind::Tua => {
+                SourceKind::Tua | SourceKind::Dialogue => {
                     tua_paths.insert(source_file.path.clone());
                     session.load_semantic_file(
                         &source_file.path,
-                        AnalysisSourceKind::Tua,
+                        analysis_kind_for_path(
+                            &source_file.path,
+                            &session.workspace.config().extension,
+                        )
+                        .expect("compiled source"),
                         &mut diagnostics,
                     );
                 }
@@ -151,7 +155,7 @@ impl WatchBuildSession {
             let source_kind = SourceKind::for_path(&path, &extension);
 
             match source_kind {
-                SourceKind::Tua => {
+                SourceKind::Tua | SourceKind::Dialogue => {
                     changed_tua.insert(path.clone());
                 }
                 SourceKind::Asset => {
@@ -187,6 +191,18 @@ impl WatchBuildSession {
         }
         let snapshot = self.host.snapshot();
         let mut affected_tua = changed_tua;
+        if surface_roots
+            .iter()
+            .chain(affected_tua.iter())
+            .any(|path| path.extension().is_some_and(|ext| ext == "tdialogue"))
+        {
+            affected_tua.extend(
+                self.host
+                    .file_paths()
+                    .into_iter()
+                    .filter(|path| path.extension().is_some_and(|ext| ext == "tdialogue")),
+            );
+        }
 
         if !surface_roots.is_empty() {
             let affected = before
@@ -200,7 +216,7 @@ impl WatchBuildSession {
                 );
 
             affected_tua.extend(affected.filter(|path| {
-                SourceKind::for_path(path, &extension) == SourceKind::Tua
+                SourceKind::for_path(path, &extension).is_compiled()
                     && snapshot.source(path).is_some()
             }));
         }
@@ -240,7 +256,7 @@ impl WatchBuildSession {
         let tua_output_collisions = colliding_tua_outputs(&tua_output_owners_for_paths(
             &self.workspace,
             self.host.file_paths().into_iter().filter(|path| {
-                SourceKind::for_path(path, &self.workspace.config().extension) == SourceKind::Tua
+                SourceKind::for_path(path, &self.workspace.config().extension).is_compiled()
                     && snapshot.source(path).is_some()
             }),
         ));
@@ -256,6 +272,16 @@ impl WatchBuildSession {
             }
 
             let mut source_diagnostics = snapshot.pipeline_diagnostics(path);
+            if !self.in_place
+                && path.extension().is_some_and(|ext| ext == "tdialogue")
+                && path.with_extension("lua").is_file()
+            {
+                source_diagnostics.push(output_collision_diagnostic(
+                    &path.with_extension("lua"),
+                    path,
+                    false,
+                ));
+            }
 
             if has_errors(&source_diagnostics) {
                 blocked.insert(path.clone());
@@ -296,20 +322,27 @@ impl WatchBuildSession {
             }
 
             let environment = snapshot.project_type_environment(&source_path);
-            let emission = match environment.as_ref() {
-                Some(environment) => emit_tua_source_with_workspace_environment_artifact(
-                    &source_path,
-                    source,
-                    annotation_mode,
-                    &self.workspace,
-                    environment,
-                ),
-                None => emit_tua_source_with_workspace_artifact(
-                    &source_path,
-                    source,
-                    annotation_mode,
-                    &self.workspace,
-                ),
+            let emission = if source_path
+                .extension()
+                .is_some_and(|extension| extension == "tdialogue")
+            {
+                tua_core::emit::emit_dialogue_source(&source_path, source)
+            } else {
+                match environment.as_ref() {
+                    Some(environment) => emit_tua_source_with_workspace_environment_artifact(
+                        &source_path,
+                        source,
+                        annotation_mode,
+                        &self.workspace,
+                        environment,
+                    ),
+                    None => emit_tua_source_with_workspace_artifact(
+                        &source_path,
+                        source,
+                        annotation_mode,
+                        &self.workspace,
+                    ),
+                }
             };
             let emission = match emission {
                 Ok(output) => output,
@@ -437,3 +470,6 @@ impl WatchBuildSession {
         dependencies.into_iter().collect()
     }
 }
+
+#[cfg(test)]
+mod tests;

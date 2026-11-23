@@ -1,0 +1,14 @@
+@dialogue 1
+@character Guide "Guide"
+
+[start]
+// @id intro.hello
+Guide: Ready?
+// @id intro.yes
+-> Yes [target:done]
+// @id intro.again
+-> Again [target:start]
+
+[done]
+// @id intro.bye
+: Goodbye. (end)

@@ -7,6 +7,7 @@ use std::sync::{Arc, RwLock};
 pub enum VfsSourceKind {
     Tua,
     Lua,
+    Dialogue,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

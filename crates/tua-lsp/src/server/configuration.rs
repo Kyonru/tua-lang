@@ -137,6 +137,7 @@ pub(super) struct PreviewSettings {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum SourceKind {
     Tua,
+    Dialogue,
     Lua,
 }
 
