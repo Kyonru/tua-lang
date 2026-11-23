@@ -19,7 +19,7 @@ Game rendering, commands, input and pause ownership belong to the host.
   queries and emitted-Lua regressions.
 - [x] Renderer seam in the game, persistent conversations, separate temporary
   policy, independent UI clock and lifecycle.
-- [ ] Shared `.tdialogue` parser/document validation and source locations.
+- [x] Shared `.tdialogue` parser/document validation and source locations.
 - [ ] Build/watch integration, dependency invalidation and mapped diagnostics.
 - [ ] Localization IDs/catalog integration and rich-text placeholder handling.
 - [ ] Editor grammar, diagnostics, completion, navigation and translation coverage.
@@ -104,3 +104,38 @@ still constructs structured data in Tua; the parser, localization, custom editor
 language and richer execution nodes remain pending. The existing headless example
 is unchanged, and no game source/assets have been copied into Tua fixtures. Both
 feature branches remain unmerged pending the user's explicit approval.
+
+
+## Shared authoring frontend
+
+The version-one subset now has a shared `tua-core` parser and Lua-data emitter.
+It supports version headers, speaker declarations, labels, explicit text IDs,
+narration, consecutive lines, choices, forward references/cycles and terminal
+lines. The typed source model retains declaration/reference/text spans; emitted
+Lua has per-line source provenance. Unknown constructs and incomplete flow fail
+with TL5012 rather than producing partial output. Input uses the shared source
+size limit and parsing never evaluates project code.
+
+`docs/dialogue.md` owns the subset contract, including whitespace and escaping.
+`examples/dialogue/intro.tdialogue` and the Rust `dialogue_compile` development
+harness exercise the frontend; `asset_host.lua` feeds its output into the existing
+player. They do not claim automatic asset discovery. The example remains outside
+`src` until project/build/watch integration is implemented. Translation IDs are
+retained, but catalogs, interpolation and cross-document uniqueness are pending.
+
+The next step is project integration: opt-in discovery, typed imported generated
+modules, dependency invalidation, mapped diagnostics and last-valid development
+output. That must reuse this parser through shared analysis; no second parser
+belongs in the CLI or extension. Then connect catalogs and shared editor queries.
+
+Final `make verify` passes: 2,107 core tests (one existing ignored test), 504 LSP
+tests, CLI suites, Clippy, language evaluations and extension checks.
+Frontend validation: eight parser regressions (including Unicode/property and
+input-limit coverage) and four emitted-data regressions pass. The multi-line
+fixture is parsed explicitly as Lua 5.1; the actual bundled player executes the
+compiled asset on Lua 5.4.8 and native LÖVE 11.5 / LuaJIT 2.1.1700008891 with JIT
+off and on. The authored example and the documentation's exact syntax example
+compile successfully. The feature tour checks 52 files, builds 93 outputs and
+executes its emitted dialogue module. Lua example formatting, Rust formatting,
+documentation build, feature coverage and JSON/whitespace checks pass. These are
+correctness checks, not performance measurements or installed-editor validation.

@@ -1,0 +1,17 @@
+-- From this example directory, after building the structured example runtime.
+package.path = 'build/?.lua;' .. package.path
+local Dialogue = require('tuadialogue')
+local document = dofile(assert(arg[1], 'pass the compiled dialogue module path'))
+local player = Dialogue.new(document)
+player:start()
+assert(player:snapshot().node.text == 'Ready?')
+assert(player:advance())
+assert(player:choose('intro.again'))
+assert(player:snapshot().nodeId == 'start')
+assert(player:advance())
+assert(player:choose('intro.yes'))
+assert(player:snapshot().node.text == 'Goodbye.')
+assert(player:advance())
+assert(player:snapshot().state == 'completed')
+player:dispose()
+print('Compiled dialogue asset passed')

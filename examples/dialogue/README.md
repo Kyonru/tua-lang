@@ -14,5 +14,26 @@ with a renderer consuming owned snapshots. The snapshot node is optional; guard 
 `text` and `options`, using an empty string/array when not applicable. `start()` selects the
 entry node; `start("label")` selects a named node. Choices use stable IDs.
 
-This slice uses structured documents. `.tdialogue` files, localization, reveal,
-temporary-message timing, async commands and editor syntax are still pending.
+## Authoring frontend harness
+
+`intro.tdialogue` exercises the shared version-one parser/emitter. Automatic
+project asset discovery is pending, so it deliberately lives outside `src`.
+From the repository root, compile it using the development harness:
+
+```sh
+cargo run -q -p tua-core --example dialogue_compile -- examples/dialogue/intro.tdialogue > /tmp/intro-dialogue.lua
+```
+
+Then, from this example directory, build the runtime and execute the data:
+
+```sh
+../../target/debug/tua build
+lua asset_host.lua /tmp/intro-dialogue.lua
+```
+
+The compiler emits ordinary data with no runtime parsing or execution of text.
+The host runs the same line/choice/end player as the structured example. Generated
+output stays outside source control. See `docs/dialogue.md` for the supported
+syntax and escaping. Build/watch integration, localization, asynchronous commands
+and `.tdialogue` editor support remain pending. Reveal and temporary-message
+policies belong to the host.

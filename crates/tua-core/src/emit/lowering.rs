@@ -24,6 +24,7 @@ pub enum LoweringKind {
     CompoundAssignment,
     Sprite,
     Annotation,
+    Dialogue,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

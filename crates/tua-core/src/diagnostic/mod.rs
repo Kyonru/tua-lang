@@ -156,6 +156,7 @@ impl DiagnosticCode {
     pub const DOMAIN_AUDIO_CONFIG: Self = Self(5009);
     pub const DOMAIN_I18N: Self = Self(5010);
     pub const DOMAIN_SAVE: Self = Self(5011);
+    pub const DOMAIN_DIALOGUE: Self = Self(5012);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -305,6 +306,7 @@ impl DiagnosticCode {
                 | Self::DOMAIN_AUDIO_CONFIG
                 | Self::DOMAIN_I18N
                 | Self::DOMAIN_SAVE
+                | Self::DOMAIN_DIALOGUE
         )
     }
 }

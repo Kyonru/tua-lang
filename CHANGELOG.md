@@ -6,6 +6,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Add the shared version-one `.tdialogue` parser and Lua-data emitter with stable
+  text IDs, speaker declarations, labels, narration, choices, explicit endings
+  and source-ranged `TL5012` validation. The frontend feeds the typed headless
+  player; project asset discovery, localization and dialogue editor support
+  remain pending on the isolated feature branch.
+
 ## [0.11.0] - 2026-11-23
 
 ### Release summary

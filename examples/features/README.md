@@ -22,6 +22,10 @@ guides cannot silently omit an example.
 
 ## Files
 
+- `src/dialogue.tua` constructs a typed, renderer-independent dialogue player.
+  The separate `examples/dialogue` project also contains the experimental
+  `.tdialogue` frontend harness; asset discovery and localization remain pending.
+
 - `src/logging.tua` shows opt-in `Log` levels, scoped messages, buffered file
   output, and a bounded screen overlay. In the Game Console, filter by level or
   scope and click a message's source location to open its `.tua` call site.
