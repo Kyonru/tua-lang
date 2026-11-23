@@ -556,7 +556,12 @@ target.x > 0`, the right operand is checked under the opposite condition.
 This applies to expressions in assignments as well as `if` conditions.
 
 A truthy value can still be `true`, so truthiness removes `nil` but keeps
-`boolean`. The `else` branch keeps the original type.
+`boolean`. An `else` branch can establish non-nil values when all preceding guards fail:
+`if not player or not target then ... else ... end` permits accesses to both.
+The same applies to explicit `== nil` guards and `elseif` chains. Conditions
+containing calls remain conservative; calls, assignments and closure capture
+invalidate the new facts before subsequent accesses. A failed ordinary truthiness
+check does not imply nil because `false` is also possible.
 
 Plain record paths can also be guarded: after `if state.target then`,
 `state.target.value` uses the non-nil target type. The same applies after

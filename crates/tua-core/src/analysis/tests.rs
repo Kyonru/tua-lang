@@ -12031,6 +12031,7 @@ mod module_shadowing;
 
 mod reassignment_contracts;
 
+mod negative_guards;
 mod save_callbacks;
 
 #[test]

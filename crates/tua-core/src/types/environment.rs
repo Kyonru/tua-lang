@@ -16,8 +16,8 @@ use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{
     directly_assigned_name, extend_with_return_guards, forget_return_guards,
-    narrowed_locals_after_false_condition, narrowed_locals_for_condition, return_guards_for_names,
-    ReturnGuard,
+    narrowed_locals_after_false_condition, narrowed_locals_for_condition, narrowed_locals_for_else,
+    return_guards_for_names, ReturnGuard,
 };
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, GenericDeclarationId,
@@ -5093,10 +5093,16 @@ fn collect_return_types_in_block(
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
+                    let mut branch_locals = scoped_locals.clone();
+                    let mut narrowed = narrowed_locals_for_else(if_stmt, context.aliases, |name| {
+                        scoped_locals.get(name).cloned()
+                    });
+                    extend_with_return_guards(&mut narrowed, &guards);
+                    branch_locals.extend(narrowed);
                     collect_return_types_in_block(
                         else_block,
                         context,
-                        &scoped_locals,
+                        &branch_locals,
                         &guards,
                         returns,
                         has_unresolved_return,

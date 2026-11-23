@@ -8081,3 +8081,46 @@ type Storage = { load: () -> ({ count: number } | nil, SaveIssue | nil) }
         "parentheses collapse multiple returns"
     );
 }
+
+#[test]
+fn negative_else_guards_narrow_both_nullable_records() {
+    for condition in ["not a or not b", "a == nil or b == nil", "not (a and b)"] {
+        let source = format!("type Point = {{ x: number }}\nlocal function sum(a: Point | nil, b: Point | nil): number\n  if {condition} then return 0 else return a.x + b.x end\nend\n");
+        check_tua_source("src/main.tua", &source).unwrap();
+    }
+    check_tua_source("src/main.tua", "type Point = { x: number }\nlocal function sum(a: Point | nil, b: Point | nil): number\nif not a then return 0 elseif not b then return 0 else return a.x + b.x end\nend\n").unwrap();
+}
+
+#[test]
+fn negative_else_guards_reject_unsafe_alternatives_and_writes() {
+    for body in [
+        "if not a and not b then return 0 else return a.x + b.x end",
+        "if not a or mutate() then return 0 else return a.x end",
+        "if not a then return 0 else a = nil return a.x end",
+        "if not a then return 0 else local a: Point | nil = nil return a.x end",
+        "if a then return 0 else return a.x end",
+    ] {
+        let source = format!("type Point = {{ x: number }}\nlocal function sum(a: Point | nil, b: Point | nil, mutate: () -> boolean): number\n{body}\nend\n");
+        assert!(
+            check_tua_source("src/main.tua", &source).is_err(),
+            "{source}"
+        );
+    }
+    assert!(check_tua_source("src/main.tua", "local function f(a: boolean | nil): number if not a then return 0 else local n: number = a return n end end").is_err());
+}
+
+#[test]
+fn negative_else_guards_expire_on_member_effects_and_closure_mutation() {
+    for source in [
+        "type Point = { x: number }\nlocal function f(state: { point: Point | nil }, mutate: () -> nil): number\nif not state.point then return 0 else mutate() return state.point.x end\nend",
+        "type Point = { x: number }\nlocal function f(a: Point | nil): number\nlocal function mutate() a = nil end\nif not a then return 0 else mutate() return a.x end\nend",
+    ] {
+        assert!(check_tua_source("src/main.tua", source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn negative_else_guards_support_values_and_calls() {
+    check_tua_source("src/main.tua", "type Point = { x: number }\nlocal function select(a: Point | nil): Point if not a then return {x=0} else return a end end\n").unwrap();
+    check_tua_source("src/main.tua", "local function invoke(f: (() -> number) | nil): number if not f then return 0 else return f() end end\n").unwrap();
+}

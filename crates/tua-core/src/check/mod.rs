@@ -1860,7 +1860,7 @@ impl<'a> Checker<'a> {
 
     fn infer_var_value(&mut self, var: &Var) -> Option<Type> {
         match var {
-            Var::Name(name) => self.infer_named_value(&token_text(name)),
+            Var::Name(name) => self.infer_named_value_at(&token_text(name), name),
             Var::Expression(expression) => {
                 if let Some(parts) = plain_field_chain_from_var_expression(expression) {
                     if let Some(ty) = self.resolve_field_chain_type(&parts) {
@@ -1919,7 +1919,7 @@ impl<'a> Checker<'a> {
             self.check_function_call(call)?
         } else {
             match expression.prefix() {
-                Prefix::Name(name) => self.infer_named_value(&token_text(name))?,
+                Prefix::Name(name) => self.infer_named_value_at(&token_text(name), name)?,
                 Prefix::Expression(expression) => self.infer_expression(expression)?,
                 _ => return None,
             }
@@ -2177,6 +2177,29 @@ impl<'a> Checker<'a> {
             }
             _ => self.infer_expression(expression),
         }
+    }
+
+    fn infer_named_value_at(&self, name: &str, node: &impl Node) -> Option<Type> {
+        let base = self.infer_named_value(name)?;
+        if matches!(base, Type::Any) || !crate::narrowing::type_may_be_nil(&base) {
+            return Some(base);
+        }
+        let aliases = self
+            .environment
+            .aliases()
+            .map(|(name, ty)| (name.to_owned(), ty.clone()))
+            .collect();
+        let parser_position = node_position(node);
+        let position = self
+            .parsed
+            .raw
+            .parser_position_origin(parser_position)
+            .map(|origin| origin.source_position)
+            .unwrap_or(parser_position);
+        crate::narrowing::narrowed_type_at_position(self.parsed, &aliases, name, position, |name| {
+            self.infer_named_value(name)
+        })
+        .or(Some(base))
     }
 
     fn infer_named_value(&self, name: &str) -> Option<Type> {
@@ -2519,7 +2542,7 @@ impl<'a> Checker<'a> {
 
     fn report_unsafe_union_call_target(&mut self, function_call: &FunctionCall) {
         let Some(mut current) = (match function_call.prefix() {
-            Prefix::Name(name) => self.infer_named_value(&token_text(name)),
+            Prefix::Name(name) => self.infer_named_value_at(&token_text(name), name),
             Prefix::Expression(expression) => self.infer_expression(expression),
             _ => None,
         }) else {

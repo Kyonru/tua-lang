@@ -962,3 +962,19 @@ open class Dialogue {
         temp.uri_for("src/writer.tua")
     );
 }
+
+#[test]
+fn negative_else_guard_uses_shared_hover_and_completion() {
+    let project = TempProject::new("negative-else-guard");
+    project.write("tua.toml", "source = 'src'\n");
+    let source = "type Point = { x: number }\nlocal function sum(a: Point | nil, b: Point | nil): number\n  if not a or not b then return 0 else\n    local value = a.x\n    return b.x\n  end\nend\n";
+    let uri = project.uri_for("src/main.tua");
+    project.write("src/main.tua", source);
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "a."));
+    server.send(hover_request(3, &uri, source, "b.x"));
+    assert_completion_labels(server.output(), 2, ["x"]);
+    assert_hover_contains(server.output(), 3, "number");
+}

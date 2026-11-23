@@ -193,6 +193,67 @@ pub(crate) fn narrowed_locals_after_false_condition(
     locals
 }
 
+/// Facts established when every condition preceding an else branch is false.
+/// Restrict this to non-nil facts: false truthiness also includes boolean false.
+/// Any call could mutate an earlier guard, so the entire chain stays conservative.
+fn else_narrowings(statement: &ast::If) -> Vec<TypeNarrowing> {
+    struct Calls(bool);
+    impl Visitor for Calls {
+        fn visit_function_call(&mut self, _: &FunctionCall) {
+            self.0 = true;
+        }
+    }
+    let mut calls = Calls(false);
+    let mut guards = Vec::new();
+    for condition in std::iter::once(statement.condition()).chain(
+        statement
+            .else_if()
+            .into_iter()
+            .flatten()
+            .map(|branch| branch.condition()),
+    ) {
+        condition.visit(&mut calls);
+        guards.extend(
+            false_condition_narrowings(condition)
+                .into_iter()
+                .filter(|guard| matches!(guard.kind, TypeNarrowingKind::NonNil)),
+        );
+    }
+    if calls.0 {
+        Vec::new()
+    } else {
+        guards
+    }
+}
+
+pub(crate) fn narrowed_locals_for_else(
+    statement: &ast::If,
+    aliases: &BTreeMap<String, Type>,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> BTreeMap<String, Type> {
+    struct Calls(bool);
+    impl Visitor for Calls {
+        fn visit_function_call(&mut self, _: &FunctionCall) {
+            self.0 = true;
+        }
+    }
+    let mut calls = Calls(false);
+    if let Some(block) = statement.else_block() {
+        block.visit(&mut calls);
+    }
+    if calls.0 {
+        return BTreeMap::new();
+    }
+    else_narrowings(statement)
+        .into_iter()
+        .filter_map(|guard| {
+            let base = lookup(&guard.name)?;
+            let ty = apply_narrowing(aliases, &base, &guard.kind, lookup)?;
+            Some((guard.name, ty))
+        })
+        .collect()
+}
+
 pub(crate) fn narrowed_type_at_position(
     parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
@@ -296,6 +357,12 @@ pub(crate) fn guarded_member_type(
     let mut current = initial.clone().or_else(|| lookup(root))?;
     let mut path = root.clone();
     let mut refined = initial.is_some();
+    if type_may_be_nil(&current) && !matches!(current, Type::Any) {
+        if let Some(ty) = narrowed_type_at_position(parsed, aliases, root, position, lookup) {
+            current = ty;
+            refined = true;
+        }
+    }
     for field in fields {
         let Type::Table(table) = resolve_aliases_from_map(aliases, &current, 0) else {
             return None;
@@ -454,6 +521,26 @@ fn collect_narrowed_type_at_position(
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
+                    let inside = if_stmt
+                        .else_token()
+                        .and_then(node_span)
+                        .zip(node_start(if_stmt.end_token()))
+                        .is_some_and(|(start, end)| {
+                            contains_position(
+                                SourceSpan {
+                                    start: start.end,
+                                    end,
+                                },
+                                position,
+                            )
+                        });
+                    if inside && !member_path_effect_before(else_block, name, position, false) {
+                        if let Some(ty) =
+                            narrowed_condition_name(else_narrowings(if_stmt), aliases, name, lookup)
+                        {
+                            *narrowed = Some(ty);
+                        }
+                    }
                     collect_narrowed_type_at_position(
                         else_block, aliases, name, position, lookup, narrowed,
                     );

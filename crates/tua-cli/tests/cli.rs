@@ -7519,3 +7519,44 @@ assert(access.lookup(fresh) == nil)
         assert!(result.status.success(), "{result:?}");
     }
 }
+
+#[test]
+fn negative_else_guards_execute_emitted_lua() {
+    let temp = TempDir::new("negative-else-runtime");
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    fs::write(
+        temp.path().join("tua.toml"),
+        "source = 'src'\nout = 'build'\nmain = 'main.tua'\ntarget = 'lua51'\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"type Point = { x: number }
+local function sum(a: Point | nil, b: Point | nil): number
+  if not a or not b then return 0 else return a.x + b.x end
+end
+assert(sum({ x = 2 }, { x = 3 }) == 5)
+assert(sum(nil, { x = 3 }) == 0)
+assert(sum({ x = 2 }, nil) == 0)
+"#,
+    )
+    .unwrap();
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    if Command::new("lua")
+        .arg("-v")
+        .output()
+        .is_ok_and(|out| out.status.success())
+    {
+        let output = Command::new("lua")
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
+}
