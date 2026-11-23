@@ -20,7 +20,7 @@ Game rendering, commands, input and pause ownership belong to the host.
 - [x] Renderer seam in the game, persistent conversations, separate temporary
   policy, independent UI clock and lifecycle.
 - [x] Shared `.tdialogue` parser/document validation and source locations.
-- [ ] Build/watch integration, dependency invalidation and mapped diagnostics.
+- [x] Build/watch integration, dependency invalidation and mapped diagnostics.
 - [ ] Localization IDs/catalog integration and rich-text placeholder handling.
 - [ ] Editor grammar, diagnostics, completion, navigation and translation coverage.
 - [ ] Conditions, local variables, registered commands, waits/cancellation,
@@ -139,3 +139,35 @@ compile successfully. The feature tour checks 52 files, builds 93 outputs and
 executes its emitted dialogue module. Lua example formatting, Rust formatting,
 documentation build, feature coverage and JSON/whitespace checks pass. These are
 correctness checks, not performance measurements or installed-editor validation.
+
+## Project integration
+
+Dialogue scripts under the configured source root opt in through `.tdialogue`.
+The shared source model, VFS and module graph preserve typed document exports,
+including forwarding modules. The CLI checks and emits them through the existing
+build/watch/cache/source-map paths. Invalid edits keep the prior valid output;
+deletions clean up generated output and maps. Text IDs are unique per project.
+Watch conservatively revalidates all dialogue assets after a dialogue change to
+handle cross-file ID conflicts. Importing data alone does not bundle the player.
+
+`examples/dialogue/src/intro.tdialogue` now runs through ordinary project builds.
+The language server indexes disk assets and preserves their kind in module graphs;
+Tua imports support hover/completion. Dedicated script grammar, unsaved dialogue
+editing, localization and richer execution remain pending. Contract field locations
+anchor to the asset start because they have no authored Lua field declaration.
+
+Game fixture migration is the next integration step after this upstream gate.
+The game currently continues to exercise the structured-document API.
+
+Project integration validation: the workspace Rust suites pass (2,108 core tests,
+one existing ignored test; 505 LSP tests; all CLI suites). The first `make verify`
+reached Clippy with a needless borrow; after removing it, the affected watch test
+and all remaining verification targets pass, including Clippy, contract/schema
+checks, model-language evaluations, extension checks (289 tests), JSON and
+whitespace checks. Documentation and the LSP feature smoke pass. The dialogue
+example passes formatting, check/build and execution on Lua 5.4.8. Its
+project-emitted data/player also complete 1,000 sessions each with JIT off/on in
+LÖVE 11.5 / LuaJIT 2.1.1700008891. Native artifacts and compiler/output hashes are
+recorded locally in `/tmp/tdialogue-project-native/provenance.json`. These are
+correctness checks, not performance measurements. Installed-editor UI validation
+remains pending.

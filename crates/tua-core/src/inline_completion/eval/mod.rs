@@ -1578,6 +1578,9 @@ fn measure_parse(file: &EvalFile, repeats: usize) -> Option<Vec<u64>> {
     let parse = |source: String| match file.kind {
         crate::AnalysisSourceKind::Tua => crate::parse_tua_source(&file.path, source),
         crate::AnalysisSourceKind::Lua => crate::parse_lua_source(&file.path, source),
+        crate::AnalysisSourceKind::Dialogue => {
+            crate::dialogue_asset::parse_module_source(&file.path, &source)
+        }
     };
     parse(file.source.clone()).ok()?;
     let mut samples = Vec::with_capacity(repeats.max(1));

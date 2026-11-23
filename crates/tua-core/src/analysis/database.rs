@@ -507,7 +507,11 @@ fn build_analysis_file(
         let _profile = profile::span_for_path("analysis.index.requires", path);
         let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
-        module_links_tua_source(path, source.clone())
+        if kind == AnalysisSourceKind::Dialogue {
+            Vec::new()
+        } else {
+            module_links_tua_source(path, source.clone())
+        }
     };
     let symbols = {
         let _profile = profile::span_for_path("analysis.index.symbols", path);
@@ -581,6 +585,7 @@ fn build_analysis_file(
         })
         .unwrap_or_default();
     AnalysisFile(Arc::new(AnalysisFileData {
+        dialogue_model: OnceLock::new(),
         source,
         kind,
         parsed,
@@ -824,6 +829,7 @@ pub(super) fn parse_analysis_source(
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
     match kind {
         AnalysisSourceKind::Lua => parse_lua_source(path, source),
+        AnalysisSourceKind::Dialogue => crate::dialogue_asset::parse_module_source(path, &source),
         AnalysisSourceKind::Tua => parse_tua_source(path, source),
     }
 }
@@ -1006,6 +1012,7 @@ pub(super) fn source_fingerprint(source: &str) -> SourceFingerprint {
 pub(super) fn infer_source_kind(path: &Path, config: &ProjectConfig) -> AnalysisSourceKind {
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("lua") => AnalysisSourceKind::Lua,
+        Some("tdialogue") => AnalysisSourceKind::Dialogue,
         Some(extension) if extension == config.extension => AnalysisSourceKind::Tua,
         _ => AnalysisSourceKind::Tua,
     }
@@ -1014,6 +1021,7 @@ pub(super) fn infer_source_kind(path: &Path, config: &ProjectConfig) -> Analysis
 pub(super) fn vfs_source_kind(kind: AnalysisSourceKind) -> VfsSourceKind {
     match kind {
         AnalysisSourceKind::Lua => VfsSourceKind::Lua,
+        AnalysisSourceKind::Dialogue => VfsSourceKind::Dialogue,
         AnalysisSourceKind::Tua => VfsSourceKind::Tua,
     }
 }
@@ -1021,6 +1029,7 @@ pub(super) fn vfs_source_kind(kind: AnalysisSourceKind) -> VfsSourceKind {
 pub(super) fn analysis_source_kind(kind: VfsSourceKind) -> AnalysisSourceKind {
     match kind {
         VfsSourceKind::Lua => AnalysisSourceKind::Lua,
+        VfsSourceKind::Dialogue => AnalysisSourceKind::Dialogue,
         VfsSourceKind::Tua => AnalysisSourceKind::Tua,
     }
 }

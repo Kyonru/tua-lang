@@ -40,3 +40,42 @@ pub(crate) fn module_type() -> Type {
         })
         .clone()
 }
+
+/// Asset exports use the exact constructor input contract, not widened Lua literals.
+pub(crate) fn document_type() -> Type {
+    let Type::Table(module) = module_type() else {
+        unreachable!()
+    };
+    let Type::Function(new) = &module.field("new").expect("constructor").ty else {
+        unreachable!()
+    };
+    new.parameters[0].ty.clone()
+}
+
+pub(crate) fn document_exports(path: &std::path::Path) -> crate::ModuleExports {
+    let value_type = document_type();
+    let Type::Table(table) = &value_type else {
+        unreachable!()
+    };
+    let fields = table
+        .fields()
+        .map(|(name, field)| {
+            (
+                name.to_owned(),
+                crate::module_index::ModuleExportField {
+                    ty: field.ty.clone(),
+                    documentation: None,
+                    deprecation: None,
+                    must_use: false,
+                    parameter_names: Vec::new(),
+                    parameter_documentation: Vec::new(),
+                },
+            )
+        })
+        .collect();
+    crate::ModuleExports {
+        path: path.to_owned(),
+        value_type,
+        fields,
+    }
+}

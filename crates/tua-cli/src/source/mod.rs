@@ -7,6 +7,7 @@ use tua_core::{AnalysisHost, AnalysisSourceKind, Diagnostic, DiagnosticCode, Pro
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SourceKind {
     Tua,
+    Dialogue,
     Asset,
 }
 
@@ -180,8 +181,13 @@ fn is_vcs_metadata_dir(path: &Path) -> bool {
 }
 
 impl SourceKind {
+    pub(crate) fn is_compiled(self) -> bool {
+        matches!(self, Self::Tua | Self::Dialogue)
+    }
     pub(crate) fn for_path(path: &Path, extension: &str) -> Self {
-        if has_extension(path, extension) {
+        if has_extension(path, "tdialogue") {
+            Self::Dialogue
+        } else if has_extension(path, extension) {
             Self::Tua
         } else {
             Self::Asset

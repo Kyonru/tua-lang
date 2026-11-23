@@ -170,6 +170,7 @@ impl EvalFile {
         match self.kind {
             AnalysisSourceKind::Tua => "tua",
             AnalysisSourceKind::Lua => "lua",
+            AnalysisSourceKind::Dialogue => "dialogue",
         }
     }
 }

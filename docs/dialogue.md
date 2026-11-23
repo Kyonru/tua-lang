@@ -6,9 +6,8 @@ icon: lucide/messages-square
 
 The optional `tuadialogue` player handles conversation flow independently of
 rendering, input and timing. It is available on the dialogue feature branch for
-the release after 0.11.0. The `.tdialogue` frontend currently exposes shared core
-parser/emitter APIs; project build/watch discovery and dedicated editor support
-are not integrated yet.
+the release after 0.11.0. The `.tdialogue` frontend integrates with project checking, building and
+watching. Dedicated dialogue editor support and translations remain pending.
 
 ## Use the player
 
@@ -73,8 +72,7 @@ speaker declaration or another ID annotation.
 
 Identifiers start with an ASCII letter or underscore and then use ASCII letters,
 digits, underscores, dots or hyphens. Text and speaker display names accept
-Unicode. IDs are unique within the document; project-wide uniqueness will be
-checked when project integration is added. Keep IDs stable when wording or order
+Unicode. Text IDs must be unique across all valid dialogue documents in the project. Keep IDs stable when wording or order
 changes. Labels and speaker IDs have their own namespaces. `else` and `endif`
 are reserved labels for future structured conditions.
 
@@ -105,6 +103,35 @@ text are rejected so planned constructs are not silently treated as working
 features. Translations and placeholder validation remain pending; stable text IDs
 and source text are retained in the parsed model for that integration.
 
+## Build and import a script
+
+Place scripts under the configured source directory, for example
+`src/scenes/intro.tdialogue`. Their extension opts into compilation without an
+additional configuration flag:
+
+```tua
+local Dialogue = require("tuadialogue")
+local document = require("scenes.intro")
+local player = Dialogue.new(document)
+player:start()
+```
+
+`tua check` validates scripts and typed imports. `tua build` emits
+`scenes/intro.lua` and source maps when enabled. Imports retain the document
+contract through Tua re-exports and support Tua hover/completion. Merely importing
+data does not bundle the player runtime; `require("tuadialogue")` does.
+Avoid source files that produce the same Lua output path. Out-of-place builds
+reject dialogue/Lua and dialogue/Tua collisions. In-place builds retain the
+existing generated-Lua sibling convention.
+
+`tua watch` validates edits before replacing the last valid generated module.
+Deleting a source removes its generated module and maps. A dialogue change
+revalidates all project dialogue scripts so duplicate IDs can be detected and
+repaired across files. Build caching includes authored scripts. The language server
+watches dialogue assets on disk; dedicated script highlighting, completions and
+unsaved dialogue editing remain a later milestone. Rebuilding data does not itself
+replace a running player's owned document or reload Lua's module cache.
+
 ## Compiler frontend
 
 `tua_core::dialogue_asset::parse_dialogue_source(path, source)` returns the typed
@@ -117,8 +144,8 @@ It contains no runtime import or executable dialogue text.
 Diagnostics use `TL5012` and one-based Unicode scalar columns with exclusive
 range ends. Unknown references, duplicate IDs/declarations, incomplete flow and
 unsupported syntax prevent output. Generated internal node IDs use an `@` prefix
-that authored identifiers cannot use. This is not yet a `tua build` asset loader
-or a `.tdialogue` language-server provider.
+that authored identifiers cannot use. The shared parser serves project checking and build/watch emission; it does not
+execute dialogue text.
 
 See the [dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
 for the structured host and frontend development harness. The format is Tua-owned;

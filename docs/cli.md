@@ -79,6 +79,10 @@ Formats project `.tua` source files in place using the built-in formatter.
 Files with parse errors are left unchanged and reported with diagnostics.
 Formatting does not produce lint diagnostics; see [Formatter](formatter.md).
 
+Scripts ending in `.tdialogue` under the source root also participate in project
+`check`, `build` and `watch`. They emit typed Lua data modules; see
+[Dialogue](dialogue.md#build-and-import-a-script) for imports and invalid-edit behavior.
+
 ## `lint`
 
 ```bash

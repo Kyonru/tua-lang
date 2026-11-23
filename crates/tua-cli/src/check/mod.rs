@@ -55,7 +55,7 @@ pub(crate) fn run_project_diagnostics(
     };
     let checked = source_files
         .iter()
-        .filter(|source_file| source_file.kind == SourceKind::Tua)
+        .filter(|source_file| source_file.kind.is_compiled())
         .count();
     let mut diagnostics = pipeline_outcome.diagnostics;
     let mut host = AnalysisHost::with_config(workspace.config().clone());
@@ -90,7 +90,7 @@ pub(crate) fn run_project_diagnostics(
     let snapshot = host.snapshot();
 
     for source_file in source_files {
-        if source_file.kind != SourceKind::Tua {
+        if !source_file.kind.is_compiled() {
             continue;
         }
 
@@ -196,6 +196,7 @@ fn analysis_source_kind_for_path(
 ) -> Option<AnalysisSourceKind> {
     match source_kind {
         SourceKind::Tua => Some(AnalysisSourceKind::Tua),
+        SourceKind::Dialogue => Some(AnalysisSourceKind::Dialogue),
         SourceKind::Asset => (path.extension().and_then(|extension| extension.to_str())
             == Some("lua"))
         .then_some(AnalysisSourceKind::Lua),
@@ -204,7 +205,9 @@ fn analysis_source_kind_for_path(
         path.extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| {
-                extension == "lua" || extension == workspace.config().extension
+                extension == "lua"
+                    || extension == "tdialogue"
+                    || extension == workspace.config().extension
             })
     })
 }

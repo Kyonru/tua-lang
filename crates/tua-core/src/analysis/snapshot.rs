@@ -374,6 +374,17 @@ impl AnalysisSnapshot {
         let Some(file) = self.file(path.as_ref()) else {
             return Vec::new();
         };
+        if file.kind == AnalysisSourceKind::Dialogue {
+            let mut diagnostics = file.diagnostics.clone();
+            diagnostics.extend(
+                self.dialogue_project_diagnostics()
+                    .get(&normalize_path(path.as_ref()))
+                    .into_iter()
+                    .flatten()
+                    .cloned(),
+            );
+            return diagnostics;
+        }
         let mut diagnostics = file.diagnostics.clone();
         diagnostics.extend(self.checker_diagnostics(path.as_ref(), file));
         diagnostics.extend(self.emission_diagnostics(path.as_ref(), file));
@@ -780,5 +791,68 @@ impl AnalysisSnapshot {
 
     pub fn importable_symbols(&self, prefix: &str) -> Vec<&SymbolIndexEntry> {
         self.symbol_index.importable_symbols(prefix)
+    }
+}
+
+impl AnalysisSnapshot {
+    fn dialogue_project_diagnostics(&self) -> &BTreeMap<PathBuf, Vec<Diagnostic>> {
+        self.dialogue_diagnostics.get_or_init(|| {
+            let mut ids: BTreeMap<(PathBuf, String), Vec<(PathBuf, SourceSpan)>> = BTreeMap::new();
+            for (path, file) in &self.files {
+                if file.kind != AnalysisSourceKind::Dialogue || file.parsed.is_err() {
+                    continue;
+                }
+                let model = file.dialogue_model.get_or_init(|| {
+                    crate::dialogue_asset::parse_dialogue_source(path, &file.source)
+                        .ok()
+                        .map(Arc::new)
+                });
+                let Some(model) = model else {
+                    continue;
+                };
+                let workspace = self
+                    .workspace_configs
+                    .iter()
+                    .filter(|(root, _)| path.starts_with(root))
+                    .max_by_key(|(root, _)| root.components().count())
+                    .map(|(root, _)| root.clone())
+                    .unwrap_or_default();
+                for section in &model.sections {
+                    for line in &section.lines {
+                        for text in std::iter::once(&line.text)
+                            .chain(line.choices.iter().map(|choice| &choice.text))
+                        {
+                            ids.entry((workspace.clone(), text.id.value.clone()))
+                                .or_default()
+                                .push((path.clone(), text.id.span));
+                        }
+                    }
+                }
+            }
+            let mut diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>> = BTreeMap::new();
+            for ((_, id), locations) in ids {
+                if locations.len() < 2 {
+                    continue;
+                }
+                for (path, span) in &locations {
+                    diagnostics.entry(path.clone()).or_default().push(
+                        Diagnostic::error(
+                            path,
+                            span.start.line,
+                            span.start.column,
+                            format!("dialogue text ID `{id}` is duplicated across project assets"),
+                        )
+                        .with_code(crate::DiagnosticCode::DOMAIN_DIALOGUE)
+                        .with_range(
+                            span.start.line,
+                            span.start.column,
+                            span.end.line,
+                            span.end.column,
+                        ),
+                    );
+                }
+            }
+            diagnostics
+        })
     }
 }

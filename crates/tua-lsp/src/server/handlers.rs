@@ -3583,6 +3583,7 @@ fn register_watched_files_request(id: u64) -> Value {
                         "watchers": [
                             { "globPattern": "**/*.tua" },
                             { "globPattern": "**/*.lua" },
+                            { "globPattern": "**/*.tdialogue" },
                             { "globPattern": "**/tua.toml" },
                             { "globPattern": "**/*.bmp" },
                             { "globPattern": "**/*.exr" },

@@ -404,6 +404,7 @@ pub(super) fn lsp_module_dependency_graph_from_core(
                 "sourceKind": match module.source_kind {
                     tua_core::AnalysisSourceKind::Tua => "tua",
                     tua_core::AnalysisSourceKind::Lua => "lua",
+                    tua_core::AnalysisSourceKind::Dialogue => "dialogue",
                 },
                 "root": module.is_root,
                 "inCycle": module.in_cycle,
@@ -420,6 +421,7 @@ pub(super) fn lsp_module_dependency_graph_from_core(
                             ModuleExportOrigin::Lua => "lua",
                             ModuleExportOrigin::LuaDoc => "luaDoc",
                             ModuleExportOrigin::GeneratedBuiltin => "generatedBuiltin",
+                            ModuleExportOrigin::Dialogue => "dialogue",
                         },
                         "range": lsp_range_for_source(snapshot.source(&module.path).unwrap_or(""), export.definition_span),
                         "exportRange": lsp_range_for_source(snapshot.source(&module.path).unwrap_or(""), export.export_span)

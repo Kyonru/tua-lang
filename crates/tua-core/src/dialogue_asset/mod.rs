@@ -478,3 +478,13 @@ impl Parser<'_> {
         }
     }
 }
+
+// A validated asset has a typed export but no Lua symbols or executable body.
+// Dedicated dialogue queries will use the authored model, never generated offsets.
+pub(crate) fn parse_module_source(
+    path: &Path,
+    source: &str,
+) -> Result<crate::ParsedSource, Vec<Diagnostic>> {
+    parse_dialogue_source(path, source)?;
+    crate::parse_lua_source(path, "return {}")
+}

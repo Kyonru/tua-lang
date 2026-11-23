@@ -63,7 +63,7 @@ function moduleViewModel(module) {
   return {
     uri: module.uri,
     file: displayUriPath(module.uri),
-    sourceKind: module.sourceKind === "lua" ? "lua" : "tua",
+    sourceKind: ["lua", "dialogue"].includes(module.sourceKind) ? module.sourceKind : "tua",
     root: Boolean(module.root),
     inCycle: Boolean(module.inCycle),
     dependencyCount: nonNegativeInteger(module.dependencyCount),
@@ -137,7 +137,7 @@ function edgeViewModel(edge, index) {
 }
 
 function knownExportOrigin(origin) {
-  return ["tua", "lua", "luaDoc", "generatedBuiltin"].includes(origin) ? origin : "tua";
+  return ["tua", "lua", "dialogue", "luaDoc", "generatedBuiltin"].includes(origin) ? origin : "tua";
 }
 
 function nonNegativeInteger(value) {

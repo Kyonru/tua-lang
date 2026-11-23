@@ -1019,7 +1019,8 @@ impl AnalysisSnapshot {
         let base = normalize_path(parent.join(specifier));
 
         if let Some(extension) = base.extension().and_then(|extension| extension.to_str()) {
-            if extension != "lua" && extension != self.config.extension {
+            if extension != "lua" && extension != "tdialogue" && extension != self.config.extension
+            {
                 return Vec::new();
             }
         }

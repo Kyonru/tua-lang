@@ -1,39 +1,33 @@
 # Headless dialogue example
 
+`src/intro.tdialogue` is authored separately from the host in `src/main.tua`.
 From this directory, use the feature-branch compiler:
 
 ```sh
+/path/to/tua check
 /path/to/tua build
 cd build
 lua main.lua
 ```
 
-The explicit `require("tuadialogue")` carries a checked constructor/method contract
-and includes the runtime only when used. No LÖVE host is needed. Replace `print`
-with a renderer consuming owned snapshots. The snapshot node is optional; guard it before reading. Present nodes always have
-`text` and `options`, using an empty string/array when not applicable. `start()` selects the
-entry node; `start("label")` selects a named node. Choices use stable IDs.
+`require("intro")` imports a typed dialogue document. The explicit
+`require("tuadialogue")` includes the player runtime only when used. No LÖVE
+host is needed. Replace `print` with a renderer consuming owned snapshots;
+guard the optional snapshot node before reading it. Choices use stable text IDs.
 
-## Authoring frontend harness
+`tua watch` rebuilds changed scripts. Invalid edits report authored locations and
+keep the previous valid output; text IDs must be unique across project scripts.
+See `docs/dialogue.md` for syntax and escaping. Localization, asynchronous commands
+and dedicated `.tdialogue` editor support remain pending. Reveal and temporary
+message policies belong to the host.
 
-`intro.tdialogue` exercises the shared version-one parser/emitter. Automatic
-project asset discovery is pending, so it deliberately lives outside `src`.
-From the repository root, compile it using the development harness:
-
-```sh
-cargo run -q -p tua-core --example dialogue_compile -- examples/dialogue/intro.tdialogue > /tmp/intro-dialogue.lua
-```
-
-Then, from this example directory, build the runtime and execute the data:
+For frontend development, the standalone harness also remains available from the
+repository root:
 
 ```sh
-../../target/debug/tua build
-lua asset_host.lua /tmp/intro-dialogue.lua
+cargo run -q -p tua-core --example dialogue_compile -- examples/dialogue/src/intro.tdialogue > /tmp/intro-dialogue.lua
 ```
 
-The compiler emits ordinary data with no runtime parsing or execution of text.
-The host runs the same line/choice/end player as the structured example. Generated
-output stays outside source control. See `docs/dialogue.md` for the supported
-syntax and escaping. Build/watch integration, localization, asynchronous commands
-and `.tdialogue` editor support remain pending. Reveal and temporary-message
-policies belong to the host.
+After building, `lua asset_host.lua /tmp/intro-dialogue.lua` from this directory
+executes that data using the same bundled player. Generated output stays outside
+source control.

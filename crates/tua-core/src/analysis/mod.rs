@@ -1,3 +1,4 @@
+use crate::project_model::module_extensions;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -135,6 +136,7 @@ impl Default for BuiltinCatalogs {
 pub enum AnalysisSourceKind {
     Tua,
     Lua,
+    Dialogue,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -214,6 +216,7 @@ pub struct AnalysisSnapshot {
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     shader_lint_cache: Arc<OnceLock<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+    dialogue_diagnostics: Arc<OnceLock<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     emission_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
@@ -260,6 +263,7 @@ impl std::ops::Deref for AnalysisFile {
 
 #[derive(Debug)]
 struct AnalysisFileData {
+    dialogue_model: OnceLock<Option<Arc<crate::dialogue_asset::DialogueSource>>>,
     source: String,
     kind: AnalysisSourceKind,
     parsed: Result<Arc<ParsedSource>, Vec<Diagnostic>>,
@@ -2672,7 +2676,10 @@ fn module_name_for_import_base(
     separator: ModulePathSeparator,
 ) -> Option<String> {
     if let Some(runtime_extension) = base.extension().and_then(|extension| extension.to_str()) {
-        if runtime_extension != "lua" && runtime_extension != extension {
+        if runtime_extension != "lua"
+            && runtime_extension != "tdialogue"
+            && runtime_extension != extension
+        {
             return None;
         }
     }
@@ -2761,16 +2768,6 @@ fn module_name_for_import_candidate(
 
 fn module_candidate_exists(candidate: &Path, known_paths: &BTreeSet<PathBuf>) -> bool {
     known_paths.contains(candidate) || candidate.is_file()
-}
-
-fn module_extensions(project_extension: &str) -> Vec<&str> {
-    let mut extensions = vec![project_extension];
-
-    if project_extension != "lua" {
-        extensions.push("lua");
-    }
-
-    extensions
 }
 
 fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {

@@ -11,8 +11,10 @@ language or editor behavior, and migration notes call out those changes.
 - Add the shared version-one `.tdialogue` parser and Lua-data emitter with stable
   text IDs, speaker declarations, labels, narration, choices, explicit endings
   and source-ranged `TL5012` validation. The frontend feeds the typed headless
-  player; project asset discovery, localization and dialogue editor support
-  remain pending on the isolated feature branch.
+  player. Project check/build/watch now compile typed dialogue imports, retain
+  last-valid development output, track source maps and enforce project-wide text
+  IDs. Localization and dedicated dialogue editor support remain pending on the
+  isolated feature branch.
 
 ## [0.11.0] - 2026-11-23
 

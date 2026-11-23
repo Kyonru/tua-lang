@@ -1,26 +1,15 @@
 -- A headless host; a graphical renderer consumes the same owned snapshots.
 local Dialogue = require("tuadialogue")
-local player = Dialogue.new({
-  entry = "welcome",
-  nodes = {
-    welcome = { kind = "line", speaker = "Guide", text = "Ready?", next = "reply" },
-    reply = {
-      kind = "choice",
-      options = {
-        { id = "yes", text = "Ready.", target = "finish" },
-        { id = "repeat", text = "Say that again.", target = "welcome" },
-      },
-    },
-    finish = { kind = "end" },
-  },
-})
+local document = require("intro")
+local player = Dialogue.new(document)
 player:start()
 local view = player:snapshot()
 local node = view.node
 if node then print(node.text) end
 assert(player:advance())
-assert(player:choose("repeat"))
+assert(player:choose("intro.again"))
 assert(player:advance())
-assert(player:choose("yes"))
+assert(player:choose("intro.yes"))
+assert(player:advance())
 assert(player:snapshot().state == "completed")
 player:dispose()

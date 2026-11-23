@@ -552,7 +552,9 @@ fn remove_deleted_outputs(
     for source_path in deleted {
         let source_kind = SourceKind::for_path(source_path, &workspace.config().extension);
         let output_paths = match source_kind {
-            SourceKind::Tua => output_paths_for_tua_source(&workspace, source_path),
+            SourceKind::Tua | SourceKind::Dialogue => {
+                output_paths_for_tua_source(&workspace, source_path)
+            }
             SourceKind::Asset => vec![output_path_for_asset(&workspace, source_path)],
         };
         let output_paths = output_paths
@@ -560,7 +562,7 @@ fn remove_deleted_outputs(
             .flat_map(|output_path| {
                 let mut paths = vec![output_path.clone()];
 
-                if source_kind == SourceKind::Tua {
+                if source_kind.is_compiled() {
                     paths.push(source_map_path_for(&output_path));
                     paths.push(debugger_source_map_path_for(&output_path));
                 }

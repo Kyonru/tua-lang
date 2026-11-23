@@ -324,6 +324,13 @@ pub(crate) fn infer_module_exports_with_optional_environment(
     parsed: &ParsedSource,
     environment: Option<&TypeEnvironment>,
 ) -> Option<ModuleExports> {
+    if parsed
+        .path
+        .extension()
+        .is_some_and(|extension| extension == "tdialogue")
+    {
+        return Some(crate::dialogue::document_exports(&parsed.path));
+    }
     let mut inferer = ExportInferer::new(parsed, environment);
 
     inferer.collect_top_level();
@@ -336,6 +343,7 @@ fn parse_module_source(
 ) -> Result<ParsedSource, Vec<crate::Diagnostic>> {
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("lua") => parse_lua_source(path, source),
+        Some("tdialogue") => crate::dialogue_asset::parse_module_source(path, &source),
         _ => parse_tua_source(path, source),
     }
 }
@@ -345,7 +353,8 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
     let source = crate::input_limits::read_source(&path).ok()?;
     // Snapshots own project queries; this fallback validates all filesystem
     // inputs before reusing standalone import inference.
-    let self_contained = crate::module_link::module_specifier_literals(&source).is_empty();
+    let self_contained = path.extension().is_some_and(|ext| ext == "tdialogue")
+        || crate::module_link::module_specifier_literals(&source).is_empty();
 
     if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE
         .with(|cache| {

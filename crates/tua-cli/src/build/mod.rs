@@ -266,7 +266,7 @@ fn build_project_files(
         &workspace,
         source_files
             .iter()
-            .filter(|source_file| source_file.kind == SourceKind::Tua)
+            .filter(|source_file| source_file.kind.is_compiled())
             .map(|source_file| source_file.path.clone()),
     );
     let tua_output_collisions = colliding_tua_outputs(&tua_output_owners);
@@ -360,7 +360,12 @@ fn build_project_files(
                 source,
                 ..
             } => {
-                host.set_file_with_kind(source_path, source.clone(), AnalysisSourceKind::Tua);
+                host.set_file_with_kind(
+                    source_path,
+                    source.clone(),
+                    analysis_kind_for_path(source_path, &workspace.config().extension)
+                        .expect("compiled source"),
+                );
             }
             SourceUnit::Asset {
                 source_path,
@@ -435,20 +440,27 @@ fn build_project_files(
                 }
 
                 let environment = snapshot.project_type_environment(&source_path);
-                let emission = match environment.as_ref() {
-                    Some(environment) => emit_tua_source_with_workspace_environment_artifact(
-                        &source_path,
-                        source.as_str(),
-                        annotation_mode,
-                        &workspace,
-                        environment,
-                    ),
-                    None => emit_tua_source_with_workspace_artifact(
-                        &source_path,
-                        source.as_str(),
-                        annotation_mode,
-                        &workspace,
-                    ),
+                let emission = if source_path
+                    .extension()
+                    .is_some_and(|extension| extension == "tdialogue")
+                {
+                    tua_core::emit::emit_dialogue_source(&source_path, &source)
+                } else {
+                    match environment.as_ref() {
+                        Some(environment) => emit_tua_source_with_workspace_environment_artifact(
+                            &source_path,
+                            source.as_str(),
+                            annotation_mode,
+                            &workspace,
+                            environment,
+                        ),
+                        None => emit_tua_source_with_workspace_artifact(
+                            &source_path,
+                            source.as_str(),
+                            annotation_mode,
+                            &workspace,
+                        ),
+                    }
                 };
                 let emission = match emission {
                     Ok(output) => output,
@@ -632,7 +644,7 @@ pub(crate) fn output_path_for(
     let output_path = out_dir.join(relative_path);
 
     match source_kind {
-        SourceKind::Tua => output_path.with_extension("lua"),
+        SourceKind::Tua | SourceKind::Dialogue => output_path.with_extension("lua"),
         SourceKind::Asset => output_path,
     }
 }
@@ -857,6 +869,7 @@ pub(crate) fn output_path_for_asset(workspace: &ProjectWorkspace, source_path: &
 fn analysis_kind_for_path(path: &Path, extension: &str) -> Option<AnalysisSourceKind> {
     match SourceKind::for_path(path, extension) {
         SourceKind::Tua => Some(AnalysisSourceKind::Tua),
+        SourceKind::Dialogue => Some(AnalysisSourceKind::Dialogue),
         SourceKind::Asset
             if path.extension().and_then(|extension| extension.to_str()) == Some("lua") =>
         {
@@ -869,7 +882,11 @@ fn analysis_kind_for_path(path: &Path, extension: &str) -> Option<AnalysisSource
 fn colliding_tua_source_for_asset(asset_path: &Path, extension: &str) -> Option<PathBuf> {
     let tua_path = asset_path.with_extension(extension);
 
-    (tua_path != asset_path && tua_path.exists()).then_some(tua_path)
+    if tua_path != asset_path && tua_path.exists() {
+        return Some(tua_path);
+    }
+    let dialogue_path = asset_path.with_extension("tdialogue");
+    (dialogue_path != asset_path && dialogue_path.exists()).then_some(dialogue_path)
 }
 
 fn push_sibling_collision_warning(
@@ -907,7 +924,16 @@ fn output_collision_diagnostic(
         )
     };
 
-    Diagnostic::new(lua_source_path, 1, 1, DiagnosticSeverity::Warning, message)
+    let severity = if !in_place
+        && tua_source_path
+            .extension()
+            .is_some_and(|ext| ext == "tdialogue")
+    {
+        DiagnosticSeverity::Error
+    } else {
+        DiagnosticSeverity::Warning
+    };
+    Diagnostic::new(lua_source_path, 1, 1, severity, message)
         .with_code(DiagnosticCode::EMIT_OUTPUT_COLLISION)
 }
 
@@ -925,7 +951,7 @@ pub(crate) fn push_tua_output_collision_diagnostics(
                 .collect::<Vec<_>>()
                 .join(", ");
             let message = format!(
-                "generated output `{}` also comes from {}; only one Tua source can emit this path",
+                "generated output `{}` also comes from {}; only one compiled source can emit this path",
                 display_path(output_path),
                 other_sources,
             );

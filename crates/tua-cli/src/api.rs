@@ -680,6 +680,7 @@ fn refresh_analysis(
             }
             let kind = match file.kind {
                 SourceKind::Tua => Some(AnalysisSourceKind::Tua),
+                SourceKind::Dialogue => Some(AnalysisSourceKind::Dialogue),
                 SourceKind::Asset
                     if file.path.extension().and_then(|value| value.to_str()) == Some("lua") =>
                 {

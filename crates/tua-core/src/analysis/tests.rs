@@ -12157,3 +12157,71 @@ player:choose(<|signature|>"leave")
         .signature_help("src/main.tua", fixture.position("signature"))
         .is_some());
 }
+
+#[test]
+fn dialogue_assets_are_typed_modules_and_update_without_lua_recovery() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Dialogue = require("tuadialogue")
+local document = require("intro")
+local entry = document.<|complete|><|hover|>entry
+local forwarded = require("forward")
+local invalid: number = forwarded.entry
+local player = Dialogue.new(document)
+player:start()
+document.entry = 42
+-- file: src/forward.tua
+return require("intro")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Hello (end)\n";
+    host.set_file("src/intro.tdialogue", source);
+    let before = host.snapshot();
+    assert!(before
+        .pipeline_diagnostics("src/intro.tdialogue")
+        .is_empty());
+    let diagnostics = before.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&before.completion("src/main.tua", fixture.position("complete")));
+    assert!(
+        labels.contains(&"entry".into()) && labels.contains(&"nodes".into()),
+        "{labels:?}"
+    );
+    assert!(before
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap()
+        .contents
+        .contains("string"));
+    host.set_file("src/intro.tdialogue", source.replace("(end)", ""));
+    let broken = host.snapshot();
+    assert!(broken
+        .pipeline_diagnostics("src/intro.tdialogue")
+        .iter()
+        .any(|d| d.code == Some(DiagnosticCode::DOMAIN_DIALOGUE)));
+    assert!(
+        before
+            .pipeline_diagnostics("src/intro.tdialogue")
+            .is_empty(),
+        "snapshots must remain immutable"
+    );
+    host.set_file("src/intro.tdialogue", source.replace("Hello", "Welcome"));
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/intro.tdialogue")
+        .is_empty());
+    host.remove_file("src/intro.tdialogue");
+    assert!(host.snapshot().source("src/intro.tdialogue").is_none());
+}
