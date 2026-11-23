@@ -1,9 +1,9 @@
-//! Built-in runtime modules typed from their own LuaDoc.
+//! Built-in runtime modules typed from shared runtime contracts.
 //!
 //! `Tween` and `Camera` are globals in Tua source, like `ECS`: using one emits
 //! `local Tween = require("tuatween")`, and `tua build` copies the runtime.
-//! Their types come from the runtime's annotations, so the Lua file is the
-//! single source of truth for behavior and checking.
+//! Most contracts come from runtime LuaDoc; Dialogue and BoundedQueue reuse the
+//! same typed declarations as their explicit imports.
 
 use std::cell::Cell;
 use std::path::Path;
@@ -25,6 +25,16 @@ pub(crate) struct BuiltinModule {
     pub source: &'static str,
     pub summary: &'static str,
     pub documentation: &'static str,
+}
+
+impl BuiltinModule {
+    /// Source-dependent contracts must stay out of the shared default catalog.
+    pub(crate) fn is_lazy(&self) -> bool {
+        matches!(
+            self.name,
+            "Log" | "AudioDesign" | "Dialogue" | "BoundedQueue"
+        )
+    }
 }
 
 pub(crate) const TWEEN: BuiltinModule = BuiltinModule {
@@ -93,6 +103,22 @@ pub(crate) const AUDIO_DESIGN: BuiltinModule = BuiltinModule {
     documentation: "Render a short, seeded waveform once to a reusable static LOVE Source.",
 };
 
+pub(crate) const DIALOGUE: BuiltinModule = BuiltinModule {
+    name: "Dialogue",
+    runtime: "tuadialogue",
+    source: include_str!("../../../vendor/runtime/tuadialogue.lua"),
+    summary: "renderer-independent dialogue playback",
+    documentation: "Create an independent player with `Dialogue.new(document)`. The host owns rendering, input and timing; the runtime is included only when referenced.",
+};
+
+pub(crate) const BOUNDED_QUEUE: BuiltinModule = BuiltinModule {
+    name: "BoundedQueue",
+    runtime: "tuaboundedqueue",
+    source: include_str!("../../../vendor/runtime/tuaboundedqueue.lua"),
+    summary: "typed bounded FIFO",
+    documentation: "Create a typed FIFO with `BoundedQueue.new(capacity, initial)`. Push rejects overflow without evicting existing items; pop releases retained references.",
+};
+
 // These modules are inferred together and shared by the common type environment.
 // Opt-in APIs below are inferred only for files that mention them.
 pub(crate) const EAGER_MODULES: &[BuiltinModule] =
@@ -106,6 +132,8 @@ pub(crate) const MODULES: &[BuiltinModule] = &[
     TWEEN_PREFERRED,
     LOG,
     AUDIO_DESIGN,
+    DIALOGUE,
+    BOUNDED_QUEUE,
 ];
 
 pub(crate) const TWEEN_INSTANCE_TYPE: &str = "tween.Tween";
@@ -121,6 +149,12 @@ pub(crate) fn matches_module_type(candidate: &Type, module: &BuiltinModule) -> b
 }
 
 pub(crate) fn module_type(module: &BuiltinModule) -> Type {
+    if module.name == DIALOGUE.name {
+        return crate::dialogue::module_type();
+    }
+    if module.name == BOUNDED_QUEUE.name {
+        return crate::bounded_queue::module_type();
+    }
     if module.name == TWEEN_PREFERRED.name {
         return module_type(&TWEEN);
     }
@@ -355,10 +389,7 @@ pub(crate) fn builtin_locals(
     }
     MODULES
         .iter()
-        .filter(|module| {
-            module.name != AUDIO_DESIGN.name || parsed.source.contains(AUDIO_DESIGN.name)
-        })
-        .filter(|module| module.name != LOG.name || parsed.source.contains(LOG.name))
+        .filter(|module| !module.is_lazy() || parsed.source.contains(module.name))
         .filter(|module| !declared.contains(module.name))
         .map(|module| (module.name.to_owned(), module_type(module)))
         .collect()

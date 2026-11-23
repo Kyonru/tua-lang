@@ -5,16 +5,15 @@ icon: lucide/messages-square
 # Dialogue
 
 The optional `tuadialogue` player handles conversation flow independently of
-rendering, input and timing. It is available on the dialogue feature branch for
-the release after 0.11.0. The `.tdialogue` frontend integrates with project checking, building and
+rendering, input and timing. It is available in development for the release after
+0.11.0. The `.tdialogue` frontend integrates with project checking, building and
 watching. Dedicated dialogue editor support and translations remain pending.
 
 ## Use the player
 
-Import the runtime explicitly in a Tua module:
+Use the typed `Dialogue` builtin in Tua:
 
 ```tua
-local Dialogue = require("tuadialogue")
 local player = Dialogue.new({
   entry = "hello",
   nodes = {
@@ -30,8 +29,10 @@ player:advance()
 player:dispose()
 ```
 
-The import supplies type checking, editor assistance for the Tua API, and opt-in
-runtime emission. A project module with the same name can replace the bundled
+Referencing `Dialogue` supplies type checking and editor assistance and injects
+`local Dialogue = require("tuadialogue")` into emitted Lua. Unused files do not
+include the runtime. Local bindings named `Dialogue` take precedence. Ordinary
+Lua callers and existing Tua code can still use the explicit import. A project module with the same name can replace the bundled
 runtime. Documents and snapshots are defensively copied. `start()` selects the
 entry node; `start("label")` selects a named node. `advance()` acknowledges a line;
 `choose("option-id")` selects a choice by stable ID. `cancel()` ends the current
@@ -110,7 +111,6 @@ Place scripts under the configured source directory, for example
 additional configuration flag:
 
 ```tua
-local Dialogue = require("tuadialogue")
 local document = require("scenes.intro")
 local player = Dialogue.new(document)
 player:start()
@@ -119,7 +119,8 @@ player:start()
 `tua check` validates scripts and typed imports. `tua build` emits
 `scenes/intro.lua` and source maps when enabled. Imports retain the document
 contract through Tua re-exports and support Tua hover/completion. Merely importing
-data does not bundle the player runtime; `require("tuadialogue")` does.
+data does not bundle the player runtime; referencing `Dialogue` or explicitly
+importing `tuadialogue` does.
 Avoid source files that produce the same Lua output path. Out-of-place builds
 reject dialogue/Lua and dialogue/Tua collisions. In-place builds retain the
 existing generated-Lua sibling convention.

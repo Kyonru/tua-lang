@@ -1,5 +1,4 @@
 -- A headless host; a graphical renderer consumes the same owned snapshots.
-local Dialogue = require("tuadialogue")
 local document = require("intro")
 local player = Dialogue.new(document)
 player:start()

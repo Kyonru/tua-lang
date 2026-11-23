@@ -992,3 +992,17 @@ fn dialogue_import_exposes_typed_snapshot_hover() {
     server.send(hover_request(2, &uri, source, "view.generation"));
     assert_hover_contains(server.output(), 2, "generation");
 }
+
+#[test]
+fn dialogue_builtin_exposes_typed_snapshot_hover() {
+    let temp = TempProject::new("dialogue-hover");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "local player = Dialogue.new({ entry = 'end', nodes = { ['end'] = { kind = 'end' } } })\nlocal view = player:snapshot()\nlocal generation = view.generation\n";
+    temp.write("src/main.tua", source);
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "view.generation"));
+    assert_hover_contains(server.output(), 2, "generation");
+}

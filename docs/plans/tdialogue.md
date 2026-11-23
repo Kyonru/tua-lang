@@ -1,8 +1,9 @@
 # Tua dialogue implementation workstream
 
-Branch: `feature/tdialogue`. Target: the release after 0.11.0. Do not merge,
-publish, change release versioning or modify the release worktree without the
-user's explicit merge approval. Base: `1a1a42cb`.
+The initial `feature/tdialogue` branches were merged with user approval: Tua
+`4eae2033`, game `5f59118`. Follow-up development is on main for the release after
+0.11.0. No release version changes, push or publication are authorized by this plan.
+Initial base: `1a1a42cb`.
 
 The engine is renderer-independent. `.tdialogue` is the proposed Tua-owned
 format, inspired by Love-Dialogue, not a compatibility claim. Normal conversations
@@ -190,3 +191,31 @@ The clean release compiler is `abf6cab7`, SHA-256
 Game evidence lives in its `docs/audits/2026-11-23/dialogue-script-validation/`.
 These are functional checks, not performance benchmarks. Both feature branches
 remain unmerged, with no package version changes or publication.
+
+## Automatic helpers and bounded game channels
+
+`Dialogue` and `BoundedQueue` now use the shared builtin-module path: references
+inject runtime imports, local bindings shadow them, and explicit imports remain
+compatible. Both reuse their existing typed contracts, including generic queue
+payloads and cross-module editor queries. No alternate runtime is introduced.
+
+The game composes the existing bounded FIFO into separate conversation and message
+channels, with eight and 32 waiting slots respectively, in addition to active
+items. Overflow rejects the new item with `false`. Conversation priority, reveal
+clocks, queue inspection and reset/disposal belong to the game adapter. The core
+player's direct `start()` lifecycle remains unchanged. Localization and dedicated
+script editing remain the next authoring milestones.
+
+Validation for automatic helpers: final `make verify` and docs build pass (2,111
+core tests, one existing ignored test; 506 LSP tests; 167 CLI integration tests;
+289 extension checks). The first full run caught lost default-catalog sharing;
+a shared lazy-module predicate and a regression now preserve sharing without
+leaking optional helper types into unrelated files. Explicit imports and project
+runtime replacements remain covered. The headless and feature-tour examples
+check, build and execute without handwritten helper imports.
+
+The game passes 202 typed specs, all 46 Lua regressions and a 210-frame native
+LÖVE queue replay, including bounded overflow, FIFO ordering, suspended clocks,
+queued farewell progression and reset/disposal. Its source/compiler evidence is
+in `docs/audits/2026-11-23/dialogue-queue-validation/`. Installed-extension bundle
+updates and releases are not part of this checkpoint.

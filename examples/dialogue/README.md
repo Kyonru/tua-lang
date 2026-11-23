@@ -1,7 +1,7 @@
 # Headless dialogue example
 
 `src/intro.tdialogue` is authored separately from the host in `src/main.tua`.
-From this directory, use the feature-branch compiler:
+From this directory, use the current development compiler:
 
 ```sh
 /path/to/tua check
@@ -10,8 +10,8 @@ cd build
 lua main.lua
 ```
 
-`require("intro")` imports a typed dialogue document. The explicit
-`require("tuadialogue")` includes the player runtime only when used. No LÖVE
+`require("intro")` imports a typed dialogue document. Referencing
+`Dialogue` automatically imports and includes the player runtime only when used. No LÖVE
 host is needed. Replace `print` with a renderer consuming owned snapshots;
 guard the optional snapshot node before reading it. Choices use stable text IDs.
 

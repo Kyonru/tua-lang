@@ -12225,3 +12225,78 @@ return require("intro")
     host.remove_file("src/intro.tdialogue");
     assert!(host.snapshot().source("src/intro.tdialogue").is_none());
 }
+
+#[test]
+fn dialogue_reexport_keeps_snapshot_types_and_method_signatures_from_builtin() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/dialogue.tua
+return Dialogue
+-- file: src/main.tua
+local Dialogue = require("dialogue")
+local player = Dialogue.new({ entry = "done", nodes = { done = { kind = "end" } } })
+player:start()
+player:choose(42)
+local view = player:snapshot()
+local count: string = view.generation
+local state = view.<|complete|><|hover|>state
+player:choose(<|signature|>"leave")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 2,
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"generation".to_owned()), "{labels:?}");
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("awaiting_choice"), "{hover:?}");
+    assert!(snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .is_some());
+}
+
+#[test]
+fn bounded_queue_reexport_keeps_generic_item_types_from_builtin() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/queue.tua
+return BoundedQueue
+-- file: src/main.tua
+local Queue = require("queue")
+local initial: { value: number }[] = {}
+local pending = Queue.new(4, initial)
+pending.push({ value = "bad" })
+local item = pending.pop()
+if item then print(item.<|complete|>value) end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    assert!(labels.contains(&"value".to_owned()), "{labels:?}");
+}

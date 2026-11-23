@@ -2159,10 +2159,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
     // the catalog until all builtin modules have finished their own inference.
     let eager_global_count = crate::builtin_module::MODULES
         .iter()
-        .filter(|module| {
-            module.name != crate::builtin_module::LOG.name
-                && module.name != crate::builtin_module::AUDIO_DESIGN.name
-        })
+        .filter(|module| !module.is_lazy())
         .count();
     let mut domain_locals = domains
         .builtin_locals()
@@ -2178,10 +2175,9 @@ pub(crate) fn build_type_environment_with_domain_registry(
             .iter()
             .all(|(name, _)| !declared.contains(name))
         && builtin_locals.len() == eager_global_count
-        && !parsed
-            .source
-            .contains(crate::builtin_module::AUDIO_DESIGN.name)
-        && !parsed.source.contains(crate::builtin_module::LOG.name);
+        && !crate::builtin_module::MODULES
+            .iter()
+            .any(|module| module.is_lazy() && parsed.source.contains(module.name));
     domain_locals.retain(|(name, _)| !locals.contains_key(name) && !declared.contains(name));
     let locals = builtin_locals
         .into_iter()
@@ -7539,6 +7535,20 @@ fn validate_generic_alias_type(
 #[cfg(test)]
 mod sharing_tests {
     use super::*;
+
+    #[test]
+    fn lazy_builtin_modules_do_not_pollute_shared_catalogs() {
+        for name in ["Dialogue", "BoundedQueue"] {
+            let used = crate::parse_tua_source("used.tua", format!("return {name}")).unwrap();
+            let used = TypeEnvironment::from_parsed(&used).unwrap();
+            assert!(used.local(name).is_some());
+            let unused = crate::parse_tua_source("unused.tua", "return 1").unwrap();
+            let first = TypeEnvironment::from_parsed(&unused).unwrap();
+            let second = TypeEnvironment::from_parsed(&unused).unwrap();
+            assert!(first.local(name).is_none());
+            assert!(Arc::ptr_eq(&first.locals, &second.locals));
+        }
+    }
 
     #[test]
     fn builtin_catalogs_share_storage_without_leaking_project_aliases() {

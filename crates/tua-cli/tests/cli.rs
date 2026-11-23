@@ -7694,3 +7694,86 @@ dofile("oracle.lua")
         );
     }
 }
+
+#[test]
+fn dialogue_and_queue_builtins_are_typed_opt_in_and_shadowable() {
+    let temp = TempDir::new("dialogue-queue-builtins");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let source = r#"local initial: number[] = {}
+local pending = BoundedQueue.new(2, initial)
+assert(pending.push(7))
+assert(pending.pop() == 7)
+local player = Dialogue.new({ entry = "done", nodes = { done = { kind = "end" } } })
+player:start()
+assert(player:snapshot().state == "completed")
+"#;
+    let main = temp.path().join("src/main.tua");
+    fs::write(&main, source).unwrap();
+    let result = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).unwrap();
+    for runtime in ["tuadialogue", "tuaboundedqueue"] {
+        assert!(
+            emitted.contains(&format!("require(\"{runtime}\")")),
+            "{emitted}"
+        );
+        assert!(temp.path().join(format!("build/{runtime}.lua")).exists());
+    }
+    if let Some(lua) = working_lua_runtime() {
+        let result = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+    }
+    fs::write(
+        &main,
+        source.replace("pending.push(7)", "pending.push(\"wrong\")"),
+    )
+    .unwrap();
+    assert!(!tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .status
+        .success());
+    fs::write(&main, "local Dialogue = { value = 1 }\nlocal BoundedQueue = { value = 2 }\nreturn Dialogue.value + BoundedQueue.value\n").unwrap();
+    let result = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let emitted = fs::read_to_string(temp.path().join("build/main.lua")).unwrap();
+    assert!(!emitted.contains("require("), "{emitted}");
+    assert!(!temp.path().join("build/tuadialogue.lua").exists());
+    assert!(!temp.path().join("build/tuaboundedqueue.lua").exists());
+    fs::write(
+        temp.path().join("src/tuadialogue.lua"),
+        "return { new = function(document) return document end }\n",
+    )
+    .unwrap();
+    fs::write(
+        &main,
+        "return Dialogue.new({ entry = 'done', nodes = { done = { kind = 'end' } } })\n",
+    )
+    .unwrap();
+    let result = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    assert!(
+        fs::read_to_string(temp.path().join("build/tuadialogue.lua"))
+            .unwrap()
+            .contains("return document")
+    );
+}

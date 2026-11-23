@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Add typed `Dialogue` and `BoundedQueue` builtins with reference-driven runtime
+  imports, lexical shadowing and existing explicit-import compatibility.
+
 - Add the shared version-one `.tdialogue` parser and Lua-data emitter with stable
   text IDs, speaker declarations, labels, narration, choices, explicit endings
   and source-ranged `TL5012` validation. The frontend feeds the typed headless

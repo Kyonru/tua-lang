@@ -249,8 +249,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - Invented package managers, runtime type objects, decorators, async/promises,
   DOM APIs, or executable plugins.
 
-- `require("tuaboundedqueue")` is an opt-in typed bounded FIFO. Use
-  `Queue.new(capacity, typedInitialArray)` with dot methods `push`, `pop`,
+- `BoundedQueue` is an opt-in typed bounded FIFO builtin. Use
+  `BoundedQueue.new(capacity, typedInitialArray)` with dot methods `push`, `pop`,
   `count`, `capacity`, `rejected`, `clear`, and `drain(limit, visitor)`.
   `push` returns false when full; `pop` returns the payload or nil. Nil
   payloads are forbidden, false is valid. Drains defer new entries, return
@@ -262,10 +262,12 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   It erases without copies or freezing mutable aliases; `any` and untyped Lua
   are trust boundaries. Keep explicit copies for time-isolated snapshots.
 
-Dialogue (feature branch, release after 0.11.0): `.tdialogue` scripts under the
+Dialogue (development, release after 0.11.0): `.tdialogue` scripts under the
 source directory compile to typed Lua data modules during check/build/watch.
 Use `local document = require("scenes.intro")` for `scenes/intro.tdialogue`, then
-`local Dialogue = require("tuadialogue")` and `Dialogue.new(document)`.
+`Dialogue.new(document)`. Both `Dialogue` and `BoundedQueue` automatically inject
+their runtime imports only when referenced; local bindings take precedence.
+Explicit `require("tuadialogue")` / `require("tuaboundedqueue")` remain supported.
 The host owns rendering, input and timing. Text IDs must be project-unique.
 Translations and dedicated dialogue editor tooling are not implemented yet.
 See docs/dialogue.md for the supported authoring grammar; do not invent commands.

@@ -1,9 +1,8 @@
 -- Feature: opt-in typed bounded FIFO with snapshot-bounded drains.
-local Queue = require("tuaboundedqueue")
 
 type Event = { amount: number }
 local initial: Event[] = {}
-local pending = Queue.new(8, initial)
+local pending = BoundedQueue.new(8, initial)
 local total = 0
 
 assert(pending.push({ amount = 12 }))

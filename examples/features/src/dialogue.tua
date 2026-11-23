@@ -1,5 +1,4 @@
 -- Feature: typed headless dialogue; rendering, input and timing belong to the host.
-local Dialogue = require("tuadialogue")
 
 local function createPlayer()
   return Dialogue.new({

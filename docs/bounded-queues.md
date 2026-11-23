@@ -1,15 +1,16 @@
 # Bounded Queues
 
-`require("tuaboundedqueue")` supplies an opt-in, typed FIFO. The compiler emits
-its Lua 5.1-compatible runtime only when imported. A project can supply a
+`BoundedQueue` supplies an opt-in, typed FIFO in Tua. Referencing it injects
+`local BoundedQueue = require("tuaboundedqueue")` into emitted Lua and bundles its
+Lua 5.1-compatible runtime. Unused or locally shadowed references do not include
+the runtime. Explicit imports remain supported, including for ordinary Lua. A project can supply a
 compatible module with the same name, following ordinary runtime replacement
 rules. The queue does not own, copy, pool, or dispose its payloads.
 
 ```tua
-local Queue = require("tuaboundedqueue")
 type DamageEvent = { target: number, amount: number }
 local initial: DamageEvent[] = {}
-local pending = Queue.new(128, initial)
+local pending = BoundedQueue.new(128, initial)
 
 if not pending.push({ target = 7, amount = 12 }) then
   print("queue full")
@@ -26,7 +27,7 @@ use the shared generic checker and editor queries, including module re-exports.
 
 | Operation (dot syntax) | Contract |
 | --- | --- |
-| `Queue.new(capacity, initial)` | Positive finite integer capacity; initial length must fit. |
+| `BoundedQueue.new(capacity, initial)` | Positive finite integer capacity; initial length must fit. |
 | `push(value)` | Returns `true`; returns `false` and increments `rejected()` if full. Never evicts old entries. |
 | `pop()` | Removes the oldest entry, or returns `nil` when empty. Releases the stored reference. |
 | `count()`, `capacity()`, `rejected()` | Pending count, fixed capacity, and overflow count since creation/clear. |
