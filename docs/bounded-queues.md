@@ -1,3 +1,7 @@
+---
+icon: lucide/list-ordered
+---
+
 # Bounded Queues
 
 `BoundedQueue` supplies an opt-in, typed FIFO in Tua. Referencing it injects
