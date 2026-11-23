@@ -6,12 +6,62 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-23
+
+### Release summary
+
+Tua 0.11.0 improves everyday editing and game workflows while strengthening
+type checking and generated Lua. The formatter now uses readable shared defaults
+in the CLI and editor, supports selected files and stdin, and has fixes for
+stable wrapping across nested calls and control-flow headers. Builds can reuse
+verified outputs across invocations, and compiler, runtime, and benchmark
+provenance is easier to inspect. Game APIs gain typed bounded FIFO queues,
+deep read-only borrowed views, deterministic named random streams, and more
+capable shader preloading and reload hooks. ECS readers, behavior-tree actor
+contracts, causal traces, and native LOVE scenario replay make larger gameplay
+systems easier to inspect and validate. The extension also improves agent
+setup, game run/debug context, asset suggestions, and run-terminal reuse.
+
+#### Highlights
+
+- Keep editor and CLI formatting consistent, format explicit source files or
+  stdin buffers, and avoid unstable output across repeated passes.
+- Model read-only collections, bounded queues, behavior-tree actors, imported
+  exports, callback results, and nullable ECS wrappers with stronger shared
+  type information.
+- Preload and hot-reload shaders with progress, source-mapped diagnostics, and
+  a callback for restoring uniforms and textures before activation.
+- Build, run, debug, and inspect bounded live debug context from supported
+  editor agents; configure terminal-agent MCP access from the extension.
+- Cache successful unchanged builds and capture native LOVE scenarios with
+  isolated saves, scripted input, assertions, and provenance.
+
+#### Upgrade notes
+
+No project configuration migration is required. The formatter's default output
+is more readable and may reformat existing files; review the diff before
+applying it to a project. Named `Rot` random streams are opt-in and have their
+own stable derivation contract; adopting them changes generated results, while
+existing `Rng.new(seed)` sequences remain unchanged. Shader preloading and
+scenario capture are optional. Update the CLI/server and extension together.
+
 ### Fixed
 
 - Nullable ECS lookup wrappers retain payload types across early guards, imported
   schemas and re-exports, including completion and argument/field diagnostics.
+- Narrow nilable values in negative-condition `else` branches, and preserve
+  `LuaAssert` guards in typed test callbacks.
 
 ### Added
+
+- Add typed bounded FIFO queues and deep `Readonly<T>` borrowed views for
+  collections and records, with shared type checking and editor support.
+- Add deterministic named `Rot.Rng.stream(seed, name)` streams that stay
+  independent of one another and do not modify LOVE's global random generator.
+- Format explicit source paths and stdin buffers from `tua fmt`, using project
+  settings while keeping stdin output isolated from status text.
+- Expose compiler build provenance to the CLI and editor, and show bounded
+  causal traces from opted-in store snapshots in the Runtime Inspector.
 
 - Runnable pause/input routing example using existing input instances and tween
   groups, with native checks for held keys, mode gating and independent clocks.
@@ -67,6 +117,8 @@ language or editor behavior, and migration notes call out those changes.
   results, while parenthesized calls retain Lua's single-result behavior.
 - Save migration entries accept named and imported functions with the same
   argument and snapshot-result checks as inline callbacks.
+- Validate declared historical save schemas against their direct migration
+  callbacks before accepting a typed save contract.
 
 - Formatting long inline branches and tables inside control-flow headers stays
   stable across repeated formatting passes.
@@ -2784,7 +2836,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Kyonru/tua-lang/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Kyonru/tua-lang/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Kyonru/tua-lang/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Kyonru/tua-lang/compare/v0.7.0...v0.8.0
