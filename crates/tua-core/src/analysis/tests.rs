@@ -13313,3 +13313,83 @@ fn rich_dialogue_authoring_queries_recover_and_refresh() {
         .completion("src/scene.tdialogue", fixture.position("complete"))
         .is_empty());
 }
+
+#[test]
+fn dialogue_action_handles_preserve_imported_types_and_editor_queries() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/handles.tua
+return { make = Dialogue.actionHandle }
+-- file: src/actions.tua
+return Dialogue.actions({
+  reward = {
+    payload = Save.shape(Save.record({ coins = Save.number(0) })),
+    effect = "consequential",
+  },
+})
+-- file: src/scene.tdialogue
+@dialogue 1
+@document async
+@actions "actions"
+[start]
+@action reward [id:async.reward] [success:done] [failure:done] {"coins":1}
+[done]
+// @id async.done
+: Done. (end)
+-- file: src/main.tua
+local handles = require("handles")
+local actions = require("actions")
+local pending = handles.make({ cancel = function() print("cancel") end })
+pending:<|resolve|>resolve(<|signature|>true)
+local view = pending:snapshot()
+local status: string = view.<|status|>status
+print(status)
+local player = actions.new(require("scene"), {
+  handlers = { reward = function(payload: { coins: number })
+    print(payload.coins)
+    return pending
+  end },
+})
+player:start()
+player:runAction()
+-- file: src/bad.tua
+local handles = require("handles")
+local actions = require("actions")
+local pending = handles.make()
+pending:resolve("yes")
+pending:reject(false)
+local wrong: number = pending:snapshot().status
+actions.new(require("scene"), {
+  handlers = { reward = function(payload: { coins: number }): string
+    return "wrong"
+  end },
+})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .expect("imported action handles provide signature help");
+    assert!(signature.signatures[0].label.contains("result: boolean"));
+    let invalid = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert_eq!(
+        invalid
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        4,
+        "{invalid:?}"
+    );
+    for (marker, label) in [("resolve", "resolve"), ("status", "status")] {
+        let position = fixture.position(marker);
+        let labels = completion_labels(&snapshot.completion("src/main.tua", position));
+        assert!(labels.contains(&label.to_owned()), "{labels:?}");
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+}

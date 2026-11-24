@@ -4,6 +4,33 @@ use crate::{Type, TypeEnvironment};
 use std::sync::OnceLock;
 mod actions;
 
+fn action_handle_constructor() -> Type {
+    static CONTRACT: OnceLock<Type> = OnceLock::new();
+    CONTRACT
+        .get_or_init(|| {
+            let parsed = crate::parse_tua_source(
+                "tuadialogue.contract.tua",
+                include_str!("../../../vendor/runtime/tuadialogue.contract.tua"),
+            )
+            .expect("bundled dialogue contract parses");
+            let environment =
+                TypeEnvironment::from_parsed(&parsed).expect("bundled dialogue contract resolves");
+            let constructor = environment
+                .function("actionHandle")
+                .and_then(|function| function.as_type())
+                .expect("action handle contract resolves");
+            environment.resolve_nested_aliases(&constructor)
+        })
+        .clone()
+}
+
+fn action_result_type() -> Type {
+    let Type::Function(constructor) = action_handle_constructor() else {
+        unreachable!()
+    };
+    Type::union([Type::boolean(), *constructor.return_type])
+}
+
 pub(crate) fn module_type() -> Type {
     static CONTRACT: OnceLock<Type> = OnceLock::new();
     CONTRACT
@@ -80,6 +107,10 @@ pub(crate) fn module_type() -> Type {
             let reveal = environment.resolve_nested_aliases(&reveal);
             Type::table([
                 ("reveal", TableField::required(reveal)),
+                (
+                    "actionHandle",
+                    TableField::required(action_handle_constructor()),
+                ),
                 ("actions", TableField::required(action_factory)),
                 ("events", TableField::required(event_factory)),
                 ("context", TableField::required(factory)),

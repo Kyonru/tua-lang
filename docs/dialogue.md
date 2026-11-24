@@ -1541,18 +1541,18 @@ and each player captures its handler map.
 
 Only `runAction()` executes a handler, at most one per call. Traversal, snapshots,
 locale changes, and updates do not dispatch it. A chain of action labels therefore
-requires separate calls. Handlers must return synchronously; asynchronous handles
-and coroutine-based actions are not supported yet. Reentrant dispatch returns
+requires separate calls. A handler returns a boolean or an action handle (below);
+coroutine-based handlers are not supported. Reentrant dispatch returns
 `false`. Cancellation, restart, or disposal inside the handler invalidates its
 result, including any error returned afterward.
 
-A missing handler, thrown error, or non-boolean result faults the player with
+A missing handler, thrown error, or invalid result faults the player with
 `action_handler_missing`, `action_handler_error`, or `action_result_invalid`.
 An error resolving the destination faults with `action_transition_error`.
 `snapshot().issue` carries source/action identity. These failures do not retry:
 inspect the issue and explicitly cancel, dispose, or restart after reconciling any
-side effects. `runAction()` returns whether dispatch successfully reached its
-outcome, not the handler's boolean result.
+side effects. For synchronous handlers, `runAction()` returns whether dispatch
+successfully reached its outcome, not the handler's boolean result.
 
 Choose `effect = "presentation"` for cosmetic host work or `"consequential"` for
 changes such as spending currency. This classification is metadata, not rollback
@@ -1570,3 +1570,81 @@ payload keys. Dynamic Lua documents validate at construction. Action IDs share a
 uniqueness namespace with event IDs and remain stable across text edits.
 Action imports emit schema **6**, requiring `Dialogue.schemaVersion >= 6`;
 older document schemas remain accepted by the new runtime.
+
+
+### Wait for asynchronous host work
+
+Return a fresh `Dialogue.actionHandle()` from a handler when the host will produce
+the result later. Existing scripts and action registries need no syntax changes.
+
+```tua
+local pending = Dialogue.actionHandle()
+local player = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string })
+      -- Start host work here; retain pending in its completion callback.
+      print(payload.item)
+      return pending
+    end,
+  },
+})
+player:start()
+player:runAction() -- Captures the handle; still awaiting_action.
+pending:resolve(true) -- A host callback supplies the outcome.
+player:runAction() -- Consumes it and enters the success target.
+```
+
+Use a **new handle for every dispatch** in a real handler. A handle can belong to
+only one action visit, even after settlement. Returning the same handle from
+another player or visit faults with `action_result_invalid`.
+
+- `handle:resolve(true/false)` selects the authored success/failure target.
+- `handle:reject(message)` records a host failure; consuming it faults with
+  `action_rejected`. Messages must contain 1–4096 bytes.
+- `handle:cancel()` invalidates the handle; consuming it faults with
+  `action_cancelled`, rather than selecting the failure target.
+- Settlement methods return `true` only for the first settlement. Later calls
+  return `false`; malformed arguments still raise validation errors.
+- `handle:snapshot()` returns an owned record with `status` and an optional
+  `cancellationError`.
+
+The first `runAction()` returns `true` when it accepts a fresh handle.
+While that handle is pending it returns `false`, without invoking the handler
+again. Once settled, the next call consumes it and returns whether the transition
+succeeded. Even a handle settled inside the handler waits for this next call.
+`update()`, snapshots and completion callbacks never consume it or start the next
+action. This bounds execution without threads, a clock, or recursive callbacks.
+
+While waiting, `snapshot().action.status` is `ready` before dispatch, then
+`pending`, `resolved`, `rejected`, or `cancelled`. The same record contains
+the stable action/source identity. Status inspection has no side effects.
+
+### Cancel external work safely
+
+Pass an optional cleanup callback when creating the handle:
+
+```tua
+local pending = Dialogue.actionHandle({
+  cancel = function()
+    -- Ask the host operation to stop; release its resources here.
+    print("cancel host work")
+  end,
+})
+```
+
+Cancellation invalidates the handle **before** cleanup runs. Restart, player
+cancellation and disposal detach and cancel the current pending handle; a handle
+returned by a handler after reentrant replacement is cancelled too. Late callbacks
+cannot advance the old player. Already-resolved/rejected handles do not run cleanup:
+their host operation has finished. Completion clears the stored cleanup callback.
+
+Cleanup runs at most once. Its errors are contained and available in the handle's
+`cancellationError` (bounded to 4096 bytes); they cannot prevent player disposal.
+A cancellation callback may reenter player lifecycle methods, so the caller should
+inspect the resulting snapshot rather than assume its state stayed unchanged.
+
+Cancelling dialogue does not guarantee external work stopped or roll back its
+effects. With no cleanup callback, the handle is still invalidated, but the host
+must manage any ongoing work. Timeouts belong to the host in this slice: call
+`reject("timed out")` when its policy expires. Authored waits, explicit suspension,
+non-cancellable skip policy, and checkpointing pending work remain future features.

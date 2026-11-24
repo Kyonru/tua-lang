@@ -424,6 +424,13 @@ text cannot execute host actions through a translated or substituted value.
 
 ## M7 — Voice and asynchronous actions
 
+**Action-handle foundation implemented on the feature branch:** handlers may return
+typed `Dialogue.actionHandle` values. Single settlement, one-visit ownership,
+explicit result consumption and lifecycle invalidation preserve bounded execution.
+Snapshots expose status and source identity. Host timeouts are explicit rejection;
+authored waits, suspension, skip policy and voice/speech work remain below.
+See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-action-handles.md).
+
 - [ ] Attach optional voice/cue identifiers and pronunciation metadata to lines,
   with explicit subtitle and voice locale/fallback policy. Reuse `audioSystem`
   or host audio through an adapter; do not create another audio engine.
@@ -442,7 +449,7 @@ text cannot execute host actions through a translated or substituted value.
   many units; never queue an unbounded catch-up burst. Offer independent chatter
   volume/mute controls, retain readable subtitles when silent, and suppress chatter
   during recorded voice by default unless explicitly mixed by the host.
-- [ ] Add host-managed asynchronous action handles with explicit completion,
+- [x] Add host-managed asynchronous action handles with explicit completion,
   failure and cancellation. Define single settlement and handling of synchronous
   completion, immediate failure and late callbacks.
 - [ ] Add waiting flow for declared actions or authored durations. Determine which
@@ -453,7 +460,7 @@ text cannot execute host actions through a translated or substituted value.
 - [ ] Define suspension separately from cancellation. Menus or host suspension
   must not silently let paused dialogue timers finish; external work behavior is
   explicit and stale completions cannot resume a replaced player.
-- [ ] Expose pending-action status and source identity for diagnostics without
+- [x] Expose pending-action status and source identity for diagnostics without
   coupling gameplay to inspector availability.
 
 **Acceptance:** fake host handles test success, error, timeout policy, double

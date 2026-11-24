@@ -32,3 +32,26 @@ contextual:start()
 assert(contextual:runAction())
 assert(contextual:snapshot().nodeId == "yes")
 contextual:dispose()
+
+-- The host may settle asynchronous work later, without advancing inside callbacks.
+local pending = Dialogue.actionHandle()
+local waiting = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string })
+      assert(payload.item == "shell")
+      return pending
+    end,
+  },
+})
+waiting:start()
+assert(waiting:runAction())
+local request = waiting:snapshot().action
+assert(request ~= nil)
+assert(request.status == "pending")
+assert(not waiting:runAction())
+assert(pending:resolve(true))
+assert(waiting:snapshot().state == "awaiting_action")
+assert(waiting:runAction())
+assert(waiting:snapshot().nodeId == "done")
+waiting:dispose()
+print("asynchronous dialogue action passed")

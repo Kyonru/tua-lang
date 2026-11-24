@@ -56,7 +56,7 @@ pub(super) fn options(options: &Type, payloads: &Type, player: &Type) -> Type {
             TableField::optional(signature(
                 vec![("payload", field.ty.clone()), ("request", request.clone())],
                 2,
-                Type::boolean(),
+                action_result_type(),
             )),
         )
     }));

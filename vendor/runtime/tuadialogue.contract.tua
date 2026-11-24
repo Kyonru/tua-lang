@@ -71,7 +71,19 @@ type FiredEvent = {
   nodeId: string,
 }
 type ActionEffect = "presentation" | "consequential"
+type ActionHandleStatus = "pending" | "resolved" | "rejected" | "cancelled"
+type ActionHandle = {
+  resolve: (self: any, result: boolean) -> boolean,
+  reject: (self: any, message: string) -> boolean,
+  cancel: (self: any) -> boolean,
+  snapshot: (self: any) -> { status: ActionHandleStatus, cancellationError?: string },
+}
+type ActionHandleOptions = { cancel?: () -> nil }
+local function actionHandle(options?: ActionHandleOptions): ActionHandle
+  error("declaration only")
+end
 type ActionRequest = {
+  status: "ready" | ActionHandleStatus,
   actionId: string,
   name: string,
   effect: ActionEffect,
@@ -154,7 +166,7 @@ type PresentationNode = {
   options: ChoiceView[],
 }
 type ActionIssue = {
-  code: "transition_budget_exceeded" | "action_handler_missing" | "action_handler_error" | "action_result_invalid" | "action_transition_error",
+  code: "transition_budget_exceeded" | "action_handler_missing" | "action_handler_error" | "action_result_invalid" | "action_transition_error" | "action_rejected" | "action_cancelled",
   message: string,
   nodeId: string,
   actionId?: string,

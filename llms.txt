@@ -355,14 +355,25 @@ The first true reveal sample starts that clock at zero; advancing/cancelling dis
 See docs/dialogue.md for the supported authoring grammar; do not invent commands.
 
 Dialogue.actions({name={payload=Save.shape(...), effect="presentation"|"consequential"}})
-registers synchronous host actions. Import with @actions "module"; author an action-only
+registers host actions. Import with @actions "module"; author an action-only
 label with @action name [id:stable.id] [success:label] [failure:label] JSON-record.
 Use registry.new(source,{handlers={name=function(payload,request) return boolean end}}),
 or include actions in Dialogue.context and pass handlers in context.new's options.
 Flow waits in awaiting_action until explicit player:runAction(); true/false handler
 results select targets. Missing/throwing/invalid handlers fault with source identity;
-cancel/start/dispose invalidate reentrant results. No auto retry, async execution,
-rollback, checkpoint or exactly-once guarantee. Requires dialogue schema 6.
+cancel/start/dispose invalidate reentrant results. Requires dialogue schema 6.
+A handler may return a fresh Dialogue.actionHandle({cancel=function() ... end}).
+The options record is optional. Handle resolve(boolean), reject(message) and cancel()
+settle once; subsequent calls return false (invalid arguments still error).
+resolve chooses a branch; reject/cancel fault when consumed. A handle belongs to one
+visit only. runAction accepts it with true, returns false while pending, and consumes
+settlement on a later call; callbacks/update never advance the player. Even immediate
+settlement yields until the next runAction. snapshot().action.status exposes ready,
+pending, resolved, rejected or cancelled. handle:snapshot() exposes status and optional
+cancellationError. Reject messages and cancellation errors are bounded to 4096 bytes.
+Lifecycle invalidation precedes cleanup, contains cleanup errors, and drops late results.
+Host work/timeout/rollback remain host-owned; no automatic retries, suspension,
+checkpoints, coroutine dispatch or exactly-once guarantees.
 
 Character expressions (schema 7): exported character records may declare
 expressions={happy={portrait="asset-id", animation="optional-host-animation"}}.

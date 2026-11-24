@@ -1,4 +1,4 @@
--- Private synchronous host-action support. No handlers run during traversal.
+-- Private host-action support. Dispatch and settlement require explicit host calls.
 local Actions = {}
 local definitions = setmetatable({}, { __mode = "k" })
 
@@ -7,6 +7,77 @@ local function copy(value)
   local result = {}
   for key, child in pairs(value) do result[key] = copy(child) end
   return result
+end
+
+-- Handles never retain a player. A claimed handle belongs to one action visit.
+-- Both sides are weak: Lua 5.1 lacks ephemeron semantics for weak-key values
+-- whose cancellation callbacks capture their own handle.
+local handles = setmetatable({}, { __mode = "kv" })
+
+function Actions.handle(options)
+  if options == nil then options = {} end
+  assert(type(options) == "table" and getmetatable(options) == nil, "invalid action handle options")
+  for key in pairs(options) do assert(key == "cancel", "unknown action handle option") end
+  assert(options.cancel == nil or type(options.cancel) == "function", "cancel must be a function")
+  local data = { status = "pending", cancel = options.cancel, claimed = false }
+  local methods = {}
+  local handle = setmetatable({}, {
+    __index = methods,
+    __metatable = "dialogue action handle",
+  })
+  local function settle(status, value)
+    if data.status ~= "pending" then return false end
+    data.status, data.value, data.cancel = status, value, nil
+    return true
+  end
+  function methods:resolve(result)
+    assert(type(result) == "boolean", "action result must be boolean")
+    return settle("resolved", result)
+  end
+  function methods:reject(message)
+    assert(type(message) == "string" and #message > 0 and #message <= 4096,
+      "action failure needs a message of 1 through 4096 bytes")
+    return settle("rejected", message)
+  end
+  function methods:cancel()
+    if data.status ~= "pending" then return false end
+    local cancel = data.cancel
+    data.status, data.cancel = "cancelled", nil
+    -- Invalidate first: reentrant or late completion cannot win cancellation.
+    if cancel then
+      local ok, message = pcall(cancel)
+      if not ok then
+        data.cancellationError = type(message) == "string" and message:sub(1, 4096)
+          or "Action cancellation failed"
+      end
+    end
+    return true
+  end
+  function methods:snapshot()
+    return { status = data.status, cancellationError = data.cancellationError }
+  end
+  data.cancelHandle = methods.cancel
+  handles[handle] = data
+  return handle
+end
+
+local function abandon(handle)
+  local data = handles[handle]
+  if data then data.cancelHandle(handle) end
+end
+
+-- Detach before running any user cancellation callback.
+function Actions.release(player)
+  local handle = player.pendingAction
+  player.pendingAction = nil
+  if handle then abandon(handle) end
+end
+
+local function claim(handle)
+  local data = handles[handle]
+  if not data or data.claimed then return false end
+  data.claimed = true
+  return true
 end
 
 function Actions.define(specs)
@@ -88,6 +159,7 @@ end
 function Actions.request(player)
   local node = player.document.nodes[player.current]
   return {
+    status = player.pendingAction and handles[player.pendingAction].status or "ready",
     actionId = node.id,
     name = node.name,
     effect = node.effect,
@@ -107,43 +179,7 @@ local function failure(player, request, code, message)
   return false
 end
 
-function Actions.run(player)
-  if player.executingAction or player.state ~= "awaiting_action" then return false end
-  local request = Actions.request(player)
-  local node = player.document.nodes[player.current]
-  local handler = player.actionHandlers[node.name]
-  if not handler then
-    return failure(
-      player,
-      request,
-      "action_handler_missing",
-      "No handler registered for action " .. node.name
-    )
-  end
-  player.executingAction = true
-  local ok, result = pcall(handler, copy(node.payload), copy(request))
-  player.executingAction = false
-  -- A reentrant lifecycle operation wins, including an error after cancellation.
-  if player.generation ~= request.generation or player.visit ~= request.visit
-    or player.current ~= request.nodeId or player.state ~= "awaiting_action" then
-    return false
-  end
-  if not ok then
-    return failure(
-      player,
-      request,
-      "action_handler_error",
-      type(result) == "string" and result or "Action handler failed"
-    )
-  end
-  if type(result) ~= "boolean" then
-    return failure(
-      player,
-      request,
-      "action_result_invalid",
-      "Action handler must return true or false"
-    )
-  end
+local function transition(player, request, node, result)
   local entered, message = pcall(player.enter, player, result and node.success or node.failure)
   if not entered then
     return failure(
@@ -159,6 +195,46 @@ function Actions.run(player)
     player.issue.source = copy(request.source)
   end
   return player.state ~= "faulted"
+end
+
+function Actions.run(player)
+  if player.executingAction or player.state ~= "awaiting_action" then return false end
+  local request = Actions.request(player)
+  local node = player.document.nodes[player.current]
+  if player.pendingAction then
+    local data = handles[player.pendingAction]
+    if data.status == "pending" then return false end
+    player.pendingAction = nil
+    if data.status == "resolved" then return transition(player, request, node, data.value) end
+    return failure(player, request,
+      data.status == "cancelled" and "action_cancelled" or "action_rejected",
+      data.status == "cancelled" and "Action was cancelled" or data.value)
+  end
+  local handler = player.actionHandlers[node.name]
+  if not handler then
+    return failure(player, request, "action_handler_missing",
+      "No handler registered for action " .. node.name)
+  end
+  player.executingAction = true
+  local ok, result = pcall(handler, copy(node.payload), copy(request))
+  player.executingAction = false
+  -- A reentrant lifecycle operation wins, including an error after cancellation.
+  if player.generation ~= request.generation or player.visit ~= request.visit
+    or player.current ~= request.nodeId or player.state ~= "awaiting_action" then
+    if ok and type(result) == "table" and claim(result) then abandon(result) end
+    return false
+  end
+  if not ok then
+    return failure(player, request, "action_handler_error",
+      type(result) == "string" and result or "Action handler failed")
+  end
+  if type(result) == "boolean" then return transition(player, request, node, result) end
+  if type(result) == "table" and claim(result) then
+    player.pendingAction = result
+    return true
+  end
+  return failure(player, request, "action_result_invalid",
+    "Action handler must return a boolean or a fresh Dialogue.actionHandle")
 end
 
 return Actions

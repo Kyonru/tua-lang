@@ -16,6 +16,10 @@ local function actions()
   if not Actions then Actions = require("tuadialogue_actions") end
   return Actions
 end
+function Dialogue.actionHandle(options)
+  return actions().handle(options)
+end
+
 function Dialogue.reveal(options)
   return require("tuadialogue_reveal").new(options)
 end
@@ -634,6 +638,7 @@ function Player:start(entry)
   self:enter(entry, locals)
   if locals then self.locals = locals end
   self.generation = self.generation + 1
+  if Actions then Actions.release(self) end
 end
 
 -- The host reports reveal completion; this runtime never reads a wall clock.
@@ -718,6 +723,7 @@ function Player:cancel()
   self.generation = self.generation + 1
   self.state, self.current, self.presentation, self.issue = "cancelled", nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
+  if Actions then Actions.release(self) end
   return true
 end
 
@@ -752,6 +758,7 @@ function Player:dispose()
   self.facts, self.locals, self.localDefaults = nil, nil, nil
   self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
+  if Actions then Actions.release(self) end
 end
 
 -- Refreshing data changes presentation, not execution identity or event clocks.

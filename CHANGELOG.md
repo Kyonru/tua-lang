@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add typed `Dialogue.actionHandle` for host-managed asynchronous actions, with
+  single settlement, explicit result consumption, pending status and lifecycle-safe
+  cancellation. Existing synchronous handlers and authored scripts stay compatible.
+
 - Connect schema-8 rich dialogue templates to owned localized presentation runs,
   literal placeholders, source ranges, and reveal pauses/rates. Typed document
   authoring and explicit `.tdialogue` `@text rich` scripts are supported, with
