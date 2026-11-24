@@ -1645,6 +1645,11 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
 
     output.push_str(indent);
     output.push_str(callee);
+    // Function-type aliases use this layout too. Keep the assignment separator
+    // on the first pass rather than relying on later whitespace normalization.
+    if callee.ends_with('=') {
+        output.push(' ');
+    }
     output.push_str("(\n");
 
     let last_index = args.len().saturating_sub(1);

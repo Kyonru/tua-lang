@@ -2148,3 +2148,18 @@ fn concatenation_in_call_arguments_and_open_calls_settles_in_one_pass() {
         assert_eq!(format_tua_source("src/main.tua", &output, &options).unwrap(), output);
     }
 }
+
+#[test]
+fn wrapped_function_type_alias_settles_in_one_pass() {
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+    let source = "type Resolver = (key: string, source: string, arguments: string, locale: string) -> string\n";
+    let output = format_tua_source("contract.tua", source, &options).unwrap();
+    assert!(output.starts_with("type Resolver = (\n"), "{output}");
+    assert_eq!(
+        format_tua_source("contract.tua", &output, &options).unwrap(),
+        output
+    );
+}
