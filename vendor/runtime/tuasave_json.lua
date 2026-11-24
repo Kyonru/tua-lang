@@ -1,5 +1,5 @@
 -- Strict, bounded JSON subset for Tua save contracts. Lua 5.1 compatible.
--- Only tuasave.lua calls this module; it is not a general-purpose JSON API.
+-- Save and dialogue checkpoints share UTF-8 validation; this is not a public JSON API.
 local Json = {}
 Json.null = {}
 Json.array = {}
@@ -86,8 +86,16 @@ function Json.decode(text, maxDepth, maxEntries)
       elseif byte == 92 then
         position = position + 1
         local escaped = text:sub(position, position)
-        local basic = { ['"'] = '"', ['\\'] = '\\', ['/'] = '/',
-          b = '\b', f = '\f', n = '\n', r = '\r', t = '\t' }
+        local basic = {
+          ['"'] = '"',
+          ['\\'] = '\\',
+          ['/'] = '/',
+          b = '\b',
+          f = '\f',
+          n = '\n',
+          r = '\r',
+          t = '\t',
+        }
         if basic[escaped] then
           pieces[#pieces + 1] = basic[escaped]
           position = position + 1
@@ -173,12 +181,18 @@ function Json.decode(text, maxDepth, maxEntries)
       position = position + 1
       local result = { [Json.array] = true }
       whitespace()
-      if text:byte(position) == 93 then position = position + 1; return result end
+      if text:byte(position) == 93 then
+        position = position + 1
+        return result
+      end
       while true do
         result[#result + 1] = value(depth + 1)
         whitespace()
         byte = text:byte(position)
-        if byte == 93 then position = position + 1; return result end
+        if byte == 93 then
+          position = position + 1
+          return result
+        end
         if byte ~= 44 then fail("expected array comma or end") end
         position = position + 1
       end
@@ -187,7 +201,10 @@ function Json.decode(text, maxDepth, maxEntries)
       position = position + 1
       local result = { [Json.object] = true }
       whitespace()
-      if text:byte(position) == 125 then position = position + 1; return result end
+      if text:byte(position) == 125 then
+        position = position + 1
+        return result
+      end
       while true do
         whitespace()
         if text:byte(position) ~= 34 then fail("expected object key") end
@@ -199,7 +216,10 @@ function Json.decode(text, maxDepth, maxEntries)
         result[key] = value(depth + 1)
         whitespace()
         byte = text:byte(position)
-        if byte == 125 then position = position + 1; return result end
+        if byte == 125 then
+          position = position + 1
+          return result
+        end
         if byte ~= 44 then fail("expected object comma or end") end
         position = position + 1
       end
