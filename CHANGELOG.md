@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add dialogue label/flow-target completion, hover and definition with incomplete
+  target recovery, unsaved-edit freshness and full Unicode-aware replacement ranges.
+
 - Add opt-in v3 settled-boundary checkpoints for action/event registry dialogues,
   preserving typed event timers and action graph compatibility without replaying
   handlers. Pending/executing actions and default registry exclusions stay intact.

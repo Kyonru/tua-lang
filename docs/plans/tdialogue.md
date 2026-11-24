@@ -565,6 +565,13 @@ context objects. Core export/import works without a filesystem or LÖVE.
 
 ## M9 — Authoring, diagnostics and preview
 
+- [x] First authoring slice: file-local label/flow-target completion, hover and
+  definition for choice, wait, branch, action and fallback references. Shared core
+  recovery supports incomplete targets; LSP replaces whole dotted/hyphenated names
+  with Unicode-correct ranges. Duplicate labels are excluded. Tests cover unsaved
+  edits, deletion/recreation and prose/payload isolation. Installed-editor visual
+  qualification remains pending; protocol tests do not establish perceived latency.
+
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
 - [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,

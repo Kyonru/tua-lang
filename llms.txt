@@ -271,6 +271,12 @@ their runtime imports only when referenced; local bindings take precedence.
 Explicit `require("tuadialogue")` / `require("tuaboundedqueue")` remain supported.
 The host owns rendering, input and timing. Text IDs must be project-unique.
 Share characters using ordinary .tua exports with a required string `name` field.
+Dialogue editor queries complete file-local label references in choices, waits,
+branches, action outcomes and fallback directives. Hover and definition follow
+unique labels; incomplete targets and unsaved label edits are supported. Duplicate
+labels are ambiguous, and prose/comments/action payloads are not flow references.
+Dialogue rename, formatting and graph preview remain planned.
+
 Before labels, `@characters Cast "dialogue.characters"` imports the module; use
 `Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,
 definition navigation and unsaved edits are supported by the updated extension.

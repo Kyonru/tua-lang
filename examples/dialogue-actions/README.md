@@ -42,3 +42,8 @@ Saving a position alone does not prevent replay from an older checkpoint.
 Run `python3 verify-checkpoints.py`; add `--love /path/to/love` for v1/v2/v3 runtime
 fixtures with JIT enabled/disabled and separate native save/load processes. Tests
 use isolated save identities and delete their save files on successful completion.
+
+In `src/scene.tdialogue`, request completion inside `success:done` or
+`failure:declined`, or use Go to Definition to jump to the corresponding label.
+The queries also work while editing an unfinished target; they never execute
+`purchase`.

@@ -24,6 +24,31 @@ Start with [your first conversation](#your-first-conversation), then add
 [timed events](#schedule-custom-events), or
 [temporary messages](#conversations-and-temporary-messages).
 
+## Navigate conversation flow
+
+In a `.tdialogue` file, request completion inside a target name to see labels in
+that file. Hover explains the label; Go to Definition jumps to its declaration.
+This works for choice/wait `target` tags, branch `target`/`else` tags, action
+`success`/`failure` tags, and `@fallback` names.
+
+```text
+-> Continue [target:shop.done]
+
+[shop.done]
+// @id shop.farewell
+: See you next time. (end)
+```
+
+For example, completing `shop.` in the target replaces the whole target name,
+including any existing suffix. It leaves the surrounding tag and prose intact.
+Suggestions remain available while a target is unfinished and update from unsaved
+label edits. Duplicate declarations are ambiguous: navigation and completion do
+not choose between them. Text inside comments, spoken prose, and action JSON
+payloads is not a flow reference.
+
+These queries only inspect source. They never run conditions or action handlers.
+Project-wide dialogue rename, dialogue formatting and graph preview remain planned.
+
 ## Your first conversation
 
 This example runs in a terminal. It needs no LÖVE window, font or image assets.

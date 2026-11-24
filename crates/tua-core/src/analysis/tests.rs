@@ -14035,3 +14035,114 @@ saved.actionState = "pending"
             .contains(&"actionState".to_owned())
     );
 }
+
+#[test]
+fn dialogue_flow_queries_recover_and_refresh_without_prose_links() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+[start]
+// @id hello
+: Hello
+// @id choose
+-> é🦆 Go [target:finish.<|choice|>good]
+[finish.good<|declaration|>]
+// @id done
+: Done (end)
+[waiting]
+@wait 1 [target:finish.<|wait|>good]
+[branching]
+@branch facts.ready [target:finish.<|yes|>good] [else:sta<|no|>rt]
+[acting]
+@action reward [id:reward.once] [success:finish.<|success|>good] [failure:sta<|failure|>rt] {"note":"[target:finish.<|payload|>good]"}
+@fallback finish.<|fallback|>good
+// [target:finish.<|comment|>good]
+: Prose [target:finish.<|prose|>good]
+-> Prose [target:finish.<|choice_prose|>good] and more [target:start]
+@wait 1 [target:fin<|partial|>
+"#,
+    );
+    let path = "src/scene.tdialogue";
+    let source = &fixture.files()[0].source;
+    let mut host = AnalysisHost::new();
+    host.set_file(path, source.clone());
+    let snapshot = host.snapshot();
+    for marker in [
+        "choice",
+        "wait",
+        "yes",
+        "success",
+        "fallback",
+        "declaration",
+    ] {
+        let position = fixture.position(marker);
+        let definition = snapshot.definition(path, position).unwrap();
+        assert_eq!(definition.span.start.line, 7, "{marker}");
+        assert!(snapshot
+            .hover(path, position)
+            .unwrap()
+            .contents
+            .contains("dialogue label: finish.good"));
+        assert_eq!(
+            completion_labels(&snapshot.completion(path, position)),
+            vec!["finish.good"]
+        );
+    }
+    for marker in ["no", "failure"] {
+        assert_eq!(
+            snapshot
+                .definition(path, fixture.position(marker))
+                .unwrap()
+                .span
+                .start
+                .line,
+            2
+        );
+    }
+    for marker in ["payload", "comment", "prose", "choice_prose"] {
+        assert!(
+            snapshot
+                .definition(path, fixture.position(marker))
+                .is_none(),
+            "{marker}"
+        );
+        assert!(
+            snapshot
+                .completion(path, fixture.position(marker))
+                .is_empty(),
+            "{marker}"
+        );
+    }
+    assert_eq!(
+        completion_labels(&snapshot.completion(path, fixture.position("partial"))),
+        vec!["finish.good"]
+    );
+    host.set_file(path, source.replace("[finish.good]", "[finish.other]"));
+    let changed = host.snapshot();
+    assert!(changed
+        .definition(path, fixture.position("choice"))
+        .is_none());
+    assert_eq!(
+        completion_labels(&changed.completion(path, fixture.position("choice"))),
+        vec!["finish.other"]
+    );
+    host.set_file(path, format!("{source}\n[finish.good]\n"));
+    assert!(host
+        .snapshot()
+        .definition(path, fixture.position("choice"))
+        .is_none());
+    assert!(host
+        .snapshot()
+        .completion(path, fixture.position("choice"))
+        .is_empty());
+    host.remove_file(path);
+    assert!(host
+        .snapshot()
+        .definition(path, fixture.position("choice"))
+        .is_none());
+    host.set_file(path, source.clone());
+    assert!(host
+        .snapshot()
+        .definition(path, fixture.position("choice"))
+        .is_some());
+}

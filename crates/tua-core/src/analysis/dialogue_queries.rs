@@ -1,6 +1,6 @@
 //! Dialogue references use the same indexed exports and type environments as Tua imports.
 use super::*;
-use crate::dialogue_asset::CharacterImport;
+use crate::dialogue_asset::{flow, CharacterImport, DialogueName};
 use crate::types::PrimitiveType;
 
 impl AnalysisSnapshot {
@@ -166,11 +166,62 @@ impl AnalysisSnapshot {
         None
     }
 
+    fn dialogue_label(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<(DialogueName, DialogueName)> {
+        let source = &self.file(path)?.source;
+        let name = flow::name_at(source, position)?;
+        let mut matches = flow::labels(source)
+            .into_iter()
+            .filter(|label| label.value == name.value);
+        let label = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some((name, label))
+    }
+
     pub(super) fn dialogue_completion(
         &self,
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+        if let Some(name) = flow::name_at(&file.source, position) {
+            let prefix: String = name
+                .value
+                .chars()
+                .take(position.column - name.span.start.column)
+                .collect();
+            let labels = flow::labels(&file.source);
+            let mut counts = std::collections::BTreeMap::new();
+            for label in &labels {
+                *counts.entry(label.value.as_str()).or_insert(0) += 1;
+            }
+            return labels
+                .iter()
+                .filter(|label| {
+                    label.value.starts_with(&prefix) && counts[label.value.as_str()] == 1
+                })
+                .map(|label| Completion {
+                    label: label.value.clone(),
+                    kind: CompletionKind::Value,
+                    detail: Some("dialogue label".into()),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect();
+        }
         if let Some(items) = self.dialogue_rich_completion(path, position) {
             return items;
         }
@@ -256,6 +307,15 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if let Some((name, _)) = self.dialogue_label(path, position) {
+            return Some(Hover {
+                is_markdown: false,
+                contents: format!("dialogue label: {}", name.value),
+                span: Some(name.span),
+                documentation: None,
+                context: vec!["Flow target in this dialogue file".into()],
+            });
+        }
         if let Some(hover) = self.dialogue_rich_hover(path, position) {
             return Some(hover);
         }
@@ -321,6 +381,13 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Definition> {
+        if let Some((_, label)) = self.dialogue_label(path, position) {
+            return Some(Definition {
+                path: path.to_owned(),
+                span: label.span,
+                kind: DefinitionKind::Local,
+            });
+        }
         if let Some((module, character, expression, _)) =
             self.expression_target(path, position, false)
         {

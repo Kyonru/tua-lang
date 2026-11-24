@@ -41,6 +41,10 @@ background refreshes do not fill worker slots in one uninterrupted batch.
     Model-based inline completion is opt-in and uses a model running on your
     own machine through [Ollama](#local-ollama-inline-completion).
 
+Dialogue scripts also support [flow-target navigation](dialogue.md#navigate-conversation-flow):
+complete local labels and follow choice, wait, branch and action targets without
+executing project code.
+
 ## Find A Feature
 
 | Goal | Feature |

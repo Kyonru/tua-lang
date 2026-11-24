@@ -3251,7 +3251,11 @@ fn lsp_completion_array(
     client_completion_label_details: bool,
     client_completion_snippets: bool,
 ) -> Value {
-    let replacement_span = tua_core::completion::completion_replacement_span(source, position);
+    let replacement_span = uri
+        .ends_with(".tdialogue")
+        .then(|| tua_core::dialogue_asset::flow::replacement_span(source, position))
+        .flatten()
+        .or_else(|| tua_core::completion::completion_replacement_span(source, position));
     Value::Array(
         completions
             .into_iter()
