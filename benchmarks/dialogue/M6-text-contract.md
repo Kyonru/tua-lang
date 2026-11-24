@@ -1,7 +1,10 @@
 # M6 styled-text contract
 
-Status: implementation design; none of the new syntax or APIs below
-is implemented by this change. The shipped `Dialogue.reveal` remains unchanged.
+Status: implementation in progress on `feature/tdialogue-rich-text`.
+The shared Rust template parser is implemented and tested; the authoring directive,
+document emission, runtime presentation and editor integration remain pending.
+None of the proposed syntax or Tua APIs below is enabled for game authors yet.
+The shipped `Dialogue.reveal` remains unchanged.
 This contract is based on revision `057b0314` and completes the remaining M6
 **design** decisions, not their implementation or acceptance tests.
 
@@ -45,7 +48,8 @@ uses the innermost rate, then restores its parent. Style keys form an ordered
 outer-to-inner stack; emphasis is boolean. Pronunciation marks may not nest.
 Opening/closing tags are case-sensitive. Empty paired regions are errors.
 Unknown marks, mismatched closures, missing values and malformed numbers are
-errors. Arbitrary HTML, expressions, interpolation in tag values, and user-defined
+errors. Decimal syntax is `digits` or `digits.digits`, without signs, exponents,
+hex notation or surrounding whitespace. Arbitrary HTML, expressions, interpolation in tag values, and user-defined
 tag handlers are excluded. Choice labels and disabled reasons may use emphasis,
 styles and pronunciation; speed and pause are line-only and errors there.
 Character display names remain plain text.
@@ -237,3 +241,33 @@ a string; source ranges cannot be recovered reliably from that result.
 `make docs-build` and whitespace checks passed. This is documentation-only work;
 no parser/runtime tests were added or claimed, and no new runtime capability is
 available until the implementation slices above land.
+
+## Parser implementation checkpoint
+
+The shared `dialogue_asset::rich_text` Rust module parses one raw text field into
+bounded tokens and a mark-free fallback template. Literal percent characters are
+re-escaped in the fallback so a later formatting pass cannot turn escaped prose
+into placeholders. Token ranges are zero-based, half-open UTF-8 byte offsets;
+future emit/editor adapters must convert to their respective range conventions.
+Escapes remain separate tokens, and escaped placeholder whitespace is preserved.
+
+The parser validates strict nesting, nonempty regions, line-only timing marks,
+pronunciation quoting, decimal syntax, input/token/depth bounds, pause counts and
+total duration. Compensated summation prevents accumulated rounding from rejecting
+100 pauses of 1.2 seconds at the 120-second limit. Dynamic substitutions, resolved
+grapheme alignment, and final presentation validation belong to the next stages.
+
+Twelve focused regressions include 2,000 deterministic malformed Unicode inputs,
+exact limit boundaries, multi-byte token/error ranges and a compatibility check
+that ordinary `.tdialogue` still treats escaped markup literally and rejects the
+not-yet-enabled `@text rich` directive. This module is preparation for the shared
+analysis/emission path, not a runnable rich-dialogue feature. No runtime schema
+version, installed extension, generated game code or public examples were changed.
+
+Verification for this parser checkpoint: `RUST_MIN_STACK=16777216 cargo test -p
+tua-core` passed 2,141 unit tests (one ignored) and 20 integration tests;
+`cargo clippy -p tua-core --all-targets -- -D warnings`, Rust formatting,
+`make docs-build` and diff checks passed. No Tua/Lua source was edited, so a
+Tua formatting pass was not applicable. The full workspace/extension gate and
+native LÖVE rendering were not run for this isolated, unconnected parser module;
+they remain required when its authoring/runtime/tooling integration lands.

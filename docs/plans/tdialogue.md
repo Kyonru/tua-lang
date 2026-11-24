@@ -400,9 +400,15 @@ or API is enabled by this design step.
 - [x] Document font coverage, shaping and bidirectional-layout responsibilities.
   Accepting Unicode strings is not proof of multilingual rendering support.
 
+**Implementation in progress on `feature/tdialogue-rich-text`:** the shared Rust
+text-field parser now validates marks, escapes, source ranges and limits, with
+12 regressions. The `.tdialogue` directive remains disabled until the runtime and
+tooling support it. This is parser infrastructure, not a usable rich-text feature.
+
 **Remaining implementation:**
 
-- [ ] Implement the opt-in grammar, versioned document data and shared editor facts.
+- [x] Implement and test bounded raw text-field tokenization and fallback templates.
+- [ ] Integrate the opt-in directive, versioned document emission and shared editor facts.
 - [ ] Implement template resolution, owned presentation runs and origin mappings.
 - [ ] Integrate authored rates/pauses with reveal and verify lifecycle semantics.
 - [ ] Qualify styled/localized examples and the acceptance matrix below.

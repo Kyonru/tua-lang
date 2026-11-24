@@ -8,6 +8,7 @@ pub use actions::DialogueAction;
 mod conditions;
 mod context;
 mod events;
+pub mod rich_text;
 pub use conditions::{Branch, Condition, ConditionKind};
 pub use context::{DialogueBinding, DialogueLiteral};
 #[cfg(test)]
