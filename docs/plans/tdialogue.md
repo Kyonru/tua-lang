@@ -336,13 +336,23 @@ core facts rather than an extension-only event index.
 
 ## M5 — Character expressions and portrait variants
 
-- [ ] Extend shared character records with named expression metadata. Preserve the
+Implemented: `@expression name` selects typed shared character metadata. Schema 7
+snapshots expose expression/portrait/portraitAnimation; omission resets to the
+character's default portrait. Constructors capture selected strings; hosts own all
+sprite playback and image resources. Imported/re-exported expression diagnostics,
+completion, hover and declaration navigation use shared core facts. Static-image
+and spriteSheet adapter recipes live in the dialogue guide. Animation IDs are host
+metadata; their existence is checked by the host's adapter, not by dialogue analysis.
+See the [M5 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M5-expressions.md).
+
+
+- [x] Extend shared character records with named expression metadata. Preserve the
   existing optional single `portrait` field as the simple/default case.
-- [ ] Allow an utterance to select a declared expression. Validate names across
+- [x] Allow an utterance to select a declared expression. Validate names across
   imported/re-exported character modules and support expression completion.
-- [ ] Carry the selected expression and resolved asset identifier to the renderer;
+- [x] Carry the selected expression and resolved asset identifier to the renderer;
   define missing/default behavior and per-line reset versus explicit persistence.
-- [ ] Provide an optional static-image and `spriteSheet` adapter recipe. Keep
+- [x] Provide an optional static-image and `spriteSheet` adapter recipe. Keep
   animation playback state per presentation instance and GPU resources host-owned.
 
 **Acceptance:** two speakers and two simultaneous players can show different
@@ -543,7 +553,7 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0–M4 are complete; continue with **M5 — Character expressions and portrait variants**.
+M0–M5 are complete; continue with **M6 — Text presentation and reveal metadata**.
 Reuse declared schemas, typed context/path facts, stable execution identities and
 bounded transition behavior. Keep gameplay mutations in explicit host actions;
 never execute arbitrary script expressions or replace the host renderer/audio stack.

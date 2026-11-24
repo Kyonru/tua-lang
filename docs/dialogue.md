@@ -211,7 +211,7 @@ provide the asset and load it. Tua does not select a portrait layout, image load
 or animation system.
 
 Each used character must have a required string `name`; `portrait` may be a string
-or nil. Other fields remain available in the character module but are not copied
+or nil. Named `expressions` are described below. Other fields remain available in the character module but are not copied
 into dialogue snapshots. Type aliases and module re-exports work normally.
 
 Character metadata is read when the emitted module loads. Each player then owns
@@ -621,11 +621,136 @@ names. Escape literal braces and brackets with `\{`, `\}`, `\[` and `\]`.
 `(end)` from ending the line. Unknown or unfinished escapes are errors.
 
 Named `%{name}` placeholders are supported by the opt-in localization adapter below.
-Rich-text effects, expressions, conditions, assignments and inline executable
-commands are not implemented. Named `@event` metadata is
+Rich-text effects, assignments and inline executable commands are not implemented.
+Character expressions and conditional branches use their explicit directives. Named `@event` metadata is
 supported as described above; its behavior comes from host handlers. Named
 placeholders are validated; other unescaped braces and brackets remain errors.
 Without a resolver, the player presents decoded source text literally.
+
+## Select character expressions
+
+Declare named expression records on a shared character. Each expression needs a
+nonempty `portrait` asset ID and may name an `animation` for the host's adapter.
+Keep the record fields visible in its type (or use inference) so the editor can
+suggest the names. A widened dictionary cannot describe a closed set of names.
+
+```tua
+return {
+  Guide = {
+    name = "Guide",
+    portrait = "portraits/guide.png",
+    expressions = {
+      happy = { portrait = "portraits/guide-happy.png" },
+      talking = { portrait = "portraits/guide-sheet.png", animation = "talk" },
+    },
+  },
+}
+```
+
+Place `@expression` after its utterance and before any choices. It works on an
+imported character, including a re-exported character; narration and local
+`@character` declarations have no expression registry.
+
+```text
+@dialogue 1
+@characters Cast "characters"
+[start]
+// @id greeting.happy
+Cast.Guide: Welcome!
+@expression happy
+// @id greeting.default
+Cast.Guide: Back to my default portrait. (end)
+```
+
+`snapshot().node` exposes `expression`, the resolved `portrait`, and optional
+`portraitAnimation`. Omission resets the next line to the character's default
+portrait, or no portrait if there is none. Selection never persists implicitly
+between lines, speakers, or players. Repeat the directive when another line needs
+the same expression. Locale changes preserve selection on the current line.
+
+Unknown names and incompatible selected metadata types produce authoring diagnostics.
+Nonempty-string constraints validate at construction. Dynamic Lua documents also
+validate there and reject unknown names rather than silently falling back. The selected portrait and animation strings are copied into each
+player; later edits to the shared record or a returned snapshot cannot change an
+existing player. No sprite timer or GPU resource is stored in the shared cast.
+
+Expression name completion works while typing a directive. Hover shows its metadata
+type; go-to-definition opens the owning character declaration, including re-exports.
+These queries inspect source facts and do not load images. Asset IDs remain opaque
+strings: the host resolves them and handles missing files or unsupported animations.
+The compiler does not prove that an animation name exists in an arbitrary host
+registry. Existing sprite-sheet calls retain their own animation-name checking.
+
+Scripts selecting expressions emit schema **7**, requiring
+`Dialogue.schemaVersion >= 7`. Portrait-only scripts keep their previous schema,
+and the new runtime accepts older schemas. See the runnable
+[expression example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
+for two speakers, two players, and reset behavior.
+
+### Optional static-image adapter
+
+Load/cache images in the host, then use the resolved asset ID. This LÖVE recipe
+assumes the named image exists; adapt missing-asset handling to your game:
+
+```tua
+local images = {
+  ["portraits/guide-happy.png"] = love.graphics.newImage("portraits/guide-happy.png"),
+}
+
+local node = player:snapshot().node
+if node then
+  local portrait = node.portrait
+  if portrait then
+    local image = images[portrait]
+    if image then love.graphics.draw(image, 24, 24) end
+  end
+end
+```
+
+Share cached image resources if useful. Keep layout, tint, and transitions local to
+each dialogue presentation. Image lifetime and cleanup remain the host's responsibility.
+
+### Optional animated adapter with `spriteSheet`
+
+Use an ordinary [sprite sheet](sprites.md) and create a **separate sprite player
+for each dialogue presentation**. The following recipe assumes a sheet containing
+four 32 × 32 frames in its first row; it is not a required dialogue runtime:
+
+```tua
+local GuideSheet = spriteSheet({
+  image = "portraits/guide-sheet.png",
+  frame = { width = 32, height = 32 },
+  animations = { talk = { from = 0, to = 3, row = 0, fps = 8 } },
+})
+
+local leftPortrait = GuideSheet:player("talk")
+local rightPortrait = GuideSheet:player("talk")
+
+-- In the left presentation's update, after a new snapshot is accepted:
+local node = player:snapshot().node
+if node and node.portrait == "portraits/guide-sheet.png" then
+  if node.portraitAnimation == "talk" then
+    leftPortrait:play("talk", true)
+  else
+    leftPortrait:stop()
+  end
+end
+
+-- In love.update(dt), advance each active presentation independently.
+leftPortrait:update(0.1)
+rightPortrait:update(0.05)
+-- In love.draw(), draw only the active animated presentations.
+leftPortrait:draw(24, 24)
+rightPortrait:draw(200, 24)
+```
+
+Call selection/restart once when `(generation, visit, presentationRevision)` changes,
+not on every frame; otherwise `play(..., true)` continually restarts the animation.
+Hide or discard the previous sprite player when the new snapshot has no animated
+portrait, or when the dialogue cancels/disposes. Switching to a static expression
+must also stop showing the old animation. The host may choose whether a locale-only
+presentation revision restarts animation. Never cache sprite players on characters;
+only cache the sheet/image resources. This keeps simultaneous conversations independent.
 
 ## Localize lines, choices and character names
 

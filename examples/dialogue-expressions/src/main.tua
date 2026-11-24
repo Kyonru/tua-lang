@@ -1,0 +1,23 @@
+local scene = require("scene")
+local first = Dialogue.new(scene)
+local second = Dialogue.new(scene)
+first:start()
+second:start("talking")
+local firstNode = first:snapshot().node
+local secondNode = second:snapshot().node
+assert(firstNode and firstNode.expression == "happy")
+assert(secondNode and secondNode.portraitAnimation == "talk")
+assert(first:advance())
+firstNode = first:snapshot().node
+assert(firstNode and firstNode.expression == nil)
+assert(firstNode and firstNode.portrait == "portraits/guide.png")
+assert(first:advance())
+firstNode = first:snapshot().node
+assert(firstNode and firstNode.portrait == nil)
+second:start("worried")
+secondNode = second:snapshot().node
+assert(secondNode and secondNode.speaker == "Captain")
+assert(secondNode and secondNode.expression == "worried")
+first:dispose()
+second:dispose()
+print("character expressions passed")

@@ -64,7 +64,14 @@ pub fn emit_dialogue_source(
     }
     output.line("return {", entry.span);
     output.line(
-        if document.actions.is_some() {
+        if document
+            .sections
+            .iter()
+            .flat_map(|s| &s.lines)
+            .any(|line| line.expression.is_some())
+        {
+            "  schemaVersion = 7,"
+        } else if document.actions.is_some() {
             "  schemaVersion = 6,"
         } else if document.events.is_some() {
             "  schemaVersion = 5,"
@@ -209,6 +216,24 @@ pub fn emit_dialogue_source(
                         speaker.span,
                     );
                 }
+            }
+            if let Some(expression) = &line.expression {
+                let speaker = line.speaker.as_ref().expect("expression speaker");
+                let (alias, member) = speaker.value.split_once('.').expect("imported speaker");
+                let index = document
+                    .imports
+                    .iter()
+                    .position(|import| import.alias.value == alias)
+                    .expect("character import");
+                output.field("      expression", &expression.value, expression.span);
+                output.line(
+                    &format!(
+                        "      expressions = __tua_characters_{}[{}].expressions,",
+                        index + 1,
+                        lua_string_literal(member)
+                    ),
+                    expression.span,
+                );
             }
             if let Some(timing) = &line.timing {
                 output.line(

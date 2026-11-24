@@ -63,6 +63,7 @@ pub struct DialogueTiming {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueLine {
+    pub expression: Option<DialogueName>,
     pub fallback: Option<DialogueName>,
     pub events: Vec<DialogueEvent>,
     pub timing: Option<DialogueTiming>,
@@ -341,6 +342,43 @@ impl Parser<'_> {
             self.event(rest, at, false);
         } else if let Some(rest) = syntax.strip_prefix("@emit ") {
             self.event(rest, at, true);
+        } else if let Some(rest) = syntax.strip_prefix("@expression ") {
+            self.abandon_id();
+            let offset = syntax.len() - rest.trim_start().len();
+            let name = self.name(
+                rest.trim(),
+                span(number, column + offset, rest.trim().chars().count()),
+            );
+            if let Some(name) = name {
+                let Some(line) = self
+                    .document
+                    .sections
+                    .last_mut()
+                    .and_then(|s| s.lines.last_mut())
+                else {
+                    self.error(at, "expression requires a preceding utterance");
+                    return;
+                };
+                if line.expression.is_some()
+                    || !line.choices.is_empty()
+                    || !line.speaker.as_ref().is_some_and(|speaker| {
+                        speaker.value.split_once('.').is_some_and(|(alias, _)| {
+                            self.document
+                                .imports
+                                .iter()
+                                .any(|import| import.alias.value == alias)
+                        }) && !self
+                            .document
+                            .speakers
+                            .iter()
+                            .any(|local| local.id.value == speaker.value)
+                    })
+                {
+                    self.error(at, "declare one expression after an utterance with an imported character, before choices");
+                } else {
+                    line.expression = Some(name);
+                }
+            }
         } else if let Some(rest) = syntax.strip_prefix("@timing ") {
             self.timing(rest, at);
         } else if let Some(import) = character_import(raw, number) {
@@ -685,6 +723,7 @@ impl Parser<'_> {
             return;
         }
         section.lines.push(DialogueLine {
+            expression: None,
             fallback: None,
             events: Vec::new(),
             timing: None,

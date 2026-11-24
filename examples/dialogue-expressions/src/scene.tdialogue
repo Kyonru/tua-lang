@@ -1,0 +1,20 @@
+@dialogue 1
+@characters Cast "forward"
+[start]
+// @id expressions.happy
+Cast.Guide: Welcome!
+@expression happy
+// @id expressions.default
+Cast.Guide: My default portrait returns here.
+// @id expressions.none
+Cast.Captain: I have no default portrait.
+// @id expressions.end
+: Goodbye. (end)
+[talking]
+// @id expressions.talking
+Cast.Guide: Let me explain. (end)
+@expression talking
+[worried]
+// @id expressions.worried
+Cast.Captain: Watch out! (end)
+@expression worried

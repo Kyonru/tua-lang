@@ -1,0 +1,15 @@
+-- Shared presentation descriptions; never store sprite players here.
+return {
+  Guide = {
+    name = "Guide",
+    portrait = "portraits/guide.png",
+    expressions = {
+      happy = { portrait = "portraits/guide-happy.png" },
+      talking = { portrait = "portraits/guide-sheet.png", animation = "talk" },
+    },
+  },
+  Captain = {
+    name = "Captain",
+    expressions = { worried = { portrait = "portraits/captain-worried.png" } },
+  },
+}

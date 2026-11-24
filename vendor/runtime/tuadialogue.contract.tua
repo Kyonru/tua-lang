@@ -63,6 +63,7 @@ type ActionNode = {
   failure: string,
   source?: EventSource,
 }
+type Expression = { portrait: string, animation?: string }
 type Node = {
   kind: "line",
   text: string,
@@ -70,6 +71,8 @@ type Node = {
   speakerKey?: string,
   speaker?: string,
   portrait?: string,
+  expression?: string,
+  expressions?: { [string]: Expression },
   next: string,
   hold?: number,
   fade?: number,
@@ -105,6 +108,8 @@ type PresentationNode = {
   speakerKey?: string,
   speaker?: string,
   portrait?: string,
+  expression?: string,
+  portraitAnimation?: string,
   hold?: number,
   fade?: number,
   events?: Event[],

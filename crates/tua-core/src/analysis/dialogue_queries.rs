@@ -49,12 +49,10 @@ impl AnalysisSnapshot {
             let Some(model) = file.dialogue_model.get().and_then(Option::as_ref) else {
                 continue;
             };
-            for speaker in model
-                .sections
-                .iter()
-                .flat_map(|section| &section.lines)
-                .filter_map(|line| line.speaker.as_ref())
-            {
+            for line in model.sections.iter().flat_map(|section| &section.lines) {
+                let Some(speaker) = &line.speaker else {
+                    continue;
+                };
                 let Some((alias, name)) = speaker.value.split_once('.') else {
                     continue;
                 };
@@ -77,11 +75,86 @@ impl AnalysisSnapshot {
                         );
                         diagnostics.push(character_error(path, speaker.span, message));
                     }
-                    _ => {}
+                    Some(ty) => {
+                        if let Some(expression) = &line.expression {
+                            let selected = expression_fields(&ty)
+                                .and_then(|fields| fields.field(&expression.value));
+                            if !selected
+                                .is_some_and(|field| !field.optional && valid_expression(&field.ty))
+                            {
+                                diagnostics.push(character_error(path, expression.span, format!("character `{}` needs a declared expression `{}` with a required string portrait and optional string animation", speaker.value, expression.value)));
+                            }
+                        }
+                    }
                 }
             }
         }
         diagnostics
+    }
+
+    // Lexical recovery allows completion while an expression name is unfinished.
+    fn expression_target(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        prefix: bool,
+    ) -> Option<(PathBuf, String, String, SourceSpan)> {
+        let file = self.file(path)?;
+        let lines: Vec<_> = file.source.lines().collect();
+        let line = *lines.get(position.line.checked_sub(1)?)?;
+        let rest = line.trim_start().strip_prefix("@expression ")?.trim_start();
+        let start = line.chars().count() - rest.chars().count() + 1;
+        let name = rest.trim_end();
+        let end = start + name.chars().count();
+        if position.column < start || position.column > end {
+            return None;
+        }
+        let token = if prefix {
+            name.chars().take(position.column - start).collect()
+        } else {
+            name.to_owned()
+        };
+        for previous in lines[..position.line - 1].iter().rev() {
+            let previous = previous.trim_start();
+            if previous.is_empty() || previous.starts_with("//") {
+                continue;
+            }
+            if previous.starts_with('[')
+                || previous.starts_with("->")
+                || previous.starts_with("@action ")
+                || previous.starts_with("@branch ")
+            {
+                return None;
+            }
+            if previous.starts_with('@') {
+                continue;
+            }
+            let (speaker, _) = previous.split_once(':')?;
+            let (alias, character) = speaker.split_once('.')?;
+            let import = file
+                .parsed
+                .as_ref()
+                .ok()?
+                .dialogue_imports
+                .iter()
+                .find(|import| import.alias.value == alias)?;
+            return Some((
+                self.dialogue_module(path, import)?,
+                character.to_owned(),
+                token,
+                SourceSpan {
+                    start: SourcePosition {
+                        line: position.line,
+                        column: start,
+                    },
+                    end: SourcePosition {
+                        line: position.line,
+                        column: end,
+                    },
+                },
+            ));
+        }
+        None
     }
 
     pub(super) fn dialogue_completion(
@@ -89,6 +162,33 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        if let Some((module, character, prefix, _)) = self.expression_target(path, position, true) {
+            let Some(ty) = self.dialogue_character_type(&module, &character) else {
+                return Vec::new();
+            };
+            let Some(expressions) = expression_fields(&ty) else {
+                return Vec::new();
+            };
+            return expressions
+                .fields()
+                .filter(|(name, field)| {
+                    name.starts_with(&prefix) && !field.optional && valid_expression(&field.ty)
+                })
+                .map(|(name, field)| Completion {
+                    label: name.to_owned(),
+                    kind: CompletionKind::Field,
+                    detail: Some(format!("expression: {}", field.ty)),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: Some(module.clone()),
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect();
+        }
         if let Some(completions) = self.dialogue_event_completion(path, position) {
             return completions;
         }
@@ -144,6 +244,21 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if let Some((module, character, expression, span)) =
+            self.expression_target(path, position, false)
+        {
+            let ty = self.dialogue_character_type(&module, &character)?;
+            let field = expression_fields(&ty)?.field(&expression)?;
+            return Some(Hover {
+                is_markdown: false,
+                contents: format!("{character}.{expression}: {}", field.ty),
+                span: Some(span),
+                documentation: None,
+                context: vec![
+                    "Per-line portrait selection; animation state belongs to the host".into(),
+                ],
+            });
+        }
         if let Some(hover) = self.dialogue_event_hover(path, position) {
             return Some(hover);
         }
@@ -191,6 +306,24 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Definition> {
+        if let Some((module, character, expression, _)) =
+            self.expression_target(path, position, false)
+        {
+            let ty = self.dialogue_character_type(&module, &character)?;
+            expression_fields(&ty)?.field(&expression)?;
+            let source = self
+                .module_graph
+                .export_type_source_path(&module, &character)?;
+            let export = self
+                .module_graph
+                .export(source, &character)
+                .or_else(|| self.module_graph.export(&module, &character))?;
+            return Some(Definition {
+                path: source.to_owned(),
+                span: export.definition_span,
+                kind: DefinitionKind::TableField,
+            });
+        }
         if let Some(definition) = self.dialogue_event_definition(path, position) {
             return Some(definition);
         }
@@ -350,4 +483,36 @@ fn dialogue_text(
             )
         })
         .find(|text| contains(text.id.span, position))
+}
+
+fn expression_fields(ty: &Type) -> Option<&crate::types::TableShape> {
+    let Type::Table(character) = unreadonly(ty) else {
+        return None;
+    };
+    let Type::Table(expressions) = unreadonly(&character.field("expressions")?.ty) else {
+        return None;
+    };
+    Some(expressions)
+}
+
+fn unreadonly(ty: &Type) -> &Type {
+    match ty {
+        Type::Readonly(inner) => unreadonly(inner),
+        _ => ty,
+    }
+}
+
+fn valid_expression(ty: &Type) -> bool {
+    let Type::Table(expression) = unreadonly(ty) else {
+        return false;
+    };
+    expression
+        .field("portrait")
+        .is_some_and(|field| !field.optional && is_string(&field.ty))
+        && expression
+            .field("animation")
+            .is_none_or(|field| is_optional_string(&field.ty))
+        && expression
+            .fields()
+            .all(|(name, _)| matches!(name, "portrait" | "animation"))
 }

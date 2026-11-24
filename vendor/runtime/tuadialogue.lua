@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 6 }
+local Dialogue = { schemaVersion = 7 }
 local Conditions
 local function conditions()
   if not Conditions then Conditions = require("tuadialogue_conditions") end
@@ -57,7 +57,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     local payload
     if event.kind ~= nil then
       assert(
-        (schemaVersion == 5 or schemaVersion == 6) and event.kind == event.name,
+        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7) and event.kind == event.name,
         "invalid typed event kind"
       )
       assert(event.id ~= nil, "typed events require an explicit ID")
@@ -75,7 +75,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     end
     if event.id ~= nil or event.source ~= nil then
       assert(
-        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6,
+        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7,
         "event identity requires schema version 4 or later"
       )
       assert(
@@ -128,6 +128,8 @@ local nodeFields = {
     speaker = true,
     speakerKey = true,
     portrait = true,
+    expression = true,
+    expressions = true,
     next = true,
     hold = true,
     fade = true,
@@ -178,7 +180,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -188,14 +190,17 @@ local function document(value)
   local validators
   if value.events ~= nil then
     assert(
-      value.schemaVersion == 5 or value.schemaVersion == 6,
+      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7,
       "event contracts require schema version 5 or later"
     )
     validators = eventDefinitions[value.events]
     assert(validators, "document needs a Dialogue.events definition")
   end
   if value.actions ~= nil then
-    assert(value.schemaVersion == 6, "action contracts require schema version 6")
+    assert(
+      value.schemaVersion == 6 or value.schemaVersion == 7,
+      "action contracts require schema version 6 or later"
+    )
     assert(actions().valid(value.actions), "document needs a Dialogue.actions definition")
   end
   local nodes, eventIds = {}, {}
@@ -217,6 +222,33 @@ local function document(value)
       assert(node.fade == nil or seconds(node.fade), "invalid fade duration")
       owned.text, owned.speaker, owned.next = node.text, node.speaker, node.next
       owned.portrait, owned.hold, owned.fade = node.portrait, node.hold, node.fade
+      if node.expression ~= nil or node.expressions ~= nil then
+        assert(value.schemaVersion == 7, "expressions require schema version 7")
+        assert(
+          type(node.expression) == "string" and node.expression ~= "",
+          "expression needs a name"
+        )
+        assert(
+          type(node.expressions) == "table" and getmetatable(node.expressions) == nil,
+          "expressions need a plain record"
+        )
+        local expression = node.expressions[node.expression]
+        assert(
+          type(expression) == "table" and getmetatable(expression) == nil,
+          "unknown character expression: " .. node.expression
+        )
+        fields(expression, { portrait = true, animation = true })
+        assert(
+          type(expression.portrait) == "string" and expression.portrait ~= "",
+          "expression needs a portrait asset ID"
+        )
+        assert(
+          expression.animation == nil or type(expression.animation) == "string" and expression.animation ~= "",
+          "invalid portrait animation"
+        )
+        owned.expression, owned.portrait = node.expression, expression.portrait
+        owned.portraitAnimation = expression.animation
+      end
       assert(optionalId(node.textId) and optionalId(node.speakerKey), "invalid localization ID")
       owned.textId, owned.speakerKey = node.textId, node.speakerKey
       owned.events = events(
@@ -232,7 +264,10 @@ local function document(value)
         end
       end
     elseif node.kind == "action" then
-      assert(value.schemaVersion == 6, "actions require schema version 6")
+      assert(
+        value.schemaVersion == 6 or value.schemaVersion == 7,
+        "actions require schema version 6 or later"
+      )
       assert(
         type(value.documentId) == "string" and value.documentId ~= "",
         "actions require documentId"
@@ -788,8 +823,8 @@ function Dialogue.context(schemas)
     assert(source.actions == registeredActions, "document uses another action definition")
     assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6,
-      "typed context requires dialogue schema version 2 through 6"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7,
+      "typed context requires dialogue schema version 2 through 7"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Shared dialogue characters support named expressions selected with `@expression`,
+  with typed metadata, editor queries, per-line portrait resets and host-owned animation.
+  Expression scripts emit schema 7; portrait-only scripts remain compatible.
+
 - Add typed registered dialogue actions with explicit host dispatch, boolean outcome
   targets, stable source identity, lifecycle-safe faults, and shared editor diagnostics.
 

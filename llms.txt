@@ -356,3 +356,14 @@ Flow waits in awaiting_action until explicit player:runAction(); true/false hand
 results select targets. Missing/throwing/invalid handlers fault with source identity;
 cancel/start/dispose invalidate reentrant results. No auto retry, async execution,
 rollback, checkpoint or exactly-once guarantee. Requires dialogue schema 6.
+
+Character expressions (schema 7): exported character records may declare
+expressions={happy={portrait="asset-id", animation="optional-host-animation"}}.
+After an imported-character utterance, before choices, @expression happy selects
+one declared record. Completion/hover/declaration navigation reuse character import
+facts. The snapshot node exposes expression, resolved portrait, portraitAnimation.
+Omission resets each line to the character's portrait or nil; selection never leaks
+across lines/speakers/players. Unknown names fail analysis or dynamic construction.
+Selected strings are copied at player construction. Hosts own loading/layout and
+one spriteSheet player per presentation; shared cast records contain no playback
+state. Asset/animation strings do not execute code or load images during analysis.

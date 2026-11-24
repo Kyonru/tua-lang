@@ -13013,3 +13013,87 @@ local player = actions.new(scene, {
         .pipeline_diagnostics("src/scene.tdialogue")
         .is_empty());
 }
+
+#[test]
+fn dialogue_expressions_share_character_import_facts_and_refresh() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/cast.tua
+return { Guide = { name = "Guide", expressions = {
+    happy = { portrait = "happy.png" }, talking = { portrait = "sheet.png", animation = "talk" },
+} } }
+-- file: src/forward.tua
+return require("cast")
+-- file: src/scene.tdialogue
+@dialogue 1
+@characters Cast "forward"
+[start]
+// @id hello
+Cast.Guide: Hello (end)
+@expression <|expression|>happy
+-- file: src/editing.tdialogue
+@dialogue 1
+@characters Cast "forward"
+[start]
+// @id editing
+Cast.Guide: Hello (end)
+@expression ta<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    assert!(
+        snapshot
+            .pipeline_diagnostics("src/scene.tdialogue")
+            .is_empty(),
+        "{:?}",
+        snapshot.pipeline_diagnostics("src/scene.tdialogue")
+    );
+    assert_eq!(
+        completion_labels(
+            &snapshot.completion("src/editing.tdialogue", fixture.position("complete"))
+        ),
+        vec!["talking"]
+    );
+    let position = fixture.position("expression");
+    assert!(snapshot
+        .hover("src/scene.tdialogue", position)
+        .unwrap()
+        .contents
+        .contains("portrait"));
+    assert_eq!(
+        snapshot
+            .definition("src/scene.tdialogue", position)
+            .unwrap()
+            .path,
+        PathBuf::from("src/cast.tua")
+    );
+    let cast = fixture
+        .files()
+        .iter()
+        .find(|file| file.path == Path::new("src/cast.tua"))
+        .unwrap();
+    for invalid in [
+        cast.source.replace("happy =", "other ="),
+        cast.source.replace("\"happy.png\"", "42"),
+        cast.source.replace(
+            "portrait = \"happy.png\"",
+            "portrait = \"happy.png\", extra = true",
+        ),
+    ] {
+        host.set_file("src/cast.tua", invalid);
+        assert!(host
+            .snapshot()
+            .pipeline_diagnostics("src/scene.tdialogue")
+            .iter()
+            .any(|d| d.message.contains("declared expression")));
+    }
+    host.set_file("src/cast.tua", cast.source.clone());
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .is_empty());
+}
