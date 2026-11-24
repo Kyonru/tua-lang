@@ -503,17 +503,21 @@ fired events and suspension. It restores into a fresh player and silently comple
 line reveal. Context/registry documents, branches and conditional choices are
 rejected in version 1. Version 2 now supports typed locals, bindings, branches and
 conditional choices while rebinding current facts. Restore rejects unavailable
-choices without following fallback. Action/event registries remain excluded;
-a typed host recipe now qualifies single-writer local action reconciliation.
-The ordinary-dialogue Save recipe now covers typed-local line/choice/wait
-persistence and explicit host storage timing. The action-enabled checkpoint format
-remains pending; neither recipe relaxes core registry exclusions.
+choices without following fallback. V3 now supports action/event registry documents with explicit
+`checkpointEffects = "settled"` opt-in. Only line/choice/wait boundaries with no
+in-flight action can be saved; restore dispatches nothing. The default registry
+exclusions and v1/v2 formats remain unchanged. A typed host recipe qualifies
+single-writer durable action reconciliation; the ordinary-dialogue Save recipe
+covers typed-local persistence and explicit host storage timing.
 See the [typed checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-context-checkpoints.md).
 See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
 
-- [ ] Define a versioned, validated JSON-shaped checkpoint: document identity and
+- [x] Define a versioned, validated JSON-shaped checkpoint: document identity and
   compatible content version, stable position/choice IDs, locals, locale, logical
   timers, relevant event-delivery/action status, and deterministic execution state.
+  V3 explicitly records settled action status and fingerprints compiled action
+  contracts; opaque pending work is deliberately excluded. See the
+  [v3 qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-settled-checkpoints.md).
 - [x] Specify what is deliberately not saved: closures, GPU/audio objects, opaque
   host handles, absolute wall-clock timestamps and the whole gameplay context.
   Rebind host context, handlers and presentation after restoring.
@@ -526,7 +530,9 @@ See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob
 - [x] Choose safe checkpoint boundaries for pending actions. Initially reject or
   defer checkpoints with non-resumable work; resumable actions need an explicit
   host policy and durable identity, not replay-on-load by default.
-  Core rejects all registry documents and pending handles. The host recipe stores
+  Core rejects registry documents by default; v3 explicitly opts into settled
+  line/choice/wait boundaries. Ready/pending/executing actions remain excluded.
+  The host recipe stores
   a prepared intent/committed receipt and only dispatches after explicit recovery.
 - [x] Provide durable idempotency keys or an acknowledgement protocol for
   consequential actions. Explain the crash window between an external effect and

@@ -11,8 +11,8 @@ Storage timing is explicit. Missing checkpoints return false. Load/save issues
 raise to the host; damaged slots block writes. Every save reopens the contract,
 observing prior writes whose acknowledgement failed. This is a single-writer
 recipe; it makes no concurrency, external-effect or physical power-loss guarantee.
-Host schema migrations remain explicit. General action-enabled core checkpoints
-are still pending; the separate durable-action recipe owns consequential effects.
+Host schema migrations remain explicit. The subsequent [v3 settled-boundary format](M8-settled-checkpoints.md) supports
+registry documents; the separate durable-action recipe owns consequential effects.
 
 ## Qualification
 

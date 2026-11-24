@@ -1,0 +1,29 @@
+local actions = require("actions")
+local scene = require("scene")
+local calls = 0
+local function fresh()
+  return actions.new(scene, {
+    checkpointVersion = "merchant-settled-v1",
+    checkpointEffects = "settled",
+    handlers = {
+      purchase = function(payload: { item: string }): boolean
+        calls += 1
+        return payload.item == "shell"
+      end,
+    },
+  })
+end
+local original = fresh()
+original:start()
+-- Ready and pending actions cannot be serialized. Dispatch belongs to the host.
+assert(original:runAction())
+local saved = original:checkpoint()
+assert(saved.version == 3 and saved.actionState == "settled")
+local restored = fresh()
+restored:restore(saved)
+assert(restored:snapshot().restored and calls == 1)
+assert(not restored:runAction())
+original:dispose()
+restored:dispose()
+print("settled action checkpoint restored without replay")
+return true

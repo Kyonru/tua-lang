@@ -429,7 +429,7 @@ clear suspension; cancellation/disposal still invalidate pending handles.
 Pass snapshots to Dialogue.reveal: present tracks suspension, freezes fractional
 reveal/timing and invalidates stale cue sequences. Missing suspended means false for
 older snapshots. finish can reveal silently but cannot navigate. Host audio pause,
-non-cancellable skip policy and checkpointing remain host responsibilities/future work.
+skip cancellation and checkpoint persistence require explicit host policies.
 
 Dialogue audio metadata (schema 10): Dialogue.speechProfile takes/returns a typed,
 owned record: sampleSet string (1..256 bytes), pitchMin/pitchMax ordered in [0.25,4],
@@ -489,8 +489,8 @@ recovery or reset. Recovery attaches a player but never automatically dispatches
 Keys identify occurrences, not authored actions or live visit/generation counters.
 Prepared work may be explicitly abandoned; playback cancellation retains intent.
 The guarantee covers single-writer local state only. External authorities need
-idempotency and outcome lookup. Core action/event-registry checkpoint exclusions
-remain unchanged.
+idempotency and outcome lookup. Core registry checkpoints remain excluded by
+default; explicit v3 settled-boundary checkpoints are described below.
 
 Optional checkpoint persistence: examples/dialogue-checkpoint supplies typed host
 modules persistence/saved_session using Save.contract. Host save/load calls are
@@ -500,4 +500,14 @@ Missing checkpoints return false; invalid saves raise errors without defaulting,
 writing or restarting. Envelope version and concrete locals schema are host-owned.
 Single-writer writes reopen the contract first; uncertain writes require reopening.
 Restart, restore and history browsing are separate; history is not persisted.
-Action-enabled core checkpoints remain pending.
+Registry checkpoint opt-in: options.checkpointEffects = "settled" selects v3 for
+players with action/event registries. Omitted/"reject" retains default exclusion;
+plain/context-only documents still use v1/v2. Only line/choice/wait boundaries with
+no pending handle or executing handler can be exported. Ready and unconsumed
+resolved actions are rejected. V3 requires actionState = "settled" (no in-flight
+work, not a durable receipt). Restore dispatches nothing; unfired notifications
+still require update. Action IDs/names/payloads/effects/targets and registry presence
+join graph identity. Keep current handlers/facts outside the save and explicitly
+bump checkpointVersion for validator/host semantic changes. No automatic migration
+or exactly-once effect guarantee. Host Save schemas must include actionState and,
+for context players, their concrete locals schema.

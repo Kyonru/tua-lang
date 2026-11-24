@@ -73,3 +73,5 @@ print("dialogue waits and suspension passed")
 
 -- Host-selected conversation skip respects pending external work.
 require("skip-demo")
+
+assert(require("checkpoint-demo"))

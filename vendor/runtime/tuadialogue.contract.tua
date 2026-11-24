@@ -179,6 +179,7 @@ type Checkpoint = {
   state: "awaiting_advance" | "awaiting_choice" | "waiting",
   elapsed: number,
   revealedElapsed?: number,
+  actionState?: "settled",
   revealedAt?: number,
   suspended: boolean,
   locale?: string,
@@ -210,6 +211,7 @@ type HistoryOptions = {
 type Options = {
   history?: HistoryOptions,
   checkpointVersion?: string,
+  checkpointEffects?: "reject" | "settled",
   transitionBudget?: number,
   locale?: string,
   args?: Arguments,

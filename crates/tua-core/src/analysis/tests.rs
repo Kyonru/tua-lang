@@ -13969,3 +13969,69 @@ print(count, other, cycle, explicit, hidden)
     let diagnostics = snapshot.pipeline_diagnostics("src/permissive.tua");
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
+
+#[test]
+fn settled_checkpoint_policy_and_status_have_shared_editor_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/actions.tua
+return Dialogue.actions({ reward = {
+  payload = Save.shape(Save.record({ count = Save.number(1) })),
+  effect = "consequential",
+} })
+-- file: src/scene.tdialogue
+@dialogue 1
+@document checkpoint.events
+@actions "actions"
+[start]
+@action reward [id:reward.one] [success:done] {"count":1}
+[done]
+// @id checkpoint.done
+: Done (end)
+-- file: src/player.tua
+local actions = require("actions")
+return actions.new(require("scene"), {
+  checkpointVersion = "v1",
+  checkpointEffects = "settled",
+})
+-- file: src/forward.tua
+return require("player")
+-- file: src/main.tua
+local player = require("forward")
+local saved = player:checkpoint()
+local state: "settled" | nil = saved.<|state|>actionState
+player:restore(saved)
+print(state)
+-- file: src/bad.tua
+local actions = require("actions")
+local player = actions.new(require("scene"), { checkpointEffects = "automatic" })
+local saved = require("forward"):checkpoint()
+saved.actionState = "pending"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/player.tua", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 2,
+        "{diagnostics:?}"
+    );
+    let position = fixture.position("state");
+    let hover = snapshot.hover("src/main.tua", position).unwrap();
+    assert!(hover.contents.contains("settled"), "{hover:?}");
+    assert!(
+        completion_labels(&snapshot.completion("src/main.tua", position))
+            .contains(&"actionState".to_owned())
+    );
+}

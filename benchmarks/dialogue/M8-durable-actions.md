@@ -4,7 +4,8 @@ This slice provides an explicit typed host recipe, using existing Dialogue and
 Save APIs. It does not change runtime dispatch, register a new helper, or enable
 core checkpoints for action/event registry documents. The subsequent
 [checkpoint-envelope Save recipe](M8-save-recipe.md) is qualified separately;
-action-enabled checkpoint representation remains pending.
+the subsequent [v3 settled-boundary format](M8-settled-checkpoints.md) supports
+registry documents while keeping pending work outside core checkpoints.
 
 ## Protocol and scope
 

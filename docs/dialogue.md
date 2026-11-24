@@ -1956,14 +1956,15 @@ Version 1 rejects context documents, branches and conditional choices. Typed
 context players use version 2, described below. **Both versions reject all action-
 and typed-event-registry documents**, not merely currently pending work. Idle,
 completed, cancelled, disposed, faulted and action states cannot be exported.
-Durable action reconciliation and a complete `Save.contract` recipe remain later
-work. Checkpoints do not promise exactly-once external effects: crashing between
+Version 3 offers explicitly opted-in settled registry boundaries, described below.
+The host persistence and durable action recipes are separate. Checkpoints do not
+promise exactly-once external effects: crashing between
 an effect and its durable acknowledgement still requires host-side atomic
 persistence or idempotency.
 
 ### Restore typed dialogue locals
 
-A player created by an imported `Dialogue.context` definition exports version-2
+A context player without registries exports version-2
 checkpoints. The `locals` field retains the definition's concrete type for checking,
 completion and hover. It contains an owned copy validated by the original
 `Save.shape`; whole gameplay facts remain outside the checkpoint.
@@ -2018,6 +2019,75 @@ host `checkpointVersion` whenever fact/local schema semantics or host behavior
 changes incompatibly, even if defaults stay the same. There is no automatic schema
 migration. Facts, closures, host handlers and media are rebound, never serialized.
 
+
+## Checkpoint conversations with actions or typed events
+
+Opt in with `checkpointEffects = "settled"` when constructing a registry-backed
+player. This selects **version 3** for that player; omitting the option (or choosing
+`"reject"`) preserves the default registry exclusion. Plain/context-only documents
+continue producing v1/v2 data even when the option is set.
+
+```tua
+local actions = require("actions")
+local scene = require("scene")
+local function fresh()
+  return actions.new(scene, {
+    checkpointVersion = "merchant-v1",
+    checkpointEffects = "settled",
+    handlers = {
+      purchase = function(payload: { item: string }): boolean
+        return payload.item == "shell" -- Example decision; host owns real effects.
+      end,
+    },
+  })
+end
+local player = fresh()
+player:start()
+player:runAction() -- Explicit host dispatch; reaches the authored outcome line.
+local saved = player:checkpoint()
+local resumed = fresh()
+resumed:restore(saved) -- Presents that line; does not dispatch the purchase again.
+player:dispose()
+resumed:dispose()
+```
+
+The runnable [settled checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue-actions/src/checkpoint-demo.tua)
+counts handler calls and verifies that restore leaves the count unchanged.
+The same option works on event-registry and context factories, including contexts
+that combine actions and events.
+
+Only line, choice and wait boundaries can be exported. Ready actions, pending
+handles, unconsumed handle resolutions and synchronous handler execution are
+rejected. V3 requires `actionState = "settled"`, meaning **no action is attached or
+executing in this player**. It is not a receipt or proof that external work has
+stopped or was durably committed. No
+handle, handler, result callback, gameplay fact or transaction ID is serialized.
+
+V3 fingerprints action IDs, names, validated payloads, effect classifications,
+success/failure targets and registry presence in addition to the existing graph.
+It retains typed-event fired flags and logical timers. Restore emits no notifications;
+unfired due events require a later `update()`. New visits may emit their events again.
+Typed locals are included only for context players. Rebind current facts, handlers,
+resolvers and presentation services when creating the fresh player.
+
+Changing an action or event payload, identity or timing rejects the old checkpoint.
+Payload schema and host-handler semantics still require an explicit
+`checkpointVersion` change when their meaning changes: graph identity does not
+fingerprint arbitrary validators or closures. No automatic v1/v2/v3 migration occurs.
+
+A checkpoint cannot make an effect and its acknowledgement atomic. If the host
+commits a purchase then crashes before saving the new dialogue position, restoring
+an older position can reach that purchase again. Use the
+[durable-action recipe](#recover-consequential-host-actions) or an external
+idempotency authority for those effects. The same limitation applies to side effects
+performed in response to emitted notifications. Cancel/restart may detach a handle
+without stopping its external work; reconcile abandoned consequential operations
+through the host policy as well.
+
+When persisting v3 with `Save.contract`, include `actionState` in the host schema
+(for example `Save.enum({ "settled" }, "settled")`), and include the concrete local
+schema only for a context player. Keep the host envelope version independent from
+the checkpoint version. The v2 Save example is deliberately scoped to its own scene.
 
 ## Persist checkpoints with Save
 
@@ -2095,8 +2165,8 @@ The guarantee is scoped to **single-writer local state and its receipt in one Sa
 record**. Save does not guarantee power-loss durability, concurrent writers or cloud
 conflict resolution. External services must honor the same idempotency key and
 provide an authoritative outcome query; a local receipt cannot make an external
-reward atomic. Core checkpoints still reject all action/typed-event registries,
-including pending handles. This example's explicit host intent is a separate
+reward atomic. Core checkpoints reject action/typed-event registries by default; v3 requires explicit
+settled-boundary opt-in and still rejects ready/pending actions. This example's explicit host intent is a separate
 recovery protocol, not general serialization of an action-enabled conversation.
 
 ## Keep a bounded conversation history

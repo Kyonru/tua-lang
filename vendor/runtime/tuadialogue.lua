@@ -186,6 +186,7 @@ local optionFields = {
 local playerOptions = {
   history = true,
   checkpointVersion = true,
+  checkpointEffects = true,
   locale = true,
   resolve = true,
   resolveTemplate = true,
@@ -453,6 +454,8 @@ local function newPlayer(source, options)
   assert(optionalId(options.locale), "invalid dialogue locale")
   assert(options.checkpointVersion == nil or (type(options.checkpointVersion) == "string"
     and #options.checkpointVersion > 0 and #options.checkpointVersion <= 256), "invalid checkpointVersion")
+  assert(options.checkpointEffects == nil or options.checkpointEffects == "reject"
+    or options.checkpointEffects == "settled", "invalid checkpointEffects")
   assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
   assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
   assert(
@@ -478,6 +481,9 @@ local function newPlayer(source, options)
   return setmetatable({
     transcript = options.history ~= nil and history().new(options.history) or nil,
     checkpointVersion = options.checkpointVersion,
+    checkpointEffects = options.checkpointEffects,
+    checkpointRegistries = (source.actions ~= nil or source.events ~= nil)
+      and { actions = source.actions ~= nil, events = source.events ~= nil } or nil,
     checkpointPlain = source.context == nil and source.actions == nil and source.events == nil,
     checkpointNoEffects = source.actions == nil and source.events == nil,
     actionHandlers = handlers,
@@ -847,12 +853,14 @@ end
 
 -- Restore only into a fresh session. Validation and presentation precede mutation.
 function Player:checkpoint()
-  assert(not self.resolving and self.state ~= "disposed", "cannot checkpoint this player")
+  assert(not self.resolving and not self.executingAction and not self.pendingAction
+    and self.state ~= "disposed", "cannot checkpoint this player")
   return require("tuadialogue_checkpoint").export(self)
 end
 
 function Player:restore(value)
-  assert(not self.resolving and self.state == "idle", "restore needs a fresh idle player")
+  assert(not self.resolving and not self.executingAction and self.state == "idle",
+    "restore needs a fresh idle player")
   local fired, locals = require("tuadialogue_checkpoint").validate(self, value)
   value = copy(value)
   if locals then boundArguments(self, self.facts, locals) end

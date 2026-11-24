@@ -67,11 +67,18 @@ local function encode(value, output, budget, seen, depth)
     output[#output + 1] = kind:sub(1, 1) .. #content .. ":" .. content
   end
 end
+local function formatVersion(player)
+  if not player.checkpointNoEffects then
+    assert(player.checkpointEffects == "settled",
+      "checkpoints cannot contain action or event registries without checkpointEffects = settled")
+    return 3
+  end
+  return player.copyLocals and 2 or 1
+end
 local function signature(player)
-  assert(
-    player.checkpointNoEffects and (player.checkpointPlain or player.copyLocals),
-    "checkpoints cannot contain action or event registries"
-  )
+  local version = formatVersion(player)
+  assert(version == 3 or player.checkpointPlain or player.copyLocals,
+    "checkpoint needs a supported context")
   assert(text(player.document.documentId, 256), "checkpoint needs a documentId")
   assert(text(player.checkpointVersion, 256), "checkpoint needs checkpointVersion")
   local graph = {
@@ -79,6 +86,7 @@ local function signature(player)
     schema = player.document.schemaVersion or 0,
     nodes = {},
   }
+  if version == 3 then graph.registries = player.checkpointRegistries end
   if player.copyLocals then
     graph.bindings = player.bindings
     graph.localDefaults = player.localDefaults
@@ -91,7 +99,8 @@ local function signature(player)
   for id, node in pairs(player.document.nodes) do
     take()
     assert(node.kind == "line" or node.kind == "choice" or node.kind == "wait" or node.kind == "end"
-      or (player.copyLocals and node.kind == "branch"),
+      or (player.copyLocals and node.kind == "branch")
+      or (version == 3 and node.kind == "action"),
       "checkpoint cannot contain actions or plain-dialogue branches")
     local row = {
       kind = node.kind,
@@ -102,6 +111,16 @@ local function signature(player)
       events = {},
       options = {},
     }
+    if version == 3 and node.kind == "action" then
+      row.action = {
+        id = node.id,
+        name = node.name,
+        payload = node.payload,
+        effect = node.effect,
+        success = node.success,
+        failure = node.failure,
+      }
+    end
     if player.copyLocals then
       row.condition, row.yes, row.no = node.condition, node.yes, node.no
     end
@@ -114,6 +133,7 @@ local function signature(player)
         delay = event.delay,
         payload = event.payload,
       }
+      if version == 3 then row.events[#row.events].kind = event.kind end
     end
     for _, option in ipairs(node.options or {}) do
       take()
@@ -147,11 +167,18 @@ local fields = {
   locale = true,
   fired = true,
   locals = true,
+  actionState = true,
 }
 local states = { line = "awaiting_advance", choice = "awaiting_choice", wait = "waiting" }
 function Checkpoint.validate(player, value)
   record(value, fields)
-  assert(value.version == (player.copyLocals and 2 or 1), "unsupported checkpoint version")
+  local version = formatVersion(player)
+  assert(value.version == version, "unsupported checkpoint version")
+  if version == 3 then
+    assert(value.actionState == "settled", "checkpoint cannot contain in-flight action work")
+  else
+    assert(value.actionState == nil, "legacy checkpoint cannot contain action status")
+  end
   local locals
   if player.copyLocals then
     -- Bound raw data before the schema copier or any resolver touches it.
@@ -209,7 +236,8 @@ function Checkpoint.export(player)
   for index in pairs(player.fired or {}) do fired[#fired + 1] = index end
   table.sort(fired)
   local value = {
-    version = player.copyLocals and 2 or 1,
+    version = formatVersion(player),
+    actionState = not player.checkpointNoEffects and "settled" or nil,
     documentId = player.document.documentId,
     contentVersion = player.checkpointVersion,
     graph = signature(player),

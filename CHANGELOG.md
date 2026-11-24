@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add opt-in v3 settled-boundary checkpoints for action/event registry dialogues,
+  preserving typed event timers and action graph compatibility without replaying
+  handlers. Pending/executing actions and default registry exclusions stay intact.
+
 - Preserve constructed dialogue player types through module re-exports, named fields
   and factories in shared editor analysis, including dependency-edit refreshes.
 

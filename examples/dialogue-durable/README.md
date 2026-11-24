@@ -3,7 +3,9 @@
 This typed host example combines `Dialogue.actions` and `Save.contract` without
 changing their runtimes. One purchase costs five coins and adds one shell.
 Gameplay counters and the action receipt share one authoritative save record.
-Core dialogue checkpoints still reject action registries, including pending work.
+Core dialogue checkpoints reject registries by default. Explicit v3 settled-boundary
+checkpoints support outcome lines, choices and waits; ready/pending work still
+requires the host recovery protocol used here.
 
 ## Try it
 

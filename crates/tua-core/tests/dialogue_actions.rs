@@ -16,6 +16,7 @@ fn dialogue_actions_execute_emitted_sources() {
         "wait",
         "skip-policy",
         "skip-demo",
+        "checkpoint-demo",
     ] {
         let code = if matches!(name, "scene" | "bound" | "wait") {
             tua_core::emit::emit_dialogue_source(
@@ -48,6 +49,7 @@ fn dialogue_actions_execute_emitted_sources() {
     script.push_str(include_str!("fixtures/dialogue_skip_policy.lua"));
     script.push_str(include_str!("fixtures/dialogue_checkpoint.lua"));
     script.push_str(include_str!("fixtures/dialogue_history.lua"));
+    script.push_str(include_str!("fixtures/dialogue_checkpoint_effects.lua"));
     let mut ran = false;
     for interpreter in ["lua", "lua5.1", "luajit"] {
         if Command::new(interpreter).arg("-v").output().is_err() {
