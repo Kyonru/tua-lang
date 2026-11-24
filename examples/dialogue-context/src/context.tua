@@ -1,0 +1,8 @@
+-- One definition can be shared by many scripts and independent players.
+return Dialogue.context({
+  facts = Save.shape(Save.record({
+    player = Save.record({ name = Save.string(""), coins = Save.number(0) }),
+    nickname = Save.optional(Save.string("")),
+  })),
+  locals = Save.shape(Save.record({ visits = Save.number(0), greeted = Save.boolean(false) })),
+})

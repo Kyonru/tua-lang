@@ -12,6 +12,27 @@ files use `local Save = require("tuasave")`.
 Passing or storing the built-in `Save` value also imports it; a table field
 named `Save` does not.
 
+## Validate data without persistence
+
+`Save.shape(Save.record({...}))` provides `{defaults, copy}` without a slot, backend,
+filesystem access or LÖVE. `defaults` is an owned initial value; `copy(value)` validates
+and returns another owned value with the inferred record type. It does not fill missing
+required fields or silently drop unknown fields. The same finite-number, plain-table,
+dense-array, depth (32) and entry-count (100,000) limits apply as for save contracts.
+Required fields need defaults; optional fields may be absent.
+
+```tua
+local shape = Save.shape(Save.record({ name = Save.string(""), count = Save.number(0) }))
+local data = shape.copy({ name = "Ada", count = 2 })
+```
+
+Dialogue context definitions reuse this helper for safe per-player copies. Creating a
+shape captures the schema and default data; later edits to its source descriptors do
+not rewrite that captured schema. The returned `defaults` value itself is mutable;
+copy it before using it as independent state.
+
+## Declare a save contract
+
 ```tua title="src/profile.tua"
 local Profile = Save.contract({
   slot = "profile",

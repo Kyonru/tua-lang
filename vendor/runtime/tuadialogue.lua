@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 1 }
+local Dialogue = { schemaVersion = 2 }
 local Player = {}
 Player.__index = Player
 
@@ -42,7 +42,14 @@ end
 
 -- Schema field sets are immutable and private; validation does not allocate a
 -- fresh lookup table or an error string for every valid field/session.
-local documentFields = { schemaVersion = true, documentId = true, entry = true, nodes = true }
+local documentFields = {
+  schemaVersion = true,
+  documentId = true,
+  entry = true,
+  nodes = true,
+  context = true,
+  bindings = true,
+}
 local nodeFields = {
   line = {
     kind = true,
@@ -78,7 +85,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -165,7 +172,7 @@ local function arguments(values)
   return result
 end
 
-function Dialogue.new(source, options)
+local function newPlayer(source, options)
   if options == nil then options = {} end
   assert(type(options) == "table", "invalid dialogue options")
   fields(options, playerOptions)
@@ -185,18 +192,45 @@ function Dialogue.new(source, options)
   }, Player)
 end
 
+function Dialogue.new(source, options)
+  assert(
+    source.context == nil and source.bindings == nil,
+    "use the context definition's new function"
+  )
+  return newPlayer(source, options)
+end
+
+-- Bound data is copied by a schema validator before it becomes session state.
+-- No user callbacks run while following a field path.
+local function boundArguments(self, facts, locals)
+  local result = copy(self.args)
+  for _, binding in ipairs(self.bindings or {}) do
+    local value = binding.root == "context" and facts or locals
+    for _, key in ipairs(binding.keys) do
+      if value == nil then break end
+      assert(type(value) == "table" and getmetatable(value) == nil, "binding needs a plain record")
+      value = rawget(value, key)
+    end
+    if value == nil then value = binding.fallback end
+    assert(value ~= nil, "missing dialogue binding: " .. binding.name)
+    result[binding.name] = value
+  end
+  return arguments(result)
+end
+
 -- Compute presentation before committing a transition; a bad resolver cannot
 -- partially advance the visit or overwrite clocks. Snapshot never calls host code.
-local function presentation(self, id, locale)
+local function presentation(self, id, locale, facts, locals)
   -- The document is already owned. Without localization, retain only an internal
   -- reference; snapshot still copies it before exposing anything to the caller.
-  if not self.resolve then return self.document.nodes[id] end
+  if not self.resolve and not self.bindings then return self.document.nodes[id] end
+  local args = boundArguments(self, facts or self.facts, locals or self.locals)
   local node = copy(self.document.nodes[id])
   node.text, node.options = node.text or "", node.options or {}
   if self.resolve then
     local function translate(key, source)
       self.resolving = true
-      local ok, value = pcall(self.resolve, key, source, copy(self.args), locale)
+      local ok, value = pcall(self.resolve, key, source, copy(args), locale)
       self.resolving = false
       if not ok then error(value, 0) end
       assert(type(value) == "string", "dialogue resolver must return text")
@@ -205,6 +239,13 @@ local function presentation(self, id, locale)
     if node.textId then node.text = translate(node.textId, node.text) end
     if node.speakerKey then node.speaker = translate(node.speakerKey, node.speaker or "") end
     for _, option in ipairs(node.options) do option.text = translate(option.id, option.text) end
+  end
+  if self.bindings then
+    local format = require("tuadialogue_text").format
+    if not self.resolve or not node.textId then node.text = format(node.text, args) end
+    if not self.resolve then
+      for _, option in ipairs(node.options) do option.text = format(option.text, args) end
+    end
   end
   return node
 end
@@ -224,9 +265,9 @@ function Player:setLocale(locale)
   return true
 end
 
-function Player:enter(id)
+function Player:enter(id, locals)
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
-  local nodePresentation = presentation(self, id, self.locale)
+  local nodePresentation = presentation(self, id, self.locale, nil, locals)
   self.presentation, self.revealComplete = nodePresentation, false
   self.presentationRevision = self.presentationRevision + 1
   self.visit = self.visit + 1
@@ -244,7 +285,9 @@ function Player:start(entry)
   assert(entry == nil or type(entry) == "string", "entry ID must be a string")
   entry = entry or self.document.entry
   assert(self.document.nodes[entry], "missing entry node")
-  self:enter(entry)
+  local locals = self.localDefaults and self.copyLocals(self.localDefaults)
+  self:enter(entry, locals)
+  if locals then self.locals = locals end
   self.generation = self.generation + 1
 end
 
@@ -346,7 +389,108 @@ function Player:dispose()
   self.generation = self.generation + 1
   self.state, self.current, self.document = "disposed", nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
+  self.facts, self.locals, self.localDefaults = nil, nil, nil
+  self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
+end
+
+-- Refreshing data changes presentation, not execution identity or event clocks.
+local function refresh(self, facts, locals)
+  boundArguments(self, facts, locals)
+  local node = self.current and presentation(self, self.current, self.locale, facts, locals)
+  self.facts, self.locals, self.presentation = facts, locals, node
+  self.presentationRevision = self.presentationRevision + 1
+  self.revealComplete = self.state == "awaiting_advance"
+  if self.revealComplete and self.revealedElapsed == nil then
+    self.revealedElapsed, self.revealedAt = 0, self.elapsed
+  end
+end
+
+local function contextReady(self)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  assert(self.state ~= "disposed", "dialogue is disposed")
+  assert(self.copyFacts, "dialogue has no typed context")
+end
+
+function Player:getContext()
+  contextReady(self)
+  return copy(self.facts)
+end
+
+function Player:getLocals()
+  contextReady(self)
+  return copy(self.locals)
+end
+
+function Player:updateContext(value)
+  contextReady(self)
+  refresh(self, self.copyFacts(value), self.locals)
+end
+
+function Player:setLocals(value)
+  contextReady(self)
+  refresh(self, self.facts, self.copyLocals(value))
+end
+
+function Dialogue.context(schemas)
+  assert(type(schemas) == "table", "context needs fact and local shapes")
+  fields(schemas, { facts = true, locals = true })
+  local Shape = require("tuasave_shape")
+  local copyFacts, initialFacts = Shape.get(schemas.facts)
+  local copyLocals, initialLocals = Shape.get(schemas.locals)
+  local definition = { kind = "context", facts = copy(initialFacts), locals = copy(initialLocals) }
+  function definition.new(source, value, options)
+    assert(source.context == definition, "document uses another context definition")
+    assert(source.schemaVersion == 2, "typed context requires dialogue schema version 2")
+    local player = newPlayer(source, options)
+    player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)
+    player.copyFacts, player.copyLocals = copyFacts, copyLocals
+    player.localDefaults, player.bindings = copyLocals(initialLocals), {}
+    local seen = {}
+    assert(
+      type(source.bindings) == "table" and #source.bindings <= 256,
+      "invalid dialogue bindings"
+    )
+    local count = 0
+    for index in pairs(source.bindings) do
+      assert(type(index) == "number" and index >= 1 and index <= #source.bindings and index % 1 == 0,
+        "bindings must be a dense array")
+      count = count + 1
+    end
+    assert(count == #source.bindings, "bindings must be a dense array")
+    for _, binding in ipairs(source.bindings) do
+      assert(type(binding) == "table", "invalid binding")
+      fields(binding, { name = true, path = true, fallback = true })
+      assert(
+        type(binding.name) == "string" and binding.name:match("^[A-Za-z_][A-Za-z0-9_]*$"),
+        "invalid binding name"
+      )
+      assert(
+        not seen[binding.name] and player.args[binding.name] == nil,
+        "duplicate dialogue argument"
+      )
+      seen[binding.name] = true
+      assert(type(binding.path) == "string", "invalid binding path")
+      local root, tail = binding.path:match("^(%a+)%.(.+)$")
+      assert(root == "context" or root == "locals", "invalid binding root")
+      local keys = {}
+      for key in tail:gmatch("[^.]+") do
+        assert(key:match("^[A-Za-z_][A-Za-z0-9_]*$"), "invalid binding field")
+        keys[#keys + 1] = key
+      end
+      assert(#keys > 0 and #keys < 32 and table.concat(keys, ".") == tail, "invalid binding path")
+      if binding.fallback ~= nil then arguments({ fallback = binding.fallback }) end
+      player.bindings[#player.bindings + 1] = {
+        name = binding.name,
+        root = root,
+        keys = keys,
+        fallback = binding.fallback,
+      }
+    end
+    boundArguments(player, player.facts, player.locals)
+    return player
+  end
+  return definition
 end
 
 return Dialogue

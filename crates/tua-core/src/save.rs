@@ -76,6 +76,16 @@ pub(crate) fn schema_value(ty: &Type) -> Option<(Type, bool)> {
     Some((value, optional))
 }
 
+pub(crate) fn shape_type(value: Type) -> Type {
+    Type::table([
+        ("defaults", field(value.clone())),
+        (
+            "copy",
+            field(function(vec![("value", value.clone())], 1, vec![value])),
+        ),
+    ])
+}
+
 pub(crate) fn binding_type() -> Type {
     let issue = Type::union([Type::alias(ISSUE_TYPE), Type::nil()]);
     Type::table([
@@ -217,6 +227,14 @@ pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
                 ],
                 1,
                 vec![schema_type(Type::string(), false)],
+            )),
+        ),
+        (
+            "shape",
+            field(function(
+                vec![("schema", Type::Any)],
+                1,
+                vec![shape_type(Type::Any)],
             )),
         ),
         (
@@ -634,6 +652,18 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
             }
             match parts[1].as_str() {
                 "contract" => self.check_contract(call),
+                "shape" => {
+                    if let Some(schema) = first_argument(call) {
+                        self.check_defaults(schema, "$", 0);
+                        if let Expression::FunctionCall(schema_call) = schema {
+                            if field_chain_before_first_call(schema_call).as_deref()
+                                != Some(&["Save".to_owned(), "record".to_owned()])
+                            {
+                                self.report(span, "Save.shape root must use Save.record");
+                            }
+                        }
+                    }
+                }
                 "record" => self.check_record(call),
                 _ => {}
             }
@@ -732,6 +762,12 @@ pub(crate) fn inferred_return(parts: &[String], argument: Option<&Type>) -> Opti
             };
             schema_type(value, false)
         }
+        "shape" => shape_type(
+            argument
+                .and_then(schema_value)
+                .map(|(value, _)| value)
+                .unwrap_or(Type::Any),
+        ),
         "contract" => {
             let snapshot = match argument {
                 Some(Type::Table(table)) => table

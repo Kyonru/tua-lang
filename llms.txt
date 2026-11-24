@@ -281,12 +281,27 @@ args = {name = "Ada", count = 2}})` uses existing configured catalogs and source
 Line text IDs and reply IDs are catalog keys; optional character `nameKey` localizes its name.
 `player:setLocale("en")` refreshes presentation without changing visit/generation or replaying events.
 Renderers honor `presentationRevision` and `revealComplete` (show refreshed lines fully).
-Compiled documents have schemaVersion 1 and line textId; optional `@document logical.id`
+Context-free compiled documents have schemaVersion 1 and line textId; optional `@document logical.id`
 before labels supplies documentId. Legacy structured documents remain playable.
 Use `assert(Dialogue.schemaVersion >= 1)` when relying on this API with runtime replacements.
 `tua dialogue-extract` prints a read-only source-text JSON manifest, never overwrites catalogs.
 Localization Explorer includes dialogue coverage/source navigation. Script formatting and
 cross-language rename remain pending.
+Typed dialogue context: declare `Dialogue.context({facts = Save.shape(Save.record({...})),
+locals = Save.shape(Save.record({...}))})` in a definitions-only Tua module. Save.shape
+is a headless schema validator/copier with typed defaults; no save slot or LÖVE required.
+A script binds it before labels with `@context "story.context"` and
+`@bind name context.player.name`; locals use `@bind visits locals.visits`.
+Optional paths require a compatible scalar `default "fallback"`. Paths are data reads,
+not arbitrary expressions. Every placeholder in a bound script needs a scalar binding.
+Create through `context.new(scene, facts, options?)`, not Dialogue.new. Re-exports retain types.
+`getContext()`/`getLocals()` return owned Readonly views. `updateContext(facts)` and
+`setLocals(locals)` validate complete replacements and refresh without replaying events.
+start resets locals to captured defaults but retains current facts; loops retain both;
+cancel retains inspection data; dispose releases it. Players never share mutable locals.
+Bindings cannot be overridden by options.args. Custom resolvers return final formatted text.
+Context-bound assets emit schemaVersion 2 (header remains @dialogue 1); runtime accepts old schemas.
+Use direct built-in factory calls; generic factory wrappers can lose specialized inference.
 Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
 After an utterance, `@event shown 0.2 event.name "payload"` or
 `@event revealed 0.2 event.name` schedules named data (up to 64 per line).

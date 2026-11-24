@@ -1,5 +1,5 @@
 //! Typed contract for the optional renderer-independent dialogue runtime.
-use crate::types::TableField;
+use crate::types::{FunctionParameter, FunctionType, TableField};
 use crate::{Type, TypeEnvironment};
 use std::sync::OnceLock;
 
@@ -36,7 +36,18 @@ pub(crate) fn module_type() -> Type {
                     add_start(ty);
                 }
             }
+            let Type::Function(new) = &constructor else {
+                unreachable!()
+            };
+            let factory = context_function(
+                Type::Any,
+                Type::Any,
+                &new.parameters[0].ty,
+                &new.parameters[1].ty,
+                &new.return_type,
+            );
             Type::table([
+                ("context", TableField::required(factory)),
                 ("new", TableField::required(constructor)),
                 ("schemaVersion", TableField::required(Type::number())),
             ])
@@ -81,4 +92,133 @@ pub(crate) fn document_exports(path: &std::path::Path) -> crate::ModuleExports {
         value_type,
         fields,
     }
+}
+
+fn signature(parameters: Vec<(&str, Type)>, required: usize, result: Type) -> Type {
+    Type::Function(FunctionType::new_signature(
+        parameters
+            .into_iter()
+            .map(|(name, ty)| FunctionParameter::named(name, ty)),
+        required,
+        None,
+        [result],
+    ))
+}
+
+fn definition_type(
+    facts: Type,
+    locals: Type,
+    document: &Type,
+    options: &Type,
+    base: &Type,
+) -> Type {
+    let Type::Table(mut player) = base.clone() else {
+        unreachable!()
+    };
+    for (name, value) in [("getContext", facts.clone()), ("getLocals", locals.clone())] {
+        player.insert(
+            name,
+            TableField::required(signature(
+                vec![("self", Type::Any)],
+                1,
+                Type::Readonly(Box::new(value)),
+            )),
+        );
+    }
+    for (name, value) in [
+        ("updateContext", facts.clone()),
+        ("setLocals", locals.clone()),
+    ] {
+        player.insert(
+            name,
+            TableField::required(signature(
+                vec![("self", Type::Any), ("value", value)],
+                2,
+                Type::nil(),
+            )),
+        );
+    }
+    Type::table([
+        (
+            "kind",
+            TableField::required(Type::string_literal("context")),
+        ),
+        (
+            "facts",
+            TableField::required(Type::Readonly(Box::new(facts.clone()))),
+        ),
+        (
+            "locals",
+            TableField::required(Type::Readonly(Box::new(locals))),
+        ),
+        (
+            "new",
+            TableField::required(signature(
+                vec![
+                    ("source", document.clone()),
+                    ("facts", facts),
+                    ("options", options.clone()),
+                ],
+                2,
+                Type::Table(player),
+            )),
+        ),
+    ])
+}
+
+fn context_function(
+    facts: Type,
+    locals: Type,
+    document: &Type,
+    options: &Type,
+    player: &Type,
+) -> Type {
+    signature(
+        vec![(
+            "schemas",
+            Type::table([
+                (
+                    "facts",
+                    TableField::required(crate::save::shape_type(facts.clone())),
+                ),
+                (
+                    "locals",
+                    TableField::required(crate::save::shape_type(locals.clone())),
+                ),
+            ]),
+        )],
+        1,
+        definition_type(facts, locals, document, options, player),
+    )
+}
+
+pub(crate) fn is_builtin(ty: &Type) -> bool {
+    ty == &module_type()
+}
+
+pub(crate) fn inferred_context(options: Option<&Type>) -> Option<Type> {
+    let Type::Table(options) = options? else {
+        return None;
+    };
+    let shape = |name| {
+        let Type::Table(schema) = &options.field(name)?.ty else {
+            return None;
+        };
+        Some(schema.field("defaults")?.ty.clone())
+    };
+    let facts = shape("facts")?;
+    let locals = shape("locals")?;
+    let Type::Table(module) = module_type() else {
+        unreachable!()
+    };
+    let Type::Function(new) = &module.field("new")?.ty else {
+        unreachable!()
+    };
+    Some(definition_type(
+        facts,
+        locals,
+        &new.parameters[0].ty,
+        &new.parameters[1].ty,
+        &new.return_type,
+    ))
 }

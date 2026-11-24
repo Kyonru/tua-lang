@@ -3,6 +3,8 @@ use crate::{Diagnostic, DiagnosticCode, SourcePosition, SourceSpan};
 use std::collections::BTreeSet;
 use std::path::Path;
 
+mod context;
+pub use context::{DialogueBinding, DialogueLiteral};
 #[cfg(test)]
 mod tests;
 
@@ -120,7 +122,11 @@ pub(crate) fn character_imports(source: &str) -> Vec<CharacterImport> {
     source
         .lines()
         .enumerate()
-        .filter_map(|(index, line)| character_import(line, index + 1)?.ok())
+        .filter_map(|(index, line)| {
+            character_import(line, index + 1)
+                .or_else(|| context::context_import(line, index + 1))?
+                .ok()
+        })
         .collect()
 }
 
@@ -140,6 +146,8 @@ pub(crate) fn character_module_specifiers(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub context: Option<CharacterImport>,
+    pub bindings: Vec<DialogueBinding>,
     pub document_id: Option<DialogueName>,
     pub imports: Vec<CharacterImport>,
     pub speakers: Vec<DialogueSpeaker>,
@@ -158,6 +166,8 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            context: None,
+            bindings: Vec::new(),
             document_id: None,
             imports: Vec::new(),
             speakers: Vec::new(),
@@ -287,6 +297,9 @@ impl Parser<'_> {
                 self.error(at, "first directive must be `@dialogue 1`");
             }
             self.abandon_id();
+            return;
+        }
+        if self.context_line(raw, number) {
             return;
         }
         if let Some(rest) = syntax.strip_prefix("@document ") {
@@ -656,6 +669,12 @@ impl Parser<'_> {
     }
 
     fn finish(mut self) -> Result<DialogueSource, Vec<Diagnostic>> {
+        if self.document.context.is_none() && !self.document.bindings.is_empty() {
+            self.error(
+                self.document.bindings[0].path.span,
+                "placeholder bindings require an @context module",
+            );
+        }
         self.abandon_id();
         if !self.header || self.document.sections.is_empty() {
             self.error(

@@ -16,10 +16,24 @@ pub struct BundledRuntime {
 
 pub const RUNTIMES: &[BundledRuntime] = &[
     BundledRuntime {
+        module: "tuasave_shape",
+        file_name: "tuasave_shape.lua",
+        source: || include_str!("../../../vendor/runtime/tuasave_shape.lua"),
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
+        module: "tuadialogue_text",
+        file_name: "tuadialogue_text.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_text.lua"),
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "tuadialogue",
         file_name: "tuadialogue.lua",
         source: || include_str!("../../../vendor/runtime/tuadialogue.lua"),
-        dependencies: &[],
+        dependencies: &["tuadialogue_text", "tuasave_shape"],
         explicit_import: true,
     },
     BundledRuntime {
@@ -97,6 +111,7 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         file_name: "tuai18n.lua",
         source: crate::tuai18n_runtime_source,
         dependencies: &[
+            "tuadialogue_text",
             "smiti18n",
             "smiti18n.format",
             "smiti18n.plural",
@@ -111,7 +126,7 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         module: "tuasave",
         file_name: "tuasave.lua",
         source: crate::tuasave_runtime_source,
-        dependencies: &["tuasave_json"],
+        dependencies: &["tuasave_json", "tuasave_shape"],
         explicit_import: false,
     },
     BundledRuntime {

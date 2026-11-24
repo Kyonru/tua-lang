@@ -1,0 +1,2 @@
+-- Re-exporting retains the context's payload types and editor support.
+return require("context")

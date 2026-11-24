@@ -76,7 +76,7 @@ impl CatalogIndex {
     }
 }
 
-fn dialogue_placeholders(text: &str) -> Result<BTreeSet<String>, String> {
+pub(crate) fn dialogue_placeholders(text: &str) -> Result<BTreeSet<String>, String> {
     let mut names = BTreeSet::new();
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {

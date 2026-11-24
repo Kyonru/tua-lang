@@ -175,6 +175,7 @@ pub struct LocalizationPage {
 }
 
 mod dialogue;
+pub(crate) use dialogue::dialogue_placeholders;
 
 impl CatalogIndex {
     /// Return only result types that are safe for every configured locale.

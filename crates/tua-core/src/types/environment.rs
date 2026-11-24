@@ -5834,6 +5834,21 @@ fn infer_first_function_call_return_types(
         return Vec::new();
     };
 
+    if parts.as_slice() == ["Dialogue", "context"]
+        && (query
+            .locals
+            .get("Dialogue")
+            .is_some_and(crate::dialogue::is_builtin)
+            || (query.context.parsed.raw.language == ParsedLanguage::Tua
+                && !query.locals.contains_key("Dialogue")))
+    {
+        let argument = first_parenthesized_call_argument_after_field(function_call)
+            .and_then(|argument| query.type_of(argument));
+        if let Some(ty) = crate::dialogue::inferred_context(argument.as_ref()) {
+            return vec![ty];
+        }
+    }
+
     if parts
         .first()
         .is_some_and(|name| name == crate::save::MODULE_NAME)

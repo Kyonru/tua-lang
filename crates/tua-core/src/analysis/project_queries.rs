@@ -1163,6 +1163,22 @@ impl AnalysisSnapshot {
                 })?;
             return Some(crate::store::store_type_from_initial(&initial));
         }
+        if parts.as_slice() == ["Dialogue", "context"]
+            && parsed.raw.language == crate::ParsedLanguage::Tua
+            && !local_types.contains_key("Dialogue")
+            && !self
+                .file(&parsed.path)?
+                .scope()?
+                .has_non_builtin_binding_at("Dialogue", node_span(function_call)?.start)
+        {
+            let argument = project_call_argument_expressions(function_call)?
+                .first()
+                .and_then(|argument| {
+                    self.project_structured_argument_type(parsed, argument, local_types)
+                });
+            return crate::dialogue::inferred_context(argument.as_ref())
+                .filter(|_| return_index == 0);
+        }
         if parts
             .first()
             .is_some_and(|part| part == crate::save::MODULE_NAME)

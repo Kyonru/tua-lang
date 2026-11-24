@@ -1,0 +1,30 @@
+local story = require("story")
+local scene = require("scene")
+local facts = { player = { name = "Ada", coins = 3 } }
+local first = story.new(scene, facts)
+local second = story.new(scene, { player = { name = "Bea", coins = 5 } })
+first:start()
+second:start()
+local before = first:snapshot()
+assert(before.node and before.node.text == "Hello Ada (traveler). Coins: 3; visits: 0.")
+assert(#first:update(0, false) == 1)
+
+-- Only an explicit replacement changes dialogue facts.
+facts.player.coins = 8
+assert(first:getContext().player.coins == 3)
+first:updateContext(facts)
+first:setLocals({ visits = 2, greeted = true })
+assert(second:getLocals().visits == 0)
+assert(#first:update(0, true) == 0)
+assert(first:snapshot().visit == before.visit)
+assert(first:snapshot().generation == before.generation)
+assert(first:advance())
+assert(first:choose("context.again"))
+assert(first:getLocals().visits == 2)
+
+first:start()
+assert(first:getLocals().visits == 0)
+assert(first:getContext().player.coins == 8)
+first:dispose()
+second:dispose()
+print("dialogue context example passed")

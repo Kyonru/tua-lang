@@ -191,6 +191,18 @@ local function defaults(spec, path)
   return validate(spec, spec.default, path, {}, 1, { value = 0 }, false)
 end
 
+-- Headless schema validation; no slot, backend, disk or LÖVE dependency.
+function Save.shape(source)
+  local spec = copySchema(schema(source), 1, {}, { value = 0 })
+  assert(spec.kind == "record", "Save.shape requires a record schema")
+  local initial = validate(spec, defaults(spec, "$"), "$", {}, 1, { value = 0 }, false)
+  local function copy(value)
+    return validate(spec, value, "$", {}, 1, { value = 0 }, false)
+  end
+  local value = { defaults = copy(initial), copy = copy }
+  return require("tuasave_shape").register(value, initial, copy)
+end
+
 local function encode(spec, value)
   if spec.kind == "optional" then return encode(spec.child, value) end
   if spec.kind == "string" or spec.kind == "enum" then return Json.quote(value) end

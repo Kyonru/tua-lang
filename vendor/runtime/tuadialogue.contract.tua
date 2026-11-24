@@ -22,7 +22,10 @@ type Node = {
 }
   | { kind: "choice", options: Option[] }
   | { kind: "end" }
+type Binding = { name: string, path: string, fallback?: string | number | boolean }
 type Document = {
+  context?: { kind: "context" },
+  bindings?: Binding[],
   schemaVersion?: number,
   documentId?: string,
   entry: string,

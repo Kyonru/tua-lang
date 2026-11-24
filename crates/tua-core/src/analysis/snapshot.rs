@@ -405,6 +405,7 @@ impl AnalysisSnapshot {
         if file.kind == AnalysisSourceKind::Dialogue {
             let mut diagnostics = file.diagnostics.clone();
             diagnostics.extend(self.dialogue_character_diagnostics(path.as_ref()));
+            diagnostics.extend(self.dialogue_context_diagnostics(path.as_ref()));
             if config.i18n.enabled {
                 diagnostics.extend(
                     self.catalog_index_for_path(path.as_ref())

@@ -2411,6 +2411,28 @@ impl<'a> Checker<'a> {
             Callable::Function(function) => {
                 if self.parsed.raw.language == crate::ParsedLanguage::Tua {
                     if let Some(parts) = field_chain_before_first_call(function_call) {
+                        if parts.as_slice() == ["Dialogue", "context"]
+                            && self
+                                .environment
+                                .local("Dialogue")
+                                .is_some_and(crate::dialogue::is_builtin)
+                            && !self
+                                .scoped_locals
+                                .iter()
+                                .any(|locals| locals.contains_key("Dialogue"))
+                            && !self
+                                .scope
+                                .globals()
+                                .get("Dialogue")
+                                .is_some_and(|global| global.kind == ScopeGlobalKind::Assigned)
+                        {
+                            let argument = crate::save::first_argument(function_call)
+                                .and_then(|argument| self.infer_expression_return(argument, 0));
+                            if let Some(ty) = crate::dialogue::inferred_context(argument.as_ref()) {
+                                self.check_call_arguments(function_call, &function);
+                                return vec![ty];
+                            }
+                        }
                         if parts
                             .first()
                             .is_some_and(|part| part == crate::save::MODULE_NAME)

@@ -12532,3 +12532,131 @@ player:setLocale(<|signature|>"fr")
         .signature_help("src/main.tua", fixture.position("signature"))
         .is_some());
 }
+
+#[test]
+fn dialogue_context_imports_bindings_and_editor_queries() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({player = Save.record({name = Save.string("")}), nickname = Save.optional(Save.string(""))})),
+  locals = Save.shape(Save.record({visits = Save.number(0)})),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@context "forward"
+@bind name context.player.na<|hover|>me
+@bind nick context.nickname default "traveler"
+@bind visits locals.visits
+[start]
+// @id hello
+: Hello %{name} %{nick} %{visits} (end)
+-- file: src/editing.tdialogue
+@dialogue 1
+@context "forward"
+@bind name context.player.n<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/scene.tdialogue");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let completions = snapshot.completion("src/editing.tdialogue", fixture.position("complete"));
+    assert_eq!(completion_labels(&completions), vec!["name"]);
+    let hover = snapshot
+        .hover("src/scene.tdialogue", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("string"), "{hover:?}");
+    let definition = snapshot
+        .definition("src/scene.tdialogue", fixture.position("hover"))
+        .unwrap();
+    assert_eq!(definition.path, PathBuf::from("src/context.tua"));
+    let valid = fixture
+        .files()
+        .iter()
+        .find(|f| f.path == Path::new("src/scene.tdialogue"))
+        .unwrap()
+        .source
+        .clone();
+    for (source, expected) in [
+        (
+            valid.replace("context.player.name", "context.player.naem"),
+            "unknown dialogue context field",
+        ),
+        (
+            valid.replace(" default \"traveler\"", ""),
+            "requires a default",
+        ),
+        (
+            valid.replace("default \"traveler\"", "default 42"),
+            "incompatible",
+        ),
+        (
+            valid.replace("context.player.name", "context.player"),
+            "scalar field",
+        ),
+        (valid.replace("%{name}", "%{missing}"), "has no binding"),
+    ] {
+        host.set_file("src/scene.tdialogue", source);
+        let errors = host.snapshot().pipeline_diagnostics("src/scene.tdialogue");
+        assert!(
+            errors.iter().any(|d| d.message.contains(expected)),
+            "{errors:?}"
+        );
+    }
+    assert!(snapshot
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .is_empty());
+    host.set_file("src/scene.tdialogue", valid);
+    host.set_file("src/context.tua", "return { kind = 'invalid' }");
+    assert!(!host
+        .snapshot()
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .is_empty());
+}
+
+#[test]
+fn dialogue_context_imported_players_reject_wrong_updates_and_readonly_writes() {
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        "src/context.tua",
+        r#"
+return Dialogue.context({
+  facts = Save.shape(Save.record({player = Save.record({name = Save.string("")})})),
+  locals = Save.shape(Save.record({visits = Save.number(0)})),
+})
+"#,
+    );
+    host.set_file("src/forward.tua", "return require('context')");
+    host.set_file(
+        "src/scene.tdialogue",
+        "@dialogue 1\n@context \"forward\"\n[start]\n// @id hello\n: Hello (end)\n",
+    );
+    host.set_file(
+        "src/main.tua",
+        r#"
+local definition = require("forward")
+local player = definition.new(require("scene"), {player = {name = "Ada"}})
+player:updateContext({player = {name = 42}})
+player:setLocals({visits = "wrong"})
+player:getContext().player.name = "changed"
+player:getLocals().visits = 4
+"#,
+    );
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+    assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.message.contains("read-only"))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+}

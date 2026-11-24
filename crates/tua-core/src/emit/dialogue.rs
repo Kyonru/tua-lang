@@ -35,8 +35,45 @@ pub fn emit_dialogue_source(
             import.module.span,
         );
     }
+    if let Some(context) = &document.context {
+        output.line(
+            &format!(
+                "local __tua_context = require({})",
+                lua_string_literal(&context.module.value)
+            ),
+            context.module.span,
+        );
+    }
     output.line("return {", entry.span);
-    output.line("  schemaVersion = 1,", entry.span);
+    output.line(
+        if document.context.is_some() {
+            "  schemaVersion = 2,"
+        } else {
+            "  schemaVersion = 1,"
+        },
+        entry.span,
+    );
+    if let Some(context) = &document.context {
+        output.line("  context = __tua_context,", context.module.span);
+        output.line("  bindings = {", context.module.span);
+        for binding in &document.bindings {
+            output.line("    {", binding.name.span);
+            output.field("      name", &binding.name.value, binding.name.span);
+            output.field("      path", &binding.path.value, binding.path.span);
+            if let Some(value) = &binding.fallback {
+                let value = match value {
+                    crate::dialogue_asset::DialogueLiteral::String(value) => {
+                        lua_string_literal(value)
+                    }
+                    crate::dialogue_asset::DialogueLiteral::Number(value) => value.clone(),
+                    crate::dialogue_asset::DialogueLiteral::Boolean(value) => value.to_string(),
+                };
+                output.line(&format!("      fallback = {value},"), binding.path.span);
+            }
+            output.line("    },", binding.path.span);
+        }
+        output.line("  },", context.module.span);
+    }
     if let Some(id) = &document.document_id {
         output.field("  documentId", &id.value, id.span);
     }

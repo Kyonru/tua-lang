@@ -1046,6 +1046,18 @@ impl<'a> ExportInferer<'a> {
                 if self.parsed.raw.language == crate::ParsedLanguage::Tua =>
             {
                 if let Some(parts) = field_chain_before_first_call(call) {
+                    if parts.as_slice() == ["Dialogue", "context"]
+                        && node_span(call).is_some_and(|span| {
+                            !crate::scope::scope_map_parsed_source(self.parsed)
+                                .has_non_builtin_binding_at("Dialogue", span.start)
+                        })
+                    {
+                        let argument = crate::save::first_argument(call)
+                            .map(|argument| self.infer_expression(argument));
+                        if let Some(ty) = crate::dialogue::inferred_context(argument.as_ref()) {
+                            return ty;
+                        }
+                    }
                     if parts
                         .first()
                         .is_some_and(|part| part == crate::save::MODULE_NAME)

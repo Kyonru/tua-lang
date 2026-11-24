@@ -1,0 +1,18 @@
+@dialogue 1
+@document context.example
+@context "story"
+@bind name context.player.name
+@bind coins context.player.coins
+@bind nickname context.nickname default "traveler"
+@bind visits locals.visits
+[start]
+// @id context.greeting
+: Hello %{name} (%{nickname}). Coins: %{coins}; visits: %{visits}.
+@event shown 0 greeted "welcome"
+// @id context.again
+-> Again [target:start]
+// @id context.done
+-> Goodbye [target:done]
+[done]
+// @id context.farewell
+: Goodbye %{name}. (end)

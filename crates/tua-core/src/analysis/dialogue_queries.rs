@@ -9,13 +9,13 @@ impl AnalysisSnapshot {
             .is_some_and(|file| file.kind == AnalysisSourceKind::Dialogue)
     }
 
-    fn dialogue_module(&self, path: &Path, import: &CharacterImport) -> Option<PathBuf> {
+    pub(super) fn dialogue_module(&self, path: &Path, import: &CharacterImport) -> Option<PathBuf> {
         let parsed = self.file(path)?.parsed.as_ref().ok()?;
         self.indexed_module_path_for_specifier(parsed, &import.module.value)
             .map(Path::to_path_buf)
     }
 
-    fn dialogue_character_type(&self, module: &Path, name: &str) -> Option<Type> {
+    pub(super) fn dialogue_character_type(&self, module: &Path, name: &str) -> Option<Type> {
         let export = self.module_graph.export(module, name)?;
         let source = self.module_graph.export_type_source_path(module, name)?;
         Some(
@@ -33,7 +33,11 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let mut diagnostics = Vec::new();
-        for import in &parsed.dialogue_imports {
+        for import in parsed
+            .dialogue_imports
+            .iter()
+            .filter(|import| !super::dialogue_context::is_context_import(&file.source, import))
+        {
             let Some(module) = self.dialogue_module(path, import) else {
                 diagnostics.push(character_error(
                     path,
@@ -85,6 +89,9 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        if let Some(completions) = self.dialogue_context_completion(path, position) {
+            return completions;
+        }
         let Some(file) = self.file(path) else {
             return Vec::new();
         };
@@ -134,6 +141,9 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if let Some(hover) = self.dialogue_context_hover(path, position) {
+            return Some(hover);
+        }
         let file = self.file(path)?;
         if self.config_for_path(path).i18n.enabled {
             if let Some(text) = dialogue_text(file, position) {
@@ -175,6 +185,9 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Definition> {
+        if let Some(definition) = self.dialogue_context_definition(path, position) {
+            return Some(definition);
+        }
         let file = self.file(path)?;
         if self.config_for_path(path).i18n.enabled {
             if let Some(text) = dialogue_text(file, position) {

@@ -447,7 +447,7 @@ reveal flags are errors.
 | A character reference reports `TL5012` | Check the imported module, exported member, required string name and optional string portrait |
 | Edited text still appears unchanged | Rebuild and refresh the running document/player and Lua module cache |
 
-Translations and placeholder validation remain pending. The extension supports
+Translations and scalar placeholder validation are supported (see below). The extension supports
 script highlighting and character completion, hover and navigation; script
 formatting and cross-language rename are not implemented.
 
@@ -627,7 +627,7 @@ validated when resolved at runtime; analysis never executes them.
 
 ### Document/runtime compatibility
 
-Compiled assets now expose `schemaVersion = 1`, optional `documentId`, and line
+Context-free compiled assets expose `schemaVersion = 1`, optional `documentId`, and line
 `textId`. The current player accepts both legacy unversioned structured documents
 and schema 1; unknown explicit versions and unknown schema-1 semantic fields fail
 validation. Legacy inputs retain their existing selected-field copy behavior.
@@ -638,6 +638,116 @@ is the explicit capability guard for localized hosts, including projects replaci
 semantics themselves. Replacement runtimes must implement these APIs; the compiler
 does not execute or certify arbitrary replacement Lua. Data-only imports still do
 not bundle the player. These schema fields do not constitute save/resume support.
+
+## Typed context and conversation locals
+
+Use a shared context definition when scripts need player facts or their own counters.
+The host supplies facts explicitly; reading a binding never calls a gameplay method.
+[Run the complete example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-context).
+
+### 1. Declare serializable data in Tua
+
+```tua title="src/story/context.tua"
+return Dialogue.context({
+  facts = Save.shape(Save.record({
+    player = Save.record({ name = Save.string(""), coins = Save.number(0) }),
+    nickname = Save.optional(Save.string("")),
+  })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})
+```
+
+`Save.shape` creates a headless validator and copier; it does **not** create a save
+slot, access a filesystem, or need LÖVE. Records, dense arrays, optional fields,
+strings, finite numbers, booleans and string enums use the existing
+[save schema rules](save-contracts.md). Required fields need defaults. Functions,
+userdata, metatables, cycles and unknown fields are rejected. Project engine objects
+must be projected into plain data first: store an entity ID and copied facts, not
+the live entity object. A future checkpoint can serialize these values; M2 does not
+implement checkpoint persistence.
+
+Keep this module definitions-only. It may be shared or re-exported through another
+Tua module, but must not import a scene which imports it back. Use the direct
+`Dialogue.context(...)` and `Save.shape(...)` built-ins to preserve specialized
+inference; wrapping them in an untyped or generic factory can lose payload types.
+
+### 2. Bind named placeholders in the script
+
+```text title="src/welcome.tdialogue"
+@dialogue 1
+@context "story.context"
+@bind name context.player.name
+@bind nickname context.nickname default "traveler"
+@bind visits locals.visits
+[start]
+// @id welcome.hello
+: Hello %{name} (%{nickname}). Visits: %{visits}. (end)
+```
+
+Declare one `@context` and all `@bind` directives before labels. `context` reads
+host facts; `locals` reads this player's private variables. Bindings are field paths,
+not expressions: no calls, indexing, arithmetic or assignment. A placeholder must
+have a binding, and its final field must be a string, number or boolean. Optional
+fields, including optional parents, require a compatible scalar `default`. `false`
+and zero are values; only a missing/nil value uses the fallback.
+
+The compiler checks imported/re-exported paths and fallback types. Editor completion
+and hover show fields; definition navigation leads to the context factory declaration.
+Limits are 256 bindings and 32 path segments (including the root). `%{name}` and `%%`
+use the same literal-safe formatting as localization. Inserted text is never parsed
+again as a placeholder, markup or dialogue code.
+
+### 3. Create players and refresh their data
+
+```tua title="src/main.tua"
+local context = require("story.context")
+local scene = require("welcome")
+local facts = { player = { name = "Ada", coins = 3 } }
+local player = context.new(scene, facts)
+player:start()
+
+facts.player.coins = 8
+player:updateContext(facts)
+player:setLocals({ visits = 2 })
+local view = player:getContext()
+local localView = player:getLocals()
+```
+
+`context.new(scene, facts, options?)` validates and copies facts and local defaults.
+Every player owns its copies. Mutating the original facts, schema defaults, document
+or a getter result cannot change another player's state. `getContext()` and
+`getLocals()` return owned, recursively read-only typed views. Lua callers can mutate
+their returned copies without altering the player.
+
+`updateContext(value)` and `setLocals(value)` accept complete replacements, not
+patches. They validate before committing and refresh current text immediately.
+Invalid data or a failing resolver leaves the previous state and presentation intact.
+These methods do not change visit/generation, execute actions, or replay timed events.
+Renderers honor `presentationRevision` and `revealComplete`, as with locale changes.
+
+| Operation | Facts | Locals | Execution |
+| --- | --- | --- | --- |
+| `new` | Copy supplied facts | Copy captured defaults | Idle |
+| `start`, including restart | Keep current facts | Reset to captured defaults | New generation and visit |
+| `advance`, `choose`, loops | Keep | Keep | Normal transition/new visit |
+| `updateContext`, `setLocals` | Replace selected data | Replace selected data | Refresh presentation only |
+| `cancel` | Keep for inspection | Keep for inspection | Discard pending events |
+| `dispose` | Release | Release defaults and validators too | Further context access fails |
+
+Localization options remain `{locale, resolve, args?}`. Use `I18n.dialogue` for the
+existing catalog integration; it receives bound values alongside optional extra
+arguments. Extra arguments cannot override a binding. Custom resolvers return final
+formatted text; the player does not interpolate their output a second time. Bindings
+work without localization or a catalog runtime.
+
+### Compatibility
+
+Context-bound scripts emit document schema **2**; context-free scripts continue to
+emit schema **1**. The authoring header remains `@dialogue 1`. Use the paired compiler
+and runtime, or check `Dialogue.schemaVersion >= 2` with a custom runtime replacement.
+Create a bound script through its matching `context.new`, not `Dialogue.new`; a
+mismatched definition fails at runtime. Existing structured and schema-one documents,
+renderers, localization, character portraits and event clocks remain supported.
 
 ## Build and import a script
 
