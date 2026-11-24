@@ -1647,7 +1647,7 @@ inspect the resulting snapshot rather than assume its state stayed unchanged.
 Cancelling dialogue does not guarantee external work stopped or roll back its
 effects. With no cleanup callback, the handle is still invalidated, but the host
 must manage any ongoing work. Timeouts belong to the host in this slice: call
-`reject("timed out")` when its policy expires. Non-cancellable skip policy and checkpointing pending work remain future features.
+`reject("timed out")` when its policy expires. The optional host skip policy below protects non-cancellable work. Checkpointing pending work remains future work.
 
 ## Wait and suspend dialogue
 
@@ -1830,8 +1830,60 @@ Run `tua build` then `love build` inside `examples/dialogue-audio`. Space finish
 text while keeping the recording, then advances and stops it. P pauses/resumes,
 M mutes chatter, V mutes recordings, and R restarts. This is a copyable host policy,
 not a new required audio engine. Its ASCII word-boundary callback is replaceable
-for other languages; pronunciation metadata is not synthesized speech. The full
-skip policy for pending cancellable/non-cancellable actions remains separate.
+for other languages; pronunciation metadata is not synthesized speech. For pending actions, use the explicit [host skip policy](#choose-an-advance-and-skip-policy) instead of bypassing their state.
 
 The [character presentation example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
 includes shared profiles, voice locale metadata, overrides, silence and plain-line reset.
+
+
+## Choose an advance and skip policy
+
+Keep finishing text, advancing a line, and cancelling an entire conversation as
+separate commands. The core does not assume that unfinished external work can be
+stopped, rolled back, or treated as successful.
+
+The copyable typed host policy in
+[`examples/dialogue-actions`](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-actions)
+uses existing player and handle APIs. It introduces no new runtime method or
+`.tdialogue` syntax. Its behavior is:
+
+| Current state | Finish / advance | Skip conversation |
+| --- | --- | --- |
+| Unfinished line | Finish reveal silently; keep the recording playing. | Cancel the player and stop host audio. |
+| Finished line | Advance once and stop the old recording. | Cancel the player and stop host audio. |
+| Choice | Require an explicit choice; do not choose automatically. | Cancel without choosing. |
+| Authored wait | `advance()` refuses; dialogue time completes the wait. | Cancel the whole conversation, without entering the next node. |
+| Action ready to dispatch | Dispatch only through `runAction()`. | Refuse: no cancellation capability has been registered. |
+| Pending cancellable action | Do not advance past the action. | Cancel the player; its handle invokes host cleanup once. |
+| Pending non-cancellable or untracked action | Wait for explicit settlement. | Refuse; retain the current visit. |
+| Settled action | Consume its result through `runAction()` first. | Refuse to discard the result. |
+| Suspended player | Resume before navigation. | Refuse this user-facing skip command. |
+| Completed/cancelled/disposed | No navigation. | Return inactive. |
+
+Create one policy per player. Before starting the player, bind it once with
+`policy.bind(player)`. In the asynchronous handler, return
+`policy.begin(request, cleanup)` for work that can genuinely stop, or
+`policy.begin(request)` for non-cancellable work. The supplied `request` is the
+handler's typed second argument. `policy.skipConversation()` returns an acceptance
+boolean and a reason such as `non_cancellable_action`, `consume_action_result`,
+`unowned_action`, or `suspended`. The runnable `skip-demo.tua` demonstrates both
+kinds of work; emitted lifecycle regressions cover restart and stale capabilities.
+
+Providing cleanup is an explicit **host capability**, not inferred from an action's
+`visual`/`consequential` effect classification. Only opt in when stopping is valid.
+Stopping does not undo purchases, saves, network writes or other effects already
+committed. The policy never resolves a handle artificially, jumps to its success
+or failure node, or dispatches an action to discover whether it is cancellable.
+
+Accepted cancellation detaches and invalidates the pending handle before cleanup.
+Late completion is ignored. Cleanup errors remain on the handle's
+`cancellationError`; they do not turn cancellation into success. A reentrant host
+restart wins: the command accepted cancellation of the old visit, but does not
+then cancel the replacement session. Check the latest snapshot after callbacks.
+
+This policy is optional host code, not an enforcement layer around `player:cancel()`.
+Direct lifecycle cancellation, restart and disposal still invalidate a handle even
+when the external operation cannot stop. Keep ownership of that operation in the
+host and suppress stale callbacks; invalidating dialogue does not roll back work.
+After accepted navigation/cancellation, synchronize the audio adapter immediately
+with `audio.update(player:snapshot(), 0)`. Dispose audio and player together.

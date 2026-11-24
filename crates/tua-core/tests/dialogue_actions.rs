@@ -7,7 +7,15 @@ fn dialogue_actions_execute_emitted_sources() {
     let example = root.join("examples/dialogue-actions/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     for name in [
-        "actions", "forward", "events", "context", "scene", "bound", "wait",
+        "actions",
+        "forward",
+        "events",
+        "context",
+        "scene",
+        "bound",
+        "wait",
+        "skip-policy",
+        "skip-demo",
     ] {
         let code = if matches!(name, "scene" | "bound" | "wait") {
             tua_core::emit::emit_dialogue_source(
@@ -24,7 +32,7 @@ fn dialogue_actions_execute_emitted_sources() {
             .unwrap()
         };
         script.push_str(&format!(
-            "package.preload.{name} = function()\n{code}\nend\n"
+            "package.preload[{name:?}] = function()\n{code}\nend\n"
         ));
     }
     script.push_str(
@@ -37,6 +45,7 @@ fn dialogue_actions_execute_emitted_sources() {
     script.push_str(include_str!("fixtures/dialogue_actions.lua"));
     script.push_str(include_str!("fixtures/dialogue_async_actions.lua"));
     script.push_str(include_str!("fixtures/dialogue_waits.lua"));
+    script.push_str(include_str!("fixtures/dialogue_skip_policy.lua"));
     let mut ran = false;
     for interpreter in ["lua", "lua5.1", "luajit"] {
         if Command::new(interpreter).arg("-v").output().is_err() {

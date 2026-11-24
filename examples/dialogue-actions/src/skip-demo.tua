@@ -1,0 +1,59 @@
+local Policy = require("skip-policy")
+local actions = require("forward")
+local scene = require("scene")
+local protected = Policy.new()
+local protectedHandle = Dialogue.actionHandle()
+local protectedPlayer = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string }, request)
+      assert(payload.item == "shell")
+      protectedHandle = protected.begin(request)
+      return protectedHandle
+    end,
+  },
+})
+protected.bind(protectedPlayer)
+protectedPlayer:start()
+assert(protectedPlayer:runAction())
+local accepted, reason = protected.skipConversation()
+assert(not accepted and reason == "non_cancellable_action")
+assert(protectedHandle:resolve(true))
+accepted, reason = protected.skipConversation()
+assert(not accepted and reason == "consume_action_result")
+assert(protectedPlayer:runAction())
+assert(protectedPlayer:snapshot().nodeId == "done")
+protectedPlayer:dispose()
+
+-- Skip cancels the conversation, never manufactures success or bypasses effects.
+local policy = Policy.new()
+local handle = Dialogue.actionHandle()
+local stopped = 0
+local player = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string }, request)
+      assert(payload.item == "shell")
+      handle = policy.begin(request, function()
+        stopped += 1
+      end)
+      return handle
+    end,
+  },
+})
+policy.bind(player)
+player:start()
+accepted, reason = policy.skipConversation()
+assert(not accepted and reason == "action_not_started")
+assert(player:runAction())
+assert(player:suspend())
+accepted, reason = policy.skipConversation()
+assert(not accepted and reason == "suspended")
+assert(player:resume())
+accepted, reason = policy.skipConversation()
+assert(accepted and reason == "cancelled")
+assert(stopped == 1 and player:snapshot().state == "cancelled")
+assert(not handle:resolve(true))
+assert(not policy.skipConversation())
+assert(stopped == 1)
+player:dispose()
+print("dialogue skip policy passed")
+return true

@@ -70,3 +70,6 @@ timed:update(0.25, false)
 assert(timed:snapshot().nodeId == "done")
 timed:dispose()
 print("dialogue waits and suspension passed")
+
+-- Host-selected conversation skip respects pending external work.
+require("skip-demo")

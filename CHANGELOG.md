@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Document and demonstrate a typed host conversation-skip policy that refuses
+  non-cancellable pending actions, preserves settled results, and uses existing
+  lifecycle cancellation for explicitly cancellable work.
+
 - Add a playable typed dialogue audio adapter example with original chatter samples,
   recording cues, bounded source pools, private pitch variation, independent mute,
   pause/resume and lifecycle cleanup. Core dialogue stays audio-independent.

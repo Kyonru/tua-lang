@@ -434,8 +434,8 @@ remain host-adapter work. Existing rich runs supply pronunciation hints. See the
 typed `Dialogue.actionHandle` values. Single settlement, one-visit ownership,
 explicit result consumption and lifecycle invalidation preserve bounded execution.
 Snapshots expose status and source identity. Host timeouts are explicit rejection;
-schema-9 authored waits and explicit suspension are implemented. Skip policy and
-voice/speech work remain below. Wait updates complete at most one wait and discard
+schema-9 authored waits and explicit suspension are implemented. Audio and host
+skip policy are implemented below. Wait updates complete at most one wait and discard
 excess time; suspension preserves clocks and defers action consumption.
 See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-action-handles.md)
 and [wait/suspension qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-waits-suspension.md).
@@ -464,7 +464,7 @@ and [wait/suspension qualification](https://github.com/Kyonru/tua-lang/blob/main
 - [x] Add waiting flow for declared actions or authored durations. Determine which
   waits use dialogue time, how concurrent waits are bounded, and how completion
   resumes without recursive unbounded execution.
-- [ ] Specify line-advance and skip policy: finish text, stop/continue voice, cancel
+- [x] Specify line-advance and skip policy: finish text, stop/continue voice, cancel
   cancellable actions, and refuse or defer skipping non-cancellable actions.
 - [x] Define suspension separately from cancellation. Menus or host suspension
   must not silently let paused dialogue timers finish; external work behavior is
@@ -487,7 +487,12 @@ private RNG, coalesced cues, independent mute, recording locale fallback and exp
 pause/finish/navigation cleanup. Emitted Lua and native rendered JIT-on/off regressions
 cover ownership and source reuse. Word cadence uses a replaceable ASCII boundary
 callback, not a universal language segmenter. The recording fixture is synthetic;
-real voice acting uses the same cue mapping. Full pending-action skip policy is next. See the
+real voice acting uses the same cue mapping. The bound host skip policy in
+`examples/dialogue-actions` refuses pending
+non-cancellable work and discarding settled results; accepted skip cancels the
+conversation through existing lifecycle APIs. See the
+[skip policy qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-skip-policy.md)
+and the
 [audio adapter qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-audio-adapter.md).
 
 ## M8 — Save/resume and bounded conversation history
@@ -630,7 +635,7 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0–M6 are complete; continue with **M7 — Voice and asynchronous actions**.
+M0–M7 are complete; continue with **M8 — Save/resume and bounded conversation history**.
 Reuse declared schemas, typed context/path facts, stable execution identities and
 bounded transition behavior. Keep gameplay mutations in explicit host actions;
 never execute arbitrary script expressions or replace the host renderer/audio stack.
