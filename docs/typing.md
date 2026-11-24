@@ -85,6 +85,11 @@ Table compatibility is structural: a value satisfies `Player` when its
 required fields have compatible types. Optional fields may be absent, but must
 have the declared type when present.
 
+Optional fields can also accept a union. For example, `speech?: Profile | "off"`
+allows an omitted field, a `Profile` record, or `"off"`. Reading it includes `nil`,
+so narrow the result before using profile fields. Other strings and invalid
+profile records still produce type errors.
+
 Inside an alias, `Self` refers to that alias. This is useful for recursive data:
 
 ```tua

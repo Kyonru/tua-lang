@@ -2410,6 +2410,20 @@ fn table_field_type_from_type_field(field: &TypeField) -> Option<TableFieldType>
 fn table_field_value_type(type_info: &TypeInfo) -> (bool, TuaType) {
     match type_info {
         TypeInfo::Optional { base, .. } => (true, tua_type_from_type_info(base)),
+        TypeInfo::Union(union) => {
+            // Normalized `field?: A | B` ends in `A | B?`. Recover the
+            // field optionality without discarding any union alternatives.
+            let fields = union
+                .types()
+                .iter()
+                .map(table_field_value_type)
+                .collect::<Vec<_>>();
+            let optional = fields.iter().any(|(optional, _)| *optional);
+            (
+                optional,
+                TuaType::Union(fields.into_iter().map(|(_, ty)| ty).collect()),
+            )
+        }
         _ => (false, tua_type_from_type_info(type_info)),
     }
 }

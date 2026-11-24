@@ -3081,3 +3081,27 @@ return identity
 "#;
     parse_tua_source("src/bounded.tua", source).expect("real generic headers remain supported");
 }
+
+#[test]
+fn optional_union_fields_preserve_alternatives_and_optionality() {
+    let parsed = parse_tua_source(
+        "src/profile.tua",
+        r#"type Profile = { gain: number }
+type Line = { speech?: Profile | "off", required: Profile | "off", nested: { gain?: number } }
+"#,
+    )
+    .expect("optional union fields parse");
+    let TuaType::Table(fields) = &parsed.type_aliases[1].ty else {
+        panic!("expected record");
+    };
+    assert!(fields[0].optional);
+    assert_eq!(
+        fields[0].ty,
+        TuaType::Union(vec![
+            TuaType::Named("Profile".to_owned()),
+            TuaType::StringLiteral("off".to_owned()),
+        ])
+    );
+    assert!(!fields[1].optional);
+    assert!(!fields[2].optional);
+}

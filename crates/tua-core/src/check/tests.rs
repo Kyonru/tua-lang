@@ -8124,3 +8124,43 @@ fn negative_else_guards_support_values_and_calls() {
     check_tua_source("src/main.tua", "type Point = { x: number }\nlocal function select(a: Point | nil): Point if not a then return {x=0} else return a end end\n").unwrap();
     check_tua_source("src/main.tua", "local function invoke(f: (() -> number) | nil): number if not f then return 0 else return f() end end\n").unwrap();
 }
+
+#[test]
+fn optional_union_fields_accept_omission_and_check_present_values() {
+    let contract = r#"type Profile = { gain: number }
+type Line = { speech?: Profile | "off" }
+"#;
+    for value in [
+        "{}",
+        "{ speech = nil }",
+        "{ speech = \"off\" }",
+        "{ speech = { gain = 0.5 } }",
+    ] {
+        check_tua_source(
+            "optional.tua",
+            format!("{contract}local line: Line = {value}\n"),
+        )
+        .expect("optional union accepts omitted and valid values");
+    }
+    for value in [
+        "{ speech = true }",
+        "{ speech = \"wrong\" }",
+        "{ speech = { gain = false } }",
+    ] {
+        assert!(check_tua_source(
+            "optional.tua",
+            format!("{contract}local line: Line = {value}\n")
+        )
+        .is_err());
+    }
+    assert!(check_tua_source(
+        "optional.tua",
+        format!("{contract}local line: Line = {{}}\nlocal profile: Profile = line.speech\n")
+    )
+    .is_err());
+    assert!(check_tua_source(
+        "required.tua",
+        "local line: { speech: number | string } = {}\n"
+    )
+    .is_err());
+}
