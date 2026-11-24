@@ -368,7 +368,7 @@ Registry validators use the original `Save.shape` descriptors, not mutable publi
 These are notifications: handling them does not wait, branch, acknowledge a reward
 or catch host-handler errors. If a handler restarts/cancels a player, use the
 existing generation/visit tokens to reject stale records from the returned batch.
-Registered actions with outcomes and resume policy are separate planned work.
+Registered actions can select an outcome target; persistent resume policy remains planned work.
 
 To combine events with context, pass the **same registry instance** in the context
 module's `events` field:
@@ -1085,3 +1085,99 @@ execute dialogue text.
 See the [dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
 for the structured host and frontend development harness. The format is Tua-owned;
 compatibility with Love-Dialogue `.ld` files is not implied.
+
+## Run a registered host action
+
+Use an action when host code must return an outcome before dialogue continues.
+Timed events remain notifications; `update()` never invokes an action handler.
+The runnable [dialogue-actions example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-actions)
+includes standalone actions and composition with context and typed events.
+
+Declare `actions.tua`:
+
+```tua
+return Dialogue.actions({
+  purchase = {
+    payload = Save.shape(Save.record({ item = Save.string("") })),
+    effect = "consequential",
+  },
+})
+```
+
+Reference it from `scene.tdialogue`. Each action occupies its own label and needs
+an explicit ID, document ID, JSON record, and both outcome targets:
+
+```text
+@dialogue 1
+@document shop
+@actions "actions"
+[buy]
+@action purchase [id:shop.purchase] [success:done] [failure:declined] {"item":"shell"}
+[done]
+// @id done.text
+: Purchased. (end)
+[declined]
+// @id declined.text
+: Not available. (end)
+```
+
+Register the host handler when constructing the player:
+
+```tua
+local actions = require("actions")
+local scene = require("scene")
+local coins = 10
+local player = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string }): boolean
+      if payload.item ~= "shell" or coins < 5 then return false end
+      coins -= 5
+      return true
+    end,
+  },
+})
+player:start()
+-- The host decides when it is safe to perform the pending operation.
+if player:snapshot().state == "awaiting_action" then
+  player:runAction()
+end
+```
+
+`true` selects `success`; `false` selects `failure`. The handler may accept a
+second request argument with `actionId`, `name`, `effect`, `documentId`, `nodeId`,
+`generation`, `visit`, and optional source coordinates. `snapshot().action` exposes
+that metadata while waiting; `snapshot().node` is absent. Payload and request
+records are owned copies. Registry validation captures payloads at construction,
+and each player captures its handler map.
+
+Only `runAction()` executes a handler, at most one per call. Traversal, snapshots,
+locale changes, and updates do not dispatch it. A chain of action labels therefore
+requires separate calls. Handlers must return synchronously; asynchronous handles
+and coroutine-based actions are not supported yet. Reentrant dispatch returns
+`false`. Cancellation, restart, or disposal inside the handler invalidates its
+result, including any error returned afterward.
+
+A missing handler, thrown error, or non-boolean result faults the player with
+`action_handler_missing`, `action_handler_error`, or `action_result_invalid`.
+An error resolving the destination faults with `action_transition_error`.
+`snapshot().issue` carries source/action identity. These failures do not retry:
+inspect the issue and explicitly cancel, dispose, or restart after reconciling any
+side effects. `runAction()` returns whether dispatch successfully reached its
+outcome, not the handler's boolean result.
+
+Choose `effect = "presentation"` for cosmetic host work or `"consequential"` for
+changes such as spending currency. This classification is metadata, not rollback
+or an exactly-once guarantee. A handler can change the world before it fails;
+the host owns reconciliation. Save/resume of pending actions remains future work.
+
+For context plus actions, pass the registry as `actions` to `Dialogue.context`,
+include matching `@context` and `@actions` imports, and supply `handlers` in the
+third argument to `context.new`. An optional `events` registry composes the same
+way. The script and constructor must reference the same registry instances.
+
+Action names and JSON payloads validate through imported/re-exported registry
+facts. Completion, hover and definition navigation cover names and top-level
+payload keys. Dynamic Lua documents validate at construction. Action IDs share a
+uniqueness namespace with event IDs and remain stable across text edits.
+Action imports emit schema **6**, requiring `Dialogue.schemaVersion >= 6`;
+older document schemas remain accepted by the new runtime.

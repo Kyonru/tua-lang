@@ -1,0 +1,11 @@
+@dialogue 1
+@document shop
+@actions "forward"
+[buy]
+@action purchase [id:shop.purchase] [success:done] [failure:declined] {"item":"shell"}
+[done]
+// @id done.text
+: Purchased. (end)
+[declined]
+// @id declined.text
+: Not available. (end)

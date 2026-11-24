@@ -2,6 +2,7 @@
 use crate::types::{FunctionParameter, FunctionType, TableField};
 use crate::{Type, TypeEnvironment};
 use std::sync::OnceLock;
+mod actions;
 
 pub(crate) fn module_type() -> Type {
     static CONTRACT: OnceLock<Type> = OnceLock::new();
@@ -59,7 +60,21 @@ pub(crate) fn module_type() -> Type {
                     &new.return_type,
                 ),
             );
+            let action_factory = signature(
+                vec![(
+                    "specs",
+                    Type::dictionary(Type::string(), actions::spec_type()),
+                )],
+                1,
+                actions::definition(
+                    Type::empty_table(),
+                    &new.parameters[0].ty,
+                    &new.parameters[1].ty,
+                    &new.return_type,
+                ),
+            );
             Type::table([
+                ("actions", TableField::required(action_factory)),
                 ("events", TableField::required(event_factory)),
                 ("context", TableField::required(factory)),
                 ("new", TableField::required(constructor)),
@@ -192,6 +207,16 @@ fn context_function(
             "schemas",
             Type::table([
                 (
+                    "actions",
+                    TableField::optional(Type::table([
+                        (
+                            "kind",
+                            TableField::required(Type::string_literal("actions")),
+                        ),
+                        ("payloads", TableField::required(Type::Any)),
+                    ])),
+                ),
+                (
                     "events",
                     TableField::optional(Type::table([
                         ("kind", TableField::required(Type::string_literal("events"))),
@@ -247,26 +272,37 @@ pub(crate) fn inferred_context(options: Option<&Type>) -> Option<Type> {
     let player = payloads
         .map(|p| specialize_events(&new.return_type, p))
         .unwrap_or_else(|| (*new.return_type).clone());
-    Some(definition_type(
-        facts,
-        locals,
-        &document,
-        &new.parameters[1].ty,
-        &player,
-    ))
+    let action_payloads = options.field("actions").and_then(|action| {
+        let Type::Table(definition) = &action.ty else {
+            return None;
+        };
+        definition.field("payloads").map(|field| &field.ty)
+    });
+    let options = action_payloads
+        .map(|p| actions::options(&new.parameters[1].ty, p, &player))
+        .unwrap_or_else(|| new.parameters[1].ty.clone());
+    Some(definition_type(facts, locals, &document, &options, &player))
 }
 
 /// Reuse one contract specialization for compiler inference, imports and editor queries.
 pub(crate) fn inferred_factory(parts: &[String], argument: Option<&Type>) -> Option<Type> {
     match parts.get(1)?.as_str() {
         "context" => inferred_context(argument),
-        "events" => {
+        "events" | "actions" => {
             let Type::Table(schemas) = argument? else {
                 return None;
             };
             let mut fields = Vec::new();
             for (name, field) in schemas.fields() {
-                let Type::Table(shape) = &field.ty else {
+                let shape_type = if parts[1] == "actions" {
+                    let Type::Table(spec) = &field.ty else {
+                        return None;
+                    };
+                    &spec.field("payload")?.ty
+                } else {
+                    &field.ty
+                };
+                let Type::Table(shape) = shape_type else {
                     return None;
                 };
                 fields.push((
@@ -280,6 +316,14 @@ pub(crate) fn inferred_factory(parts: &[String], argument: Option<&Type>) -> Opt
             let Type::Function(new) = &module.field("new")?.ty else {
                 return None;
             };
+            if parts[1] == "actions" {
+                return Some(actions::definition(
+                    Type::table(fields),
+                    &new.parameters[0].ty,
+                    &new.parameters[1].ty,
+                    &new.return_type,
+                ));
+            }
             Some(events_definition(
                 Type::table(fields),
                 &new.parameters[0].ty,

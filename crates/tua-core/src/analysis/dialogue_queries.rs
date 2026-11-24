@@ -36,6 +36,7 @@ impl AnalysisSnapshot {
         for import in parsed.dialogue_imports.iter().filter(|import| {
             !super::dialogue_context::is_context_import(&file.source, import)
                 && !super::dialogue_events::is_event_import(&file.source, import)
+                && !super::dialogue_events::is_action_import(&file.source, import)
         }) {
             let Some(module) = self.dialogue_module(path, import) else {
                 diagnostics.push(character_error(

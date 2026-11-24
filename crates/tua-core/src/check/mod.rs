@@ -2412,7 +2412,8 @@ impl<'a> Checker<'a> {
                 if self.parsed.raw.language == crate::ParsedLanguage::Tua {
                     if let Some(parts) = field_chain_before_first_call(function_call) {
                         if (parts.as_slice() == ["Dialogue", "context"]
-                            || parts.as_slice() == ["Dialogue", "events"])
+                            || parts.as_slice() == ["Dialogue", "events"]
+                            || parts.as_slice() == ["Dialogue", "actions"])
                             && self
                                 .environment
                                 .local("Dialogue")

@@ -346,3 +346,13 @@ After an utterance, `@event shown 0.2 event.name "payload"` or
 The first true reveal sample starts that clock at zero; advancing/cancelling discards pending events.
 `@timing hold 3 fade 0.35` supplies optional host presentation hints, never automatic advancement.
 See docs/dialogue.md for the supported authoring grammar; do not invent commands.
+
+Dialogue.actions({name={payload=Save.shape(...), effect="presentation"|"consequential"}})
+registers synchronous host actions. Import with @actions "module"; author an action-only
+label with @action name [id:stable.id] [success:label] [failure:label] JSON-record.
+Use registry.new(source,{handlers={name=function(payload,request) return boolean end}}),
+or include actions in Dialogue.context and pass handlers in context.new's options.
+Flow waits in awaiting_action until explicit player:runAction(); true/false handler
+results select targets. Missing/throwing/invalid handlers fault with source identity;
+cancel/start/dispose invalidate reentrant results. No auto retry, async execution,
+rollback, checkpoint or exactly-once guarantee. Requires dialogue schema 6.

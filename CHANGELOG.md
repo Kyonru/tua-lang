@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add typed registered dialogue actions with explicit host dispatch, boolean outcome
+  targets, stable source identity, lifecycle-safe faults, and shared editor diagnostics.
+
 - Dialogue scripts can import typed notification contracts with `@events` and emit
   validated structured payloads with `@emit`. Typed readers, context composition
   and shared diagnostics/editor queries are available; these scripts use schema 5.

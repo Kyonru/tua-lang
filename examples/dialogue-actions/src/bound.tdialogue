@@ -1,0 +1,19 @@
+@dialogue 1
+@document bound
+@context "context"
+@actions "actions"
+@events "events"
+[buy]
+@action purchase [id:bound.purchase] [success:check] [failure:done] {"item":"shell"}
+[check]
+@branch context.allowed [target:yes] [else:done]
+[yes]
+// @id bound.yes
+: Allowed.
+@emit shown 0 notice [id:bound.notice] {"value":1}
+@emit revealed 0 notice [id:bound.reveal] {"value":2}
+// @id bound.after
+: Finished. (end)
+[done]
+// @id bound.done
+: Done. (end)

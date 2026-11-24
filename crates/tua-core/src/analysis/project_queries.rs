@@ -1164,7 +1164,8 @@ impl AnalysisSnapshot {
             return Some(crate::store::store_type_from_initial(&initial));
         }
         if (parts.as_slice() == ["Dialogue", "context"]
-            || parts.as_slice() == ["Dialogue", "events"])
+            || parts.as_slice() == ["Dialogue", "events"]
+            || parts.as_slice() == ["Dialogue", "actions"])
             && parsed.raw.language == crate::ParsedLanguage::Tua
             && !local_types.contains_key("Dialogue")
             && !self

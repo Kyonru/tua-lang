@@ -1047,7 +1047,8 @@ impl<'a> ExportInferer<'a> {
             {
                 if let Some(parts) = field_chain_before_first_call(call) {
                     if (parts.as_slice() == ["Dialogue", "context"]
-                        || parts.as_slice() == ["Dialogue", "events"])
+                        || parts.as_slice() == ["Dialogue", "events"]
+                        || parts.as_slice() == ["Dialogue", "actions"])
                         && node_span(call).is_some_and(|span| {
                             !crate::scope::scope_map_parsed_source(self.parsed)
                                 .has_non_builtin_binding_at("Dialogue", span.start)

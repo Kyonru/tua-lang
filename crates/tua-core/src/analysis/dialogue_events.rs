@@ -10,6 +10,13 @@ pub(super) fn is_event_import(source: &str, import: &CharacterImport) -> bool {
         .is_some_and(|line| line.trim_start().starts_with("@events "))
 }
 
+pub(super) fn is_action_import(source: &str, import: &CharacterImport) -> bool {
+    source
+        .lines()
+        .nth(import.module.span.start.line.saturating_sub(1))
+        .is_some_and(|line| line.trim_start().starts_with("@actions "))
+}
+
 fn unwrap(ty: &Type) -> &Type {
     match ty {
         Type::Readonly(inner) => unwrap(inner),
@@ -18,7 +25,16 @@ fn unwrap(ty: &Type) -> &Type {
 }
 
 impl AnalysisSnapshot {
-    fn event_contract(&self, path: &Path) -> Option<(PathBuf, Type)> {
+    fn contract_at(&self, path: &Path, position: SourcePosition) -> Option<(PathBuf, Type)> {
+        let line = self
+            .file(path)?
+            .source
+            .lines()
+            .nth(position.line.checked_sub(1)?)?;
+        self.event_contract(path, line.trim_start().starts_with("@action "))
+    }
+
+    fn event_contract(&self, path: &Path, actions: bool) -> Option<(PathBuf, Type)> {
         let file = self.file(path)?;
         let import = file
             .parsed
@@ -26,7 +42,13 @@ impl AnalysisSnapshot {
             .ok()?
             .dialogue_imports
             .iter()
-            .find(|import| is_event_import(&file.source, import))?;
+            .find(|import| {
+                if actions {
+                    is_action_import(&file.source, import)
+                } else {
+                    is_event_import(&file.source, import)
+                }
+            })?;
         let module = self.dialogue_module(path, import)?;
         let value = self.indexed_module_value_type(&module)?;
         let value = self
@@ -35,7 +57,9 @@ impl AnalysisSnapshot {
         let Type::Table(table) = unwrap(&value) else {
             return None;
         };
-        if table.field("kind")?.ty != Type::string_literal("events") {
+        if table.field("kind")?.ty
+            != Type::string_literal(if actions { "actions" } else { "events" })
+        {
             return None;
         }
         Some((module, unwrap(&table.field("payloads")?.ty).clone()))
@@ -65,7 +89,7 @@ impl AnalysisSnapshot {
                     ),
             );
         };
-        let Some((_, Type::Table(payloads))) = self.event_contract(path) else {
+        let Some((_, Type::Table(payloads))) = self.event_contract(path, false) else {
             report(
                 import.module.span,
                 "event module must export a Dialogue.events definition".into(),
@@ -95,6 +119,59 @@ impl AnalysisSnapshot {
         result
     }
 
+    pub(super) fn dialogue_action_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
+        let Some(model) = self
+            .file(path)
+            .and_then(|f| f.dialogue_model.get())
+            .and_then(Option::as_ref)
+        else {
+            return Vec::new();
+        };
+        let Some(import) = &model.actions else {
+            return Vec::new();
+        };
+        let mut result = Vec::new();
+        let mut report = |span: SourceSpan, message: String| {
+            result.push(
+                Diagnostic::error(path, span.start.line, span.start.column, message)
+                    .with_code(DiagnosticCode::DOMAIN_DIALOGUE)
+                    .with_range(
+                        span.start.line,
+                        span.start.column,
+                        span.end.line,
+                        span.end.column,
+                    ),
+            );
+        };
+        let Some((_, Type::Table(payloads))) = self.event_contract(path, true) else {
+            report(
+                import.module.span,
+                "action module must export a Dialogue.actions definition".into(),
+            );
+            return result;
+        };
+        for action in model
+            .sections
+            .iter()
+            .filter_map(|section| section.action.as_ref())
+        {
+            let Some(field) = payloads.field(&action.name.value) else {
+                report(
+                    action.span,
+                    format!("unknown declared dialogue action `{}`", action.name.value),
+                );
+                continue;
+            };
+            if let Err(message) = check_payload(&action.payload, &field.ty, "payload") {
+                report(
+                    action.span,
+                    format!("action `{}`: {message}", action.name.value),
+                );
+            }
+        }
+        result
+    }
+
     pub(super) fn dialogue_event_completion(
         &self,
         path: &Path,
@@ -102,7 +179,7 @@ impl AnalysisSnapshot {
     ) -> Option<Vec<Completion>> {
         let file = self.file(path)?;
         let (name, field, prefix, _) = event_token(&file.source, position)?;
-        let (_, Type::Table(events)) = self.event_contract(path)? else {
+        let (_, Type::Table(events)) = self.contract_at(path, position)? else {
             return Some(Vec::new());
         };
         let table = if field {
@@ -144,7 +221,7 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Option<Hover> {
         let (name, field, token, span) = event_token(&self.file(path)?.source, position)?;
-        let (_, Type::Table(events)) = self.event_contract(path)? else {
+        let (_, Type::Table(events)) = self.contract_at(path, position)? else {
             return None;
         };
         let payload = &events.field(&name)?.ty;
@@ -162,7 +239,7 @@ impl AnalysisSnapshot {
             span: Some(span),
             documentation: None,
             context: vec![
-                "Declared dialogue notification; payload captured at player construction".into(),
+                "Declared dialogue contract; payload captured at player construction".into(),
             ],
         })
     }
@@ -173,7 +250,7 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Option<Definition> {
         self.dialogue_event_hover(path, position)?;
-        let (module, _) = self.event_contract(path)?;
+        let (module, _) = self.contract_at(path, position)?;
         let export = self.module_graph.export(&module, "payloads")?;
         let source = self
             .module_graph
@@ -246,11 +323,16 @@ fn event_token(
     let line = source.lines().nth(position.line.checked_sub(1)?)?;
     let chars: Vec<_> = line.chars().collect();
     let cursor = position.column.checked_sub(1)?.min(chars.len());
-    if !line.trim_start().starts_with("@emit ") {
+    let name_index = if line.trim_start().starts_with("@action ") {
+        1
+    } else {
+        3
+    };
+    if !line.trim_start().starts_with("@emit ") && name_index != 1 {
         return None;
     }
     let words: Vec<_> = line.split_whitespace().collect();
-    let name = words.get(3).copied().unwrap_or("").to_owned();
+    let name = words.get(name_index).copied().unwrap_or("").to_owned();
     let mut start = cursor;
     while start > 0
         && (chars[start - 1].is_alphanumeric() || matches!(chars[start - 1], '_' | '.' | '-'))
@@ -265,7 +347,7 @@ fn event_token(
     }
     let before: String = chars[..start].iter().collect();
     let field = before.contains('{');
-    if !field && before.split_whitespace().count() != 3 {
+    if !field && before.split_whitespace().count() != name_index {
         return None;
     }
     let key_position = before

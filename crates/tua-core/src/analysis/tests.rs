@@ -12881,3 +12881,135 @@ end
         .pipeline_diagnostics("src/scene.tdialogue")
         .is_empty());
 }
+
+#[test]
+fn dialogue_actions_share_imported_payload_facts_and_editor_queries() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/events.tua
+return Dialogue.actions({
+  reward = {
+    payload = Save.shape(Save.record({ coins = Save.number(0), tag = Save.optional(Save.string("")) })),
+    effect = "consequential",
+  },
+})
+-- file: src/forward.tua
+return require("events")
+-- file: src/scene.tdialogue
+@dialogue 1
+@document example
+@actions "forward"
+[start]
+@action <|event|>reward [id:example.reward] [success:done] [failure:done] {"<|argument|>coins": 10}
+[done]
+// @id example.hello
+: Hello (end)
+-- file: src/main.tua
+local actions = require("forward")
+local scene = require("scene")
+local wrong: string = actions.payloads.reward.coins
+print(actions.payloads.reward.<|field|>coins)
+local player = actions.new(scene, {
+  handlers = { reward = function(payload: { coins: number }): boolean
+    return payload.coins > 0
+  end },
+})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    assert!(
+        snapshot
+            .pipeline_diagnostics("src/scene.tdialogue")
+            .is_empty(),
+        "{:?}",
+        snapshot.pipeline_diagnostics("src/scene.tdialogue")
+    );
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        1,
+        "{diagnostics:?}"
+    );
+    for (marker, label) in [("event", "reward"), ("argument", "coins")] {
+        let position = fixture.position(marker);
+        let labels = completion_labels(&snapshot.completion("src/scene.tdialogue", position));
+        assert!(labels.contains(&label.to_owned()), "{labels:?}");
+        assert!(snapshot.hover("src/scene.tdialogue", position).is_some());
+        assert!(snapshot
+            .definition("src/scene.tdialogue", position)
+            .is_some());
+    }
+    let labels = completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+    assert!(labels.contains(&"coins".to_owned()), "{labels:?}");
+    let main = fixture
+        .files()
+        .iter()
+        .find(|file| file.path == std::path::Path::new("src/main.tua"))
+        .unwrap();
+    for invalid in [
+        main.source
+            .replace("payload: { coins: number }", "payload: { coins: string }"),
+        main.source
+            .replace("): boolean", "): string")
+            .replace("return payload.coins > 0", "return \"bad\""),
+    ] {
+        host.set_file("src/main.tua", invalid);
+        assert!(
+            host.snapshot()
+                .pipeline_diagnostics("src/main.tua")
+                .iter()
+                .any(|d| d.message.contains("handlers.reward")),
+            "{:?}",
+            host.snapshot().pipeline_diagnostics("src/main.tua")
+        );
+    }
+    host.set_file("src/main.tua", main.source.clone());
+    let scene = fixture
+        .files()
+        .iter()
+        .find(|file| file.path == std::path::Path::new("src/scene.tdialogue"))
+        .unwrap()
+        .source
+        .clone();
+    let restored_scene = scene.clone();
+    for invalid in [
+        scene.replace("reward [id:", "missing [id:"),
+        scene.replace("10}", "\"wrong\"}"),
+        scene.replace("\"coins\": 10", "\"other\": 10"),
+        scene.replace("{\"coins\": 10}", "{}"),
+    ] {
+        host.set_file("src/scene.tdialogue", invalid);
+        assert!(host
+            .snapshot()
+            .pipeline_diagnostics("src/scene.tdialogue")
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_DIALOGUE)));
+    }
+    host.set_file("src/scene.tdialogue", restored_scene);
+    let events = fixture
+        .files()
+        .iter()
+        .find(|file| file.path == std::path::Path::new("src/events.tua"))
+        .unwrap();
+    host.set_file(
+        "src/events.tua",
+        events.source.replace("Save.number(0)", "Save.string(\"\")"),
+    );
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("payload.coins")));
+    host.set_file("src/events.tua", events.source.clone());
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .is_empty());
+}

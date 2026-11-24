@@ -29,6 +29,10 @@ async function main() {
       },
     }),
     loadGrammar(scopeName) {
+      if (scopeName === "text.tdialogue") {
+        const dialoguePath = path.join(extensionRoot, "syntaxes", "tdialogue.tmLanguage.json");
+        return textmate.parseRawGrammar(fs.readFileSync(dialoguePath, "utf8"), dialoguePath);
+      }
       if (scopeName !== "source.tua") {
         return null;
       }
@@ -36,6 +40,14 @@ async function main() {
       return textmate.parseRawGrammar(fs.readFileSync(grammarPath, "utf8"), grammarPath);
     },
   });
+  const dialogueGrammar = await registry.loadGrammar("text.tdialogue");
+  assert(dialogueGrammar, "expected text.tdialogue grammar to load");
+  for (const directive of ["@actions", "@action"]) {
+    const result = dialogueGrammar.tokenizeLine(`${directive} purchase`, textmate.INITIAL);
+    assert(result.tokens.some((token) => token.scopes.some((scope) => scope.startsWith("keyword"))),
+      `expected ${directive} to be highlighted as a dialogue directive`);
+  }
+
   const grammar = await registry.loadGrammar("source.tua");
   assert(grammar, "expected source.tua grammar to load");
 

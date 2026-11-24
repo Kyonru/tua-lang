@@ -297,26 +297,34 @@ validation and inferred payload facts. Registry imports and bounded `@emit` JSON
 payloads have shared diagnostics, event/top-level argument completion, hover and
 contract navigation. Typed readers preserve imported payload types; capture occurs
 at player construction. Legacy notifications remain dynamic string events. Context
-composition uses the same registry instance. Actions, results, handler errors and
-persistent action resume policy remain pending; the checklist below covers both
-notifications and those future actions.
+composition uses the same registry instance.
+
+**Registered synchronous actions implemented:** `Dialogue.actions` captures typed
+payload shapes and effect classifications. `@action` has stable identity and explicit
+success/failure targets. `runAction()` dispatches one host handler; traversal never
+executes it. Missing handlers, errors, invalid results and destination errors fault
+with source identity. Cancellation/restart/disposal invalidate stale results.
+Payloads and handler maps are captured at construction. Schema 6 composes actions,
+context and timed notifications. Async handles remain M7; checkpoint/reconciliation
+policy remains M8. There is no automatic retry or exactly-once guarantee. See the
+[action validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M4-actions.md).
 
 Follow-up: general tagged-record sibling-field narrowing is not yet available;
 use `events.read.name(notification)` for checked payload access. Nested JSON key
 completion can be expanded later; nested payload types already validate. See the
 [typed notification validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M4-typed-events.md).
 
-- [ ] Reuse existing declared-event/schema facts where possible to expose a typed
+- [x] Reuse existing declared-event/schema facts where possible to expose a typed
   action/event contract from a `.tua` module. Keep signal buses optional adapters.
 - [x] Add validated structured payloads and argument completion; retain existing
   undeclared string-payload events as a compatible, explicitly dynamic path.
-- [ ] Separate notification events from actions whose completion or outcome affects
+- [x] Separate notification events from actions whose completion or outcome affects
   flow. Both remain requests to host code, never executable Lua in script text.
-- [ ] Give persistent actions stable authored identity. Name plus array position
+- [x] Give persistent actions stable authored identity. Name plus array position
   is insufficient: names may repeat and declarations may be reordered.
-- [ ] Preserve `shown`/`revealed` timing, ordering, limits and lifecycle tokens.
+- [x] Preserve `shown`/`revealed` timing, ordering, limits and lifecycle tokens.
   Decide payload capture time so handlers do not observe accidental later mutations.
-- [ ] Define unknown-action, handler-error and invalid-result behavior. Include
+- [x] Define unknown-action, handler-error and invalid-result behavior. Include
   source identity in issues and distinguish presentation-only actions from
   consequential gameplay actions for resume policy.
 
@@ -535,7 +543,7 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0–M3 are complete; continue with **M4 — typed events and registered host actions**.
+M0–M4 are complete; continue with **M5 — Character expressions and portrait variants**.
 Reuse declared schemas, typed context/path facts, stable execution identities and
 bounded transition behavior. Keep gameplay mutations in explicit host actions;
 never execute arbitrary script expressions or replace the host renderer/audio stack.

@@ -1,0 +1,8 @@
+local actions = require("actions")
+local events = require("events")
+return Dialogue.context({
+  actions = actions,
+  events = events,
+  facts = Save.shape(Save.record({ allowed = Save.boolean(false) })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})

@@ -1,0 +1,34 @@
+local actions = require("forward")
+local scene = require("scene")
+local coins = 10
+local player = actions.new(scene, {
+  handlers = {
+    purchase = function(payload: { item: string }): boolean
+      if payload.item ~= "shell" or coins < 5 then return false end
+      coins -= 5
+      return true
+    end,
+  },
+})
+player:start()
+assert(player:snapshot().state == "awaiting_action")
+assert(coins == 10)
+assert(player:runAction())
+assert(coins == 5)
+assert(player:snapshot().nodeId == "done")
+player:dispose()
+print("registered dialogue action passed")
+
+local context = require("context")
+local bound = require("bound")
+local contextual = context.new(bound, { allowed = true }, {
+  handlers = {
+    purchase = function(payload: { item: string }): boolean
+      return payload.item == "shell"
+    end,
+  },
+})
+contextual:start()
+assert(contextual:runAction())
+assert(contextual:snapshot().nodeId == "yes")
+contextual:dispose()

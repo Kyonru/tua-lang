@@ -5834,7 +5834,9 @@ fn infer_first_function_call_return_types(
         return Vec::new();
     };
 
-    if (parts.as_slice() == ["Dialogue", "context"] || parts.as_slice() == ["Dialogue", "events"])
+    if (parts.as_slice() == ["Dialogue", "context"]
+        || parts.as_slice() == ["Dialogue", "events"]
+        || parts.as_slice() == ["Dialogue", "actions"])
         && (query
             .locals
             .get("Dialogue")

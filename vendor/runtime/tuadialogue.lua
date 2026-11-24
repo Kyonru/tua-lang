@@ -1,11 +1,16 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 5 }
+local Dialogue = { schemaVersion = 6 }
 local Conditions
 local function conditions()
   if not Conditions then Conditions = require("tuadialogue_conditions") end
   return Conditions
 end
 local eventDefinitions = setmetatable({}, { __mode = "k" })
+local Actions
+local function actions()
+  if not Actions then Actions = require("tuadialogue_actions") end
+  return Actions
+end
 local Player = {}
 Player.__index = Player
 
@@ -51,7 +56,10 @@ local function events(value, schemaVersion, documentId, seen, validators)
     assert(type(event.name) == "string" and event.name ~= "", "invalid dialogue event name")
     local payload
     if event.kind ~= nil then
-      assert(schemaVersion == 5 and event.kind == event.name, "invalid typed event kind")
+      assert(
+        (schemaVersion == 5 or schemaVersion == 6) and event.kind == event.name,
+        "invalid typed event kind"
+      )
       assert(event.id ~= nil, "typed events require an explicit ID")
       local validate = validators and validators[event.name]
       assert(validate, "unknown typed dialogue event: " .. event.name)
@@ -67,7 +75,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     end
     if event.id ~= nil or event.source ~= nil then
       assert(
-        schemaVersion == 4 or schemaVersion == 5,
+        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6,
         "event identity requires schema version 4 or later"
       )
       assert(
@@ -101,8 +109,18 @@ local documentFields = {
   context = true,
   bindings = true,
   events = true,
+  actions = true,
 }
 local nodeFields = {
+  action = {
+    kind = true,
+    id = true,
+    name = true,
+    payload = true,
+    source = true,
+    success = true,
+    failure = true,
+  },
   line = {
     kind = true,
     text = true,
@@ -137,7 +155,13 @@ local optionFields = {
   reason = true,
   reasonId = true,
 }
-local playerOptions = { locale = true, resolve = true, args = true, transitionBudget = true }
+local playerOptions = {
+  locale = true,
+  resolve = true,
+  args = true,
+  transitionBudget = true,
+  handlers = true,
+}
 
 local function fields(value, allowed)
   for key in pairs(value) do
@@ -154,7 +178,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -163,16 +187,23 @@ local function document(value)
   end
   local validators
   if value.events ~= nil then
-    assert(value.schemaVersion == 5, "event contracts require schema version 5")
+    assert(
+      value.schemaVersion == 5 or value.schemaVersion == 6,
+      "event contracts require schema version 5 or later"
+    )
     validators = eventDefinitions[value.events]
     assert(validators, "document needs a Dialogue.events definition")
+  end
+  if value.actions ~= nil then
+    assert(value.schemaVersion == 6, "action contracts require schema version 6")
+    assert(actions().valid(value.actions), "document needs a Dialogue.actions definition")
   end
   local nodes, eventIds = {}, {}
   for id, node in pairs(value.nodes) do
     assert(type(id) == "string" and id ~= "", "node IDs must be nonempty strings")
     assert(type(node) == "table", "dialogue node must be a record")
     assert(
-      node.kind == "line" or node.kind == "choice" or node.kind == "end" or node.kind == "branch",
+      node.kind == "line" or node.kind == "choice" or node.kind == "end" or node.kind == "branch" or node.kind == "action",
       "unknown dialogue node kind"
     )
     if value.schemaVersion then fields(node, nodeFields[node.kind]) end
@@ -200,6 +231,22 @@ local function document(value)
           fields(event, eventFields)
         end
       end
+    elseif node.kind == "action" then
+      assert(value.schemaVersion == 6, "actions require schema version 6")
+      assert(
+        type(value.documentId) == "string" and value.documentId ~= "",
+        "actions require documentId"
+      )
+      assert(type(node.id) == "string" and node.id ~= "", "action needs a stable ID")
+      assert(type(node.name) == "string" and node.name ~= "", "action needs a name")
+      assert(
+        type(node.success) == "string" and type(node.failure) == "string",
+        "action needs both outcome targets"
+      )
+      assert(not eventIds[node.id], "duplicate event/action ID: " .. node.id)
+      eventIds[node.id] = true
+      owned = actions().compile(value.actions, node, value.documentId)
+      owned.source = eventSource(node.source)
     elseif node.kind == "branch" then
       assert((value.schemaVersion or 0) >= 3, "branches require schema version 3 or later")
       assert(
@@ -267,6 +314,9 @@ local function document(value)
   assert(nodes[value.entry], "missing entry node")
   for _, node in pairs(nodes) do
     if node.next then assert(nodes[node.next], "missing next node") end
+    if node.kind == "action" then
+      assert(nodes[node.success] and nodes[node.failure], "missing action outcome target")
+    end
     if node.fallback then assert(nodes[node.fallback], "missing fallback node") end
     if node.kind == "branch" then
       assert(nodes[node.yes] and nodes[node.no], "missing branch target")
@@ -309,7 +359,14 @@ local function newPlayer(source, options)
     type(budget) == "number" and budget % 1 == 0 and budget >= 1 and budget <= 4096,
     "transitionBudget must be an integer from 1 to 4096"
   )
+  local handlers
+  if source.actions ~= nil then
+    handlers = actions().handlers(source.actions, options.handlers)
+  else
+    assert(options.handlers == nil, "handlers require an action registry")
+  end
   return setmetatable({
+    actionHandlers = handlers,
     transitionBudget = budget,
     document = document(source),
     state = "idle",
@@ -325,8 +382,8 @@ end
 
 function Dialogue.new(source, options)
   assert(
-    source.context == nil and source.bindings == nil and source.events == nil,
-    "use the context or event definition's new function"
+    source.context == nil and source.bindings == nil and source.events == nil and source.actions == nil,
+    "use the context, event or action definition's new function"
   )
   return newPlayer(source, options)
 end
@@ -389,6 +446,7 @@ end
 -- Compute presentation before committing a transition; a bad resolver cannot
 -- partially advance the visit or overwrite clocks. Snapshot never calls host code.
 local function presentation(self, id, locale, facts, locals)
+  if self.document.nodes[id].kind == "action" then return nil end
   -- The document is already owned. Without localization, retain only an internal
   -- reference; snapshot still copies it before exposing anything to the caller.
   if not self.resolve and not self.bindings and (self.document.schemaVersion or 0) < 3 then
@@ -472,6 +530,7 @@ function Player:enter(id, locals, facts, resolved, issue)
   local node = self.document.nodes[id]
   if issue then self.state = "faulted"
   elseif node.kind == "end" then self.state = "completed"
+  elseif node.kind == "action" then self.state = "awaiting_action"
   elseif node.kind == "line" then self.state = "awaiting_advance"
   else self.state = "awaiting_choice" end
 end
@@ -535,6 +594,12 @@ function Player:update(dt, revealed)
   return result
 end
 
+function Player:runAction()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  if self.state ~= "awaiting_action" then return false end
+  return actions().run(self)
+end
+
 function Player:advance()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state ~= "awaiting_advance" then return false end
@@ -575,6 +640,7 @@ function Player:snapshot()
   end
   return {
     state = self.state,
+    action = self.state == "awaiting_action" and actions().request(self) or nil,
     issue = copy(self.issue),
     generation = self.generation,
     visit = self.visit,
@@ -593,6 +659,7 @@ function Player:dispose()
   self.generation = self.generation + 1
   self.state, self.current, self.document, self.issue = "disposed", nil, nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
+  self.actionHandlers = nil
   self.facts, self.locals, self.localDefaults = nil, nil, nil
   self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
@@ -648,6 +715,17 @@ function Player:setLocals(value)
   refresh(self, self.facts, self.copyLocals(value))
 end
 
+function Dialogue.actions(specs)
+  local definition = actions().define(specs)
+  function definition.new(source, options)
+    assert(source.actions == definition, "document uses another action definition")
+    assert(source.context == nil and source.bindings == nil and source.events == nil,
+      "use a context definition to combine action and event registries")
+    return newPlayer(source, options)
+  end
+  return definition
+end
+
 function Dialogue.events(shapes)
   assert(
     type(shapes) == "table" and getmetatable(shapes) == nil,
@@ -678,6 +756,7 @@ function Dialogue.events(shapes)
   eventDefinitions[definition] = validators
   function definition.new(source, options)
     assert(source.events == definition, "document uses another event definition")
+    assert(source.actions == nil, "use a context definition to combine registries")
     assert(
       source.context == nil and source.bindings == nil,
       "use the context definition's new function"
@@ -689,10 +768,15 @@ end
 
 function Dialogue.context(schemas)
   assert(type(schemas) == "table", "context needs fact and local shapes")
-  fields(schemas, { facts = true, locals = true, events = true })
+  fields(schemas, { facts = true, locals = true, events = true, actions = true })
   local Shape = require("tuasave_shape")
   local copyFacts, initialFacts = Shape.get(schemas.facts)
   local copyLocals, initialLocals = Shape.get(schemas.locals)
+  local registeredActions = schemas.actions
+  assert(
+    registeredActions == nil or actions().valid(registeredActions),
+    "invalid context action definition"
+  )
   local registeredEvents = schemas.events
   assert(
     registeredEvents == nil or eventDefinitions[registeredEvents],
@@ -701,10 +785,11 @@ function Dialogue.context(schemas)
   local definition = { kind = "context", facts = copy(initialFacts), locals = copy(initialLocals) }
   function definition.new(source, value, options)
     assert(source.context == definition, "document uses another context definition")
+    assert(source.actions == registeredActions, "document uses another action definition")
     assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5,
-      "typed context requires dialogue schema version 2 through 5"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6,
+      "typed context requires dialogue schema version 2 through 6"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

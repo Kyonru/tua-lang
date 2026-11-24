@@ -235,7 +235,7 @@ impl Parser<'_> {
                 self.error(at, "branch requires a label");
                 return true;
             };
-            if !section.lines.is_empty() || section.branch.is_some() {
+            if !section.lines.is_empty() || section.branch.is_some() || section.action.is_some() {
                 self.error(at, "a branch must be the only content of its label");
                 return true;
             }

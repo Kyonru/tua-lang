@@ -3,6 +3,8 @@ use crate::{Diagnostic, DiagnosticCode, SourcePosition, SourceSpan};
 use std::collections::BTreeSet;
 use std::path::Path;
 
+mod actions;
+pub use actions::DialogueAction;
 mod conditions;
 mod context;
 mod events;
@@ -72,6 +74,7 @@ pub struct DialogueLine {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSection {
+    pub action: Option<DialogueAction>,
     pub branch: Option<Branch>,
     pub label: DialogueName,
     pub lines: Vec<DialogueLine>,
@@ -135,7 +138,8 @@ pub(crate) fn character_imports(source: &str) -> Vec<CharacterImport> {
         .filter_map(|(index, line)| {
             character_import(line, index + 1)
                 .or_else(|| context::context_import(line, index + 1))
-                .or_else(|| events::event_import(line, index + 1))?
+                .or_else(|| events::event_import(line, index + 1))
+                .or_else(|| actions::action_import(line, index + 1))?
                 .ok()
         })
         .collect()
@@ -157,6 +161,7 @@ pub(crate) fn character_module_specifiers(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub actions: Option<CharacterImport>,
     pub events: Option<CharacterImport>,
     pub context: Option<CharacterImport>,
     pub bindings: Vec<DialogueBinding>,
@@ -178,6 +183,7 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            actions: None,
             events: None,
             context: None,
             bindings: Vec::new(),
@@ -312,6 +318,9 @@ impl Parser<'_> {
             self.abandon_id();
             return;
         }
+        if self.action_line(raw, number, at) {
+            return;
+        }
         if self.condition_line(syntax, at) {
             return;
         }
@@ -370,6 +379,7 @@ impl Parser<'_> {
                         self.error(label.span, format!("duplicate label `{}`", label.value));
                     }
                     self.document.sections.push(DialogueSection {
+                        action: None,
                         branch: None,
                         label,
                         lines: Vec::new(),
@@ -670,8 +680,8 @@ impl Parser<'_> {
             );
             return;
         }
-        if section.branch.is_some() {
-            self.error(at, "branch labels cannot contain utterances");
+        if section.branch.is_some() || section.action.is_some() {
+            self.error(at, "branch/action labels cannot contain utterances");
             return;
         }
         section.lines.push(DialogueLine {
@@ -783,7 +793,26 @@ impl Parser<'_> {
                     }
                 }
             }
-            if section.lines.is_empty() && section.branch.is_none() {
+            if let Some(action) = &section.action {
+                if self.document.document_id.is_none() {
+                    errors.push((action.id.span, "action IDs require an @document ID".into()));
+                }
+                if !event_ids.insert(&action.id.value) {
+                    errors.push((
+                        action.id.span,
+                        format!("duplicate event/action ID `{}`", action.id.value),
+                    ));
+                }
+                for target in [&action.success, &action.failure] {
+                    if !labels.contains(target.value.as_str()) {
+                        errors.push((
+                            target.span,
+                            format!("unknown action target `{}`", target.value),
+                        ));
+                    }
+                }
+            }
+            if section.lines.is_empty() && section.branch.is_none() && section.action.is_none() {
                 errors.push((
                     section.label.span,
                     "label needs at least one utterance".into(),

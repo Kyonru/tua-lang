@@ -53,9 +53,20 @@ pub fn emit_dialogue_source(
             events.module.span,
         );
     }
+    if let Some(actions) = &document.actions {
+        output.line(
+            &format!(
+                "local __tua_actions = require({})",
+                lua_string_literal(&actions.module.value)
+            ),
+            actions.module.span,
+        );
+    }
     output.line("return {", entry.span);
     output.line(
-        if document.events.is_some() {
+        if document.actions.is_some() {
+            "  schemaVersion = 6,"
+        } else if document.events.is_some() {
             "  schemaVersion = 5,"
         } else if document.sections.iter().any(|section| {
             section
@@ -107,12 +118,38 @@ pub fn emit_dialogue_source(
     if let Some(events) = &document.events {
         output.line("  events = __tua_events,", events.module.span);
     }
+    if let Some(actions) = &document.actions {
+        output.line("  actions = __tua_actions,", actions.module.span);
+    }
     if let Some(id) = &document.document_id {
         output.field("  documentId", &id.value, id.span);
     }
     output.field("  entry", &entry.value, entry.span);
     output.line("  nodes = {", entry.span);
     for section in &document.sections {
+        if let Some(action) = &section.action {
+            output.line(
+                &format!("    [{}] = {{", lua_string_literal(&section.label.value)),
+                section.label.span,
+            );
+            output.field("      kind", "action", action.span);
+            output.field("      name", &action.name.value, action.name.span);
+            output.field("      id", &action.id.value, action.id.span);
+            output.field("      success", &action.success.value, action.success.span);
+            output.field("      failure", &action.failure.value, action.failure.span);
+            output.line(
+                &format!("      payload = {},", json_payload(&action.payload)),
+                action.span,
+            );
+            output.line(
+                &format!(
+                    "      source = {{ line = {}, column = {} }},",
+                    action.span.start.line, action.span.start.column
+                ),
+                action.span,
+            );
+            output.line("    },", action.span);
+        }
         if let Some(branch) = &section.branch {
             output.line(
                 &format!("    [{}] = {{", lua_string_literal(&section.label.value)),
