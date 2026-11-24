@@ -140,6 +140,7 @@ pub(crate) fn character_module_specifiers(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub document_id: Option<DialogueName>,
     pub imports: Vec<CharacterImport>,
     pub speakers: Vec<DialogueSpeaker>,
     /// The first section is the entry. Sections never implicitly fall through.
@@ -157,6 +158,7 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            document_id: None,
             imports: Vec::new(),
             speakers: Vec::new(),
             sections: Vec::new(),
@@ -287,7 +289,14 @@ impl Parser<'_> {
             self.abandon_id();
             return;
         }
-        if let Some(rest) = syntax.strip_prefix("@event ") {
+        if let Some(rest) = syntax.strip_prefix("@document ") {
+            self.abandon_id();
+            if !self.document.sections.is_empty() || self.document.document_id.is_some() {
+                self.error(at, "declare one document ID before the first label");
+            } else {
+                self.document.document_id = self.name(rest.trim(), at);
+            }
+        } else if let Some(rest) = syntax.strip_prefix("@event ") {
             self.event(rest, at);
         } else if let Some(rest) = syntax.strip_prefix("@timing ") {
             self.timing(rest, at);
@@ -486,6 +495,24 @@ impl Parser<'_> {
         let mut chars = value.chars().peekable();
         while let Some(c) = chars.next() {
             match c {
+                '%' if chars.peek() == Some(&'{') => {
+                    chars.next();
+                    let mut name = String::new();
+                    let mut closed = false;
+                    for next in chars.by_ref() {
+                        if next == '}' {
+                            closed = true;
+                            break;
+                        }
+                        name.push(next);
+                    }
+                    let key = name.trim();
+                    if !closed || !identifier(key) || key.contains(['.', '-']) {
+                        self.error(at, "expected a named placeholder `%{name}`");
+                        return None;
+                    }
+                    output.push_str(&format!("%{{{key}}}"));
+                }
                 '\\' => match chars.next() {
                     Some('n') => output.push('\n'),
                     Some('t') => output.push('\t'),

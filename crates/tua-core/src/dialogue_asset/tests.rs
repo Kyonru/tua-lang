@@ -158,3 +158,22 @@ fn character_imports_validate_aliases_and_declaration_order() {
         );
     }
 }
+
+#[test]
+fn dialogue_identity_and_named_placeholders_preserve_plain_text() {
+    let source = "@dialogue 1\n@document scene.intro\n[start]\n// @id intro\n: Hi %{name}, %%{literal}, 雨 (end)\n";
+    let model = parse_dialogue_source("scene.tdialogue", source).unwrap();
+    assert_eq!(model.document_id.unwrap().value, "scene.intro");
+    assert_eq!(
+        model.sections[0].lines[0].text.value,
+        "Hi %{name}, %%{literal}, 雨"
+    );
+    for bad in ["%{}", "%{name", "%{player.name}", "%{call()}"] {
+        assert!(parse_dialogue_source("scene.tdialogue", &source.replace("%{name}", bad)).is_err());
+    }
+    assert!(parse_dialogue_source(
+        "scene.tdialogue",
+        &source.replace("[start]", "@document duplicate\n[start]")
+    )
+    .is_err());
+}

@@ -2119,6 +2119,10 @@ impl LspServer {
         let page = snapshot.localization_page(source_uri, search, offset, 100);
         let rows = page.rows.into_iter().map(|row| json!({
             "key": row.key,
+            "source": row.source.map(|cell| {
+                let range = cell.path.as_ref().zip(cell.span).and_then(|(path, span)| snapshot.source(path).map(|source| lsp_range_for_source(source, span)));
+                json!({ "preview": cell.preview, "placeholders": cell.placeholders, "uri": cell.path.as_deref().map(uri_from_path), "range": range })
+            }),
             "cells": row.cells.into_iter().map(|cell| {
                 let range = cell.path.as_ref().zip(cell.span).and_then(|(path, span)| snapshot.source(path).map(|source| lsp_range_for_source(source, span)));
                 json!({ "locale": cell.locale, "status": cell.status, "preview": cell.preview,

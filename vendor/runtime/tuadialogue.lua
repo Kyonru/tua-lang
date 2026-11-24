@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = {}
+local Dialogue = { schemaVersion = 1 }
 local Player = {}
 Player.__index = Player
 
@@ -40,10 +40,26 @@ local function events(value)
   return result
 end
 
+local function fields(value, allowed)
+  for key in pairs(value) do assert(allowed[key], "unknown dialogue field: " .. tostring(key)) end
+end
+
+local function optionalId(value)
+  return value == nil or (type(value) == "string" and value ~= "")
+end
+
 -- Validate and own the document before any session can execute it.
 local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
+  assert(
+    value.schemaVersion == nil or value.schemaVersion == 1,
+    "unsupported dialogue schemaVersion"
+  )
+  assert(optionalId(value.documentId), "invalid documentId")
+  if value.schemaVersion then
+    fields(value, { schemaVersion = true, documentId = true, entry = true, nodes = true })
+  end
   local nodes = {}
   for id, node in pairs(value.nodes) do
     assert(type(id) == "string" and id ~= "", "node IDs must be nonempty strings")
@@ -52,6 +68,24 @@ local function document(value)
       node.kind == "line" or node.kind == "choice" or node.kind == "end",
       "unknown dialogue node kind"
     )
+    if value.schemaVersion then
+      local allowed = { kind = true }
+      if node.kind == "line" then
+        allowed = {
+          kind = true,
+          text = true,
+          textId = true,
+          speaker = true,
+          speakerKey = true,
+          portrait = true,
+          next = true,
+          hold = true,
+          fade = true,
+          events = true,
+        }
+      elseif node.kind == "choice" then allowed.options = true end
+      fields(node, allowed)
+    end
     local owned = { kind = node.kind }
     if node.kind == "line" then
       assert(type(node.text) == "string", "line needs text")
@@ -62,7 +96,14 @@ local function document(value)
       assert(node.fade == nil or seconds(node.fade), "invalid fade duration")
       owned.text, owned.speaker, owned.next = node.text, node.speaker, node.next
       owned.portrait, owned.hold, owned.fade = node.portrait, node.hold, node.fade
+      assert(optionalId(node.textId) and optionalId(node.speakerKey), "invalid localization ID")
+      owned.textId, owned.speakerKey = node.textId, node.speakerKey
       owned.events = events(node.events)
+      if value.schemaVersion then
+        for _, event in ipairs(node.events or {}) do
+          fields(event, { anchor = true, delay = true, name = true, payload = true })
+        end
+      end
     elseif node.kind == "choice" then
       assert(type(node.options) == "table" and #node.options > 0, "choice needs options")
       owned.options = {}
@@ -81,6 +122,7 @@ local function document(value)
         )
         assert(not seen[option.id], "duplicate choice ID")
         assert(type(option.text) == "string" and type(option.target) == "string", "invalid choice")
+        if value.schemaVersion then fields(option, { id = true, text = true, target = true }) end
         seen[option.id] = true
         owned.options[index] = { id = option.id, text = option.text, target = option.target }
       end
@@ -94,17 +136,88 @@ local function document(value)
       assert(nodes[option.target], "missing choice target")
     end
   end
-  return { entry = value.entry, nodes = nodes }
+  return {
+    entry = value.entry,
+    nodes = nodes,
+    documentId = value.documentId,
+    schemaVersion = value.schemaVersion,
+  }
 end
 
-function Dialogue.new(source)
-  return setmetatable(
-    { document = document(source), state = "idle", generation = 0, visit = 0 },
-    Player
-  )
+local function arguments(values)
+  assert(type(values) == "table", "dialogue args must be a record")
+  local result = {}
+  for key, value in pairs(values) do
+    assert(type(key) == "string", "dialogue argument names must be strings")
+    assert(type(value) == "string" or type(value) == "boolean"
+      or (type(value) == "number" and value == value and math.abs(value) < math.huge),
+      "dialogue arguments must be finite scalar values")
+    result[key] = value
+  end
+  return result
+end
+
+function Dialogue.new(source, options)
+  if options == nil then options = {} end
+  assert(type(options) == "table", "invalid dialogue options")
+  fields(options, { locale = true, resolve = true, args = true })
+  assert(optionalId(options.locale), "invalid dialogue locale")
+  assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
+  assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
+  return setmetatable({
+    document = document(source),
+    state = "idle",
+    generation = 0,
+    visit = 0,
+    locale = options.locale,
+    resolve = options.resolve,
+    args = arguments(options.args == nil and {} or options.args),
+    presentationRevision = 0,
+    revealComplete = false,
+  }, Player)
+end
+
+-- Compute presentation before committing a transition; a bad resolver cannot
+-- partially advance the visit or overwrite clocks. Snapshot never calls host code.
+local function presentation(self, id, locale)
+  local node = copy(self.document.nodes[id])
+  node.text, node.options = node.text or "", node.options or {}
+  if self.resolve then
+    local function translate(key, source)
+      self.resolving = true
+      local ok, value = pcall(self.resolve, key, source, copy(self.args), locale)
+      self.resolving = false
+      if not ok then error(value, 0) end
+      assert(type(value) == "string", "dialogue resolver must return text")
+      return value
+    end
+    if node.textId then node.text = translate(node.textId, node.text) end
+    if node.speakerKey then node.speaker = translate(node.speakerKey, node.speaker or "") end
+    for _, option in ipairs(node.options) do option.text = translate(option.id, option.text) end
+  end
+  return node
+end
+
+function Player:setLocale(locale)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  assert(self.state ~= "disposed", "dialogue is disposed")
+  assert(type(locale) == "string" and locale ~= "", "invalid dialogue locale")
+  if locale == self.locale then return false end
+  local node = self.current and presentation(self, self.current, locale)
+  self.locale, self.presentation = locale, node
+  self.presentationRevision = self.presentationRevision + 1
+  self.revealComplete = self.state == "awaiting_advance"
+  if self.revealComplete and self.revealedElapsed == nil then
+    self.revealedElapsed, self.revealedAt = 0, self.elapsed
+  end
+  return true
 end
 
 function Player:enter(id)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  local nodePresentation = presentation(self, id, self.locale)
+  self.presentation, self.revealComplete = nodePresentation, false
+  self.presentationRevision = self.presentationRevision + 1
   self.visit = self.visit + 1
   self.elapsed, self.revealedElapsed, self.revealedAt, self.fired = 0, nil, nil, {}
   self.current = id
@@ -115,18 +228,20 @@ function Player:enter(id)
 end
 
 function Player:start(entry)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   assert(self.state ~= "disposed", "dialogue is disposed")
   assert(entry == nil or type(entry) == "string", "entry ID must be a string")
   entry = entry or self.document.entry
   assert(self.document.nodes[entry], "missing entry node")
-  self.generation = self.generation + 1
   self:enter(entry)
+  self.generation = self.generation + 1
 end
 
 -- The host reports reveal completion; this runtime never reads a wall clock.
 -- The first true sample anchors revealed events at elapsed zero, conservatively
 -- excluding the update interval in which presentation finished revealing.
 function Player:update(dt, revealed)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   assert(seconds(dt) and type(revealed) == "boolean", "invalid dialogue update")
   if self.state ~= "awaiting_advance" then return {} end
   local node = self.document.nodes[self.current]
@@ -166,12 +281,14 @@ function Player:update(dt, revealed)
 end
 
 function Player:advance()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state ~= "awaiting_advance" then return false end
   self:enter(self.document.nodes[self.current].next)
   return true
 end
 
 function Player:choose(id)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state ~= "awaiting_choice" then return false end
   for _, option in ipairs(self.document.nodes[self.current].options) do
     if option.id == id then
@@ -183,35 +300,37 @@ function Player:choose(id)
 end
 
 function Player:cancel()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state == "disposed" or self.state == "cancelled" or self.state == "completed" then
     return false
   end
   self.generation = self.generation + 1
-  self.state, self.current = "cancelled", nil
+  self.state, self.current, self.presentation = "cancelled", nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
   return true
 end
 
 function Player:snapshot()
-  local node = self.current and self.document and self.document.nodes[self.current]
-  local presentation = copy(node)
-  if presentation then
-    presentation.text = presentation.text or ""
-    presentation.options = presentation.options or {}
-  end
+  local presentation = copy(self.presentation)
   return {
     state = self.state,
     generation = self.generation,
     visit = self.visit,
     nodeId = self.current,
     node = presentation,
+    locale = self.locale,
+    documentId = self.document and self.document.documentId,
+    presentationRevision = self.presentationRevision,
+    revealComplete = self.revealComplete,
   }
 end
 
 function Player:dispose()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state == "disposed" then return end
   self.generation = self.generation + 1
   self.state, self.current, self.document = "disposed", nil, nil
+  self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
 end
 

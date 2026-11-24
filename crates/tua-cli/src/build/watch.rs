@@ -117,6 +117,19 @@ impl WatchBuildSession {
     }
 
     pub(crate) fn rebuild(&mut self, changed: Vec<PathBuf>, deleted: Vec<PathBuf>) -> BuildOutcome {
+        let catalog_paths: BTreeSet<_> = self
+            .workspace
+            .config()
+            .i18n
+            .catalogs
+            .iter()
+            .map(|catalog| self.workspace.primary_source_root().join(&catalog.path))
+            .collect();
+        let localization_changed = self.workspace.config().i18n.enabled
+            && changed.iter().chain(&deleted).any(|path| {
+                catalog_paths.contains(path)
+                    || path.extension().is_some_and(|ext| ext == "tdialogue")
+            });
         let before = self.host.snapshot();
         let extension = self.workspace.config().extension.clone();
         let mut diagnostics = Vec::new();
@@ -191,6 +204,19 @@ impl WatchBuildSession {
         }
         let snapshot = self.host.snapshot();
         let mut affected_tua = changed_tua;
+        if localization_changed {
+            affected_tua.extend(
+                self.host
+                    .file_paths()
+                    .into_iter()
+                    .filter(|path| SourceKind::for_path(path, &extension).is_compiled()),
+            );
+            changed_assets.extend(
+                catalog_paths
+                    .into_iter()
+                    .filter(|path| snapshot.source(path).is_some()),
+            );
+        }
         if surface_roots
             .iter()
             .chain(affected_tua.iter())
@@ -252,6 +278,11 @@ impl WatchBuildSession {
         stop_on_any_error: bool,
         warn_on_sibling_collisions: bool,
     ) -> BuildOutcome {
+        // Catalog validity depends on dialogue source placeholders too. Check the
+        // complete index on either kind of edit before copying any changed asset.
+        let catalog_diagnostics = snapshot.i18n_catalog_diagnostics();
+        let invalid_catalogs = has_errors(&catalog_diagnostics);
+        diagnostics.extend(catalog_diagnostics);
         let mut blocked = BTreeSet::new();
         let tua_output_collisions = colliding_tua_outputs(&tua_output_owners_for_paths(
             &self.workspace,
@@ -267,6 +298,9 @@ impl WatchBuildSession {
         remove_colliding_outputs(&self.output_guard, &tua_output_collisions, &mut diagnostics);
 
         for path in &tua_paths {
+            if invalid_catalogs && path.extension().is_some_and(|ext| ext == "tdialogue") {
+                blocked.insert(path.clone());
+            }
             if snapshot.source(path).is_none() {
                 continue;
             }
@@ -383,6 +417,13 @@ impl WatchBuildSession {
         }
 
         for source_path in asset_paths {
+            if invalid_catalogs
+                && self.workspace.config().i18n.catalogs.iter().any(|catalog| {
+                    self.workspace.primary_source_root().join(&catalog.path) == source_path
+                })
+            {
+                continue;
+            }
             if source_path
                 .extension()
                 .and_then(|extension| extension.to_str())

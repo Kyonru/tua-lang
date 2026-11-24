@@ -14,6 +14,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Localize dialogue lines, choices and character names through existing catalogs,
+  with independent player locales, scalar placeholders/plurals and no event replay
+  when switching language. Preserve line IDs and optional logical document IDs in
+  schema-1 assets; the runtime still accepts legacy structured input.
+- Add read-only `tua dialogue-extract` manifests and dialogue source coverage,
+  navigation, placeholder validation and drift warnings in Localization Explorer.
+  See the runnable `examples/dialogue-localization` English/French host.
+
 - Dialogue scripts can import shared typed character modules with `@characters`.
   The updated extension adds `.tdialogue` highlighting, character completion,
   hover and definition navigation, including unsaved edits. Check/build/watch
@@ -27,8 +35,7 @@ language or editor behavior, and migration notes call out those changes.
   and source-ranged `TL5012` validation. The frontend feeds the typed headless
   player. Project check/build/watch now compile typed dialogue imports, retain
   last-valid development output, track source maps and enforce project-wide text
-  IDs. Localization and dedicated dialogue editor support remain pending on the
-  isolated feature branch.
+  IDs. The current localization and editor additions are listed above.
 
 ## [0.11.0] - 2026-11-23
 

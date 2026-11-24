@@ -211,3 +211,34 @@ fn localization_unknown_key_action_edits_the_fallback_catalog() {
         .unwrap()
         .contains("missing = \"TODO\""));
 }
+
+#[test]
+fn dialogue_localization_explorer_navigates_sources_and_refreshes_unsaved_prose() {
+    let project = TempProject::new("dialogue-localization");
+    project.write("tua.toml", "source = 'src'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n");
+    project.write("src/en.lua", "return { en = { hello = 'Hello' } }");
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Hello (end)\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(json!({"jsonrpc":"2.0","id":2,"method":"tua/localizationCatalog","params":{"uri":uri,"search":"hello"}}));
+    let page = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(page["rows"][0]["source"]["preview"], "Hello");
+    assert_eq!(page["rows"][0]["source"]["uri"], uri);
+    server.send(hover_request(3, &uri, source, "hello"));
+    assert_hover_contains(server.output(), 3, "dialogue text: hello");
+    server.send(definition_request(4, &uri, source, "hello", 2));
+    assert!(response_with_id(server.output(), 4)
+        .to_string()
+        .contains("en.lua"));
+    server.send(did_change(&uri, &source.replace(": Hello", ": Changed"), 2));
+    server.send(json!({"jsonrpc":"2.0","id":5,"method":"tua/localizationCatalog","params":{"uri":uri,"search":"hello"}}));
+    assert_eq!(
+        response_with_id(server.output(), 5)["result"]["rows"][0]["source"]["preview"],
+        "Changed"
+    );
+}

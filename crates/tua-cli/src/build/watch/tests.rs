@@ -118,3 +118,64 @@ fn dialogue_watch_rechecks_shared_character_types_and_deletion() {
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn dialogue_watch_preserves_catalogs_on_placeholder_errors_and_recovers() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "tua-dialogue-localization-watch-{}-{nonce}",
+        std::process::id()
+    ));
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("tua.toml"), "source = 'src'\nout = 'build'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n").unwrap();
+    let scene = root.join("src/scene.tdialogue");
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Hi %{name} (end)\n";
+    fs::write(&scene, source).unwrap();
+    fs::write(root.join("src/main.tua"), "local player = Dialogue.new(require('scene'), { locale = 'en', resolve = I18n.dialogue, args = { name = 'A' } })\nplayer:start()\n").unwrap();
+    let catalog = root.join("src/en.lua");
+    let valid = "return { en = { hello = 'Hi %{name}' } }";
+    fs::write(&catalog, valid).unwrap();
+    let loaded = tua_core::load_config_from_dir(&root).unwrap();
+    let (mut session, initial) = WatchBuildSession::start(&root, loaded).unwrap();
+    assert!(
+        !has_errors(&initial.diagnostics),
+        "{:?}",
+        initial.diagnostics
+    );
+    let original = fs::read(root.join("build/en.lua")).unwrap();
+    let original_scene = fs::read(root.join("build/scene.lua")).unwrap();
+    fs::write(&catalog, valid.replace("name", "wrong")).unwrap();
+    let invalid = session.rebuild(vec![catalog.clone()], vec![]);
+    assert!(
+        has_errors(&invalid.diagnostics),
+        "{:?}",
+        invalid.diagnostics
+    );
+    assert_eq!(fs::read(root.join("build/en.lua")).unwrap(), original);
+    fs::write(&catalog, valid).unwrap();
+    assert!(!has_errors(
+        &session.rebuild(vec![catalog.clone()], vec![]).diagnostics
+    ));
+    fs::write(&scene, source.replace("name", "other")).unwrap();
+    assert!(has_errors(
+        &session.rebuild(vec![scene.clone()], vec![]).diagnostics
+    ));
+    assert_eq!(
+        fs::read(root.join("build/scene.lua")).unwrap(),
+        original_scene
+    );
+    fs::write(&catalog, valid.replace("name", "other")).unwrap();
+    let repaired = session.rebuild(vec![catalog], vec![]);
+    assert!(fs::read_to_string(root.join("build/scene.lua"))
+        .unwrap()
+        .contains("%{other}"));
+    assert!(
+        !has_errors(&repaired.diagnostics),
+        "{:?}",
+        repaired.diagnostics
+    );
+    fs::remove_dir_all(root).unwrap();
+}

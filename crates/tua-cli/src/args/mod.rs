@@ -22,6 +22,7 @@ Commands:
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change
   dev       Rebuild on change and hot reload the running LOVE game
+  dialogue-extract Export dialogue source text as JSON without changing catalogs
   shader-tools Test shader validators with built-in source and report JSON
   lsp       Start the tua language server over stdio
   api       Start the read-only Tua JSON-RPC API over stdio
@@ -96,6 +97,7 @@ pub enum CommandName {
     Api,
     Mcp,
     ShaderTools,
+    DialogueExtract,
     Test,
 }
 
@@ -117,6 +119,7 @@ impl CommandName {
             "api" => Self::Api,
             "mcp" => Self::Mcp,
             "shader-tools" => Self::ShaderTools,
+            "dialogue-extract" => Self::DialogueExtract,
             _ => return None,
         })
     }
@@ -125,6 +128,7 @@ impl CommandName {
 pub fn command_help(command: CommandName) -> &'static str {
     match command {
         CommandName::Test => "tua test - build and run unit tests with Busted\n\nUsage:\n  tua test [SOURCE-PATH] [--busted PATH] [--filter PATTERN] [--tags TAGS] [--lua PATH] [--list] [--report PATH] [--coverage PATH]\n\n--list returns JSON discovery without executing tests.\n--report writes structured JSON results with mapped source locations.\n--coverage writes source-mapped JSON line coverage (requires LuaCov).\n\nDiscovers *_spec.tua and *_spec.lua below [test].source or source.\nSOURCE-PATH is relative to that discovery root. Builds into temporary .tua output,\nthen runs an installed Busted executable (TUA_BUSTED or busted on PATH).\nTests run with the generated output as their working directory.\n",
+        CommandName::DialogueExtract => "tua dialogue-extract - export source text IDs and defaults as JSON\n\nUsage:\n  tua dialogue-extract\n\nReads project dialogue sources only; never executes Lua or overwrites catalogs.\nReview differences and merge additions into configured Lua catalogs.\n",
         CommandName::ShaderTools => "tua shader-tools - test installed shader validators\n\nUsage:\n  tua shader-tools\n\nReports JSON using a built-in shader in an isolated directory; does not load the project.\n",
         CommandName::Init => "tua init - create a Tua project\n\nUsage:\n  tua init\n\nCreates tua.toml and src/main.tua without overwriting existing files, and adds generated folders to .gitignore.\n",
         CommandName::Actions => "tua actions - add GitHub Actions to a Tua project\n\nUsage:\n  tua actions init\n\nAdds .github/workflows/tua-game.yml without overwriting an existing workflow.\nThe workflow builds a .love archive, uploads an Actions artifact, and creates a draft release for v* tags.\n",

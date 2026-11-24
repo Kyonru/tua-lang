@@ -150,7 +150,7 @@ local function recursiveLoad(currentContext, data)
   end
 end
 
-local function localizedTranslate(key, loc, data)
+local function localizedValue(key, loc)
   local path, length = dotSplit(loc .. "." .. key)
   local node = store
 
@@ -159,6 +159,12 @@ local function localizedTranslate(key, loc, data)
     if not node then return nil end
   end
 
+  return node
+end
+
+local function localizedTranslate(key, loc, data)
+  local node = localizedValue(key, loc)
+  if node == nil then return nil end
   return treatNode(node, loc, data)
 end
 
@@ -210,6 +216,17 @@ function i18n.set(key, value)
 
   local lastKey = path[length]
   node[lastKey] = value
+end
+
+-- Tua extension: reuse the catalog store and locale chain without interpolation.
+-- Callers must treat the returned entry as borrowed, read-only data.
+function i18n.resolve(key, selectedLocale)
+  assertPresent('resolve', 'key', key)
+  assertPresent('resolve', 'locale', selectedLocale)
+  for _, candidate in ipairs(variants.fallbacks({selectedLocale, fallbackLocale})) do
+    local value = localizedValue(key, candidate)
+    if value ~= nil then return value, candidate end
+  end
 end
 
 function i18n.translate(key, data)

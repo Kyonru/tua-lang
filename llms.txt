@@ -273,9 +273,20 @@ Share characters using ordinary .tua exports with a required string `name` field
 Before labels, `@characters Cast "dialogue.characters"` imports the module; use
 `Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,
 definition navigation and unsaved edits are supported by the updated extension.
-Character fields other than name/portrait remain host metadata. Analysis
+Character fields other than name/portrait/nameKey remain host metadata. Analysis
 never executes project modules; emitted scripts use ordinary runtime require.
-Translations, script formatting and cross-language rename remain pending.
+Dialogue localization: `Dialogue.new(document, {locale = "fr", resolve = I18n.dialogue,
+args = {name = "Ada", count = 2}})` uses existing configured catalogs and source fallback.
+`%{name}` placeholders take scalar args, `%%` escapes a percent; inserted values are literal.
+Line text IDs and reply IDs are catalog keys; optional character `nameKey` localizes its name.
+`player:setLocale("en")` refreshes presentation without changing visit/generation or replaying events.
+Renderers honor `presentationRevision` and `revealComplete` (show refreshed lines fully).
+Compiled documents have schemaVersion 1 and line textId; optional `@document logical.id`
+before labels supplies documentId. Legacy structured documents remain playable.
+Use `assert(Dialogue.schemaVersion >= 1)` when relying on this API with runtime replacements.
+`tua dialogue-extract` prints a read-only source-text JSON manifest, never overwrites catalogs.
+Localization Explorer includes dialogue coverage/source navigation. Script formatting and
+cross-language rename remain pending.
 Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
 After an utterance, `@event shown 0.2 event.name "payload"` or
 `@event revealed 0.2 event.name` schedules named data (up to 64 per line).

@@ -16,6 +16,7 @@ the VS Code extension's bundled server is not added to your `PATH`.
 | --- | --- | --- |
 | Create the project layout | `tua init` | Creates missing project files. |
 | Check types and project diagnostics | `tua check` | No Lua output; configured asset pipelines may generate their outputs. |
+| Export dialogue source text | `tua dialogue-extract` | No; prints JSON to standard output. |
 | Execute unit tests with Busted | `tua test` | Writes temporary test output; configured asset pipelines may generate files. |
 | Apply formatting | `tua fmt` | Rewrites project Tua source. |
 | Check formatting in CI | `tua fmt --check` | No. |
@@ -82,6 +83,18 @@ Formatting does not produce lint diagnostics; see [Formatter](formatter.md).
 Scripts ending in `.tdialogue` under the source root also participate in project
 `check`, `build` and `watch`. They emit typed Lua data modules; see
 [Dialogue](dialogue.md#build-and-import-a-script) for imports and invalid-edit behavior.
+
+## `dialogue-extract`
+
+```bash
+tua dialogue-extract > /tmp/dialogue-source.json
+```
+
+Parses production dialogue scripts and prints a sorted JSON manifest of text IDs,
+source prose, logical document IDs and source locations. It does not run Lua or
+asset pipelines and never writes translation catalogs. Review manifest changes
+and merge additions deliberately, preserving translator edits. See
+[dialogue localization](dialogue.md#localize-lines-choices-and-character-names).
 
 ## `lint`
 

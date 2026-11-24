@@ -36,7 +36,7 @@ function registerLocalizationExplorer({ getClient }) {
   }
   const show = vscode.commands.registerCommand(COMMANDS.showLocalizationExplorer, async () => {
     const active = vscode.window.activeTextEditor?.document;
-    sourceUri = active && /\.(?:tua|lua)$/i.test(active.uri.path)
+    sourceUri = active && /\.(?:tua|lua|tdialogue)$/i.test(active.uri.path)
       ? active.uri.toString()
       : undefined;
     if (!panel) {
@@ -59,10 +59,10 @@ function registerLocalizationExplorer({ getClient }) {
     await refresh();
   });
   const changed = vscode.workspace.onDidChangeTextDocument(event => {
-    if (/\.(lua|tua|toml)$/i.test(event.document.uri.path)) scheduleRefresh();
+    if (/\.(lua|tua|tdialogue|toml)$/i.test(event.document.uri.path)) scheduleRefresh();
   });
   const saved = vscode.workspace.onDidSaveTextDocument(document => {
-    if (/\.(lua|tua|toml)$/i.test(document.uri.path)) scheduleRefresh();
+    if (/\.(lua|tua|tdialogue|toml)$/i.test(document.uri.path)) scheduleRefresh();
   });
   return vscode.Disposable.from(show, changed, saved, { dispose() { gate.invalidate(); clearTimeout(timer); panel?.dispose(); } });
 }

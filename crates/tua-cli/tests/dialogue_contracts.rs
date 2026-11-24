@@ -107,3 +107,76 @@ print(wrong)
     assert!(!invalid.status.success());
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("TL5012"));
 }
+
+#[test]
+fn dialogue_localization_uses_emitted_runtime_and_non_destructive_extraction() {
+    let temp = TempDir::new("dialogue-m1");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    copy_dir_all(&root.join("examples/dialogue-localization"), temp.path()).unwrap();
+    run(temp.path(), "check");
+    run(temp.path(), "build");
+    let catalog = temp.path().join("src/locales/fr.lua");
+    let original = fs::read(&catalog).unwrap();
+    let output = tua()
+        .arg("dialogue-extract")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(data["entries"]["harbor.bye"]["text"], "Goodbye, %{name}.");
+    assert_eq!(fs::read(&catalog).unwrap(), original);
+    if let Some(lua) = support::lua_executable() {
+        fs::copy(
+            root.join("vendor/tests/dialogue_localization_test.lua"),
+            temp.path().join("build/oracle.lua"),
+        )
+        .unwrap();
+        for name in ["main.lua", "oracle.lua"] {
+            let output = Command::new(&lua)
+                .arg(name)
+                .current_dir(temp.path().join("build"))
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    for invalid in [
+        "local p = Dialogue.new(require('scene'), { locale = 4, resolve = I18n.dialogue })",
+        "local p = Dialogue.new(require('scene'), { locale = 'en', resolve = I18n.dialogue, args = { name = {} } })",
+        "local p = Dialogue.new(require('scene'))\np:setLocale(false)",
+        "local p = Dialogue.new(require('scene'))\nlocal wrong: string = p:snapshot().presentationRevision",
+    ] {
+        fs::write(temp.path().join("src/main.tua"), invalid).unwrap();
+        assert!(!tua().arg("check").current_dir(temp.path()).output().unwrap().status.success(), "accepted: {invalid}");
+    }
+    fs::write(
+        temp.path().join("src/tuadialogue.lua"),
+        "return { schemaVersion = 0 }\n",
+    )
+    .unwrap();
+    fs::write(temp.path().join("src/main.tua"), "local runtime = require('tuadialogue')\nassert(runtime.schemaVersion >= 1, 'needs dialogue schema 1')\n").unwrap();
+    run(temp.path(), "build");
+    assert!(
+        fs::read_to_string(temp.path().join("build/tuadialogue.lua"))
+            .unwrap()
+            .contains("schemaVersion = 0")
+    );
+    if let Some(lua) = support::lua_executable() {
+        let output = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("needs dialogue schema 1"));
+    }
+}

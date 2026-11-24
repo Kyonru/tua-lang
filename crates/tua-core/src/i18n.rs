@@ -65,6 +65,25 @@ pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
                 ),
             ),
             (
+                "dialogue",
+                field(
+                    vec![
+                        ("key", Type::alias(KEY_TYPE)),
+                        ("source", Type::string()),
+                        (
+                            "args",
+                            Type::dictionary(
+                                Type::string(),
+                                Type::union([Type::string(), Type::number(), Type::boolean()]),
+                            ),
+                        ),
+                        ("locale", Type::alias(LOCALE_TYPE)),
+                    ],
+                    4,
+                    Type::string(),
+                ),
+            ),
+            (
                 "setLocale",
                 field(vec![("locale", Type::alias(LOCALE_TYPE))], 1, Type::nil()),
             ),
@@ -126,6 +145,7 @@ pub(crate) struct CatalogIndex {
     pub entries: BTreeMap<String, BTreeMap<String, CatalogEntry>>,
     pub diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
     pub duplicate_keys: BTreeSet<String>,
+    pub dialogue_sources: BTreeMap<String, CatalogEntry>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,6 +162,7 @@ pub struct LocalizationCell {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalizationRow {
     pub key: String,
+    pub source: Option<LocalizationCell>,
     pub cells: Vec<LocalizationCell>,
 }
 
@@ -152,6 +173,8 @@ pub struct LocalizationPage {
     pub total: usize,
     pub rows: Vec<LocalizationRow>,
 }
+
+mod dialogue;
 
 impl CatalogIndex {
     /// Return only result types that are safe for every configured locale.
@@ -406,7 +429,8 @@ impl CatalogIndex {
             let Some(fallback) = by_locale.get(fallback_locale) else {
                 if let Some(entry) = by_locale.values().next() {
                     self.diagnostics.entry(entry.path.clone()).or_default().push(
-                        Diagnostic::error(&entry.path, entry.span.start.line, entry.span.start.column,
+                        Diagnostic::new(&entry.path, entry.span.start.line, entry.span.start.column,
+                            if self.dialogue_sources.contains_key(key) { DiagnosticSeverity::Warning } else { DiagnosticSeverity::Error },
                             format!("i18n key `{key}` is missing from fallback locale `{fallback_locale}`"))
                             .with_code(DiagnosticCode::DOMAIN_I18N),
                     );
@@ -415,6 +439,7 @@ impl CatalogIndex {
             };
             for entry in by_locale.values() {
                 if entry.locale != *fallback_locale
+                    && !self.dialogue_sources.contains_key(key)
                     && entry.placeholders != fallback.placeholders
                     && !matches!(entry.value, CatalogValue::Dynamic)
                     && !matches!(fallback.value, CatalogValue::Dynamic)
@@ -623,7 +648,7 @@ fn dialogue_table(table: &TableConstructor) -> bool {
             .all(|field| matches!(field, Field::NoKey(_)))
 }
 
-fn placeholders(text: &str) -> BTreeSet<String> {
+pub(crate) fn placeholders(text: &str) -> BTreeSet<String> {
     let mut result = BTreeSet::new();
     for marker in ["%{", "%<"] {
         let mut rest = text;

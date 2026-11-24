@@ -119,6 +119,19 @@ Translation text still needs a game font containing the selected language's
 glyphs. Tua does not perform text shaping, UI mirroring, or layout overflow
 measurement.
 
+## Authored dialogue graphs
+
+[Dialogue localization](dialogue.md#localize-lines-choices-and-character-names) maps
+`.tdialogue` line/reply IDs to this same catalog index. Pass `I18n.dialogue` as the
+player resolver with an explicit locale. It returns scalar text, selects existing
+plural/fallback rules and safely inserts `%{name}` arguments as literal text;
+`I18n.t` keeps its existing string/array/nil contract.
+
+The Explorer includes authored keys without translations and a separate source
+prose/navigation panel. `tua dialogue-extract` prints a source manifest for reviewed
+catalog updates without executing Lua or overwriting translator edits. Open the
+Explorer from `.tua`, `.lua` or `.tdialogue` files.
+
 ## Spoken audio and subtitles
 
 `I18n` catalogs contain text, not sound files. Keep subtitles under stable

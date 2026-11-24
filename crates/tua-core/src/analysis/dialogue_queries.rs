@@ -68,7 +68,7 @@ impl AnalysisSnapshot {
                     )),
                     Some(ty) if !is_character(&ty) => {
                         let message = format!(
-                            "character `{}` must be a record with a required string `name` and optional string `portrait`; found {ty}",
+                            "character `{}` must be a record with a required string `name` and optional string `portrait` and `nameKey`; found {ty}",
                             speaker.value
                         );
                         diagnostics.push(character_error(path, speaker.span, message));
@@ -135,6 +135,20 @@ impl AnalysisSnapshot {
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
         let file = self.file(path)?;
+        if self.config_for_path(path).i18n.enabled {
+            if let Some(text) = dialogue_text(file, position) {
+                return Some(Hover {
+                    is_markdown: false,
+                    contents: format!("dialogue text: {}\n{}", text.id.value, text.value),
+                    span: Some(text.id.span),
+                    documentation: None,
+                    context: vec![
+                        "Localization Explorer shows exact translations and fallback coverage"
+                            .into(),
+                    ],
+                });
+            }
+        }
         let (token, span) = speaker_token(&file.source, position, false)?;
         let (alias, name) = token.split_once('.')?;
         let import = file
@@ -162,6 +176,22 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Option<Definition> {
         let file = self.file(path)?;
+        if self.config_for_path(path).i18n.enabled {
+            if let Some(text) = dialogue_text(file, position) {
+                let config = &self.config_for_path(path).i18n;
+                if let Some(entry) = self.catalog_index_for_path(path).resolved_entry(
+                    &text.id.value,
+                    &config.default_locale,
+                    &config.fallback_locale,
+                ) {
+                    return Some(Definition {
+                        path: entry.path.clone(),
+                        span: entry.span,
+                        kind: DefinitionKind::TableField,
+                    });
+                }
+            }
+        }
         let imports = &file.parsed.as_ref().ok()?.dialogue_imports;
         if let Some(import) = imports
             .iter()
@@ -196,6 +226,9 @@ fn is_character(ty: &Type) -> bool {
             shape
                 .field("name")
                 .is_some_and(|field| !field.optional && is_string(&field.ty))
+                && shape
+                    .field("nameKey")
+                    .is_none_or(|field| is_optional_string(&field.ty))
                 && shape
                     .field("portrait")
                     .is_none_or(|field| is_optional_string(&field.ty))
@@ -275,4 +308,20 @@ fn is_optional_string(ty: &Type) -> bool {
         Type::Union(types) => types.iter().all(is_optional_string),
         _ => is_string(ty),
     }
+}
+
+fn dialogue_text(
+    file: &AnalysisFile,
+    position: SourcePosition,
+) -> Option<&crate::dialogue_asset::DialogueText> {
+    file.dialogue_model
+        .get()?
+        .as_ref()?
+        .sections
+        .iter()
+        .flat_map(|section| &section.lines)
+        .flat_map(|line| {
+            std::iter::once(&line.text).chain(line.choices.iter().map(|choice| &choice.text))
+        })
+        .find(|text| contains(text.id.span, position))
 }

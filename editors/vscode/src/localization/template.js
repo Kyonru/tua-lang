@@ -51,6 +51,12 @@ function select(key) {
   const row = page.rows.find(item => item.key === key);
   const detail = $('details'); detail.replaceChildren();
   if (!row) return;
+  if (row.source) {
+    detail.append(element('p', 'Dialogue source: ' + row.source.preview, 'sample'));
+    const open = element('button', 'Open dialogue source'); open.type = 'button';
+    open.addEventListener('click', () => vscode.postMessage({ command: 'openLocation', uri: row.source.uri, range: row.source.range }));
+    detail.append(open);
+  }
   for (const cell of row.cells) {
     const block = element('div', null, 'locale');
     const heading = element('h3', cell.locale + ' · ' + cell.status); block.append(heading);

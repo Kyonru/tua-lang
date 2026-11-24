@@ -365,7 +365,8 @@ host dismisses the line before a late event becomes due, that event is discarded
 
 | Call | Purpose |
 | --- | --- |
-| `Dialogue.new(document)` | Validate and copy a document into a new player |
+| `Dialogue.new(document, options?)` | Validate and copy a document; optionally select a localization resolver |
+| `player:setLocale("fr")` | Refresh localized presentation without starting a new visit |
 | `player:start()` | Start at the document's first label |
 | `player:start("done")` | Start/restart at a named entry point |
 | `player:snapshot()` | Get a defensive copy of current presentation state |
@@ -380,6 +381,8 @@ A snapshot contains `state`, `generation`, `visit`, optional `nodeId` and option
 `options`, defaulting to an empty string and array. `speaker`, `portrait`, `next`,
 `hold`, `fade` and `events` are optional. `generation` distinguishes sessions;
 `visit` increases on each node entry, including loops.
+Snapshots also expose optional `documentId` and `locale`, plus `presentationRevision`
+and `revealComplete`. Lines preserve `textId`; choices preserve their existing `id`.
 
 Referencing the `Dialogue` builtin automatically includes `tuadialogue` only when
 used. Local bindings named `Dialogue` take precedence. Ordinary Lua can use
@@ -462,12 +465,179 @@ names. Escape literal braces and brackets with `\{`, `\}`, `\[` and `\]`.
 `\$`, `\(` and `\)` are also supported; `\(end)` prevents a literal terminal
 `(end)` from ending the line. Unknown or unfinished escapes are errors.
 
-Interpolation, rich-text effects, expressions, conditions, assignments and
-inline executable commands are not implemented. Named `@event` metadata is
-supported as described above; its behavior comes from host handlers. Unescaped braces and brackets in
-text are rejected so planned constructs are not silently treated as working
-features. Translations and placeholder validation remain pending; stable text IDs
-and source text are retained in the parsed model for that integration.
+Named `%{name}` placeholders are supported by the opt-in localization adapter below.
+Rich-text effects, expressions, conditions, assignments and inline executable
+commands are not implemented. Named `@event` metadata is
+supported as described above; its behavior comes from host handlers. Named
+placeholders are validated; other unescaped braces and brackets remain errors.
+Without a resolver, the player presents decoded source text literally.
+
+## Localize lines, choices and character names
+
+The runnable [localized dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-localization)
+contains English and French catalogs, two simultaneous players and an intentionally
+missing French farewell. It checks the same API used by graphical hosts.
+
+### 1. Keep source text and stable IDs
+
+IDs are catalog keys; translate their text, never the IDs themselves. An optional
+logical document ID is independent of filenames and generated node addresses:
+
+```text
+@dialogue 1
+@document harbor.welcome
+@characters Cast "cast"
+[start]
+// @id harbor.hello
+Cast.Guide: Hello, %{name}! You have %{count} coins.
+@event shown 0 greet "once"
+@event revealed 0.2 ready "once"
+// @id harbor.again
+-> Again [target:start]
+// @id harbor.leave
+-> Leave [target:done]
+[done]
+// @id harbor.bye
+: Goodbye, %{name}. (end)
+```
+
+`@document` appears once before labels. Document IDs and text IDs must be unique
+within their respective project namespaces. Document IDs are optional for playback;
+this milestone does not implement checkpoints.
+
+Use `%{name}` for named scalar arguments. Names are simple ASCII identifiers, not
+field paths or executable expressions. With localization enabled, `%%` produces a
+literal percent: `%%{name}` displays `%{name}`. A replacement value such as
+`"100% %{other}"` is inserted literally and never parsed again. General printf
+formatting and `%<name>.d` are not part of this dialogue adapter.
+
+### 2. Configure existing catalogs
+
+Enable `[i18n]` and configure locale files as described in
+[Localization](localization.md). In `src/locales/en.lua`:
+
+```lua
+return {
+  en = {
+    cast = { guide = "Guide" },
+    harbor = {
+      hello = {
+        one = "Hello, %{name}! You have %{count} coin.",
+        other = "Hello, %{name}! You have %{count} coins.",
+      },
+      again = "Again",
+      leave = "Leave",
+      bye = "Goodbye, %{name}.",
+    },
+  },
+}
+```
+
+A line or reply must resolve to a scalar string or plural entry with an `other`
+form. The older array-shaped `I18n.t` dialogue entries are a different feature and
+cannot be used as graph lines. Each plural form must retain the source placeholders;
+`count` must be a finite number. Regional locales use the same parent/fallback chain
+as `I18n.t`, followed by authored source prose when no catalog entry exists.
+
+For a shared character, keep a plain fallback name and optionally add `nameKey`:
+
+```tua
+return { Guide = { name = "Guide", nameKey = "cast.guide" } }
+```
+
+Names without `nameKey` remain unchanged. Character keys use the same runtime
+resolver; existing catalog tooling covers their catalog entries. The source-text
+extraction manifest covers authored lines/replies, not dynamically computed names.
+
+### 3. Select a locale per player
+
+```tua
+local scene = require("scene")
+assert(Dialogue.schemaVersion >= 1)
+local player = Dialogue.new(scene, {
+  locale = "fr-CA",
+  resolve = I18n.dialogue,
+  args = { name = "Zoé", count = 1 },
+})
+player:start()
+local node = player:snapshot().node
+if node then print(node.text) end
+```
+
+`I18n.dialogue(key, source, args, locale)` is a scalar adapter over the existing
+catalog engine. Referencing `I18n` includes its runtime through the normal opt-in
+build path; `Dialogue` alone does not import localization. A headless host may
+instead provide a function with that signature returning a string.
+
+The player copies scalar `args` at construction. Strings, booleans and finite
+numbers are accepted. Missing required arguments and missing/extra translation
+placeholders fail explicitly. Extra **argument values** are allowed so one player
+can carry arguments for several lines. Typed context bindings and argument refresh
+are M2 work. Do not put services or mutable gameplay objects in this argument map.
+
+Resolvers run on node entry and locale changes, never during `snapshot()`.
+Presentation is cached; returned snapshots remain defensive copies. A resolver
+must not mutate the same player, including disposal; this is rejected to avoid
+half-applied transitions. It may use another player. Resolver errors leave the
+previous visit/presentation intact. Resolve text without gameplay side effects.
+
+### 4. Refresh presentation without replaying events
+
+```tua
+player:setLocale("en")
+local view = player:snapshot()
+-- When presentationRevision changes, redraw using the refreshed node.
+-- If revealComplete is true, display the whole translated line immediately.
+```
+
+A changed locale increments `presentationRevision`, preserves `generation`, `visit`,
+node/choice IDs and fired events, and replaces text without a new visit. A partially
+revealed line becomes fully revealed: if its revealed clock had not started, it
+starts at zero at the switch. Existing clocks continue. `setLocale` returns false
+for the current locale. It never changes global `I18n` state or another player.
+A renderer must honor `revealComplete`; the core does not draw or count glyphs.
+On the next node entry, `revealComplete` resets to false. Restart uses the latest
+selected locale. Dispose releases resolver, arguments and presentation references.
+
+### 5. Extract and review translations safely
+
+```sh
+tua dialogue-extract > /tmp/dialogue-source.json
+```
+
+This read-only command parses project scripts and emits a sorted JSON manifest of
+IDs, source text, document IDs and source locations. It neither runs project Lua
+nor writes catalogs. Compare successive manifests, merge new keys into the Lua
+catalogs and review changed prose with translators; never replace an edited
+translation with source prose automatically. Removed IDs remain visible in the old
+manifest for intentional cleanup. Invalid scripts or duplicate text IDs fail extraction.
+
+**Tua: Show Localization Explorer** includes authored IDs even before any catalog
+contains them, displays source prose and opens its script location. Catalog cells
+continue to distinguish exact, fallback, missing and dynamic entries. Hover over a
+script text ID for source text; definition navigates to its default-locale/fallback
+catalog entry when present. Unsaved scripts and catalogs refresh shared analysis.
+
+Incomplete translations and default-locale source drift are warnings (`TL5010`);
+`check --deny-warnings` can enforce completeness. Wrong entry shapes, malformed
+placeholders and missing/extra placeholders are errors. Each plural form is checked.
+Source drift compares plain default-locale text; plural prose requires translator
+review against extraction manifests. Dynamic Lua entries are marked dynamic and
+validated when resolved at runtime; analysis never executes them.
+
+### Document/runtime compatibility
+
+Compiled assets now expose `schemaVersion = 1`, optional `documentId`, and line
+`textId`. The current player accepts both legacy unversioned structured documents
+and schema 1; unknown explicit versions and unknown schema-1 semantic fields fail
+validation. Legacy inputs retain their existing selected-field copy behavior.
+
+Use the paired compiler/runtime when rebuilding. `Dialogue.schemaVersion >= 1`
+is the explicit capability guard for localized hosts, including projects replacing
+`tuadialogue`. Old runtimes ignore unknown document fields and cannot detect new
+semantics themselves. Replacement runtimes must implement these APIs; the compiler
+does not execute or certify arbitrary replacement Lua. Data-only imports still do
+not bundle the player. These schema fields do not constitute save/resume support.
 
 ## Build and import a script
 

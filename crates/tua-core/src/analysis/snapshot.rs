@@ -137,7 +137,15 @@ impl AnalysisSnapshot {
                     .and_then(|file| file.parsed.as_ref().ok());
                 index.add_catalog(&catalog.locale, path, parsed.map(Arc::as_ref));
             }
+            for (path, file) in &self.files {
+                if path.starts_with(root) {
+                    if let Some(model) = file.dialogue_model.get().and_then(Option::as_ref) {
+                        index.add_dialogue(path.clone(), model);
+                    }
+                }
+            }
             index.finish(config);
+            index.check_dialogue_sources(config);
         }
         index
     }
@@ -150,9 +158,11 @@ impl AnalysisSnapshot {
         }
         self.catalog_index()
             .diagnostics
-            .values()
-            .flatten()
-            .cloned()
+            .iter()
+            // Compiled dialogue files publish their source warnings through the
+            // normal pipeline. This aggregate adds noncompiled/missing catalogs.
+            .filter(|(path, _)| !self.is_dialogue(path))
+            .flat_map(|(_, diagnostics)| diagnostics.iter().cloned())
             .collect()
     }
 
@@ -276,6 +286,21 @@ impl AnalysisSnapshot {
                     .collect();
                 crate::LocalizationRow {
                     key: key.clone(),
+                    source: index
+                        .dialogue_sources
+                        .get(key)
+                        .map(|source| crate::LocalizationCell {
+                            locale: "source".into(),
+                            status: "source",
+                            preview: match &source.value {
+                                crate::i18n::CatalogValue::Text(text) => Some(text.clone()),
+                                _ => None,
+                            },
+                            forms: Vec::new(),
+                            placeholders: source.placeholders.iter().cloned().collect(),
+                            path: Some(source.path.clone()),
+                            span: Some(source.span),
+                        }),
                     cells,
                 }
             })
@@ -380,6 +405,16 @@ impl AnalysisSnapshot {
         if file.kind == AnalysisSourceKind::Dialogue {
             let mut diagnostics = file.diagnostics.clone();
             diagnostics.extend(self.dialogue_character_diagnostics(path.as_ref()));
+            if config.i18n.enabled {
+                diagnostics.extend(
+                    self.catalog_index_for_path(path.as_ref())
+                        .diagnostics
+                        .get(&normalize_path(path.as_ref()))
+                        .into_iter()
+                        .flatten()
+                        .cloned(),
+                );
+            }
             diagnostics.extend(
                 self.dialogue_project_diagnostics()
                     .get(&normalize_path(path.as_ref()))
@@ -821,6 +856,11 @@ impl AnalysisSnapshot {
                     .max_by_key(|(root, _)| root.components().count())
                     .map(|(root, _)| root.clone())
                     .unwrap_or_default();
+                if let Some(id) = &model.document_id {
+                    ids.entry((workspace.clone(), format!("document:{}", id.value)))
+                        .or_default()
+                        .push((path.clone(), id.span));
+                }
                 for section in &model.sections {
                     for line in &section.lines {
                         for text in std::iter::once(&line.text)

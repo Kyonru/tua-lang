@@ -12486,3 +12486,49 @@ local invalid: number = event.payload
         .signature_help("src/main.tua", fixture.position("signature"))
         .is_some());
 }
+
+#[test]
+fn dialogue_localization_methods_and_snapshots_keep_imported_editor_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/player.tua
+return Dialogue
+-- file: src/main.tua
+local Player = require("player")
+local player = Player.new({ entry = "done", nodes = { done = { kind = "end" } } })
+local view = player:snapshot()
+local revision = view.<|complete|><|hover|>presentationRevision
+player:setLocale(<|signature|>"fr")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.severity == DiagnosticSeverity::Error),
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    for name in [
+        "locale",
+        "documentId",
+        "presentationRevision",
+        "revealComplete",
+    ] {
+        assert!(labels.contains(&name.to_owned()), "{labels:?}");
+    }
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap()
+        .contents
+        .contains("number"));
+    assert!(snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .is_some());
+}

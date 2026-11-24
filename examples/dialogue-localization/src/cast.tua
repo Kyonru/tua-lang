@@ -1,0 +1,1 @@
+return { Guide = { name = "Guide", nameKey = "cast.guide" } }

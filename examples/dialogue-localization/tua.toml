@@ -1,0 +1,14 @@
+source = "src"
+out = "build"
+main = "main.tua"
+target = "lua51"
+[i18n]
+enabled = true
+default_locale = "en"
+fallback_locale = "en"
+[[i18n.catalogs]]
+locale = "en"
+path = "locales/en.lua"
+[[i18n.catalogs]]
+locale = "fr"
+path = "locales/fr.lua"

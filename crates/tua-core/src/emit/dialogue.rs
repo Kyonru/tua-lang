@@ -36,6 +36,10 @@ pub fn emit_dialogue_source(
         );
     }
     output.line("return {", entry.span);
+    output.line("  schemaVersion = 1,", entry.span);
+    if let Some(id) = &document.document_id {
+        output.field("  documentId", &id.value, id.span);
+    }
     output.field("  entry", &entry.value, entry.span);
     output.line("  nodes = {", entry.span);
     for section in &document.sections {
@@ -52,6 +56,7 @@ pub fn emit_dialogue_source(
             output.line(&format!("    [{}] = {{", lua_string_literal(&id)), origin);
             output.field("      kind", "line", origin);
             output.field("      text", &line.text.value, origin);
+            output.field("      textId", &line.text.id.value, line.text.id.span);
             if let Some(speaker) = &line.speaker {
                 if let Some(name) = speakers.get(speaker.value.as_str()) {
                     output.field("      speaker", name, speaker.span);
@@ -64,6 +69,14 @@ pub fn emit_dialogue_source(
                     output.line(
                         &format!(
                             "      speaker = __tua_characters_{}[{}].name,",
+                            index + 1,
+                            lua_string_literal(member)
+                        ),
+                        speaker.span,
+                    );
+                    output.line(
+                        &format!(
+                            "      speakerKey = __tua_characters_{}[{}].nameKey,",
                             index + 1,
                             lua_string_literal(member)
                         ),

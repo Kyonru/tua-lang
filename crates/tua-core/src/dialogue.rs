@@ -36,7 +36,10 @@ pub(crate) fn module_type() -> Type {
                     add_start(ty);
                 }
             }
-            Type::table([("new", TableField::required(constructor))])
+            Type::table([
+                ("new", TableField::required(constructor)),
+                ("schemaVersion", TableField::required(Type::number())),
+            ])
         })
         .clone()
 }

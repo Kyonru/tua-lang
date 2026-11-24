@@ -8,6 +8,7 @@ mod check;
 mod command;
 mod dev;
 mod diagnostics;
+mod dialogue_extract;
 mod error;
 mod formatter;
 mod github_actions;

@@ -33,7 +33,7 @@ test("localization explorer discards stale replies and refreshes after source ed
     Disposable: { from: (...items) => ({ dispose() { items.forEach(item => item.dispose?.()); } }) },
     commands: { registerCommand(_name, handler) { show = handler; return { dispose() {} }; } },
     window: {
-      activeTextEditor: { document: { uri: { path: "/game/src/main.tua", toString: () => "file:///game/src/main.tua" } } },
+      activeTextEditor: { document: { uri: { path: "/game/src/scene.tdialogue", toString: () => "file:///game/src/scene.tdialogue" } } },
       createWebviewPanel() { return panel; },
     },
     workspace: {
@@ -63,14 +63,14 @@ test("localization explorer discards stale replies and refreshes after source ed
     const opened = show();
     assert.equal(requests.length, 1);
     const searched = receive({ type: "search", value: "menu.play" });
-    assert.deepEqual(requests[1].params, { search: "menu.play", offset: 0, uri: "file:///game/src/main.tua" });
+    assert.deepEqual(requests[1].params, { search: "menu.play", offset: 0, uri: "file:///game/src/scene.tdialogue" });
     requests[1].resolve(page("menu.play"));
     await searched;
     requests[0].resolve(page("stale"));
     await opened;
     assert.deepEqual(posted.filter(message => message.type === "page").map(message => message.page.rows[0].key), ["menu.play"]);
 
-    onEdit({ document: { uri: { path: "/game/src/locales/en.lua" } } });
+    onEdit({ document: { uri: { path: "/game/src/scene.tdialogue" } } });
     await new Promise(resolve => setTimeout(resolve, 450));
     assert.equal(requests.length, 3, "catalog edit refreshes the open explorer");
     requests[2].resolve(page("menu.updated"));
@@ -95,4 +95,51 @@ test("localization explorer discards stale replies and refreshes after source ed
   } finally {
     feature.dispose();
   }
+});
+
+test("dialogue source rows render and navigate without embedding catalog text as HTML", () => {
+  const vm = require("node:vm");
+  class Element {
+    constructor(tag) {
+      this.tag = tag;
+      this.children = [];
+      this.dataset = {};
+      this.listeners = {};
+      this.value = "Ada";
+    }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute() {}
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    get rows() { return this.children; }
+  }
+  const nodes = new Map();
+  const get = id => {
+    if (!nodes.has(id)) nodes.set(id, new Element(id));
+    return nodes.get(id);
+  };
+  const table = get("table");
+  table.tBodies = [new Element("tbody")];
+  table.createTHead = () => (table.tHead = new Element("thead"));
+  const messages = [];
+  let receive;
+  const script = localizationHtml({}, "test").match(/<script nonce="test">([\s\S]*?)<\/script>/)[1];
+  vm.runInNewContext(script, {
+    document: { getElementById: get, createElement: tag => new Element(tag) },
+    window: { addEventListener(_name, callback) { receive = callback; } },
+    acquireVsCodeApi: () => ({ postMessage: message => messages.push(message) }),
+    setTimeout, clearTimeout,
+  });
+  receive({ data: { type: "page", page: {
+    enabled: true, total: 1, offset: 0, locales: ["en"], rows: [{
+      key: "hello", source: { preview: "Hello <tag>", uri: "file:///game/src/hello.tdialogue", range: {} },
+      cells: [{ locale: "en", status: "missing", forms: [] }],
+    }],
+  } } });
+  const details = get("details").children;
+  assert.equal(details[0].textContent, "Dialogue source: Hello <tag>");
+  const button = details.find(item => item.textContent === "Open dialogue source");
+  button.listeners.click();
+  assert.equal(messages.at(-1).command, "openLocation");
+  assert.equal(messages.at(-1).uri, "file:///game/src/hello.tdialogue");
 });

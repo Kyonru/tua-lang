@@ -1,0 +1,37 @@
+local scene = require("scene")
+assert(Dialogue.schemaVersion >= 1)
+local english = Dialogue.new(
+  scene,
+  { locale = "en", resolve = I18n.dialogue, args = { name = "Ada", count = 2 } }
+)
+local french = Dialogue.new(
+  scene,
+  { locale = "fr-CA", resolve = I18n.dialogue, args = { name = "Zoé", count = 1 } }
+)
+english:start()
+french:start()
+local en = english:snapshot().node
+local fr = french:snapshot().node
+assert(en and en.text == "Hello, Ada! You have 2 coins.")
+assert(fr and fr.text == "Bonjour, Zoé ! Vous avez 1 pièce.")
+assert(fr and fr.speaker == "Guide du port")
+assert(#french:update(0, false) == 1)
+local before = french:snapshot()
+assert(french:setLocale("en"))
+local after = french:snapshot()
+assert(after.visit == before.visit and after.generation == before.generation)
+assert(after.revealComplete)
+assert(#french:update(0, false) == 0)
+assert(#french:update(0.2, true) == 1)
+assert(french:advance())
+assert(french:setLocale("fr"))
+local choices = french:snapshot().node
+assert(choices and choices.options[2].id == "harbor.leave")
+assert(choices and choices.options[2].text == "Partir")
+assert(french:choose("harbor.leave"))
+local fallback = french:snapshot().node
+assert(fallback and fallback.text == "Goodbye, Zoé.")
+assert(I18n.getLocale() == "en")
+english:dispose()
+french:dispose()
+print("localized dialogue passed")

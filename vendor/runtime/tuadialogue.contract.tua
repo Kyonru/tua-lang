@@ -11,6 +11,8 @@ type FiredEvent = {
 type Node = {
   kind: "line",
   text: string,
+  textId?: string,
+  speakerKey?: string,
   speaker?: string,
   portrait?: string,
   next: string,
@@ -20,10 +22,23 @@ type Node = {
 }
   | { kind: "choice", options: Option[] }
   | { kind: "end" }
-type Document = { entry: string, nodes: { [string]: Node } }
+type Document = {
+  schemaVersion?: number,
+  documentId?: string,
+  entry: string,
+  nodes: { [string]: Node },
+}
+type Arguments = { [string]: string | number | boolean }
+type Options = {
+  locale: string,
+  args?: Arguments,
+  resolve: (key: string, source: string, args: Arguments, locale: string) -> string,
+}
 type PresentationNode = {
   kind: "line" | "choice" | "end",
   text: string,
+  textId?: string,
+  speakerKey?: string,
   speaker?: string,
   portrait?: string,
   hold?: number,
@@ -33,6 +48,10 @@ type PresentationNode = {
   options: Option[],
 }
 type Snapshot = {
+  locale?: string,
+  documentId?: string,
+  presentationRevision: number,
+  revealComplete: boolean,
   state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed",
   generation: number,
   visit: number,
@@ -42,7 +61,8 @@ type Snapshot = {
 local function start(self: any, entry?: string): nil
   error("declaration only")
 end
-local function new(source: Document): {
+local function new(source: Document, options?: Options): {
+  setLocale: (self: any, locale: string) -> boolean,
   update: (self: any, dt: number, revealed: boolean) -> FiredEvent[],
   advance: (self: any) -> boolean,
   choose: (self: any, id: string) -> boolean,

@@ -1,0 +1,15 @@
+@dialogue 1
+@document harbor.welcome
+@characters Cast "cast"
+[start]
+// @id harbor.hello
+Cast.Guide: Hello, %{name}! You have %{count} coins.
+@event shown 0 greet "once"
+@event revealed 0.2 ready "once"
+// @id harbor.again
+-> Again [target:start]
+// @id harbor.leave
+-> Leave [target:done]
+[done]
+// @id harbor.bye
+: Goodbye, %{name}. (end)
