@@ -1,6 +1,6 @@
 # Tua dialogue: implementation plan
 
-Status: M0–M1 complete; M2–M10 planned. Baseline: `46a70a89` (portraits and timed events)
+Status: M0–M2 complete; M3–M10 planned. Baseline: `46a70a89` (portraits and timed events)
 and `2e179341` (dialogue documentation). This plan combines the remaining initial
 workstream with the expanded dialogue improvements. It does not claim those
 improvements are implemented or assign them a released version.
@@ -204,19 +204,19 @@ context/argument bindings and the M0 compiler probes are still pending.
 
 ## M2 — Typed context, placeholders and local variables
 
-- [ ] Bind a script to a declared/imported context shape using ordinary `.tua`
+- [x] Bind a script to a declared/imported context shape using ordinary `.tua`
   types and values wherever practical. Carry the shape across imports/re-exports.
-- [ ] Expose a read-only view of host-owned facts such as player name, inventory,
+- [x] Expose a read-only view of host-owned facts such as player name, inventory,
   quest state and reputation. Reading context must not invoke arbitrary methods
   or mutate the supplied game state.
-- [ ] Add explicit per-player local variables with declared primitive/serializable
+- [x] Add explicit per-player local variables with declared primitive/serializable
   types, defaults and scoped access. Choose a small assignment/update model; keep
   progression/inventory changes in host actions rather than hidden script writes.
-- [ ] Define when context is sampled/refreshed and when local updates become
+- [x] Define when context is sampled/refreshed and when local updates become
   visible. Specify reset, restart, loop and dispose behavior separately.
-- [ ] Type placeholder arguments against the bound context/locals, including
+- [x] Type placeholder arguments against the bound context/locals, including
   optional values and formatting. Reject wrong paths and incompatible values.
-- [ ] Define checkpoint eligibility: callbacks, userdata, entity objects and
+- [x] Define checkpoint eligibility: callbacks, userdata, entity objects and
   external service handles are not serializable dialogue locals.
 
 **Acceptance:** a misspelled context field fails after cross-module import;
@@ -224,6 +224,24 @@ completion and hover show the correct fields; writes through read-only context
 fail. Two players sharing a document cannot share mutable locals accidentally.
 Defaults, nil handling, context replacement and restart behavior have runtime
 regressions without introducing a module-wide `any` boundary.
+
+### M2 completion record
+
+Implemented `Save.shape` for headless validated copies, `Dialogue.context` for typed
+fact/local definitions, and `@context` / `@bind` for imported scalar placeholders.
+The supported API preserves concrete payloads through re-exports and checks readonly
+writes. Each player owns its values; explicit replacements refresh presentation
+without replaying events. Start resets locals, loops preserve them, cancellation
+retains inspection state, and disposal clears retained data and validators.
+
+Context-bound assets emit schema two; existing documents remain compatible.
+Shared editor analysis supplies diagnostics, completion, hover and declaration
+navigation. See the [context guide](../dialogue.md#typed-context-and-conversation-locals),
+[runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-context),
+and [M2 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M2.md).
+The record preserves a narrower nested-shape generic inference/formatter follow-up;
+M2 uses concrete derived signatures and does not claim to repair arbitrary wrappers.
+Installed-editor UI and rendered showcase qualification remain outside this slice.
 
 ## M3 — Conditions, branches and choice availability
 
@@ -452,10 +470,11 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0 and M1 are complete; continue with **M2 — typed context, placeholders and local
-variables**. Reuse the implemented localization adapter, stable identities and
-owned presentation behavior, and address the preserved imported-type probes. Do not start by implementing the entire expanded grammar
-or replacing storage/rendering architecture.
+M0–M2 are complete; continue with **M3 — conditions, branches and choice
+availability**. Reuse the typed context/path facts, explicit refresh behavior,
+localization adapter and stable execution identities. Keep host gameplay mutations
+in explicit actions; do not introduce arbitrary script execution or replace the
+renderer/storage architecture.
 
 ## Historical delivery checkpoints
 
