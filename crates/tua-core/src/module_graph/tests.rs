@@ -882,3 +882,49 @@ fn project_module_resolution_never_falls_back_to_another_workspace() {
         Some(RequireResolution::Missing { .. })
     ));
 }
+
+#[test]
+fn named_factory_results_keep_field_entries_through_forwarders() {
+    for returned in ["value", "(value)"] {
+        let (provider, provider_hir, provider_exports) = tua_input(
+            "src/provider.tua",
+            &format!("local function make(): {{ count: number }}\n  return {{ count = 1 }}\nend\nlocal value = make()\nreturn {returned}\n"),
+        );
+        let forward = parse_tua_source("src/forward.tua", "return require('provider')\n").unwrap();
+        let forward_hir = lower_parsed_source(&forward);
+        let forward_exports = ModuleExports {
+            path: forward.path.clone(),
+            value_type: Type::Any,
+            fields: BTreeMap::new(),
+        };
+        let graph = graph([
+            (
+                &provider,
+                &provider_hir,
+                &provider_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &forward,
+                &forward_hir,
+                &forward_exports,
+                AnalysisSourceKind::Tua,
+            ),
+        ]);
+        for path in ["src/provider.tua", "src/forward.tua"] {
+            let field = graph
+                .export(path, "count")
+                .expect("retain inferred field entry");
+            assert_eq!(field.field.ty, Type::number());
+        }
+        assert_eq!(
+            graph
+                .export("src/provider.tua", "count")
+                .unwrap()
+                .definition_span
+                .start
+                .line,
+            5
+        );
+    }
+}

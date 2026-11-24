@@ -847,3 +847,8 @@ Callbacks infer the full result list of a final returned call, including capture
 save contracts: `function() return profile:load() end` returns the snapshot and
 issue. Lua parentheses still collapse a call to one value:
 `function() return (profile:load()) end` returns only the snapshot.
+
+Inferred fields on a returned factory result also survive forwarding modules when
+the result is first stored in a local and then returned. When
+there is no separate field declaration, navigation anchors at the return expression.
+Parenthesized local returns preserve the same contract.

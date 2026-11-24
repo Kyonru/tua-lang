@@ -1205,15 +1205,18 @@ fn export_entries_for_module(
                 .or_else(|| returned_class_member_span(parsed?, public_name))
                 // Inferred factory fields have no separate declaration. Retain
                 // their concrete types through forwarding modules and navigate
-                // to the factory expression that creates the exported value.
+                // to its return expression, including a named factory result.
                 .or_else(|| {
                     let LastStmt::Return(returned) = parsed?.ast.nodes().last_stmt()? else {
                         return None;
                     };
                     let expression = returned.returns().iter().next()?;
-                    matches!(expression, Expression::FunctionCall(_))
-                        .then(|| node_span(expression))
-                        .flatten()
+                    matches!(
+                        unparenthesized_expression(expression),
+                        Expression::FunctionCall(_) | Expression::Var(ast::Var::Name(_))
+                    )
+                    .then(|| node_span(expression))
+                    .flatten()
                 })
                 // Asset contract fields have no authored Lua declaration. Anchor
                 // them to the asset, rather than dropping their types from re-exports.
