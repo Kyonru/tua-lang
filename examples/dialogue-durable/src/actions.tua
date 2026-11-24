@@ -1,0 +1,6 @@
+return Dialogue.actions({
+  purchase = {
+    payload = Save.shape(Save.record({ item = Save.string("") })),
+    effect = "consequential",
+  },
+})

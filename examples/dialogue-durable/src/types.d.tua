@@ -1,0 +1,35 @@
+export type Backend = {
+  mkdir: (path: string) -> boolean,
+  info: (path: string) -> { size: number } | nil,
+  read: (path: string) -> string | nil,
+  write: (path: string, bytes: string) -> boolean,
+  remove: (path: string) -> boolean,
+  hash: (bytes: string) -> string,
+}
+export type Request = {
+  status: string,
+  documentId: string,
+  actionId: string,
+  nodeId: string,
+  name: string,
+  effect: string,
+}
+export type Intent = {
+  operation: number,
+  key: string,
+  documentId: string,
+  contentVersion: string,
+  actionId: string,
+  nodeId: string,
+  item: string,
+  price: number,
+  committed: boolean,
+  success?: boolean,
+}
+export type Profile = {
+  account: string,
+  coins: number,
+  shells: number,
+  nextOperation: number,
+  intent?: Intent,
+}

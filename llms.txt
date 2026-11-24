@@ -479,3 +479,14 @@ Locale/context refreshes preserve original records. No payloads/contexts/media a
 retained. redactHistory(id) removes one record; clearHistory() resets entries/counts
 without recycling IDs. Cancel/restart retain history; dispose releases it.
 Checkpoints exclude history; restore does not append a record. No history import.
+
+The dialogue-durable example is a host recipe, not a new runtime helper. It persists
+one operation ID/intent before dispatch, commits local gameplay counters plus a
+boolean receipt in one Save record, and acknowledges after consuming the outcome.
+Fresh Save contracts reconcile uncertain writes; load issues never auto-accept
+recovery or reset. Recovery attaches a player but never automatically dispatches.
+Keys identify occurrences, not authored actions or live visit/generation counters.
+Prepared work may be explicitly abandoned; playback cancellation retains intent.
+The guarantee covers single-writer local state only. External authorities need
+idempotency and outcome lookup. Core action/event-registry checkpoint exclusions
+remain unchanged; the full ordinary-dialogue Save recipe remains pending.

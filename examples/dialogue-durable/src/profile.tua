@@ -1,0 +1,30 @@
+import type { Backend } from "./types"
+
+-- One authoritative record owns both the gameplay change and its receipt.
+local function open(backend?: Backend)
+  return Save.contract({
+    slot = "dialogue_durable_demo",
+    version = 1,
+    max_bytes = 8192,
+    backend = backend,
+    schema = Save.record({
+      account = Save.string("demo"),
+      coins = Save.number(10),
+      shells = Save.number(0),
+      nextOperation = Save.number(1),
+      intent = Save.optional(Save.record({
+        operation = Save.number(0),
+        key = Save.string(""),
+        documentId = Save.string(""),
+        contentVersion = Save.string(""),
+        actionId = Save.string(""),
+        nodeId = Save.string(""),
+        item = Save.string(""),
+        price = Save.number(0),
+        committed = Save.boolean(false),
+        success = Save.optional(Save.boolean()),
+      })),
+    }),
+  })
+end
+return { open = open }

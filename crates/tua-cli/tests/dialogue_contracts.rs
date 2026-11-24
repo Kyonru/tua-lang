@@ -219,3 +219,50 @@ fn rich_authored_dialogue_builds_runs_and_extracts_templates() {
         );
     }
 }
+
+#[test]
+fn durable_dialogue_recipe_checks_builds_and_recovers_crash_windows() {
+    let temp = TempDir::new("dialogue-durable");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    copy_dir_all(&root.join("examples/dialogue-durable"), temp.path()).unwrap();
+    run(temp.path(), "check");
+    run(temp.path(), "build");
+    if let Some(lua) = support::lua_executable() {
+        let output = Command::new(lua)
+            .arg("../tests/recovery.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    } else {
+        eprintln!("SKIP durable dialogue faults: no Lua interpreter");
+    }
+    fs::write(
+        temp.path().join("src/invalid.tua"),
+        r#"
+local journal = require("journal").new()
+local value = journal.load()
+value.coins = "wrong"
+journal.receipt(123)
+local intent = value.intent
+if intent then intent.committed = "wrong" end
+"#,
+    )
+    .unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    let diagnostics = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "invalid imported journal types accepted"
+    );
+    assert!(diagnostics.matches("TL1003").count() >= 3, "{diagnostics}");
+}

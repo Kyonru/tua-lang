@@ -1,0 +1,17 @@
+local journals = require("journal")
+local sessions = require("session")
+
+-- Running this headless demo explicitly starts one purchase, or recovers one.
+function love.load()
+  local journal = journals.new()
+  journal.initialize()
+  local flow = sessions.new()
+  local active = flow.recover() or flow.begin()
+  assert(active.player:runAction())
+  local state = journal.load()
+  print("operation", active.key, "coins", state.coins, "shells", state.shells)
+  local line = active.player:snapshot().node
+  if line then print(line.text) end
+  active.acknowledge()
+  love.event.quit()
+end

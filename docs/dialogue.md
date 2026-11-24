@@ -2018,6 +2018,54 @@ changes incompatibly, even if defaults stay the same. There is no automatic sche
 migration. Facts, closures, host handlers and media are rebound, never serialized.
 
 
+## Recover consequential host actions
+
+The [durable dialogue recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-durable)
+shows how to recover one local purchase using existing `Dialogue.actions` and
+`Save.contract` APIs. It persists an operation ID before dispatch, then saves the
+coins/inventory change and its boolean receipt together. Recovery loads that record
+and creates a fresh player; the host explicitly calls `runAction()` to consume the
+receipt or commit prepared work. A receipt returns the original result, including
+`false`, without applying the purchase again.
+
+```tua
+local journal = require("journal").new()
+local flow = require("session").new()
+
+-- The profile must already have been explicitly initialized by the host.
+local recovered = flow.recover()
+if recovered then
+  assert(recovered.player:runAction())
+  local state = journal.load()
+  print(state.coins, state.shells)
+  -- Acknowledge after the host has consumed the action's outcome.
+  recovered.acknowledge()
+end
+```
+
+These `journal` and `session` modules belong to the example, not new built-ins.
+The host calls `flow.begin()` for a deliberate new purchase. Each occurrence gets a
+new persistent key; authored action IDs and live generation/visit counters alone
+are not durable operation identities. Acknowledgement removes the one outstanding
+receipt but retains the sequence counter, preventing stale keys from being reused.
+Cancelling playback does not cancel the durable intent; prepared work can be
+explicitly abandoned with `journal.abandon(key)`.
+
+A write error does not establish that nothing was saved. The recipe reopens a fresh
+Save contract on each operation, reconciles any committed receipt, and stops on
+all load issues rather than accepting older data or resetting automatically.
+Compatibility and payload checks run before dispatch. The README and runnable tests
+cover failures before/after writes, failed read-back, damaged slots, restart before
+acknowledgement, stale keys and declined results.
+
+The guarantee is scoped to **single-writer local state and its receipt in one Save
+record**. Save does not guarantee power-loss durability, concurrent writers or cloud
+conflict resolution. External services must honor the same idempotency key and
+provide an authoritative outcome query; a local receipt cannot make an external
+reward atomic. Core checkpoints still reject all action/typed-event registries,
+including pending handles. This example's explicit host intent is a separate
+recovery protocol, not general serialization of an action-enabled conversation.
+
 ## Keep a bounded conversation history
 
 Enable history when constructing a player. It works with plain conversations and

@@ -205,3 +205,13 @@ Treat load issues as product decisions instead of silently replacing data:
 an explicit confirmation when progress matters. If a write fails, retain the
 binding and surface the issue. Scheduled retries use backoff, while `flush()`
 lets the game decide when to try synchronously again.
+
+
+### Save a consequential dialogue result
+
+The [durable dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-durable)
+keeps local gameplay counters and an operation receipt in one Save record. It
+persists intent before dispatch, reopens uncertain writes, and returns a committed
+result on recovery without applying the purchase again. This single-writer recipe
+also stops on damaged-slot issues; it never automatically accepts a potentially
+older receipt. External side effects require an idempotent authority of their own.

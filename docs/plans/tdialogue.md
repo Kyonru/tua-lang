@@ -504,7 +504,9 @@ line reveal. Context/registry documents, branches and conditional choices are
 rejected in version 1. Version 2 now supports typed locals, bindings, branches and
 conditional choices while rebinding current facts. Restore rejects unavailable
 choices without following fallback. Action/event registries remain excluded;
-durable action reconciliation and the Save recipe are still pending.
+a typed host recipe now qualifies single-writer local action reconciliation.
+The full ordinary-dialogue Save recipe and action-enabled checkpoint format remain
+pending; the recipe does not relax core registry exclusions.
 See the [typed checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-context-checkpoints.md).
 See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
 
@@ -520,13 +522,20 @@ See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob
   V2 validates locals against the rebound Save shape and fingerprints conditions,
   bindings and defaults. The required host key owns incompatible schema/semantic
   changes not distinguishable from defaults; migration remains explicit.
-- [ ] Choose safe checkpoint boundaries for pending actions. Initially reject or
+- [x] Choose safe checkpoint boundaries for pending actions. Initially reject or
   defer checkpoints with non-resumable work; resumable actions need an explicit
   host policy and durable identity, not replay-on-load by default.
-- [ ] Provide durable idempotency keys or an acknowledgement protocol for
+  Core rejects all registry documents and pending handles. The host recipe stores
+  a prepared intent/committed receipt and only dispatches after explicit recovery.
+- [x] Provide durable idempotency keys or an acknowledgement protocol for
   consequential actions. Explain the crash window between an external effect and
   recording delivery: exactly-once rewards require host-side atomic persistence
   or idempotency, not merely an in-memory “fired” flag.
+  The typed `dialogue-durable` example persists occurrence IDs, local gameplay
+  counters and receipts atomically in one Save candidate, reopens uncertain writes,
+  and requires acknowledgement. External authorities must implement their own
+  idempotency/lookup contract. See the
+  [reconciliation qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-durable-actions.md).
 - [x] Add an optional bounded transcript with text IDs, displayed text/locale,
   speaker identity and selected replies. Define capacity, eviction, redaction,
   save inclusion and whether history preserves original displayed translations.

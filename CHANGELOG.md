@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a typed durable-dialogue host recipe using Save intents and receipts, with
+  crash-window tests and native process-restart qualification. Local gameplay and
+  receipts share one save record; core action-checkpoint exclusions stay unchanged.
+
 - Add version-2 typed-context dialogue checkpoints with owned, schema-validated
   locals, rebound gameplay facts, condition/binding graph compatibility and
   transactional rejection of unavailable saved choices. Plain v1 remains compatible;

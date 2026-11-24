@@ -1,0 +1,66 @@
+import type { Backend } from "./types"
+local journals = require("journal")
+local actions = require("actions")
+local scene = require("scene")
+
+-- A typed structural view lets the guard read common optional metadata safely.
+type ActionIdentity = {
+  kind?: string,
+  name?: string,
+  id?: string,
+  success?: string,
+  failure?: string,
+}
+local function checkScene()
+  local raw = scene.nodes.buy
+  assert(raw ~= nil, "authored action missing")
+  local node: ActionIdentity = raw
+  assert(scene.documentId == "merchant" and scene.entry == "buy", "authored document changed")
+  assert(node.kind == "action" and node.name == "purchase" and node.id == "merchant.purchase"
+    and node.success == "done" and node.failure == "declined", "authored action changed")
+end
+
+local function new(backend?: Backend)
+  local journal = journals.new(backend)
+  local function attach(operationKey: string)
+    checkScene()
+    local intent = journal.receipt(operationKey)
+    local player = actions.new(scene, {
+      handlers = {
+        purchase = function(payload: { item: string }, request)
+          return journal.commit(operationKey, payload, request)
+        end,
+      },
+    })
+    player:start(intent.nodeId)
+    local request = player:snapshot().action
+    assert(request ~= nil and request.documentId == intent.documentId
+      and request.actionId == intent.actionId, "authored action identity changed")
+    local function acknowledge()
+      local receipt = journal.receipt(operationKey)
+      local expected = receipt.success == true and "done" or "declined"
+      assert(receipt.committed and player:snapshot().nodeId == expected,
+        "consume the action outcome before acknowledging")
+      journal.acknowledge(operationKey)
+      player:dispose()
+    end
+    return { player = player, key = operationKey, acknowledge = acknowledge }
+  end
+  local function begin()
+    checkScene()
+    local probe = actions.new(scene)
+    probe:start("buy")
+    local request = probe:snapshot().action
+    assert(request ~= nil)
+    probe:dispose()
+    local operationKey = journal.prepare(request)
+    return attach(operationKey)
+  end
+  local function recover()
+    local intent = journal.load().intent
+    if intent then return attach(intent.key) end
+    return nil
+  end
+  return { begin = begin, recover = recover }
+end
+return { new = new }

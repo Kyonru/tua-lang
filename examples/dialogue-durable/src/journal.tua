@@ -1,0 +1,144 @@
+import type { Backend, Profile, Intent, Request } from "./types"
+local profile = require("profile")
+local contentVersion = "merchant-v1"
+
+local function integer(value: number, minimum: number): boolean
+  return value >= minimum and value <= 1000000000 and value % 1 == 0
+end
+local function key(account: string, operation: number): string
+  return account .. ":" .. operation
+end
+local function validate(value: Profile)
+  assert(value.account == "demo", "another profile owns this operation")
+  assert(integer(value.coins, 0) and integer(value.shells, 0), "invalid gameplay counters")
+  assert(integer(value.nextOperation, 1), "invalid operation sequence")
+  local intent = value.intent
+  if intent then
+    assert(integer(intent.operation, 1) and intent.operation == value.nextOperation - 1,
+      "invalid operation identity")
+    assert(intent.key == key(value.account, intent.operation), "invalid operation key")
+    assert(intent.documentId == "merchant" and intent.actionId == "merchant.purchase"
+      and intent.nodeId == "buy" and intent.contentVersion == contentVersion,
+      "incompatible action content; explicit reconciliation required")
+    assert(intent.item == "shell" and intent.price == 5, "operation payload changed")
+    assert((not intent.committed and intent.success == nil)
+      or (intent.committed and intent.success ~= nil), "invalid operation receipt")
+  end
+end
+local function checkRequest(request: Request)
+  assert(request.status == "ready" and request.documentId == "merchant"
+    and request.actionId == "merchant.purchase" and request.nodeId == "buy"
+    and request.name == "purchase" and request.effect == "consequential",
+    "unexpected action request")
+end
+
+-- This recipe is single-writer. A fresh contract observes uncertain prior writes.
+local function new(backend?: Backend)
+  local function load(): Profile
+    local saved, issue = profile.open(backend):load()
+    if issue then error(issue.code .. ": " .. issue.message) end
+    assert(saved ~= nil, "initialize the profile explicitly before playing")
+    validate(saved)
+    return saved
+  end
+  local function write(value: Profile)
+    validate(value)
+    local contract = profile.open(backend)
+    local _, issue = contract:load()
+    if issue then error(issue.code .. ": " .. issue.message) end
+    local ok, failure = contract:save(value)
+    if not ok then
+      if failure then error(failure.code .. ": " .. failure.message) end
+      error("save failed; reopen before retrying")
+    end
+  end
+  local function initialize()
+    local contract = profile.open(backend)
+    local saved, issue = contract:load()
+    if issue then error(issue.code .. ": " .. issue.message) end
+    if saved then
+      validate(saved)
+      return
+    end
+    -- The host explicitly requests a new profile; ordinary recovery never defaults.
+    write(contract:defaults())
+  end
+  local function pending(operationKey: string): Profile
+    local value = load()
+    local intent = value.intent
+    assert(intent ~= nil and intent.key == operationKey, "stale or missing operation")
+    return value
+  end
+  local function prepare(request: Request): string
+    checkRequest(request)
+    local value = load()
+    assert(value.intent == nil, "reconcile the outstanding operation first")
+    assert(value.nextOperation < 1000000000, "operation sequence exhausted")
+    local operation = value.nextOperation
+    local operationKey = key(value.account, operation)
+    value.nextOperation += 1
+    value.intent = {
+      operation = operation,
+      key = operationKey,
+      documentId = request.documentId,
+      contentVersion = contentVersion,
+      actionId = request.actionId,
+      nodeId = request.nodeId,
+      item = "shell",
+      price = 5,
+      committed = false,
+    }
+    write(value)
+    return operationKey
+  end
+  local function commit(operationKey: string, payload: { item: string }, request: Request): boolean
+    checkRequest(request)
+    local value = pending(operationKey)
+    local intent = value.intent
+    assert(intent ~= nil and payload.item == intent.item, "operation payload mismatch")
+    if intent.committed then
+      assert(intent.success ~= nil)
+      return intent.success == true
+    end
+    local success = value.coins >= intent.price
+    if success then
+      value.coins -= intent.price
+      value.shells += 1
+    end
+    intent.committed = true
+    intent.success = success
+    -- No external reward occurs here: counters and receipt are one save candidate.
+    write(value)
+    return success
+  end
+  local function receipt(operationKey: string): Intent
+    local intent = pending(operationKey).intent
+    assert(intent ~= nil)
+    return intent
+  end
+  local function acknowledge(operationKey: string)
+    local value = pending(operationKey)
+    assert(value.intent ~= nil and value.intent.committed, "action is not committed")
+    value.intent = nil
+    write(value)
+  end
+  local function abandon(operationKey: string)
+    local value = pending(operationKey)
+    assert(
+      value.intent ~= nil and not value.intent.committed,
+      "committed actions need acknowledgement"
+    )
+    value.intent = nil
+    write(value)
+  end
+  return {
+    abandon = abandon,
+    initialize = initialize,
+    load = load,
+    prepare = prepare,
+    commit = commit,
+    receipt = receipt,
+    acknowledge = acknowledge,
+  }
+end
+return { new = new }

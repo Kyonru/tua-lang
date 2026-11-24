@@ -1,0 +1,11 @@
+@dialogue 1
+@document merchant
+@actions "actions"
+[buy]
+@action purchase [id:merchant.purchase] [success:done] [failure:declined] {"item":"shell"}
+[done]
+// @id merchant.done
+: Your shell is ready. (end)
+[declined]
+// @id merchant.declined
+: You need five coins. (end)
