@@ -313,6 +313,10 @@ A script binds it before labels with `@context "story.context"` and
 `@bind name context.player.name`; locals use `@bind visits locals.visits`.
 Optional paths require a compatible scalar `default "fallback"`. Paths are data reads,
 not arbitrary expressions. Every placeholder in a bound script needs a scalar binding.
+Inside authored `%{name}` fields, completion suggests scalar bindings, hover shows
+the imported type/path, and definition jumps to @bind. Queries recover unfinished
+text, refresh unsaved imports and preserve name-only edit ranges; escaped %% and
+rich-mark attributes are not placeholder references. Invalid headers yield no bindings.
 Create through `context.new(scene, facts, options?)`, not Dialogue.new. Re-exports retain types.
 `getContext()`/`getLocals()` return owned Readonly views. `updateContext(facts)` and
 `setLocals(locals)` validate complete replacements and refresh without replaying events.

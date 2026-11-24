@@ -434,6 +434,11 @@ pub(crate) fn authoring_field(
     if significant.next()?.trim() != "@dialogue 1" || significant.next()?.trim() != "@text rich" {
         return None;
     }
+    text_field(source, line_number)
+}
+
+/// Prose boundaries shared by plain and rich placeholder authoring queries.
+pub(crate) fn text_field(source: &str, line_number: usize) -> Option<(&str, usize, FieldKind)> {
     let line = source.lines().nth(line_number.checked_sub(1)?)?;
     let trimmed = line.trim_start();
     let (text, kind) = if let Some(text) = trimmed.strip_prefix("-> ") {
@@ -473,27 +478,32 @@ pub(crate) fn mark_at(text: &str, cursor: usize) -> Option<(Range<usize>, &str)>
         if ch != '[' {
             continue;
         }
-        let mut quoted = false;
-        let mut end = text.len();
-        let mut closed = false;
-        while let Some((at, ch)) = chars.next() {
-            if quoted && ch == '\\' {
-                chars.next();
-                continue;
-            }
-            if ch == '"' {
-                quoted = !quoted;
-            }
-            if ch == ']' && !quoted {
-                end = at + 1;
-                closed = true;
-                break;
-            }
-        }
+        let (end, closed) = mark_end(&mut chars, text.len());
         if cursor > start && (cursor < end || !closed && cursor == end) {
             let body_end = if closed { end - 1 } else { end };
             return Some((start..end, &text[start + 1..body_end]));
         }
     }
     None
+}
+
+/// Consume one already-opened rich mark, honoring quoted and escaped brackets.
+pub(crate) fn mark_end(
+    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
+    text_len: usize,
+) -> (usize, bool) {
+    let mut quoted = false;
+    while let Some((at, ch)) = chars.next() {
+        if quoted && ch == '\\' {
+            chars.next();
+            continue;
+        }
+        if ch == '"' {
+            quoted = !quoted;
+        }
+        if ch == ']' && !quoted {
+            return (at + 1, true);
+        }
+    }
+    (text_len, false)
 }

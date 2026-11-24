@@ -1285,7 +1285,15 @@ fields, including optional parents, require a compatible scalar `default`. `fals
 and zero are values; only a missing/nil value uses the fallback.
 
 The compiler checks imported/re-exported paths and fallback types. Editor completion
-and hover show fields; definition navigation leads to the context factory declaration.
+and hover show fields; definition navigation from a binding path leads to the context
+factory declaration. Inside `%{name}`, completion suggests declared scalar bindings,
+hover shows the imported field type and bound path, and Go to Definition jumps to
+`@bind name`. This works in plain/rich lines, choices and disabled-choice reasons,
+even while the placeholder is unfinished. It replaces only the name, preserving
+braces and surrounding prose. Unsaved binding and imported-context edits refresh
+the results. Duplicate or malformed headers suppress binding suggestions; escaped
+`%%` and rich-mark attributes are not placeholder references.
+
 Limits are 256 bindings and 32 path segments (including the root). `%{name}` and `%%`
 use the same literal-safe formatting as localization. Inserted text is never parsed
 again as a placeholder, markup or dialogue code.

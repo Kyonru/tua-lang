@@ -1,6 +1,6 @@
 //! Context paths resolve against imported types; analysis never runs project code.
 use super::*;
-use crate::dialogue_asset::DialogueLiteral;
+use crate::dialogue_asset::{placeholders, DialogueBinding, DialogueLiteral};
 use crate::types::PrimitiveType;
 
 fn unwrapped(ty: &Type) -> &Type {
@@ -200,6 +200,99 @@ impl AnalysisSnapshot {
             }
         }
         result
+    }
+
+    fn placeholder_binding(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<(DialogueBinding, SourceSpan)> {
+        let file = self.file(path)?;
+        let name = placeholders::name_at(&file.source, position)?;
+        let bindings = crate::dialogue_asset::binding_declarations(path, &file.source)?;
+        let binding = bindings
+            .into_iter()
+            .find(|binding| binding.name.value == name.value)?;
+        Some((binding, name.span))
+    }
+
+    pub(super) fn dialogue_placeholder_completion(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Vec<Completion>> {
+        let file = self.file(path)?;
+        let name = placeholders::name_at(&file.source, position)?;
+        let prefix: String = name
+            .value
+            .chars()
+            .take(position.column - name.span.start.column)
+            .collect();
+        let bindings =
+            crate::dialogue_asset::binding_declarations(path, &file.source).unwrap_or_default();
+        Some(
+            bindings
+                .into_iter()
+                .filter(|binding| binding.name.value.starts_with(&prefix))
+                .filter_map(|binding| {
+                    let (ty, optional) = self.context_path(path, &binding.path.value).ok()?;
+                    if !scalar(&ty) {
+                        return None;
+                    }
+                    Some(Completion {
+                        label: binding.name.value,
+                        kind: CompletionKind::Value,
+                        detail: Some(format!(
+                            "{}: {ty}{}",
+                            binding.path.value,
+                            if optional { "?" } else { "" }
+                        )),
+                        documentation: None,
+                        deprecation: None,
+                        insert_text: None,
+                        filter_text: None,
+                        is_snippet: false,
+                        module_path: None,
+                        source_module: None,
+                        additional_text_edits: Vec::new(),
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    pub(super) fn dialogue_placeholder_hover(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let (binding, span) = self.placeholder_binding(path, position)?;
+        let (ty, optional) = self.context_path(path, &binding.path.value).ok()?;
+        Some(Hover {
+            is_markdown: false,
+            contents: format!(
+                "placeholder {}: {ty}{}\n{}",
+                binding.name.value,
+                if optional { "?" } else { "" },
+                binding.path.value
+            ),
+            span: Some(span),
+            documentation: None,
+            context: vec!["Value supplied by @bind; refreshed explicitly by the host".into()],
+        })
+    }
+
+    pub(super) fn dialogue_placeholder_definition(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let (binding, _) = self.placeholder_binding(path, position)?;
+        Some(Definition {
+            path: path.to_owned(),
+            span: binding.name.span,
+            kind: DefinitionKind::Local,
+        })
     }
 
     pub(super) fn dialogue_context_completion(

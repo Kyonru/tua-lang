@@ -572,6 +572,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   edits, deletion/recreation and prose/payload isolation. Installed-editor visual
   qualification remains pending; protocol tests do not establish perceived latency.
 
+- [x] Placeholder authoring slice: completion, typed hover and binding navigation
+  for plain/rich lines, choices and disabled reasons. Reuse the strict header parser
+  for incomplete text, preserve Unicode/name-only ranges, and refresh imported
+  context types and unsaved bindings. Ignore percent escapes, markup attributes,
+  comments and payloads; suppress ambiguous headers. Installed-editor UI checks
+  remain pending.
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
 - [x] Text-identity refactor slice: explicit rename/reference queries connect

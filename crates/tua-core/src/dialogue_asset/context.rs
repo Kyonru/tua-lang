@@ -127,6 +127,8 @@ impl Parser<'_> {
         };
         let path_start = raw.find(path).unwrap();
         let name_start = raw.find("@bind ").unwrap() + 6;
+        let name_start =
+            name_start + raw[name_start..].len() - raw[name_start..].trim_start().len();
         self.document.bindings.push(DialogueBinding {
             name: DialogueName {
                 value: name.into(),

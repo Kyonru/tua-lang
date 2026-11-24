@@ -14291,3 +14291,133 @@ fn dialogue_text_id_rename_without_catalog_preserves_action_identity() {
         .rename(&file.path, fixture.position("payload"), "greeting")
         .is_none());
 }
+
+#[test]
+fn dialogue_placeholder_queries_recover_typed_bindings_and_import_edits() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({ player = Save.record({ name = Save.string("") }) })),
+  locals = Save.shape(Save.record({ coins = Save.number(0) })),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@text rich
+@context "forward"
+@bind   player context.player.name
+@bind coins locals.coins
+[start]
+// @id hello
+: é🦆 [em]%{pla<|line|>yer}[/em] %%{pla<|escaped|>yer}
+// @id go
+-> Go %{pla<|choice|>yer} [target:start]
+// @id disabled
+@reason Need %{co<|reason|>ins}
+: [pronounce="%{pla<|attribute|>yer}"]Hello[/pronounce]
+: [pronounce="%{"]Hello[/pronounce] %{pla<|after_attribute|>yer}
+: %{pl<|unfinished|>
+: %{<|empty|>
+// %{pla<|comment|>yer}
+@voice {"cue":"%{pla<|voice|>yer}"}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let scene = "src/scene.tdialogue";
+    let snapshot = host.snapshot();
+    for marker in ["line", "choice", "unfinished", "after_attribute"] {
+        let items = snapshot.completion(scene, fixture.position(marker));
+        assert_eq!(completion_labels(&items), vec!["player"]);
+        assert!(items[0].detail.as_ref().unwrap().contains("string"));
+    }
+    let empty = completion_labels(&snapshot.completion(scene, fixture.position("empty")));
+    assert!(empty.contains(&"player".into()) && empty.contains(&"coins".into()));
+    for marker in ["line", "choice"] {
+        let position = fixture.position(marker);
+        let definition = snapshot.definition(scene, position).unwrap();
+        assert_eq!(definition.path, PathBuf::from(scene));
+        assert_eq!(definition.span.start, SourcePosition { line: 4, column: 9 });
+        assert!(snapshot
+            .hover(scene, position)
+            .unwrap()
+            .contents
+            .contains("player: string"));
+    }
+    assert_eq!(
+        completion_labels(&snapshot.completion(scene, fixture.position("reason"))),
+        vec!["coins"]
+    );
+    assert!(snapshot
+        .hover(scene, fixture.position("reason"))
+        .unwrap()
+        .contents
+        .contains("number"));
+    for marker in ["escaped", "attribute", "comment", "voice"] {
+        assert!(
+            snapshot
+                .completion(scene, fixture.position(marker))
+                .is_empty(),
+            "{marker}"
+        );
+        assert!(
+            snapshot
+                .definition(scene, fixture.position(marker))
+                .is_none(),
+            "{marker}"
+        );
+    }
+    let context = &fixture
+        .files()
+        .iter()
+        .find(|file| file.path == Path::new("src/context.tua"))
+        .unwrap()
+        .source;
+    host.set_file(
+        "src/context.tua",
+        context.replace("Save.string(\"\")", "Save.number(0)"),
+    );
+    assert!(host
+        .snapshot()
+        .hover(scene, fixture.position("line"))
+        .unwrap()
+        .contents
+        .contains("player: number"));
+    let source = &fixture
+        .files()
+        .iter()
+        .find(|file| file.path == Path::new(scene))
+        .unwrap()
+        .source;
+    host.set_file(
+        scene,
+        source.replace("@bind   player", "@bind   playerName"),
+    );
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion(scene, fixture.position("unfinished"))
+        ),
+        vec!["playerName"]
+    );
+    assert!(host
+        .snapshot()
+        .definition(scene, fixture.position("line"))
+        .is_none());
+    host.set_file(
+        scene,
+        source.replace("@bind coins locals.coins", "@bind player locals.coins"),
+    );
+    assert!(host
+        .snapshot()
+        .completion(scene, fixture.position("line"))
+        .is_empty());
+    assert!(host
+        .snapshot()
+        .definition(scene, fixture.position("line"))
+        .is_none());
+}

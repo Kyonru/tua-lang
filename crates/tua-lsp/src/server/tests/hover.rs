@@ -1120,3 +1120,32 @@ fn dialogue_flow_targets_use_full_utf16_ranges_and_unsaved_labels() {
     server.send(completion_request(5, &uri, &changed, "target:finish."));
     assert_completion_labels(server.output(), 5, ["finish.other-end"]);
 }
+
+#[test]
+fn dialogue_placeholder_queries_replace_names_and_follow_unsaved_bindings() {
+    let temp = TempProject::new("dialogue-placeholders");
+    temp.write("tua.toml", "source = 'src'\n");
+    temp.write("src/context.tua", "return Dialogue.context({ facts = Save.shape(Save.record({ name = Save.string('') })), locals = Save.shape(Save.record({})) })");
+    let source = "@dialogue 1\n@context \"context\"\n@bind   player context.name\n[start]\n// @id hello\n: é🦆 %{player} (end)\n";
+    temp.write("src/scene.tdialogue", source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(completion_request(2, &uri, source, "%{pla"));
+    assert_completion_labels(server.output(), 2, ["player"]);
+    let edit = &response_with_id(server.output(), 2)["result"][0]["textEdit"];
+    assert_eq!(edit["newText"], "player");
+    assert_eq!(edit["range"]["start"], json!({"line":5,"character":8}));
+    assert_eq!(edit["range"]["end"], json!({"line":5,"character":14}));
+    server.send(definition_request(3, &uri, source, "%{player", 4));
+    let target = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(target["uri"], uri);
+    assert_eq!(target["range"]["start"], json!({"line":2,"character":8}));
+    let changed = source.replace("@bind   player", "@bind   playerName");
+    server.send(did_change(&uri, &changed, 2));
+    server.send(completion_request(4, &uri, &changed, "%{pla"));
+    assert_completion_labels(server.output(), 4, ["playerName"]);
+}

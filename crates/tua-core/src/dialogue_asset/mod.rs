@@ -6,6 +6,7 @@ use std::path::Path;
 mod actions;
 pub mod flow;
 mod media;
+pub mod placeholders;
 mod waits;
 pub use actions::DialogueAction;
 pub use media::DialogueSpeech;
@@ -198,8 +199,20 @@ pub fn parse_dialogue_source(
     source: &str,
 ) -> Result<DialogueSource, Vec<Diagnostic>> {
     let _profile = crate::profile::span("dialogue.parse");
-    let mut parser = Parser {
-        path: path.as_ref(),
+    let mut parser = parser_for(path.as_ref());
+    if source.len() > crate::input_limits::MAX_SOURCE_BYTES {
+        parser.error(span(1, 1, 1), "dialogue source exceeds byte limit");
+        return Err(parser.diagnostics);
+    }
+    for (index, raw) in source.lines().enumerate() {
+        parser.line(index + 1, raw);
+    }
+    parser.finish()
+}
+
+fn parser_for(path: &Path) -> Parser<'_> {
+    Parser {
+        path,
         document: DialogueSource {
             rich_text: false,
             actions: None,
@@ -218,15 +231,24 @@ pub fn parse_dialogue_source(
         speakers: BTreeSet::new(),
         header: false,
         rich_directive_allowed: false,
-    };
-    if source.len() > crate::input_limits::MAX_SOURCE_BYTES {
-        parser.error(span(1, 1, 1), "dialogue source exceeds byte limit");
-        return Err(parser.diagnostics);
     }
+}
+
+/// Parse header declarations with the real grammar while the text body is incomplete.
+/// Invalid/ambiguous headers are not suitable for authoring suggestions.
+pub(crate) fn binding_declarations(path: &Path, source: &str) -> Option<Vec<DialogueBinding>> {
+    if source.len() > crate::input_limits::MAX_SOURCE_BYTES {
+        return None;
+    }
+    let mut parser = parser_for(path);
     for (index, raw) in source.lines().enumerate() {
         parser.line(index + 1, raw);
+        if !parser.document.sections.is_empty() {
+            break;
+        }
     }
-    parser.finish()
+    (parser.header && parser.document.context.is_some() && parser.diagnostics.is_empty())
+        .then_some(parser.document.bindings)
 }
 
 fn span(line: usize, column: usize, width: usize) -> SourceSpan {

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add typed dialogue placeholder completion, hover and binding navigation, with
+  incomplete-text recovery, imported-context refresh and Unicode-safe name edits.
+
 - Connect explicit dialogue text-ID rename and references with locale entries and
   typed localization calls, preserving unrelated identities and rejecting conflicts.
   Nested projects no longer contribute dialogue IDs to their parent's catalog index.

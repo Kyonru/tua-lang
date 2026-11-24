@@ -222,6 +222,9 @@ impl AnalysisSnapshot {
                 })
                 .collect();
         }
+        if let Some(items) = self.dialogue_placeholder_completion(path, position) {
+            return items;
+        }
         if let Some(items) = self.dialogue_rich_completion(path, position) {
             return items;
         }
@@ -316,6 +319,9 @@ impl AnalysisSnapshot {
                 context: vec!["Flow target in this dialogue file".into()],
             });
         }
+        if let Some(hover) = self.dialogue_placeholder_hover(path, position) {
+            return Some(hover);
+        }
         if let Some(hover) = self.dialogue_rich_hover(path, position) {
             return Some(hover);
         }
@@ -387,6 +393,9 @@ impl AnalysisSnapshot {
                 span: label.span,
                 kind: DefinitionKind::Local,
             });
+        }
+        if let Some(definition) = self.dialogue_placeholder_definition(path, position) {
+            return Some(definition);
         }
         if let Some((module, character, expression, _)) =
             self.expression_target(path, position, false)
