@@ -41,6 +41,9 @@ the optional `node` before reading its fields.
 - In `arrival.tdialogue`, compare `@event shown 0.2 portrait.pulse` with
   `@event revealed 0.25 sound.play "welcome"`. The host explicitly reports reveal
   completion between these two events.
+- Use Rename Symbol on `[start]` in `intro.tdialogue` to update its local targets.
+  Rename uses the full label and leaves text IDs/prose alone. Update any host-side
+  entry strings separately; they are not inferred rename references.
 - Change an event delay and adjust the corresponding `update()` interval to see
   when it becomes due. Merely passing time to `shown` does not start `revealed`.
 - Type `Cast.` at a speaker position in the updated extension to see completion;

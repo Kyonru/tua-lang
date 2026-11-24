@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add file-local dialogue flow references and rename across all target forms,
+  validating unsaved scripts and conflicts while preserving prose and payloads.
+
 - Add a dedicated dialogue document formatter to CLI project/explicit/stdin/check
   modes, editor document formatting and read-only previews, preserving prose and
   metadata without applying Lua layout.

@@ -14421,3 +14421,97 @@ return require("context")
         .definition(scene, fixture.position("line"))
         .is_none());
 }
+
+#[test]
+fn dialogue_flow_rename_uses_strict_targets_and_preserves_other_identities() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+@document flow.example
+@context "context"
+@actions "actions"
+[st<|label|>art]
+// @id start
+: é🦆 start
+// @id go
+-> é🦆 Go [target:st<|target|>art]
+@fallback start
+[wait]
+@wait 1 [target:start]
+[branch]
+@branch true [target:start] [else:start]
+[action]
+@action purchase [id:start] [success:start] [failure:start] {"name":"start"}
+-- file: src/other.tdialogue
+@dialogue 1
+[start]
+// @id other
+: start (end)
+-- file: src/main.tua
+return "start"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let path = Path::new("src/scene.tdialogue");
+    let position = fixture.position("target");
+    crate::dialogue_asset::parse_dialogue_source(path, host.snapshot().source(path).unwrap())
+        .unwrap();
+    let snapshot = host.snapshot();
+    assert_eq!(snapshot.references(path, position, false).len(), 7);
+    assert_eq!(snapshot.references(path, position, true).len(), 8);
+    assert_eq!(
+        snapshot.prepare_rename(path, position).unwrap().placeholder,
+        "start"
+    );
+    let renamed = snapshot.rename(path, position, "shop.done-end").unwrap();
+    assert_eq!(renamed.edits.len(), 8);
+    assert_eq!(
+        snapshot
+            .rename(path, fixture.position("label"), "shop.done-end")
+            .unwrap(),
+        renamed
+    );
+    for invalid in ["wait", "else", "endif", "", "bad name", "1name", "é"] {
+        assert!(
+            snapshot.rename(path, position, invalid).is_none(),
+            "{invalid}"
+        );
+    }
+    let original = snapshot.source(path).unwrap();
+    let mut changed = original.to_owned();
+    for edit in renamed.edits.iter().rev() {
+        assert_eq!(edit.path, path);
+        let start = crate::source_text::byte_for_position(&changed, edit.span.start).unwrap();
+        let end = crate::source_text::byte_for_position(&changed, edit.span.end).unwrap();
+        changed.replace_range(start..end, &edit.new_text);
+    }
+    assert!(changed.contains("// @id start\n: é🦆 start"));
+    assert!(changed.contains("[id:start]"));
+    assert!(changed.contains(r#"{"name":"start"}"#));
+    assert!(crate::dialogue_asset::parse_dialogue_source(path, &changed).is_ok());
+    assert!(crate::emit::emit_dialogue_source(path, &changed).is_ok());
+    host.set_file(path, changed.clone());
+    assert_eq!(
+        host.snapshot()
+            .prepare_rename(path, position)
+            .unwrap()
+            .placeholder,
+        "shop.done-end"
+    );
+    for invalid in [
+        format!("{changed}\n[shop.done-end]\n"),
+        format!("{changed}\n@wait "),
+    ] {
+        host.set_file(path, invalid);
+        assert!(host.snapshot().prepare_rename(path, position).is_none());
+        assert!(host.snapshot().rename(path, position, "next").is_none());
+        assert!(host.snapshot().references(path, position, true).is_empty());
+    }
+    host.remove_file(path);
+    assert!(host.snapshot().rename(path, position, "next").is_none());
+    host.set_file(path, changed);
+    assert_eq!(host.snapshot().references(path, position, true).len(), 8);
+}

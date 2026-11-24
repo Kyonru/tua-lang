@@ -48,12 +48,9 @@ impl Parser<'_> {
         let (id, rest) = take_word(rest);
         let (success, rest) = take_word(rest);
         let (failure, payload) = take_word(rest);
-        let tag = |value: &str, prefix: &str| {
-            value
-                .strip_prefix(prefix)
-                .and_then(|v| v.strip_suffix(']'))
-                .map(str::to_owned)
-        };
+        fn tag<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+            value.strip_prefix(prefix)?.strip_suffix(']')
+        }
         let (Some(id), Some(success), Some(failure)) = (
             tag(id, "[id:"),
             tag(success, "[success:"),
@@ -65,11 +62,19 @@ impl Parser<'_> {
             );
             return true;
         };
+        let name_span = |value: &str| {
+            let offset = value.as_ptr() as usize - raw.as_ptr() as usize;
+            span(
+                number,
+                raw[..offset].chars().count() + 1,
+                value.chars().count(),
+            )
+        };
         let (Some(name), Some(id), Some(success), Some(failure)) = (
-            self.name(name, at),
-            self.name(&id, at),
-            self.name(&success, at),
-            self.name(&failure, at),
+            self.name(name, name_span(name)),
+            self.name(id, name_span(id)),
+            self.name(success, name_span(success)),
+            self.name(failure, name_span(failure)),
         ) else {
             return true;
         };

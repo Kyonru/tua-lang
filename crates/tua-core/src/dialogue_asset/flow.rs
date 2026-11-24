@@ -92,6 +92,44 @@ pub fn name_at(source: &str, position: SourcePosition) -> Option<DialogueName> {
     None
 }
 
+/// Strict occurrences for refactors. Recovery queries above intentionally accept
+/// incomplete text; edits must account for every target in a valid document.
+pub(crate) fn occurrences(
+    path: &std::path::Path,
+    source: &str,
+) -> Option<Vec<(DialogueName, bool)>> {
+    let document = super::parse_dialogue_source(path, source).ok()?;
+    let mut names = Vec::new();
+    for section in document.sections {
+        names.push((section.label, true));
+        if let Some(wait) = section.wait {
+            names.push((wait.target, false));
+        }
+        if let Some(branch) = section.branch {
+            names.push((branch.yes, false));
+            names.push((branch.no, false));
+        }
+        if let Some(action) = section.action {
+            names.push((action.success, false));
+            names.push((action.failure, false));
+        }
+        for line in section.lines {
+            if let Some(fallback) = line.fallback {
+                names.push((fallback, false));
+            }
+            for choice in line.choices {
+                names.push((choice.target, false));
+            }
+        }
+    }
+    names.sort_by_key(|(name, _)| (name.span.start.line, name.span.start.column));
+    Some(names)
+}
+
+pub(crate) fn valid_label(name: &str) -> bool {
+    identifier(name) && !matches!(name, "else" | "endif")
+}
+
 pub fn replacement_span(source: &str, position: SourcePosition) -> Option<SourceSpan> {
     name_at(source, position).map(|name| name.span)
 }

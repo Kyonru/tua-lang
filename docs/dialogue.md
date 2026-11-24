@@ -47,7 +47,18 @@ not choose between them. Text inside comments, spoken prose, and action JSON
 payloads is not a flow reference.
 
 These queries only inspect source. They never run conditions or action handlers.
-Flow-label rename and graph preview remain planned.
+Use **Find References** or **Rename Symbol** on a label or one of its targets to
+update that script's flow. Rename accepts the complete label, including dots and
+hyphens (for example, `shop.done-end`). It updates all choice, wait, branch,
+action and fallback targets without changing prose, text IDs or JSON payloads.
+References include the label only when Include Declaration is enabled.
+
+Refactoring requires a syntactically valid script with unique labels and valid
+targets. Existing destination labels and reserved names `else`/`endif` are rejected.
+Unsaved edits participate in validation. Other scripts have independent labels;
+host entry-point strings and saved checkpoints are not migrated by this file-local
+rename. Update those external references separately before using the renamed flow.
+Graph preview remains planned.
 
 ## Rename a text identity
 

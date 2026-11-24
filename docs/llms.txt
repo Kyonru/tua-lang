@@ -280,7 +280,12 @@ locale entries and recognized typed literal localization uses in the same projec
 Rename accepts a new final key segment and rejects duplicate IDs, destination
 conflicts and malformed dialogue sources. Computed keys and arbitrary host strings
 are not inferred references. Prose, flow/document/action identity stay unchanged.
-Flow-label rename and graph preview remain planned. `tua fmt` includes .tdialogue
+Flow-label references and rename use strict parser facts in the current script,
+including choice/wait/branch/action/fallback targets. Rename accepts full dotted or
+hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
+reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
+saved checkpoints stay unchanged; migrate external entry references separately.
+Graph preview remains planned. `tua fmt` includes .tdialogue
 scripts with a dedicated full-document formatter: align structural lines at column
 zero, normalize structural whitespace/blank lines and configured line endings,
 preserve prose spacing, escapes, JSON payloads, IDs and metadata order. Explicit

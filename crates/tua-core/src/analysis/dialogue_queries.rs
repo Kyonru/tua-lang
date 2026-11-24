@@ -166,6 +166,84 @@ impl AnalysisSnapshot {
         None
     }
 
+    pub(super) fn dialogue_flow_references(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        let source = &self.file(path)?.source;
+        let names = flow::occurrences(path, source)?;
+        let (selected, _) = names
+            .iter()
+            .find(|(name, _)| contains_position(name.span, position))?;
+        Some(
+            names
+                .iter()
+                .filter(|(name, declaration)| {
+                    name.value == selected.value && (include_declaration || !declaration)
+                })
+                .map(|(name, _)| Reference {
+                    path: path.to_owned(),
+                    span: name.span,
+                    kind: crate::ReferenceKind::Local,
+                })
+                .collect(),
+        )
+    }
+
+    pub(super) fn dialogue_flow_rename_target(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<RenameTarget> {
+        let names = flow::occurrences(path, &self.file(path)?.source)?;
+        let (name, _) = names
+            .into_iter()
+            .find(|(name, _)| contains_position(name.span, position))?;
+        Some(RenameTarget {
+            path: path.to_owned(),
+            span: name.span,
+            placeholder: name.value,
+            kind: crate::RenameKind::Local,
+        })
+    }
+
+    pub(super) fn rename_dialogue_flow(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        new_name: &str,
+    ) -> Option<RenameEdit> {
+        if !flow::valid_label(new_name) {
+            return None;
+        }
+        let names = flow::occurrences(path, &self.file(path)?.source)?;
+        let old_name = names
+            .iter()
+            .find(|(name, _)| contains_position(name.span, position))?
+            .0
+            .value
+            .clone();
+        if new_name != old_name
+            && names
+                .iter()
+                .any(|(name, declaration)| *declaration && name.value == new_name)
+        {
+            return None;
+        }
+        let edits = names
+            .into_iter()
+            .filter(|(name, _)| name.value == old_name)
+            .map(|(name, _)| TextEdit {
+                path: path.to_owned(),
+                span: name.span,
+                new_text: new_name.into(),
+            })
+            .collect();
+        Some(RenameEdit { edits })
+    }
+
     fn dialogue_label(
         &self,
         path: &Path,

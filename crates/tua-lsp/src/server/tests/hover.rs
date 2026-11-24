@@ -1181,3 +1181,58 @@ fn dialogue_document_formatting_uses_overlay_and_keeps_prose_literal() {
     server.send(request(3));
     assert!(response_with_id(server.output(), 3)["result"].is_null());
 }
+
+#[test]
+fn dialogue_flow_rename_uses_unsaved_targets_and_utf16_ranges() {
+    let project = TempProject::new("dialogue-flow-rename");
+    project.write("tua.toml", "source = 'src'\n");
+    let disk = "@dialogue 1\n[start]\n// @id hello\n: Disk (end)\n";
+    project.write("src/scene.tdialogue", disk);
+    let source =
+        "@dialogue 1\n[start]\n// @id hello\n: Hello\n// @id go\n-> é🦆 Go [target:start]\n";
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(prepare_rename_request(2, &uri, source, "target:start", 9));
+    let prepared = response_with_id(server.output(), 2)["result"].clone();
+    assert_eq!(prepared["placeholder"], "start");
+    assert_eq!(prepared["range"]["start"], json!({"line":5,"character":18}));
+    assert_eq!(prepared["range"]["end"], json!({"line":5,"character":23}));
+    server.send(rename_request(
+        3,
+        &uri,
+        source,
+        "target:start",
+        9,
+        "shop.done-end",
+    ));
+    let changes = &response_with_id(server.output(), 3)["result"]["changes"];
+    assert_eq!(changes.as_object().unwrap().len(), 1);
+    assert_eq!(changes[&uri].as_array().unwrap().len(), 2);
+    assert_eq!(changes[&uri][1]["range"], prepared["range"]);
+    server.send(references_request(
+        4,
+        &uri,
+        source,
+        "target:start",
+        9,
+        false,
+    ));
+    assert_eq!(
+        response_with_id(server.output(), 4)["result"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let invalid = format!("{source}[start]\n");
+    server.send(did_change(&uri, &invalid, 2));
+    server.send(rename_request(5, &uri, &invalid, "target:start", 9, "next"));
+    assert!(response_with_id(server.output(), 5)["result"].is_null());
+    server.send(did_change(&uri, source, 3));
+    server.send(rename_request(6, &uri, source, "target:start", 9, "next"));
+    assert!(response_with_id(server.output(), 6)["result"]["changes"].is_object());
+}

@@ -586,6 +586,11 @@ context objects. Core export/import works without a filesystem or LÖVE.
   duplicate IDs, destination conflicts and malformed dialogue sources; keep edits
   within the owning project and use unsaved overlays. Dynamic host strings remain
   outside this static reference set. Installed-editor UI qualification is pending.
+- [x] File-local flow-label references and rename: strict parser facts cover
+  choice/wait/branch/action/fallback edges, with Unicode-safe source ranges and
+  unsaved-buffer refresh. Reject invalid scripts and destination conflicts; preserve
+  prose, text/action IDs and JSON. Host entry strings and saved checkpoints require
+  separate migration. Broader symbols and installed-editor UI checks remain pending.
 - [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,
   `.tdialogue` and catalogs. Reject ambiguous/dynamic references and conflicts;
   preserve stable text/action identity unless that identity is deliberately renamed.

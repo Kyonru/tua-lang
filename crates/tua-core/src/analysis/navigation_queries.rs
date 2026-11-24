@@ -1231,6 +1231,17 @@ impl AnalysisSnapshot {
             return (!is_cancelled()).then_some(references);
         }
 
+        if self.is_dialogue(path)
+            && self.file(path).is_some_and(|file| {
+                crate::dialogue_asset::flow::name_at(&file.source, position).is_some()
+            })
+        {
+            let references = self
+                .dialogue_flow_references(path, position, include_declaration)
+                .unwrap_or_default();
+            return (!is_cancelled()).then_some(references);
+        }
+
         if let Some(references) =
             self.signal_event_references_at_position(path, position, include_declaration)
         {
@@ -2077,7 +2088,7 @@ impl AnalysisSnapshot {
         }
 
         if self.is_dialogue(path) {
-            return None;
+            return self.dialogue_flow_rename_target(path, position);
         }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {
@@ -2120,7 +2131,7 @@ impl AnalysisSnapshot {
             return self.rename_i18n_key(path, &key, new_name);
         }
         if self.is_dialogue(path) {
-            return None;
+            return self.rename_dialogue_flow(path, position, new_name);
         }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {

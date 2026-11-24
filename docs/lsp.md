@@ -42,8 +42,8 @@ background refreshes do not fill worker slots in one uninterrupted batch.
     own machine through [Ollama](#local-ollama-inline-completion).
 
 Dialogue scripts also support [flow-target navigation](dialogue.md#navigate-conversation-flow):
-complete local labels and follow choice, wait, branch and action targets without
-executing project code.
+complete local labels, follow targets, find references and rename file-local flow
+without executing project code. Rename validates the whole script and preserves prose.
 
 ## Find A Feature
 
