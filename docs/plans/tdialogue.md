@@ -524,6 +524,17 @@ synthetic protocol timing is not presented as perceived UI latency.
 
 ## M10 — LÖVE showcase, documentation and consuming-game qualification
 
+- [ ] Organize dialogue-related files in a dedicated cleanup change. Group internal
+  runtime helpers under a dialogue directory (for example, `vendor/runtime/dialogue/`)
+  and consolidate the dialogue examples under `examples/dialogue/`, with a shared
+  README/index and focused, independently runnable scenarios plus the LÖVE showcase.
+  Preserve public `Dialogue` APIs, explicit runtime imports and project runtime
+  replacements; retain a compatibility entry module where needed. Update runtime
+  bundling/dependency discovery, emitted paths, example configurations, test fixtures,
+  build scripts and documentation links together. Verify opt-in helper inclusion,
+  packaged output and module loading under Lua 5.1/LuaJIT and LÖVE, including hosts
+  whose module search path omits `?/init.lua`. Keep file moves separate from gameplay
+  or dialogue behavior changes; shared examples must not require unrelated features.
 - [ ] Add one runnable LÖVE showcase with interchangeable presentation adapters:
   conversation panel, NPC speech bubble, and non-pausing radio message.
 - [ ] Demonstrate shared characters/expressions, localized placeholders, conditional
