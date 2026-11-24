@@ -14146,3 +14146,148 @@ fn dialogue_flow_queries_recover_and_refresh_without_prose_links() {
         .definition(path, fixture.position("choice"))
         .is_some());
 }
+
+#[test]
+fn dialogue_text_id_rename_updates_catalogs_and_static_calls_only() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+[hello]
+// @id shop.he<|id|>llo
+: é🦆 shop.hello
+// @id shop.go
+-> Go [target:hello]
+-- file: src/en.lua
+return { en = { shop = { hello = "Hello", go = "Go" } } }
+-- file: src/fr.lua
+return { fr = { shop = { hello = "Bonjour", go = "Aller" } } }
+-- file: src/wrapper.tua
+local function translate(key: I18nKey) return I18n.t(key) end
+return { translate = translate }
+-- file: src/main.tua
+local translate = require('wrapper').translate
+local wrapped = translate('shop.hello')
+local text = I18n.t('shop.he<|call|>llo')
+local ordinary = 'shop.hello'
+return text
+"#,
+    );
+    let mut config = ProjectConfig::default();
+    config.i18n.enabled = true;
+    for locale in ["en", "fr"] {
+        config.i18n.catalogs.push(crate::I18nCatalogConfig {
+            locale: locale.into(),
+            path: format!("{locale}.lua").into(),
+        });
+    }
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let scene = "src/scene.tdialogue";
+    let position = fixture.position("id");
+    assert_eq!(
+        snapshot
+            .prepare_rename(scene, position)
+            .unwrap()
+            .placeholder,
+        "hello"
+    );
+    assert_eq!(snapshot.references(scene, position, true).len(), 5);
+    assert_eq!(snapshot.references(scene, position, false).len(), 2);
+    let rename = snapshot.rename(scene, position, "welcome").unwrap();
+    assert_eq!(rename.edits.len(), 5);
+    assert_eq!(
+        snapshot
+            .rename("src/main.tua", fixture.position("call"), "welcome")
+            .unwrap()
+            .edits
+            .len(),
+        5
+    );
+    assert!(snapshot.rename(scene, position, "go").is_none());
+    assert!(snapshot.rename(scene, position, "bad.name").is_none());
+    for file in fixture.files() {
+        let mut source = file.source.clone();
+        let mut edits: Vec<_> = rename
+            .edits
+            .iter()
+            .filter(|edit| edit.path == file.path)
+            .collect();
+        edits.sort_by_key(|edit| std::cmp::Reverse((edit.span.start.line, edit.span.start.column)));
+        for edit in edits {
+            let start = crate::source_text::byte_for_position(&source, edit.span.start).unwrap();
+            let end = crate::source_text::byte_for_position(&source, edit.span.end).unwrap();
+            source.replace_range(start..end, &edit.new_text);
+        }
+        host.set_file(&file.path, source);
+    }
+    let changed = host.snapshot();
+    let source = changed.source(Path::new(scene)).unwrap();
+    assert!(source.contains("// @id shop.welcome"));
+    assert!(source.contains(": é🦆 shop.hello"));
+    assert!(source.contains("[target:hello]"));
+    assert!(changed
+        .source(Path::new("src/main.tua"))
+        .unwrap()
+        .contains("ordinary = 'shop.hello'"));
+    assert!(crate::dialogue_asset::parse_dialogue_source(scene, source).is_ok());
+    assert_eq!(changed.references(scene, position, true).len(), 5);
+    assert!(changed
+        .pipeline_diagnostics(scene)
+        .iter()
+        .all(|d| d.severity != crate::DiagnosticSeverity::Error));
+    host.set_file(
+        "src/duplicate.tdialogue",
+        "@dialogue 1\n[s]\n// @id shop.welcome\n: Duplicate (end)\n",
+    );
+    assert!(host.snapshot().prepare_rename(scene, position).is_none());
+    assert!(host.snapshot().rename(scene, position, "again").is_none());
+    host.remove_file("src/duplicate.tdialogue");
+    host.set_file("src/editing.tdialogue", "@dialogue 1\n[s]\n// @id shop.");
+    assert!(host.snapshot().rename(scene, position, "again").is_none());
+    host.remove_file("src/editing.tdialogue");
+    assert!(host.snapshot().rename(scene, position, "again").is_some());
+}
+
+#[test]
+fn dialogue_text_id_rename_without_catalog_preserves_action_identity() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+@document story
+@actions "actions"
+[start]
+@action give [id:story.line] [success:done] [failure:done] {"text":"story.<|payload|>line"}
+[done]
+// @id story.<|text|>line
+: Hello (end)
+"#,
+    );
+    let mut config = ProjectConfig::default();
+    config.i18n.enabled = true;
+    config.i18n.catalogs.push(crate::I18nCatalogConfig {
+        locale: "en".into(),
+        path: "en.lua".into(),
+    });
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/en.lua", "return { en = {} }");
+    let file = &fixture.files()[0];
+    host.set_file(&file.path, file.source.clone());
+    let snapshot = host.snapshot();
+    let rename = snapshot
+        .rename(&file.path, fixture.position("text"), "greeting")
+        .unwrap();
+    assert_eq!(rename.edits.len(), 1);
+    assert_eq!(rename.edits[0].new_text, "story.greeting");
+    assert_eq!(rename.edits[0].span.start.line, 7);
+    assert!(snapshot
+        .prepare_rename(&file.path, fixture.position("payload"))
+        .is_none());
+    assert!(snapshot
+        .rename(&file.path, fixture.position("payload"), "greeting")
+        .is_none());
+}

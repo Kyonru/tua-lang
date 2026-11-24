@@ -648,3 +648,23 @@ fn valid_character_speech(ty: &Type) -> bool {
             .field("cadence")
             .is_some_and(|f| !f.optional && cadence(&f.ty))
 }
+
+/// Only validated authored IDs are declarations; never recover rename edits from prose.
+pub(super) fn text_ids(file: &AnalysisFile) -> Option<Vec<&DialogueName>> {
+    let model = file.dialogue_model.get()?.as_ref()?;
+    Some(
+        model
+            .sections
+            .iter()
+            .flat_map(|section| &section.lines)
+            .flat_map(|line| {
+                std::iter::once(&line.text).chain(
+                    line.choices.iter().flat_map(|choice| {
+                        std::iter::once(&choice.text).chain(choice.reason.iter())
+                    }),
+                )
+            })
+            .map(|text| &text.id)
+            .collect(),
+    )
+}

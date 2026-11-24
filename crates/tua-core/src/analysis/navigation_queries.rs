@@ -1884,6 +1884,12 @@ impl AnalysisSnapshot {
             return None;
         }
         let file = self.file(path)?;
+        if file.kind == AnalysisSourceKind::Dialogue {
+            return super::dialogue_queries::text_ids(file)?
+                .into_iter()
+                .find(|id| contains_position(id.span, position))
+                .map(|id| (id.value.clone(), id.span));
+        }
         if file.kind == AnalysisSourceKind::Lua {
             let entry = self
                 .catalog_index_for_path(path)
@@ -1901,8 +1907,15 @@ impl AnalysisSnapshot {
         include_declaration: bool,
     ) -> Option<Vec<Reference>> {
         let (key, _) = self.i18n_key_at(path, position)?;
+        let Some(declarations) = self.dialogue_id_declarations(path, &key) else {
+            return Some(Vec::new());
+        };
+        if declarations.len() > 1 {
+            return Some(Vec::new());
+        }
         let mut references = Vec::new();
         if include_declaration {
+            references.extend(declarations);
             if let Some(entries) = self.catalog_index_for_path(path).entries.get(&key) {
                 references.extend(entries.values().map(|entry| Reference {
                     path: entry.path.clone(),
@@ -1936,9 +1949,39 @@ impl AnalysisSnapshot {
         Some(references)
     }
 
+    fn dialogue_id_declarations(&self, path: &Path, key: &str) -> Option<Vec<Reference>> {
+        let mut declarations = Vec::new();
+        for (file_path, file) in &self.files {
+            if file.kind != AnalysisSourceKind::Dialogue
+                || self.workspace_root_for_path(file_path) != self.workspace_root_for_path(path)
+            {
+                continue;
+            }
+            // Refuse partial edits while a script could hide a declaration.
+            for id in super::dialogue_queries::text_ids(file)? {
+                if id.value == key {
+                    declarations.push(Reference {
+                        path: file_path.clone(),
+                        span: id.span,
+                        kind: ReferenceKind::TableField,
+                    });
+                }
+            }
+        }
+        Some(declarations)
+    }
+
+    fn unique_dialogue_id(&self, path: &Path, key: &str) -> bool {
+        self.dialogue_id_declarations(path, key)
+            .is_some_and(|ids| ids.len() <= 1)
+    }
+
     fn rename_i18n_key(&self, path: &Path, key: &str, new_leaf: &str) -> Option<RenameEdit> {
         let index = self.catalog_index_for_path(path);
-        if !is_valid_rename_identifier(new_leaf) || index.duplicate_keys.contains(key) {
+        if !is_valid_rename_identifier(new_leaf)
+            || index.duplicate_keys.contains(key)
+            || !self.unique_dialogue_id(path, key)
+        {
             return None;
         }
         let parent = key.rsplit_once('.').map(|(parent, _)| parent);
@@ -1950,7 +1993,15 @@ impl AnalysisSnapshot {
             return None;
         }
         let references = index.entries.get(key)?;
-        let mut edits = Vec::new();
+        let mut edits: Vec<_> = self
+            .dialogue_id_declarations(path, key)?
+            .into_iter()
+            .map(|declaration| TextEdit {
+                path: declaration.path,
+                span: declaration.span,
+                new_text: new_key.clone(),
+            })
+            .collect();
         for entry in references.values() {
             let source = self.source(&entry.path)?;
             let start = crate::source_text::byte_for_position(source, entry.span.start)?;
@@ -2008,15 +2059,12 @@ impl AnalysisSnapshot {
     ) -> Option<RenameTarget> {
         let _profile = profile::span("analysis.query.prepare_rename");
         let path = path.as_ref();
-        if self.is_dialogue(path) {
-            return None;
-        }
-
         if let Some((key, span)) = self.i18n_key_at(path, position) {
             if self
                 .catalog_index_for_path(path)
                 .duplicate_keys
                 .contains(&key)
+                || !self.unique_dialogue_id(path, &key)
             {
                 return None;
             }
@@ -2026,6 +2074,10 @@ impl AnalysisSnapshot {
                 placeholder: key.rsplit('.').next().unwrap_or(&key).to_owned(),
                 kind: crate::RenameKind::TableField,
             });
+        }
+
+        if self.is_dialogue(path) {
+            return None;
         }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {
@@ -2064,12 +2116,11 @@ impl AnalysisSnapshot {
     ) -> Option<RenameEdit> {
         let _profile = profile::span("analysis.query.rename");
         let path = path.as_ref();
-        if self.is_dialogue(path) {
-            return None;
-        }
-
         if let Some((key, _)) = self.i18n_key_at(path, position) {
             return self.rename_i18n_key(path, &key, new_name);
+        }
+        if self.is_dialogue(path) {
+            return None;
         }
 
         if let Some(event) = self.usage_index.signal_event_at(path, position) {

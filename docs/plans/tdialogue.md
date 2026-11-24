@@ -574,6 +574,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
 
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
+- [x] Text-identity refactor slice: explicit rename/reference queries connect
+  authored line/choice/reason IDs, locale entries and recognized typed localization
+  calls. Preserve namespace and unrelated prose/flow/action identities. Reject
+  duplicate IDs, destination conflicts and malformed dialogue sources; keep edits
+  within the owning project and use unsaved overlays. Dynamic host strings remain
+  outside this static reference set. Installed-editor UI qualification is pending.
 - [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,
   `.tdialogue` and catalogs. Reject ambiguous/dynamic references and conflicts;
   preserve stable text/action identity unless that identity is deliberately renamed.

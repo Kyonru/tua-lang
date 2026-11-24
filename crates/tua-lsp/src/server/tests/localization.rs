@@ -242,3 +242,54 @@ fn dialogue_localization_explorer_navigates_sources_and_refreshes_unsaved_prose(
         "Changed"
     );
 }
+
+#[test]
+fn dialogue_text_id_rename_has_unquoted_source_edits_and_overlay_conflicts() {
+    let project = TempProject::new("dialogue-id-rename");
+    project.write("tua.toml", "source = 'src'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n");
+    let catalog = "return { en = { shop = { hello = 'Hello', taken = 'Other' } } }";
+    project.write("src/en.lua", catalog);
+    project.write("src/main.tua", "return I18n.t('shop.hello')");
+    let source = "@dialogue 1\n[start]\n// @id shop.hello\n: é🦆 Hello (end)\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    project.write("src/other/tua.toml", "source = 'src'\n[i18n]\nenabled = true\n[[i18n.catalogs]]\nlocale = 'en'\npath = 'en.lua'\n");
+    project.write("src/other/src/en.lua", catalog);
+    let other_source = source.replace(" (end)", "") + "// @id shop.welcome\n: Nested (end)\n";
+    project.write("src/other/src/scene.tdialogue", &other_source);
+    let other_uri = project.uri_for("src/other/src/scene.tdialogue");
+    let mut other_open = did_open(&other_uri, &other_source);
+    other_open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(other_open);
+    server.send(prepare_rename_request(2, &uri, source, "shop.hello", 6));
+    let prepared = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(prepared["placeholder"], "hello");
+    assert_eq!(prepared["range"]["start"], json!({"line":2,"character":7}));
+    assert_eq!(prepared["range"]["end"], json!({"line":2,"character":17}));
+    server.send(rename_request(3, &uri, source, "shop.hello", 6, "welcome"));
+    let edits = &response_with_id(server.output(), 3)["result"]["changes"];
+    assert_eq!(edits.as_object().unwrap().len(), 3);
+    assert_eq!(edits[&uri][0]["newText"], "shop.welcome");
+    server.send(references_request(4, &uri, source, "shop.hello", 6, true));
+    assert_eq!(
+        response_with_id(server.output(), 4)["result"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    let catalog_uri = project.uri_for("src/en.lua");
+    server.send(did_open(&catalog_uri, catalog));
+    server.send(did_change(
+        &catalog_uri,
+        &catalog.replace("taken", "welcome"),
+        2,
+    ));
+    server.send(rename_request(5, &uri, source, "shop.hello", 6, "welcome"));
+    assert!(response_with_id(server.output(), 5)["result"].is_null());
+}

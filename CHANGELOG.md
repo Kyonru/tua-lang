@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Connect explicit dialogue text-ID rename and references with locale entries and
+  typed localization calls, preserving unrelated identities and rejecting conflicts.
+  Nested projects no longer contribute dialogue IDs to their parent's catalog index.
+
 - Add dialogue label/flow-target completion, hover and definition with incomplete
   target recovery, unsaved-edit freshness and full Unicode-aware replacement ranges.
 

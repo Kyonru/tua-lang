@@ -109,7 +109,9 @@ their Lua code. It suggests keys in `I18n.t("...")`, locales in
 `I18n.setLocale("...")` and the third `t` argument, and named fields in an
 unfinished argument table. Hover shows a translation and the catalog it came
 from; definition opens that entry. References and rename operate on literal
-uses and catalog entries.
+uses and catalog entries. They also include [authored dialogue text IDs](dialogue.md#rename-a-text-identity),
+with duplicate/conflict checks and project-local edits. Rename accepts a new final
+key segment, retaining the existing namespace.
 
 Diagnostics cover unknown keys, absent named fields,
 unconfigured literal locales, missing plural `other` forms, mismatched

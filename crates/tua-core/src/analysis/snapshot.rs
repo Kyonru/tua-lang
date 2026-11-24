@@ -138,7 +138,9 @@ impl AnalysisSnapshot {
                 index.add_catalog(&catalog.locale, path, parsed.map(Arc::as_ref));
             }
             for (path, file) in &self.files {
-                if path.starts_with(root) {
+                if path.starts_with(root)
+                    && self.workspace_root_for_path(path) == self.workspace_root_for_path(root)
+                {
                     if let Some(model) = file.dialogue_model.get().and_then(Option::as_ref) {
                         index.add_dialogue(path.clone(), model);
                     }

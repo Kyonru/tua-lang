@@ -21,3 +21,10 @@ on `presentationRevision` changes honor `revealComplete` to show refreshed text 
 
 See [the dialogue guide](../../docs/dialogue.md) for options, ownership, fallback,
 argument validation, extraction/merge policy and runtime replacement requirements.
+
+To deliberately change a text identity, use Rename Symbol on an ID in
+`src/scene.tdialogue`, entering a new final key segment. Review the workspace edit:
+it includes matching locale keys and recognized typed localization calls, without
+changing dialogue prose or flow labels. Find References can show this relationship
+before renaming. Existing destination keys and duplicate IDs are rejected; finish
+malformed script edits before refactoring.

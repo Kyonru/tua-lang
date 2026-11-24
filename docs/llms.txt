@@ -275,7 +275,12 @@ Dialogue editor queries complete file-local label references in choices, waits,
 branches, action outcomes and fallback directives. Hover and definition follow
 unique labels; incomplete targets and unsaved label edits are supported. Duplicate
 labels are ambiguous, and prose/comments/action payloads are not flow references.
-Dialogue rename, formatting and graph preview remain planned.
+With i18n enabled, explicit text-ID rename updates authored line/choice/reason IDs,
+locale entries and recognized typed literal localization uses in the same project.
+Rename accepts a new final key segment and rejects duplicate IDs, destination
+conflicts and malformed dialogue sources. Computed keys and arbitrary host strings
+are not inferred references. Prose, flow/document/action identity stay unchanged.
+Flow-label rename, formatting and graph preview remain planned.
 
 Before labels, `@characters Cast "dialogue.characters"` imports the module; use
 `Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,

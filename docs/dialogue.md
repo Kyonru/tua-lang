@@ -47,7 +47,29 @@ not choose between them. Text inside comments, spoken prose, and action JSON
 payloads is not a flow reference.
 
 These queries only inspect source. They never run conditions or action handlers.
-Project-wide dialogue rename, dialogue formatting and graph preview remain planned.
+Flow-label rename, dialogue formatting and graph preview remain planned.
+
+## Rename a text identity
+
+With `[i18n] enabled = true`, use Rename Symbol on an authored text ID, its catalog
+entry, or a recognized literal localization call. Enter the new final key segment:
+renaming `hello` to `welcome` changes `shop.hello` to `shop.welcome` while retaining
+its namespace. Find References includes the authored ID and locale entries when
+Include Declaration is enabled, plus recognized typed uses.
+
+The edit updates line, choice or disabled-reason IDs, configured locale keys,
+`I18n.t` literals and supported typed localization-wrapper calls in the same
+project. An authored ID can be renamed before translations exist. Prose, ordinary
+strings, flow labels, document IDs and action IDs are preserved, even when they
+contain the same text.
+
+This command deliberately changes the text's identity. Duplicate declarations,
+existing destination keys and invalid new names are rejected. Finish malformed
+dialogue edits first: a script that cannot be parsed could hide another declaration,
+so localization rename is unavailable until it parses again. Unsaved script and
+catalog edits participate in conflict checks. Computed keys and arbitrary host
+strings are not rename targets or inferred references; maintain those mappings
+explicitly. The command does not migrate saved checkpoints or external catalogs.
 
 ## Your first conversation
 
