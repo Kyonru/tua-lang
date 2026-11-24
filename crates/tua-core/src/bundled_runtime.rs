@@ -37,6 +37,13 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: false,
     },
     BundledRuntime {
+        module: "tuadialogue_checkpoint",
+        file_name: "tuadialogue_checkpoint.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_checkpoint.lua"),
+        dependencies: &["tuasave_json"],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "tuadialogue_media",
         file_name: "tuadialogue_media.lua",
         source: || include_str!("../../../vendor/runtime/tuadialogue_media.lua"),
@@ -102,6 +109,7 @@ pub const RUNTIMES: &[BundledRuntime] = &[
             "tuadialogue_conditions",
             "tuadialogue_actions",
             "tuadialogue_media",
+            "tuadialogue_checkpoint",
             "tuadialogue_reveal",
             "tuadialogue_rich",
         ],

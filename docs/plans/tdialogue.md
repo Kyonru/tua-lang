@@ -497,6 +497,14 @@ and the
 
 ## M8 — Save/resume and bounded conversation history
 
+**Initial plain-dialogue checkpoint slice:** version-1 export/restore supports line,
+choice and wait boundaries, validates graph identity and timers, and preserves
+fired events and suspension. It restores into a fresh player and silently completes
+line reveal. Context/registry documents, branches and conditional choices are
+rejected in this first version. The general checklist below remains open until
+locals, durable action reconciliation, the Save recipe and history are qualified.
+See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
+
 - [ ] Define a versioned, validated JSON-shaped checkpoint: document identity and
   compatible content version, stable position/choice IDs, locals, locale, logical
   timers, relevant event-delivery/action status, and deterministic execution state.

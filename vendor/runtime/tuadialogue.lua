@@ -182,6 +182,7 @@ local optionFields = {
   reasonId = true,
 }
 local playerOptions = {
+  checkpointVersion = true,
   locale = true,
   resolve = true,
   resolveTemplate = true,
@@ -447,6 +448,8 @@ local function newPlayer(source, options)
   assert(type(options) == "table", "invalid dialogue options")
   fields(options, playerOptions)
   assert(optionalId(options.locale), "invalid dialogue locale")
+  assert(options.checkpointVersion == nil or (type(options.checkpointVersion) == "string"
+    and #options.checkpointVersion > 0 and #options.checkpointVersion <= 256), "invalid checkpointVersion")
   assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
   assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
   assert(
@@ -470,6 +473,8 @@ local function newPlayer(source, options)
     assert(options.handlers == nil, "handlers require an action registry")
   end
   return setmetatable({
+    checkpointVersion = options.checkpointVersion,
+    checkpointPlain = source.context == nil and source.actions == nil and source.events == nil,
     actionHandlers = handlers,
     transitionBudget = budget,
     document = document(source),
@@ -646,6 +651,7 @@ function Player:enter(id, locals, facts, resolved, issue)
   end
   local nodePresentation = not issue and presentation(self, id, self.locale, facts, locals) or nil
   self.issue = issue
+  self.restored = false
   self.presentation, self.revealComplete = nodePresentation, false
   self.presentationRevision = self.presentationRevision + 1
   self.visit = self.visit + 1
@@ -800,10 +806,34 @@ function Player:cancel()
   self.generation = self.generation + 1
   self.suspended = false
   self.deferredChoiceRefresh = nil
+  self.restored = false
   self.state, self.current, self.presentation, self.issue = "cancelled", nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
   if Actions then Actions.release(self) end
   return true
+end
+
+-- Restore only into a fresh session. Validation and presentation precede mutation.
+function Player:checkpoint()
+  assert(not self.resolving and self.state ~= "disposed", "cannot checkpoint this player")
+  return require("tuadialogue_checkpoint").export(self)
+end
+
+function Player:restore(value)
+  assert(not self.resolving and self.state == "idle", "restore needs a fresh idle player")
+  local fired = require("tuadialogue_checkpoint").validate(self, value)
+  value = copy(value)
+  local node = presentation(self, value.nodeId, value.locale)
+  self.current, self.state, self.presentation = value.nodeId, value.state, node
+  self.restored = true
+  self.locale, self.suspended = value.locale, value.suspended
+  self.elapsed, self.fired = value.elapsed, fired
+  self.revealedElapsed, self.revealedAt = value.revealedElapsed, value.revealedAt
+  self.revealComplete = value.state == "awaiting_advance"
+  if self.revealComplete and self.revealedElapsed == nil then
+    self.revealedElapsed, self.revealedAt = 0, self.elapsed
+  end
+  self.generation, self.visit, self.presentationRevision = 1, 1, 1
 end
 
 function Player:snapshot()
@@ -814,6 +844,7 @@ function Player:snapshot()
   end
   return {
     state = self.state,
+    restored = self.restored == true,
     suspended = self.suspended == true,
     wait = self.state == "waiting" and {
       duration = self.document.nodes[self.current].duration,
@@ -837,6 +868,7 @@ end
 function Player:dispose()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state == "disposed" then return end
+  self.restored = false
   self.generation = self.generation + 1
   self.suspended = false
   self.deferredChoiceRefresh = nil

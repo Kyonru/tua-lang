@@ -13516,3 +13516,63 @@ local wrong: string = cast.Guide.speech.gain
         "{errors:?}"
     );
 }
+
+#[test]
+fn dialogue_checkpoints_preserve_imported_types_and_editor_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/session.tua
+local player = Dialogue.new({ documentId = "demo", entry = "s", nodes = {
+  s = { kind = "line", text = "Hello", next = "done" },
+  done = { kind = "end" },
+} }, { checkpointVersion = "v1" })
+return player
+-- file: src/forward.tua
+return require("session")
+-- file: src/main.tua
+local player = require("forward")
+player:start()
+local checkpoint = player:checkpoint()
+local elapsed: number = checkpoint.<|elapsed|>elapsed
+local id: string = checkpoint.<|documentId|>documentId
+local locale = checkpoint.locale
+if locale then
+  local selected: string = locale
+  print(selected)
+end
+print(elapsed, id)
+-- file: src/bad.tua
+local player = require("forward")
+player:restore("invalid")
+local checkpoint = player:checkpoint()
+local wrong: boolean = checkpoint.elapsed
+checkpoint.fired = { "wrong" }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/session.tua", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 3,
+        "{diagnostics:?}"
+    );
+    for marker in ["elapsed", "documentId"] {
+        let position = fixture.position(marker);
+        assert!(
+            completion_labels(&snapshot.completion("src/main.tua", position))
+                .contains(&marker.to_owned())
+        );
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+}

@@ -1,0 +1,13 @@
+@dialogue 1
+@document harbor.checkpoint
+[start]
+// @id checkpoint.hello
+: Welcome back to the harbor.
+@event shown 0 greet "once"
+// @id checkpoint.wait
+-> Watch the tide [target:tide]
+[tide]
+@wait 2 [target:done]
+[done]
+// @id checkpoint.done
+: The tide has turned. (end)

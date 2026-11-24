@@ -448,3 +448,13 @@ recorded voice plays unless mixSpeech; off always disables chatter, not recorded
 Profiles do not configure reveal automatically; its existing cues are grapheme-based.
 Word segmentation, profile timing, private RNG, volume, polyphony, audio pause/skip and
 lifecycle cleanup belong to the pending host adapter. Pronunciation uses existing rich runs.
+
+Plain dialogue checkpoints: construct with `checkpointVersion` and a document ID,
+call `player:checkpoint()` for owned version-1 data and `freshPlayer:restore(data)`
+only on a new idle player. Supports line/choice/wait boundaries without context,
+registries, branches or conditional choices. Identity/graph/timer validation occurs
+before mutation. Restore preserves delivered-event flags and suspension, silently
+completes current-line reveal, and exposes snapshot.restored for host audio policy.
+Rebind resolvers/args; locale is saved. No filesystem, action dispatch, effect
+rollback, partial reveal restoration or exactly-once guarantee is implied. Typed
+locals, action reconciliation, history and the Save.contract recipe remain pending.

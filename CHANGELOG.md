@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add bounded, versioned checkpoints for plain dialogue line/choice/wait boundaries,
+  with graph compatibility validation, transactional fresh-player restore, logical
+  timers and delivered-event flags. Restored presentations remain silent. Typed
+  context/action persistence and conversation history remain follow-up work.
+
 - Document and demonstrate a typed host conversation-skip policy that refuses
   non-cancellable pending actions, preserves settled results, and uses existing
   lifecycle cancellation for explicitly cancellable work.

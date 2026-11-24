@@ -21,6 +21,7 @@ folder in VS Code and use **Tua: Run LOVE Project** without building the compile
 | `starfall` | A playable game with scenes, input, camera, and persistence. |
 | `love-tua` | A game combining typed systems with existing Lua libraries. |
 | `audio-system` | Audio buses, cues, music scenes, and analysis metadata. |
+| `dialogue-checkpoint` | Headless line, choice and wait checkpoint round trips with compatibility validation. |
 | `dialogue-audio` | Playable character chatter, recording cues, independent mute and pause controls. |
 | `dialogue-localization` | Headless English/French conversations, plural text, independent locales and translation coverage. |
 | `unit-testing` | Typed class and plain Lua specs run through Busted. |

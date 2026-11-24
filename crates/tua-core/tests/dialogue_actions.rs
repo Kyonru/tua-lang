@@ -46,6 +46,7 @@ fn dialogue_actions_execute_emitted_sources() {
     script.push_str(include_str!("fixtures/dialogue_async_actions.lua"));
     script.push_str(include_str!("fixtures/dialogue_waits.lua"));
     script.push_str(include_str!("fixtures/dialogue_skip_policy.lua"));
+    script.push_str(include_str!("fixtures/dialogue_checkpoint.lua"));
     let mut ran = false;
     for interpreter in ["lua", "lua5.1", "luajit"] {
         if Command::new(interpreter).arg("-v").output().is_err() {

@@ -27,6 +27,7 @@ end
 local function player(cadence, voice, text)
   return Dialogue.new({
     schemaVersion = 10,
+    documentId = "audio.test",
     entry = "s",
     nodes = {
       s = {
@@ -46,7 +47,7 @@ local function player(cadence, voice, text)
       },
       done = { kind = "end" },
     },
-  }, { locale = "fr" })
+  }, { locale = "fr", checkpointVersion = "v1" })
 end
 local function run()
   local backend, state = fake()
@@ -171,3 +172,23 @@ wordAudio.update(wordPlayer:snapshot(), 10)
 assert(#wordState.cues == 2, "word tail creates no extra cue")
 wordAudio.dispose()
 print("word cadence passed")
+
+local restoredHost, restoredState = fake()
+local restoredAudio = Adapter.new(restoredHost, 30)
+local restoredPlayer = player(
+  "character",
+  { cue = "hello", sourceLocale = "en", fallback = "source" }
+)
+restoredPlayer:start()
+local savedAudio = restoredPlayer:checkpoint()
+local resumedPlayer = player(
+  "character",
+  { cue = "hello", sourceLocale = "en", fallback = "source" }
+)
+resumedPlayer:restore(savedAudio)
+restoredAudio.update(resumedPlayer:snapshot(), 1)
+assert(#restoredState.cues == 0 and #restoredState.voices == 0, "restore is silent")
+restoredAudio.dispose()
+restoredPlayer:dispose()
+resumedPlayer:dispose()
+print("restored presentation is silent")

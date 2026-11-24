@@ -17,6 +17,7 @@ type Voice = {
 }
 type Node = { kind: string, text: string, speech?: Profile | "off", voice?: Voice }
 type DialogueInput = {
+  restored?: boolean,
   generation: number,
   visit: number,
   presentationRevision: number,
@@ -69,7 +70,7 @@ local function new(backend: Backend, seed: number)
     local node = snapshot.node
     local active = snapshot.state == "awaiting_advance" and node ~= nil and node.kind == "line"
     if not active then backend.stop() end
-    if changed and active and node ~= nil and node.voice ~= nil then
+    if changed and active and not snapshot.restored and node ~= nil and node.voice ~= nil then
       local voice = node.voice
       assert(voice ~= nil)
       local found = backend.voice(voice.cue, voice.locale)

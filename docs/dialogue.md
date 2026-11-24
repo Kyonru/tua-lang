@@ -202,8 +202,8 @@ Selection is keyed by the snapshot's `generation`, `visit`, and
 `presentationRevision`. Re-presenting the same snapshot preserves progress.
 Changing text without changing that identity is an error. Locale/context refreshes
 already marked `revealComplete` appear fully revealed without a speech burst.
-Likewise, after a future/custom restore, honor a completed snapshot or call
-`finish()` before consuming updates. This is not a checkpoint API.
+Checkpoint restore marks the line complete; honor that snapshot before consuming
+updates. For custom restore flows, call `finish()` to avoid catch-up speech.
 
 Pass snapshots after line changes, cancellation, and disposal. Non-line states
 clear the controller. A user skip calls `finish()` and reports `update(0, true)`
@@ -1016,7 +1016,8 @@ Cast.Guide: Hello, %{name}! You have %{count} coins.
 
 `@document` appears once before labels. Document IDs and text IDs must be unique
 within their respective project namespaces. Document IDs are optional for playback;
-this milestone does not implement checkpoints.
+plain-dialogue checkpoints additionally require a host compatibility key; see
+[checkpoints](#checkpoint-a-plain-conversation).
 
 Use `%{name}` for named scalar arguments. Names are simple ASCII identifiers, not
 field paths or executable expressions. With localization enabled, `%%` produces a
@@ -1887,3 +1888,75 @@ when the external operation cannot stop. Keep ownership of that operation in the
 host and suppress stale callbacks; invalidating dialogue does not roll back work.
 After accepted navigation/cancellation, synchronize the audio adapter immediately
 with `audio.update(player:snapshot(), 0)`. Dispose audio and player together.
+
+## Checkpoint a plain conversation
+
+For plain dialogues, a checkpoint can preserve the current line, choice or wait
+without depending on disk or LÖVE. Give the script a stable `@document` ID and
+choose a host compatibility key:
+
+```tua
+local scene = require("scene")
+local options = { checkpointVersion = "harbor-v1", locale = "en" }
+local player = Dialogue.new(scene, options)
+player:start()
+local saved = player:checkpoint()
+
+-- Store `saved` with the host's JSON persistence when appropriate.
+local restored = Dialogue.new(scene, options)
+restored:restore(saved)
+```
+
+The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+round-trips line, choice and suspended-wait positions. `checkpoint()` returns an
+owned plain record. `restore()` accepts only a fresh idle player; invalid data,
+incompatible content or a throwing resolver leaves that player idle. No automatic
+branch traversal, action dispatch or event delivery occurs during restore.
+
+Checkpoint version 1 contains the document ID, host content version, exact graph
+signature, node/state, elapsed and revealed-event timers, fired-event indices,
+locale and suspension. It excludes closures, host arguments, gameplay context,
+GPU/audio objects, handles, wall-clock time and partial typewriter progress. Rebind
+arguments and resolvers through the fresh player's options. Saved locale wins;
+call `setLocale()` afterward for a different language.
+
+Restored lines appear fully revealed and emit no catch-up speech cues. Existing
+revealed-event clocks are preserved; if reveal had not finished before saving,
+its clock starts at zero on restore. Shown-event clocks retain their saved elapsed
+time. Fired flags prevent ordinary duplicate delivery within the restored visit;
+newly due notifications still require `update()`. Suspended restores stay suspended.
+The snapshot's `restored` flag remains true for this visit (including locale refresh)
+and resets on a new node. The audio example suppresses automatic recordings for
+such snapshots; a host may offer explicit replay. Runtime identity counters belong
+to the fresh player and are not durable idempotency keys.
+
+### Compatibility and limits
+
+The host `checkpointVersion` key is required, nonempty and at most 256 bytes, as is
+the document ID. Checkpoint node IDs are limited to 1,024 UTF-8 bytes and locales to
+256. Timers must be finite, nonnegative and at most 10¹² seconds. Wait elapsed time
+cannot exceed its authored duration. The validator rejects unknown fields,
+metatables, malformed event arrays, unsupported versions and incompatible positions.
+
+A collision-free canonical graph signature includes schema, entry, node kinds,
+node/text/choice IDs, targets, wait durations and event identities/payloads/timing.
+Changing those facts rejects restore rather than jumping to a similarly numbered
+node. Plain prose, translated presentation, portraits and voice metadata may change
+without invalidating the graph. Bump the host key when a semantic change requires
+migration despite an unchanged structure. Migration is an explicit host decision;
+there is no automatic remapping in this version.
+
+Graph work is capped at 8,192 node/event/option records, canonical traversal at
+16,384 entries and depth 32, string content at 256 KiB, and the final signature at
+512 KiB. Delivered-event arrays contain at most 4,096 entries. The graph signature
+is data, not a cryptographic integrity check. Apply your storage schema/size limits
+before decoding untrusted save files.
+
+This first version rejects **all context-, action- and event-registry documents**,
+branches and conditional choices, not merely currently pending work. Idle,
+completed, cancelled, disposed, faulted and action states cannot be exported.
+Typed locals, durable action reconciliation, transcript history and a complete
+`Save.contract` recipe remain later M8 work. Existing Save migration/validation
+concepts apply, but checkpoint data is not a promise of exactly-once external
+effects: crashing between an effect and its durable acknowledgement still needs
+host-side atomic persistence or idempotency.
