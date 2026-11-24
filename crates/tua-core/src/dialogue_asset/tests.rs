@@ -177,3 +177,33 @@ fn dialogue_identity_and_named_placeholders_preserve_plain_text() {
     )
     .is_err());
 }
+
+#[test]
+fn event_identity_requires_a_document_and_unique_valid_ids() {
+    let prefix = "@dialogue 1\n@document arrival\n[start]\n// @id greeting\n: Hello (end)\n";
+    for directive in [
+        "@event shown 0 pulse [id:]",
+        "@event shown 0 pulse [id:two words]",
+        "@event shown 0 pulse [id:unclosed",
+        "@event shown 0 pulse [id:one] [id:two]",
+        "@event shown 0 pulse [id:one]\n@event revealed 1 pulse [id:one]",
+    ] {
+        assert!(!errors(&format!("{prefix}{directive}\n")).is_empty());
+    }
+    let valid = format!(
+        "{prefix}@event shown 0 pulse [id:first] \"hello\"\n@event shown 0 pulse [id:second]\n"
+    );
+    let parsed = parse_dialogue_source("scene.tdialogue", &valid).unwrap();
+    let events = &parsed.sections[0].lines[0].events;
+    assert_eq!(events[0].id.as_ref().unwrap().value, "first");
+    assert_eq!(events[0].payload, "hello");
+    assert_eq!(events[1].payload, "");
+    assert!(errors(&valid.replace("@document arrival\n", ""))
+        .iter()
+        .any(|error| error.message.contains("require an @document")));
+    let duplicate =
+        format!("{valid}[next]\n// @id other\n: Bye (end)\n@event shown 0 pulse [id:first]\n");
+    assert!(errors(&duplicate)
+        .iter()
+        .any(|error| error.message.contains("duplicate event ID")));
+}

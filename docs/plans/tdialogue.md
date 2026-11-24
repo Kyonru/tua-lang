@@ -286,6 +286,14 @@ dependency or automatic gameplay action.
 
 ## M4 — Typed events and registered host actions
 
+**In progress — identity foundation:** timed notifications accept explicit
+`[id:...]` with a required logical `@document` ID. Schema 4 validates document-wide
+uniqueness, owns metadata, and returns `eventId`, `documentId`, and source coordinates.
+Legacy records and schemas remain supported. Identity survives reordering and text
+edits; delivery still uses per-player generation/visit tokens. This is not persistent
+action execution or deduplication. See the [identity validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M4-event-identity.md).
+The remaining items below are not yet complete.
+
 - [ ] Reuse existing declared-event/schema facts where possible to expose a typed
   action/event contract from a `.tua` module. Keep signal buses optional adapters.
 - [ ] Add validated structured payloads and argument completion; retain existing

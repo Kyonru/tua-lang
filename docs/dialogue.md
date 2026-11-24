@@ -240,6 +240,55 @@ The `arrival.tdialogue` example above contains:
 Neither event name has built-in behavior. The player returns data; your host
 chooses what to do with it. Dialogue files never execute arbitrary Lua.
 
+### Give repeated events stable identities
+
+Use an explicit event ID when the host needs to distinguish two calls with the
+same name. Declare a logical document ID before the first label:
+
+```text
+@dialogue 1
+@document arrival
+[start]
+// @id arrival.greeting
+: Welcome aboard! (end)
+@event shown 0 portrait.pulse [id:arrival.first-pulse] "soft"
+@event revealed 0.2 portrait.pulse [id:arrival.second-pulse] "bright"
+```
+
+The optional `[id:...]` goes after the event name and before its string payload.
+IDs use the same identifier syntax as labels and must be unique across the entire
+document. Text IDs and event IDs are separate namespaces. Rewording a line,
+reordering events or renaming the script file does not change an explicit ID.
+Changing the authored ID means changing the identity; keep document IDs unique
+within your project when combining records from multiple scripts.
+
+For identified events, `player:update` additionally returns:
+
+| Field | Meaning |
+| --- | --- |
+| `documentId` | Logical ID from `@document` |
+| `eventId` | Explicit event ID |
+| `source` | Owned `{line, column}` pointing to the event directive, both one-based |
+
+Source coordinates are for diagnostics and can change after edits. Use
+`documentId` + `eventId` for authored identity, and the existing `generation` +
+`visit` tokens for a delivery within one player. Tokens are scoped to each player;
+keep the player identity as well when combining concurrent sessions.
+
+The host still decides how to handle an event. IDs do not persist state, provide
+exactly-once delivery across saves, or suppress events on a new visit. Cancelling
+or advancing discards pending events; locale refresh does not replay fired ones.
+Mutating a document, snapshot or returned source record cannot change a player's
+captured identity. Events without IDs keep their existing returned record shape.
+
+Assets with event IDs emit schema **4**; use the paired runtime or check
+`Dialogue.schemaVersion >= 4` when supplying a replacement. Earlier document
+schemas remain supported. Programmatic schema-4 documents use `id` on event
+records and require `documentId`; `source` is optional and, when supplied, must
+contain only positive integer `line` and `column` fields. Duplicate IDs are rejected
+before playback. See the runnable
+[event identity example](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue-event-identity).
+
 ### Choose the right timing anchor
 
 | Anchor | Clock starts when | Useful for |
@@ -873,10 +922,12 @@ instruction/depth limits too. The evaluator reads owned plain records and never 
 `load`, `loadstring`, a host method, or a wall clock. Each automatic edge evaluates
 bounded data, and a refresh resolves its route once.
 
-Assets using conditional flow or reasons emit schema **3**, requiring the paired
-runtime (`Dialogue.schemaVersion >= 3`). The authoring header remains `@dialogue 1`.
-Context-only assets still emit schema 2; plain assets still emit schema 1. Existing
-line, event, localization and context APIs remain compatible.
+Assets using conditional flow or reasons emit schema **3**, requiring
+`Dialogue.schemaVersion >= 3`. Adding event IDs upgrades the asset to schema **4**
+and requires `Dialogue.schemaVersion >= 4`. The authoring header remains
+`@dialogue 1`. Without event IDs, context-only assets still emit schema 2 and plain
+assets still emit schema 1. Existing line, event, localization and context APIs
+remain compatible.
 
 ## Build and import a script
 

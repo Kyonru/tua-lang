@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Dialogue timed events can carry explicit document-scoped IDs and source locations.
+  Scripts using `[id:...]` emit schema 4; legacy event records remain compatible.
+
 - Dialogue scripts now pass shared character portraits to snapshots and support
   `@event shown|revealed` timing plus optional `@timing hold/fade` hints. The typed,
   renderer-independent player returns once-per-visit events with lifecycle tokens;

@@ -42,6 +42,7 @@ pub struct DialogueChoice {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueEvent {
+    pub id: Option<DialogueName>,
     pub anchor: String,
     pub delay: String,
     pub name: String,
@@ -402,6 +403,18 @@ impl Parser<'_> {
         let (anchor, rest) = take_word(rest);
         let (delay, rest) = take_word(rest);
         let (name, payload) = take_word(rest);
+        let (id, payload) = if let Some(tag) = payload.strip_prefix("[id:") {
+            let Some((id, payload)) = tag.split_once(']') else {
+                self.error(at, "event ID needs a closing ]");
+                return;
+            };
+            let Some(id) = self.name(id, at) else {
+                return;
+            };
+            (Some(id), payload.trim_start())
+        } else {
+            (None, payload)
+        };
         let Some(delay) = seconds(delay) else {
             self.error(at, "event delay must be finite and nonnegative");
             return;
@@ -431,6 +444,7 @@ impl Parser<'_> {
                 return;
             }
             line.events.push(DialogueEvent {
+                id,
                 anchor: anchor.into(),
                 delay,
                 name: name.into(),
@@ -705,6 +719,7 @@ impl Parser<'_> {
             );
         }
         let mut errors = Vec::new();
+        let mut event_ids = BTreeSet::new();
         let labels: BTreeSet<_> = self
             .document
             .sections
@@ -755,6 +770,16 @@ impl Parser<'_> {
                 ));
             }
             for line in &section.lines {
+                for event in &line.events {
+                    if let Some(id) = &event.id {
+                        if self.document.document_id.is_none() {
+                            errors.push((id.span, "event IDs require an @document ID".into()));
+                        }
+                        if !event_ids.insert(&id.value) {
+                            errors.push((id.span, format!("duplicate event ID `{}`", id.value)));
+                        }
+                    }
+                }
                 if let Some(target) = &line.fallback {
                     if !labels.contains(target.value.as_str()) {
                         errors.push((

@@ -229,3 +229,53 @@ Cast.Guide: Hello (end)
         eprintln!("SKIP: no standalone Lua interpreter");
     }
 }
+
+#[test]
+fn identified_events_preserve_identity_after_edits_and_execute_in_emitted_lua() {
+    let source = "@dialogue 1\n@document arrival\n[start]\n// @id greeting\n: Hello (end)\n@event shown 0 pulse [id:first] \"one\"\n@event shown 0 pulse [id:second] \"two\"\n@event revealed 0 legacy\n";
+    let revised = source.replace("Hello", "Reworded greeting")
+        .replace("@event shown 0 pulse [id:first] \"one\"\n@event shown 0 pulse [id:second] \"two\"",
+            "// harmless comment\n@event shown 0 pulse [id:second] \"two\"\n@event shown 0 pulse [id:first] \"one\"");
+    let output = emit_dialogue_source("scene.tdialogue", source).unwrap();
+    let revised = emit_dialogue_source("renamed.tdialogue", &revised).unwrap();
+    assert!(output.code.contains("schemaVersion = 4"));
+    assert!(output.code.contains("source = { line = 6, column = 1 }"));
+    assert_eq!(output.provenance.len(), output.code.lines().count());
+    full_moon::parse_fallible(&output.code, full_moon::ast::LuaVersion::lua51())
+        .into_result()
+        .unwrap();
+    let script = format!(
+        "local Dialogue = (function()\n{}\nend)()\nlocal document = (function()\n{}\nend)()\nlocal revised = (function()\n{}\nend)()\n{}",
+        include_str!("../../../vendor/runtime/tuadialogue.lua"), output.code, revised.code,
+        include_str!("fixtures/dialogue_event_identity.lua")
+    );
+    let mut ran = false;
+    for interpreter in ["lua", "lua5.1", "luajit"] {
+        if Command::new(interpreter).arg("-v").output().is_err() {
+            continue;
+        }
+        ran = true;
+        let mut child = Command::new(interpreter)
+            .arg("-")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{interpreter}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    if !ran {
+        eprintln!("SKIP identified event runtime: no standalone Lua interpreter");
+    }
+}

@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 3 }
+local Dialogue = { schemaVersion = 4 }
 local Conditions
 local function conditions()
   if not Conditions then Conditions = require("tuadialogue_conditions") end
@@ -19,7 +19,21 @@ local function seconds(value)
   return type(value) == "number" and value >= 0 and value < math.huge
 end
 
-local function events(value)
+local function eventSource(value)
+  if value == nil then return nil end
+  assert(type(value) == "table" and getmetatable(value) == nil, "invalid event source")
+  for key in pairs(value) do
+    assert(key == "line" or key == "column", "unknown event source field")
+  end
+  for _, key in ipairs({ "line", "column" }) do
+    local number = value[key]
+    assert(type(number) == "number" and number >= 1 and number < math.huge and number % 1 == 0,
+      "event source positions must be positive integers")
+  end
+  return { line = value.line, column = value.column }
+end
+
+local function events(value, schemaVersion, documentId, seen)
   if value == nil then return {} end
   assert(type(value) == "table" and #value <= 64, "a line supports at most 64 events")
   local count, result = 0, {}
@@ -35,7 +49,19 @@ local function events(value)
     assert(seconds(event.delay), "invalid event delay")
     assert(type(event.name) == "string" and event.name ~= "" and type(event.payload) == "string",
       "invalid dialogue event")
+    if event.id ~= nil or event.source ~= nil then
+      assert(schemaVersion == 4, "event identity requires schema version 4")
+      assert(
+        type(documentId) == "string" and documentId ~= "",
+        "event identity requires documentId"
+      )
+      assert(type(event.id) == "string" and event.id ~= "", "event ID must be a nonempty string")
+      assert(not seen[event.id], "duplicate event ID: " .. event.id)
+      seen[event.id] = true
+    end
     result[index] = {
+      id = event.id,
+      source = eventSource(event.source),
       anchor = event.anchor,
       delay = event.delay,
       name = event.name,
@@ -72,7 +98,14 @@ local nodeFields = {
   branch = { kind = true, condition = true, yes = true, no = true },
   ["end"] = { kind = true },
 }
-local eventFields = { anchor = true, delay = true, name = true, payload = true }
+local eventFields = {
+  anchor = true,
+  delay = true,
+  name = true,
+  payload = true,
+  id = true,
+  source = true,
+}
 local optionFields = {
   id = true,
   text = true,
@@ -99,14 +132,14 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
   if value.schemaVersion then
     fields(value, documentFields)
   end
-  local nodes = {}
+  local nodes, eventIds = {}, {}
   for id, node in pairs(value.nodes) do
     assert(type(id) == "string" and id ~= "", "node IDs must be nonempty strings")
     assert(type(node) == "table", "dialogue node must be a record")
@@ -127,14 +160,14 @@ local function document(value)
       owned.portrait, owned.hold, owned.fade = node.portrait, node.hold, node.fade
       assert(optionalId(node.textId) and optionalId(node.speakerKey), "invalid localization ID")
       owned.textId, owned.speakerKey = node.textId, node.speakerKey
-      owned.events = events(node.events)
+      owned.events = events(node.events, value.schemaVersion, value.documentId, eventIds)
       if value.schemaVersion then
         for _, event in ipairs(node.events or {}) do
           fields(event, eventFields)
         end
       end
     elseif node.kind == "branch" then
-      assert(value.schemaVersion == 3, "branches require schema version 3")
+      assert((value.schemaVersion or 0) >= 3, "branches require schema version 3 or later")
       assert(
         optionalId(node.yes) and node.yes and optionalId(node.no) and node.no,
         "branch needs both targets"
@@ -144,7 +177,7 @@ local function document(value)
       assert(type(node.options) == "table" and #node.options > 0, "choice needs options")
       assert(optionalId(node.fallback), "invalid choice fallback")
       if node.fallback then
-        assert(value.schemaVersion == 3, "fallback requires schema version 3")
+        assert((value.schemaVersion or 0) >= 3, "fallback requires schema version 3 or later")
       end
       owned.options, owned.fallback = {}, node.fallback
       local seen = {}
@@ -170,7 +203,10 @@ local function document(value)
           or option.enabled ~= nil
           or option.reason ~= nil
           or option.reasonId ~= nil then
-          assert(value.schemaVersion == 3, "choice conditions/reasons require schema version 3")
+          assert(
+            (value.schemaVersion or 0) >= 3,
+            "choice conditions/reasons require schema version 3 or later"
+          )
           assert(
             optionalId(option.reasonId) and (option.reason == nil or type(option.reason) == "string"),
             "invalid disabled reason"
@@ -321,13 +357,13 @@ end
 local function presentation(self, id, locale, facts, locals)
   -- The document is already owned. Without localization, retain only an internal
   -- reference; snapshot still copies it before exposing anything to the caller.
-  if not self.resolve and not self.bindings and self.document.schemaVersion ~= 3 then
+  if not self.resolve and not self.bindings and (self.document.schemaVersion or 0) < 3 then
     return self.document.nodes[id]
   end
   local args = boundArguments(self, facts or self.facts, locals or self.locals)
   local node = copy(self.document.nodes[id])
   node.text, node.options = node.text or "", node.options or {}
-  if node.kind == "choice" and self.document.schemaVersion == 3 then
+  if node.kind == "choice" and (self.document.schemaVersion or 0) >= 3 then
     local options = {}
     for _, option in ipairs(node.options) do
       local visible, enabled = available(option, facts or self.facts, locals or self.locals)
@@ -451,6 +487,9 @@ function Player:update(dt, revealed)
   for _, item in ipairs(due) do
     local event = node.events[item.index]
     result[#result + 1] = {
+      eventId = event.id,
+      documentId = event.id and self.document.documentId or nil,
+      source = copy(event.source),
       name = event.name,
       payload = event.payload,
       generation = self.generation,
@@ -584,8 +623,8 @@ function Dialogue.context(schemas)
   function definition.new(source, value, options)
     assert(source.context == definition, "document uses another context definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3,
-      "typed context requires dialogue schema version 2 or 3"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4,
+      "typed context requires dialogue schema version 2, 3 or 4"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

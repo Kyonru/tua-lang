@@ -12721,3 +12721,57 @@ return require("context")
         .pipeline_diagnostics("src/scene.tdialogue")
         .is_empty());
 }
+
+#[test]
+fn dialogue_event_identity_fields_keep_types_and_editor_queries_after_reexport() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/dialogue.tua
+return Dialogue
+-- file: src/main.tua
+local Dialogues = require("dialogue")
+local player = Dialogues.new({ entry = "done", nodes = { done = { kind = "end" } } })
+local events = player:update(0, false)
+local event = events[1]
+local id = event.<|complete|><|hover|>eventId
+local wrong: number = event.eventId
+local source = event.source
+if source then
+  local wrongLine: string = source.line
+  print(source.<|source|>column)
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    for label in ["eventId", "documentId", "source", "generation", "visit"] {
+        assert!(labels.contains(&label.to_owned()), "{labels:?}");
+    }
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .unwrap();
+    assert!(
+        hover.contents.contains("string") && hover.contents.contains("nil"),
+        "{hover:?}"
+    );
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("source")));
+    assert!(
+        labels.contains(&"line".to_owned()) && labels.contains(&"column".to_owned()),
+        "{labels:?}"
+    );
+}

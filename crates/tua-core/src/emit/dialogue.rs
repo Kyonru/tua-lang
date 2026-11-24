@@ -47,6 +47,13 @@ pub fn emit_dialogue_source(
     output.line("return {", entry.span);
     output.line(
         if document.sections.iter().any(|section| {
+            section
+                .lines
+                .iter()
+                .any(|line| line.events.iter().any(|event| event.id.is_some()))
+        }) {
+            "  schemaVersion = 4,"
+        } else if document.sections.iter().any(|section| {
             section.branch.is_some()
                 || section.lines.iter().any(|line| {
                     line.fallback.is_some()
@@ -161,9 +168,21 @@ pub fn emit_dialogue_source(
             if !line.events.is_empty() {
                 output.line("      events = {", origin);
                 for event in &line.events {
+                    let identity = event
+                        .id
+                        .as_ref()
+                        .map(|id| {
+                            format!(
+                                "id = {}, source = {{ line = {}, column = {} }}, ",
+                                lua_string_literal(&id.value),
+                                event.span.start.line,
+                                event.span.start.column
+                            )
+                        })
+                        .unwrap_or_default();
                     output.line(
                         &format!(
-                            "        {{ anchor = {}, delay = {}, name = {}, payload = {} }},",
+                            "        {{ {identity}anchor = {}, delay = {}, name = {}, payload = {} }},",
                             lua_string_literal(&event.anchor),
                             event.delay,
                             lua_string_literal(&event.name),

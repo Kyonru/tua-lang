@@ -3,6 +3,15 @@ use std::process::{Command, Stdio};
 
 #[test]
 fn dialogue_conditions_emitted_runtime() {
+    run_conditions(false);
+}
+
+#[test]
+fn dialogue_conditions_with_identified_events_emitted_runtime() {
+    run_conditions(true);
+}
+
+fn run_conditions(identified: bool) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let source = include_str!("fixtures/dialogue-conditions/lifecycle.lua");
     let context = tua_core::emit::emit_tua_source(
@@ -10,12 +19,14 @@ fn dialogue_conditions_emitted_runtime() {
         include_str!("../../../examples/dialogue-conditions/src/context.tua"),
     )
     .unwrap();
-    let scene = tua_core::emit::emit_dialogue_source(
-        "scene.tdialogue",
-        include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue"),
-    )
-    .unwrap()
-    .code;
+    let mut scene_source =
+        include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue").to_owned();
+    if identified {
+        scene_source = scene_source.replace("greet ", "greet [id:shop.greet] ");
+    }
+    let scene = tua_core::emit::emit_dialogue_source("scene.tdialogue", &scene_source)
+        .unwrap()
+        .code;
     let main = tua_core::emit::emit_tua_source(
         "main.tua",
         include_str!("../../../examples/dialogue-conditions/src/main.tua"),

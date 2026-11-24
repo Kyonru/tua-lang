@@ -16,6 +16,10 @@
       },
       "patterns": [
         {
+          "name": "entity.name.tag.tdialogue",
+          "match": "\\[id:[A-Za-z_][A-Za-z_0-9.-]*\\]"
+        },
+        {
           "name": "string.quoted.double.tdialogue",
           "begin": "\"",
           "end": "\"",

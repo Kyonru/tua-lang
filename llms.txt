@@ -317,6 +317,13 @@ Options transitionBudget defaults to 256 (range 1..4096). Budget exhaustion prod
 state=faulted and snapshot.issue={code="transition_budget_exceeded",message,nodeId}.
 Faulted players do no automatic work; start/cancel/dispose provide explicit recovery.
 Conditions have a fixed 32-level/256-instruction runtime limit. Gameplay effects remain host-owned.
+Identified timed events: `@event shown 0 pulse [id:arrival.pulse] "soft"` requires
+`@document arrival`; event IDs are document-unique and independent of text IDs.
+These assets emit schema 4; earlier schemas remain supported. Fired records add
+optional eventId, documentId and source={line,column}; legacy records stay unchanged.
+Source coordinates are diagnostic only. Explicit IDs survive text edits/reordering;
+generation/visit remain per-player delivery tokens, not persisted exactly-once guarantees.
+Programmatic events use id and optional source on schema-4 documents with documentId.
 Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
 After an utterance, `@event shown 0.2 event.name "payload"` or
 `@event revealed 0.2 event.name` schedules named data (up to 64 per line).

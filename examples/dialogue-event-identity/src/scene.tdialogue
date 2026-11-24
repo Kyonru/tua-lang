@@ -1,0 +1,7 @@
+@dialogue 1
+@document arrival
+[start]
+// @id arrival.greeting
+: Welcome aboard! (end)
+@event shown 0 portrait.pulse [id:arrival.first-pulse] "soft"
+@event revealed 0.2 portrait.pulse [id:arrival.second-pulse] "bright"

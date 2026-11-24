@@ -22,8 +22,19 @@ type ChoiceView = {
   reason?: string,
   reasonId?: string,
 }
-type Event = { anchor: "shown" | "revealed", delay: number, name: string, payload: string }
+type EventSource = { line: number, column: number }
+type Event = {
+  id?: string,
+  source?: EventSource,
+  anchor: "shown" | "revealed",
+  delay: number,
+  name: string,
+  payload: string,
+}
 type FiredEvent = {
+  eventId?: string,
+  documentId?: string,
+  source?: EventSource,
   name: string,
   payload: string,
   generation: number,

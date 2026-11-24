@@ -1,0 +1,23 @@
+-- Event names may repeat; explicit IDs distinguish authored occurrences.
+local scene = require("scene")
+local player = Dialogue.new(scene)
+player:start()
+local first = player:update(0, false)
+assert(#first == 1)
+assert(first[1].eventId == "arrival.first-pulse")
+assert(first[1].documentId == "arrival")
+local source = first[1].source
+assert(source and source.line == 6 and source.column == 1)
+assert(#player:update(0, true) == 0)
+local second = player:update(0.2, true)
+assert(#second == 1 and second[1].eventId == "arrival.second-pulse")
+assert(second[1].name == first[1].name)
+assert(#player:update(1, true) == 0)
+
+-- A restart is a new delivery, even when the authored event is the same.
+player:start()
+local restarted = player:update(0, false)
+assert(restarted[1].eventId == first[1].eventId)
+assert(restarted[1].generation > first[1].generation)
+player:dispose()
+print("dialogue event identity example passed")

@@ -44,5 +44,7 @@ test("dialogue grammar highlights imports and speakers without highlighting pros
   const condition = grammar.tokenizeLine('@visible not context.hidden and context.coins >= 2 or false', textmate.INITIAL).tokens;
   assert(condition.some((token) => token.scopes.includes("keyword.operator.logical.tdialogue")));
   assert(condition.some((token) => token.scopes.includes("constant.language.tdialogue")));
+  const identified = grammar.tokenizeLine('@event shown 0 pulse [id:arrival.pulse] "soft"', textmate.INITIAL).tokens;
+  assert(identified.some((token) => token.scopes.includes("entity.name.tag.tdialogue")));
   registry.dispose();
 });
