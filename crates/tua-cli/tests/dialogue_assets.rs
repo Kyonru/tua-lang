@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCENE: &str = "@dialogue 1\n[start]\n// @id intro.hello\n: Hello (end)\n";
@@ -17,12 +18,14 @@ assert(player:snapshot().state == "completed")
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let project = Self(std::env::temp_dir().join(format!(
-            "tua-dialogue-assets-{}-{nonce}",
+            "tua-dialogue-assets-{}-{nonce}-{sequence}",
             std::process::id()
         )));
         project.write("tua.toml", "source = \"src\"\nout = \"build\"\n");
