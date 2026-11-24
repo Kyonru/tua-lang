@@ -1079,7 +1079,9 @@ impl<'a> ExportInferer<'a> {
                                 _ => None,
                             })
                             .map(|argument| self.infer_expression(argument));
-                        if let Some(ty) = crate::save::inferred_return(&parts, argument.as_ref()) {
+                        if let Some(ty) =
+                            crate::save::inferred_call_return(&parts, argument.as_ref(), call)
+                        {
                             return ty;
                         }
                     }

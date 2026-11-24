@@ -73,8 +73,10 @@ indices, and an empty array stays distinct from an empty record. The root
 schema must be a record. `Profile:defaults()` returns a fresh deep copy.
 
 A literal schema gives completion and type checking for the snapshot, including
-after importing `Profile` from another file. A computed schema remains valid at
-runtime, but editor types can be less specific.
+after importing `Profile` from another file. Literal `Save.enum({ "ready", "waiting" }, "ready")` lists retain the
+`"ready" | "waiting"` union, including inside arrays and optional fields and across
+module imports. Computed mutable lists remain `string`-valued. A computed schema
+remains valid at runtime, but editor types can be less specific.
 
 ```tua title="src/main.tua"
 local Profile = require("profile")

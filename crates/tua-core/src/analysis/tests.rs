@@ -13702,3 +13702,65 @@ player:restore("wrong")
         assert!(snapshot.hover("src/main.tua", position).is_some());
     }
 }
+
+#[test]
+fn save_enum_literals_survive_imports_and_editor_queries() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/profile.tua
+local function open()
+  return Save.contract({
+    slot = "enum_test",
+    version = 1,
+    schema = Save.record({
+      state = Save.enum({ "ready", "waiting" }, "ready"),
+      optional = Save.optional(Save.enum({ "yes", "no" })),
+      list = Save.array(Save.enum({ "small", "large" }, "small"), {}),
+    }),
+  })
+end
+return { open = open }
+-- file: src/forward.tua
+return require("profile")
+-- file: src/main.tua
+local profile = require("forward").open()
+local saved = profile:defaults()
+local state: "ready" | "waiting" = saved.<|state|>state
+local optional: "yes" | "no" | nil = saved.optional
+local size: "small" | "large" = saved.list[1]
+saved.state = "waiting"
+print(state, optional, size)
+-- file: src/bad.tua
+local profile = require("forward").open()
+local saved = profile:defaults()
+saved.state = "wrong"
+saved.optional = "wrong"
+saved.list[1] = "wrong"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/profile.tua", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 3,
+        "{diagnostics:?}"
+    );
+    let position = fixture.position("state");
+    let hover = snapshot.hover("src/main.tua", position).unwrap();
+    assert!(format!("{hover:?}").contains("waiting"), "{hover:?}");
+    assert!(
+        completion_labels(&snapshot.completion("src/main.tua", position))
+            .contains(&"state".to_owned())
+    );
+}

@@ -15,25 +15,7 @@ local function new(coins: number, backend?: Backend)
     if not saved then return false end
     local checkpoint = saved.checkpoint
     if not checkpoint then return false end
-    local state = checkpoint.state
-    assert(state == "awaiting_advance" or state == "awaiting_choice" or state == "waiting",
-      "invalid checkpoint state")
-    -- Save.enum currently infers string; narrow it at this small typed boundary.
-    player:restore({
-      version = checkpoint.version,
-      documentId = checkpoint.documentId,
-      contentVersion = checkpoint.contentVersion,
-      graph = checkpoint.graph,
-      nodeId = checkpoint.nodeId,
-      state = state,
-      elapsed = checkpoint.elapsed,
-      revealedElapsed = checkpoint.revealedElapsed,
-      revealedAt = checkpoint.revealedAt,
-      suspended = checkpoint.suspended,
-      locale = checkpoint.locale,
-      fired = checkpoint.fired,
-      locals = checkpoint.locals,
-    })
+    player:restore(checkpoint)
     return true
   end
   local function save()

@@ -717,6 +717,39 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
         .map(|(start, end)| SourceSpan::from_range(start, end))
 }
 
+/// Preserve enum literals before ordinary mutable-table inference widens them.
+/// Computed lists stay string-valued; their runtime contents are not statically known.
+pub(crate) fn inferred_call_return(
+    parts: &[String],
+    argument: Option<&Type>,
+    call: &FunctionCall,
+) -> Option<Type> {
+    if parts == ["Save", "enum"] {
+        fn literal_values(expression: &Expression) -> Option<Vec<Type>> {
+            match expression {
+                Expression::Parentheses { expression, .. } => literal_values(expression),
+                Expression::TableConstructor(table) => table
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        let Field::NoKey(value) = field else {
+                            return None;
+                        };
+                        string_value(value).map(Type::string_literal)
+                    })
+                    .collect(),
+                _ => None,
+            }
+        }
+        if let Some(values) = first_argument(call).and_then(literal_values) {
+            if !values.is_empty() {
+                return Some(schema_type(Type::union(values), false));
+            }
+        }
+    }
+    inferred_return(parts, argument)
+}
+
 pub(crate) fn inferred_return(parts: &[String], argument: Option<&Type>) -> Option<Type> {
     if parts.first().map(String::as_str) != Some(MODULE_NAME) || parts.len() != 2 {
         return None;
@@ -795,6 +828,70 @@ pub(crate) fn json_runtime_source() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enum_literals_are_precise_but_computed_and_shadowed_lists_stay_dynamic() {
+        let source = r#"
+local shape = Save.shape(Save.record({ state = Save.enum({ "ready", "waiting" }, "ready") }))
+local value = shape.defaults
+local state: "ready" | "waiting" = value.state
+value.state = "waiting"
+local choices = { "ready", "waiting" }
+choices[1] = "changed"
+local dynamic = Save.shape(Save.record({ state = Save.enum(choices, "waiting") }))
+local text: string = dynamic.defaults.state
+print(state, text)
+"#;
+        let shadowed = crate::check::check_tua_source_with_diagnostics_config(
+            "src/shadowed.tua",
+            r#"
+local Save = { enum = function(values: string[]): number return #values end }
+local count: number = Save.enum({ "ready", "waiting" })
+print(count)
+"#
+            .to_owned(),
+            &Default::default(),
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(
+            shadowed
+                .iter()
+                .all(|d| d.severity != crate::DiagnosticSeverity::Error),
+            "{shadowed:?}"
+        );
+        let valid = crate::check::check_tua_source_with_diagnostics_config(
+            "src/main.tua",
+            source.to_owned(),
+            &crate::config::DiagnosticsConfig {
+                globals: vec!["Save".to_owned()],
+                ..Default::default()
+            },
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(
+            valid
+                .iter()
+                .all(|d| d.severity != crate::DiagnosticSeverity::Error),
+            "{valid:?}"
+        );
+        let diagnostics = crate::check::check_tua_source_with_diagnostics_config(
+            "src/bad.tua",
+            source.replace("value.state = \"waiting\"", "value.state = \"invalid\""),
+            &crate::config::DiagnosticsConfig {
+                globals: vec!["Save".to_owned()],
+                ..Default::default()
+            },
+        )
+        .expect_err("invalid enum member must fail");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.code == Some(crate::DiagnosticCode::TYPE_MISMATCH)),
+            "{diagnostics:?}"
+        );
+    }
 
     #[test]
     fn literal_schema_infers_nested_snapshot_type() {

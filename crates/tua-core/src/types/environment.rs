@@ -5863,7 +5863,9 @@ fn infer_first_function_call_return_types(
     {
         let argument = first_parenthesized_call_argument_after_field(function_call)
             .and_then(|argument| query.type_of(argument));
-        if let Some(ty) = crate::save::inferred_return(&parts, argument.as_ref()) {
+        if let Some(ty) =
+            crate::save::inferred_call_return(&parts, argument.as_ref(), function_call)
+        {
             return vec![ty];
         }
     }

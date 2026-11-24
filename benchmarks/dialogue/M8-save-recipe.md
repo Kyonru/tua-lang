@@ -41,11 +41,10 @@ Compiler: Tua 0.11.0 debug, `aarch64-apple-darwin`, revision
 `2370897c7378af66293bcfbfac08935b4c6a7e29` plus this slice's changes. SHA-256:
 `e165b80efe69e97ee913af37376ae0040de8fd75b06c47e5d05804af6c631ca1`.
 
-## Typed boundary and follow-up
+## Resolved enum typing follow-up
 
-Save enum inference currently exposes a string rather than a literal union.
-The example explicitly checks and narrows the persisted state before constructing
-the typed restore argument; it does not use `any` or weaken runtime validation.
-A minimal follow-up is an imported `Save.contract` with a `Save.enum` field assigned
-to the corresponding literal union: it should retain that union for checking and
-editor assistance. This recipe does not claim that inference gap is fixed.
+Literal `Save.enum` lists now retain their string union through schema composition,
+module exports and editor analysis. The example passes the persisted checkpoint
+directly to typed restore. Computed mutable lists remain string-valued; no runtime
+validation is weakened. Regressions cover imports, optional/array schemas, invalid
+writes, hover/completion and shadowed Save bindings.

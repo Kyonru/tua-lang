@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Preserve literal Save enum unions through nested schemas, imports and editor
+  queries; computed mutable lists keep conservative string types.
+
 - Add an optional typed Save-backed dialogue checkpoint recipe with explicit host
   save/load calls, rebound facts, failure tests and native restart qualification.
 

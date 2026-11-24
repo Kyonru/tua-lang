@@ -1199,7 +1199,7 @@ impl AnalysisSnapshot {
                 .and_then(|argument| {
                     self.project_structured_argument_type(parsed, argument, local_types)
                 });
-            return crate::save::inferred_return(&parts, argument.as_ref())
+            return crate::save::inferred_call_return(&parts, argument.as_ref(), function_call)
                 .filter(|_| return_index == 0);
         }
         if return_index == 0 && self.config_for_path(&parsed.path).i18n.enabled {

@@ -2467,7 +2467,11 @@ impl<'a> Checker<'a> {
                             } else {
                                 let argument = crate::save::first_argument(function_call)
                                     .and_then(|argument| self.infer_expression_return(argument, 0));
-                                crate::save::inferred_return(&parts, argument.as_ref())
+                                crate::save::inferred_call_return(
+                                    &parts,
+                                    argument.as_ref(),
+                                    function_call,
+                                )
                             };
                             if let Some(ty) = inferred {
                                 if parts.get(1).is_some_and(|member| member == "contract") {

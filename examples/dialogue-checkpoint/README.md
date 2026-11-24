@@ -72,10 +72,10 @@ are for explicit defaults construction, not repairs of missing fields. The concr
 key for incompatible semantic changes; author explicit Save migrations if needed.
 The saved locale wins over the newly constructed player's locale.
 
-The small restore adapter explicitly narrows `state`: Save enums currently infer
-`string`, whereas the player requires a literal union. It does not cast to `any`
-or bypass runtime validation. For a plain v1 document, omit `locals` from the Save
-schema and use a plain player; do not pass this v2 envelope to it.
+Literal Save enums retain their string union across imports, so the validated
+record can be passed directly to typed restore. For a plain v1 document, omit
+`locals` from the Save schema and use a plain player; do not pass this v2 envelope
+to it.
 
 Restarting (`player:start()`), loading (`session.load()`), and reading history are
 separate operations. Restart does not delete an existing save. History is never
