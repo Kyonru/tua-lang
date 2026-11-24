@@ -38,9 +38,10 @@ do not make external effects exactly-once.
 Its v2 checkpoint retains typed locals but not facts. Restoring the choice with
 zero coins fails transactionally; updating the fresh player's facts allows retry.
 The host compatibility key must change for incompatible schema semantics even if
-local defaults stay identical. Import shared context definitions and construct
-players in the consumer to retain checkpoint-local inference; additional forwarding
-of already-created players has a known editor-analysis inference limitation.
+local defaults stay identical. Shared definitions and already-created players
+retain concrete types through module forwarding. `exported_player.tua`,
+`forwarded_player.tua` and `forward_demo.tua` exercise a constructed player across
+two module boundaries, including typed checkpoint locals.
 
 ## Persist and resume a conversation
 

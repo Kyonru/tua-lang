@@ -1,0 +1,5 @@
+local context = require("context")
+local scene = require("context_scene")
+
+-- Export a constructed player; its concrete facts/locals remain part of its type.
+return context.new(scene, { coins = 20 }, { checkpointVersion = "harbor-context-v1" })

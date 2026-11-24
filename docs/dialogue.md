@@ -1986,9 +1986,10 @@ assert(resumed:getContext().coins == 20)
 
 The [typed checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue-checkpoint/src/context_demo.tua)
 includes the shared context and authored script. Shared context definitions retain
-checkpoint-local inference through imports and forwarding modules. Construct the
-player where it is consumed: additional forwarding of an already-created player
-currently loses inference in the editor analysis path.
+checkpoint-local inference through imports and forwarding modules. Constructed
+players can also be exported directly, returned by a factory, or exposed as named
+fields and re-exported through Tua or Lua facade modules. Their concrete facts,
+locals and method signatures remain available to checking and editor queries.
 
 Version 2 supports branches, conditional choices and bindings in the document;
 only line/choice/wait positions are checkpoint boundaries. Restore rebuilds the

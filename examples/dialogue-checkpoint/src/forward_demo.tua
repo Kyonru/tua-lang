@@ -1,0 +1,10 @@
+local player = require("forwarded_player")
+player:start()
+player:setLocals({ visits = 4 })
+local checkpoint = player:checkpoint()
+local visits: number = checkpoint.locals.visits
+assert(visits == 4)
+assert(player:getContext().coins == 20)
+player:dispose()
+print("forwarded player retains typed context and checkpoint locals")
+return true

@@ -29,3 +29,5 @@ waiting:dispose()
 print("dialogue checkpoint round trips passed")
 
 assert(require("context_demo"))
+
+assert(require("forward_demo"))

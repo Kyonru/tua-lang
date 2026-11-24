@@ -389,16 +389,53 @@ fn function_return_forwards(
         .collect()
 }
 
-struct ComponentAccessCalls<'a, 'b> {
+fn stable_import_bindings(parsed: &ParsedSource) -> Vec<crate::module_index::RequireBinding> {
+    let mut mutations = ModuleAliasMutations::default();
+    mutations.visit_ast(&parsed.ast);
+    struct Declarations(BTreeMap<String, usize>);
+    impl Visitor for Declarations {
+        fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+            for name in local.names() {
+                *self
+                    .0
+                    .entry(crate::ast_utils::token_text(name))
+                    .or_default() += 1;
+            }
+        }
+    }
+    let mut declarations = Declarations(BTreeMap::new());
+    declarations.visit_ast(&parsed.ast);
+    crate::module_index::require_bindings_for_parsed_source(parsed)
+        .into_iter()
+        .filter(|binding| {
+            !mutations.0.contains(&binding.alias)
+                && declarations.0.get(&binding.alias).copied().unwrap_or(0) <= 1
+                && !parsed
+                    .local_annotations
+                    .iter()
+                    .any(|a| a.name == binding.alias)
+        })
+        .collect()
+}
+
+struct ImportedValueCalls<'a, 'b> {
     semantic: &'a crate::semantic::SemanticModel<'b>,
+    imported: BTreeSet<String>,
     found: bool,
 }
 
-impl Visitor for ComponentAccessCalls<'_, '_> {
+impl Visitor for ImportedValueCalls<'_, '_> {
     fn visit_function_call(&mut self, call: &full_moon::ast::FunctionCall) {
         let Some(parts) = crate::ast_utils::field_chain_before_first_call(call) else {
             return;
         };
+        if parts
+            .first()
+            .is_some_and(|root| self.imported.contains(root))
+        {
+            self.found = true;
+            return;
+        }
         let Some(method) = parts.last() else {
             return;
         };
@@ -417,52 +454,63 @@ impl Visitor for ComponentAccessCalls<'_, '_> {
 
 impl ModuleGraph {
     /// Reuse normal semantic/export inference with indexed imports. File-local
-    /// inference cannot specialize component access whose schema comes from another
-    /// module. No project code or filesystem lookup is needed here.
-    pub(super) fn enrich_component_access_exports(
+    /// inference cannot specialize calls whose receiver comes from another module.
+    /// No project code or filesystem lookup is needed here.
+    pub(super) fn enrich_imported_value_exports(
         &mut self,
         inputs: &[ModuleGraphInput<'_>],
         forwards: &[RuntimeExportForward],
     ) {
         let candidates = inputs
             .iter()
-            .filter(|input| {
-                let (Some(parsed), Some(environment)) = (input.parsed, input.environment) else {
-                    return false;
-                };
-                if crate::module_index::require_bindings_for_parsed_source(parsed).is_empty() {
-                    return false;
+            .filter_map(|input| {
+                let parsed = input.parsed?;
+                let environment = input.environment?;
+                if !matches!(parsed.ast.nodes().last_stmt(), Some(LastStmt::Return(_))) {
+                    return None;
                 }
+                let bindings = stable_import_bindings(parsed);
+                if bindings.is_empty() {
+                    return None;
+                }
+                let imported = bindings
+                    .iter()
+                    .map(|binding| binding.alias.clone())
+                    .collect();
                 let semantic = crate::semantic::SemanticModel::new(parsed, environment);
-                let mut calls = ComponentAccessCalls {
+                let mut calls = ImportedValueCalls {
                     semantic: &semantic,
+                    imported,
                     found: false,
                 };
                 calls.visit_ast(&parsed.ast);
-                calls.found
+                calls.found.then_some((input, bindings))
             })
             .collect::<Vec<_>>();
         for _ in 0..candidates.len().min(64) {
             let mut changed = false;
-            for input in &candidates {
+            for (input, imports) in &candidates {
                 let parsed = input.parsed.expect("filtered above");
                 let mut bindings = Vec::new();
                 let mut required = Vec::new();
-                for binding in crate::module_index::require_bindings_for_parsed_source(parsed) {
+                for binding in imports {
                     let Some(path) = self.resolved_require_path(input.path, &binding.module) else {
                         continue;
                     };
                     let Some(module) = self.module(&path) else {
                         continue;
                     };
+                    if module.exports.is_empty() {
+                        continue;
+                    }
                     let ty = Type::table(module.exports.iter().map(|entry| {
                         (
                             entry.public_name.clone(),
                             crate::TableField::required(entry.field.ty.clone()),
                         )
                     }));
-                    bindings.push((binding.alias, ty.clone()));
-                    required.push((binding.module, ty));
+                    bindings.push((binding.alias.clone(), ty.clone()));
+                    required.push((binding.module.clone(), ty));
                 }
                 let environment = input
                     .environment
@@ -477,14 +525,24 @@ impl ModuleGraph {
                     continue;
                 };
                 for (name, field) in exports.fields {
-                    let Some(mut entry) = self.export(input.path, &name).cloned() else {
-                        continue;
+                    let mut entry = match self.export(input.path, &name).cloned() {
+                        Some(entry) => entry,
+                        None => {
+                            let Some(span) = parsed.ast.nodes().last_stmt().and_then(node_span)
+                            else {
+                                continue;
+                            };
+                            ModuleExportEntry {
+                                module_path: normalize_path(input.path),
+                                public_name: name,
+                                symbol_id: None,
+                                definition_span: span,
+                                export_span: span,
+                                field: field.clone(),
+                                origin: export_origin(input.source_kind, None),
+                            }
+                        }
                     };
-                    // Only function values are specialized here; retain the
-                    // existing provenance for other exported values/classes.
-                    if !matches!(field.ty, Type::Function(_)) {
-                        continue;
-                    }
                     entry.field.ty = field.ty;
                     changed |= self.upsert_provenance_export(entry);
                 }

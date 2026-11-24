@@ -13764,3 +13764,208 @@ saved.list[1] = "wrong"
             .contains(&"state".to_owned())
     );
 }
+
+#[test]
+fn constructed_dialogue_players_keep_types_through_forwarding() {
+    for (returned, expression) in [
+        ("return player", "require(\"players\")"),
+        ("return { player = player }", "require(\"players\").player"),
+        ("return { player = player }", "selected"),
+        (
+            "local function make() return player end\nreturn { make = make }",
+            "require(\"players\").make()",
+        ),
+    ] {
+        for extension in ["tua", "lua"] {
+            let source = r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({ coins = Save.number(0) })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@document test
+@context "forward"
+[hello]
+// @id hello
+: Hi (end)
+-- file: src/session.tua
+local definition = require("forward")
+local player = definition.new(require("scene"), { coins = 10 }, { checkpointVersion = "v1" })
+return player
+-- file: src/players.tua
+return require("session")
+-- file: src/main.tua
+local player = require("players")
+local saved = player:checkpoint()
+local visits: number = saved.locals.<|visits|>visits
+player:restore(saved)
+player:setLocals(<|signature|>{ visits = visits })
+print(visits)
+-- file: src/bad.tua
+local player = require("players")
+local saved = player:checkpoint()
+saved.locals.visits = "wrong"
+player:restore("wrong")
+player:setLocals({ visits = "wrong" })
+"#;
+            let source = if expression == "selected" {
+                source.replace(
+                    "local player = require(\"players\")",
+                    "local players = import(\"./players\")\nlocal player = players.player",
+                )
+            } else {
+                source.replace("require(\"players\")", expression)
+            };
+            let source = source
+                .replace("return player\n-- file:", &format!("{returned}\n-- file:"))
+                .replace("src/players.tua", &format!("src/players.{extension}"));
+            let fixture = Fixture::parse(&source);
+            let mut host = AnalysisHost::new();
+            host.set_source_roots([PathBuf::from("src")]);
+            for file in fixture.files() {
+                host.set_file(&file.path, file.source.clone());
+            }
+            let fast = host.fast_diagnostics("src/main.tua");
+            assert!(
+                !fast
+                    .iter()
+                    .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+                "{fast:?}"
+            );
+            let snapshot = host.snapshot();
+            for path in ["src/session.tua", "src/main.tua"] {
+                let diagnostics = snapshot.pipeline_diagnostics(path);
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            }
+            let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+            assert!(
+                diagnostics
+                    .iter()
+                    .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+                    .count()
+                    >= 3,
+                "{diagnostics:?}"
+            );
+            let position = fixture.position("visits");
+            let hover = snapshot.hover("src/main.tua", position).unwrap();
+            assert!(hover.contents.contains("number"), "{hover:?}");
+            assert!(
+                completion_labels(&snapshot.completion("src/main.tua", position))
+                    .contains(&"visits".to_owned())
+            );
+            let signature = snapshot
+                .signature_help("src/main.tua", fixture.position("signature"))
+                .unwrap();
+            assert!(
+                signature.signatures[0].label.contains("visits: number"),
+                "{signature:?}"
+            );
+            let context = fixture
+                .files()
+                .iter()
+                .find(|file| file.path == Path::new("src/context.tua"))
+                .unwrap();
+            host.set_file(
+                "src/context.tua",
+                context
+                    .source
+                    .replace("visits = Save.number(0)", "visits = Save.string(\"\")"),
+            );
+            let updated = host.snapshot();
+            let hover = updated.hover("src/main.tua", position).unwrap();
+            assert!(hover.contents.contains("string"), "{hover:?}");
+            assert!(updated
+                .pipeline_diagnostics("src/main.tua")
+                .iter()
+                .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+            assert!(snapshot
+                .hover("src/main.tua", position)
+                .unwrap()
+                .contents
+                .contains("number"));
+        }
+    }
+}
+
+#[test]
+fn imported_value_exports_are_generic_and_keep_dynamic_boundaries() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/factory.tua
+local function new(): { count: number }
+  return { count = 0 }
+end
+return { new = new }
+-- file: src/value.lua
+local factory = require("factory")
+local value = factory.new()
+return { value = value }
+-- file: src/facade.tua
+return require("value")
+-- file: src/unknown.tua
+local function new(): any
+  return {}
+end
+return { new = new }
+-- file: src/dynamic.tua
+local factory = require("unknown")
+return factory.new()
+-- file: src/mutated.tua
+local factory = require("factory")
+local other: any = {}
+factory = other
+return factory.new()
+-- file: src/annotated.tua
+local factory: any = require("factory")
+return factory.new()
+-- file: src/shadowed.tua
+local factory = require("factory")
+local factory: any = {}
+return factory.new()
+-- file: src/a.tua
+local b = require("b")
+local function new()
+  return b.new()
+end
+return { new = new }
+-- file: src/b.tua
+local a = require("a")
+local function new()
+  return a.new()
+end
+return { new = new }
+-- file: src/main.tua
+local value = require("facade")
+value.value.count = "wrong"
+-- file: src/permissive.tua
+local dynamic = require("dynamic")
+local mutated = require("mutated")
+local a = require("a")
+local annotated = require("annotated")
+local shadowed = require("shadowed")
+local count: number = dynamic.unknown
+local other: string = mutated.count
+local cycle: boolean = a.new()
+local explicit: string = annotated.count
+local hidden: string = shadowed.count
+print(count, other, cycle, explicit, hidden)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+    let diagnostics = snapshot.pipeline_diagnostics("src/permissive.tua");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}

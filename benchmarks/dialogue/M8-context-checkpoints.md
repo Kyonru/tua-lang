@@ -29,8 +29,8 @@ interrupted while refining the editor fixture; this result is from the fresh fin
 - Version-2 data round-trips through Save's real JSON/schema pipeline with an
   in-memory test backend (test checksum, not production SHA-256).
 - Imported and forwarded context definitions preserve concrete checkpoint-local
-  types, hover/completion and invalid-write diagnostics. See the distinct player
-  forwarding limitation below.
+  types, hover/completion and invalid-write diagnostics. The subsequent player
+  forwarding fix is described below.
 - The maintained authored example checks/builds and runs on standalone Lua 5.4.8.
   LÖVE 11.5 / LuaJIT 2.1.1700008891 passes the checkpoint fixture families and
   authored example with JIT enabled and disabled. No standalone Lua 5.1/LuaJIT
@@ -46,14 +46,15 @@ Native compiler provenance: Tua 0.11.0, debug, `aarch64-apple-darwin`, revision
 `7d1f7890ac66a94f1f6a7938b9827d6f417fb47d` plus this slice's working changes. Executable SHA-256:
 `021f14e5048f033b896cf28ffc9dc410284bf7189349beb5443b448487095c08`.
 
-## Constructed-player forwarding follow-up
+## Resolved constructed-player forwarding follow-up
 
-On Tua 0.11.0 plus this slice, the permanent regression verifies imported/forwarded
-context definitions, concrete checkpoint locals, hover/completion and rejected
-invalid writes. Additional forwarding of an already-constructed player loses
-inference in AnalysisHost. The example constructs players in the consuming module;
-no `any` widening is added. An isolated CLI check with one direct player import
-correctly rejected a wrong `setLocals` value, so this is not a universal import bug.
+The original slice reproduced a loss of AnalysisHost inference after forwarding an
+already-constructed player. The follow-up now resolves imported constructor results
+through the existing shared module-graph export inference. Direct returns, named
+fields, factories and Tua/Lua facades preserve concrete facts, locals and signatures.
+Checking, hover, completion, signature help and dependency-edit invalidation have
+permanent regressions. Reassigned/shadowed/explicitly annotated imports are excluded
+from enrichment; `any` and unresolved cycles remain permissive.
 
 Editor-analysis reproduction matching the regression fixture:
 
@@ -91,7 +92,10 @@ The authored `scene.tdialogue` is:
 : Hello (end)
 ```
 
-Expected: type mismatches. Observed in AnalysisHost: invalid writes/arguments were
-accepted. An inline-document variant also reproduced the failure. A follow-up should
-compare CLI/editor module inference and cover direct/named returns and extra forwarding
-for existing methods and checkpoints. No constructed-player forwarding fix is claimed.
+Before the fix, AnalysisHost accepted these invalid writes/arguments. The regression
+now requires type mismatches, and the runnable checkpoint example plus CLI tests
+exercise the emitted player and reject invalid imported method arguments. Runtime
+dialogue semantics are unchanged.
+
+See the [typing follow-up qualification](M8-typing-followups.md) for the final
+regression matrix and rebuilt compiler provenance.

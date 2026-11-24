@@ -2,6 +2,7 @@ function love.load()
   local ok, issue = pcall(function()
     if os.getenv("TUA_CHECKPOINT_JIT") == "off" then jit.off() else jit.on() end
     print(_VERSION, jit.version, "JIT", jit.status())
+    assert(require("forward_demo"))
     local session = require("saved_session").new(20)
     local phase = os.getenv("TUA_CHECKPOINT_PHASE")
     if phase == "line" then

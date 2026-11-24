@@ -291,4 +291,25 @@ fn saved_dialogue_checkpoints_validate_and_rebind_context() {
     } else {
         eprintln!("SKIP checkpoint persistence runtime: no Lua interpreter");
     }
+    fs::write(
+        temp.path().join("src/invalid_forward.tua"),
+        r#"
+local player = require("forwarded_player")
+player:checkpoint().locals.visits = "wrong"
+player:setLocals({ visits = "wrong" })
+player:restore("wrong")
+"#,
+    )
+    .unwrap();
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    let diagnostics = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "invalid forwarded player types accepted"
+    );
+    assert!(diagnostics.matches("TL1003").count() >= 3, "{diagnostics}");
 }

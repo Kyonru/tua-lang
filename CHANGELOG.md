@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Preserve constructed dialogue player types through module re-exports, named fields
+  and factories in shared editor analysis, including dependency-edit refreshes.
+
 - Preserve literal Save enum unions through nested schemas, imports and editor
   queries; computed mutable lists keep conservative string types.
 

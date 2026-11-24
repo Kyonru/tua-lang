@@ -48,3 +48,6 @@ module exports and editor analysis. The example passes the persisted checkpoint
 directly to typed restore. Computed mutable lists remain string-valued; no runtime
 validation is weakened. Regressions cover imports, optional/array schemas, invalid
 writes, hover/completion and shadowed Save bindings.
+
+See the [typing follow-up qualification](M8-typing-followups.md) for the combined
+compiler/editor regression coverage and rebuilt compiler provenance.
