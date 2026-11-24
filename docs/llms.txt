@@ -283,8 +283,8 @@ args = {name = "Ada", count = 2}})` uses existing configured catalogs and source
 It reuses dialogue catalog/placeholder validation, requires finite count for plurals,
 and does not change global locale. Source fallback has no locale/variant. Non-count
 args need not be supplied until expansion. This record-returning selector is not a
-replacement for the string-returning `resolve` callback; `resolveTemplate` and rich
-markup integration remain pending.
+replacement for the string-returning `resolve` callback. Use it as `resolveTemplate`
+for schema-8 rich fields; plain fields/names continue to use `resolve`.
 Line text IDs and reply IDs are catalog keys; optional character `nameKey` localizes its name.
 `player:setLocale("en")` refreshes presentation without changing visit/generation or replaying events.
 Renderers honor `presentationRevision` and `revealComplete` (show refreshed lines fully).
@@ -388,3 +388,12 @@ sequence and dialogue generation/visit/presentationRevision reject stale playbac
 Completed locale/context refresh and reduced motion reveal silently. No audio, automatic
 advancement, word segmentation, shaping, bidi layout, markup or checkpoints are implied.
 Styled spans and authored pause/speed syntax remain pending M6; audio profiles remain M7.
+
+Rich dialogue runtime: schema 8 typed line records may include `richText` (raw template)
+alongside an exactly matching mark-free `text` fallback template. Choices accept richText;
+disabled reasons accept richReason. Tags: em, style=identifier, speed=decimal,
+pause=decimal, pronounce="hint"; strict nesting, no code execution, literal args.
+`node.presentation` exposes final text, grapheme-indexed runs, boundary pauses,
+UTF-8 origin ranges, optional resolvedLocale/variant. Dialogue.reveal consumes runs/pauses;
+finish and reducedMotion skip pauses without speech bursts. Template/refresh failures
+are atomic. @text rich authoring/editor support remains pending; use typed documents.

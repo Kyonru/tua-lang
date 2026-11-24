@@ -1,11 +1,10 @@
 # M6 styled-text contract
 
 Status: implementation in progress on `feature/tdialogue-rich-text`.
-The shared Rust template parser is implemented and tested; the authoring directive,
-document emission, runtime presentation and editor integration remain pending.
-The `I18n.dialogueTemplate` selector is implemented; rich syntax and the player
-`resolveTemplate` option remain unavailable.
-The shipped `Dialogue.reveal` remains unchanged.
+The shared Rust parser and schema-8 Lua runtime are implemented. Typed documents
+support `richText`, `richReason`, `resolveTemplate`, owned presentations and reveal
+timing. `.tdialogue` authoring/emission and editor integration remain pending.
+
 This contract is based on revision `057b0314` and completes the remaining M6
 **design** decisions, not their implementation or acceptance tests.
 
@@ -69,11 +68,17 @@ catalog authors therefore double backslashes in ordinary Lua quoted strings.
 
 ## Renderer-neutral data
 
-Emit a bounded token sequence for authored text, retaining token source ranges:
-text, placeholder, open mark, close mark, pause. The generated document stores
-this representation and the plain fallback template. Programmatic rich documents
-must provide the same validated representation; do not maintain a second markup
-syntax inside runtime construction. Rich parsing is also available internally
+Implementation adjustment: schema-8 typed documents carry raw `richText` (or
+`richReason`) beside an exact mark-free fallback template. The runtime compiles and
+owns a bounded token sequence once at construction. This keeps untrusted serialized
+IR out of the public document contract and uses the same validation for authored
+and dynamically selected templates. Future `.tdialogue` emission will produce this
+representation; compiler token/source facts remain available for tooling.
+
+The internal bounded token sequence retains token source ranges:
+text, placeholder, open mark, close mark, pause. The document stores the raw template and its plain fallback. Programmatic rich
+documents use this same contract. Rust/Lua parser parity fixtures constrain the two
+implementations; neither interprets general dialogue commands inside text. Rich parsing is also available internally
 for dynamic catalog templates, with identical grammar and fixture expectations.
 
 Resolve a presentation to an owned record exposed as optional `node.presentation`

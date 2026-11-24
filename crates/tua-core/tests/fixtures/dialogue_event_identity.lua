@@ -38,9 +38,11 @@ assert(batch[1].payload == "two" and batch[2].payload == "one")
 assert(batch[2].documentId == "arrival" and batch[2].source.line == 8)
 assert(batch[1].name == "pulse" and batch[2].name == "pulse")
 local event = revised.nodes.start.events[1]
-for _, version in ipairs({ 1, 2, 3, 8 }) do
+revised.schemaVersion = 8
+assert(Dialogue.new(revised), "schema 8 preserves event identity")
+for _, version in ipairs({ 1, 2, 3, Dialogue.schemaVersion + 1 }) do
   revised.schemaVersion = version
-  assert(not pcall(Dialogue.new, revised), "identity requires supported schema 4")
+  assert(not pcall(Dialogue.new, revised), "identity requires supported schema 4 or later")
 end
 revised.schemaVersion = nil
 assert(not pcall(Dialogue.new, revised))

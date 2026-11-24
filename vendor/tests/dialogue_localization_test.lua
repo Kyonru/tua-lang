@@ -134,3 +134,26 @@ for _, resolve in ipairs({ I18n.dialogue, I18n.dialogueTemplate }) do
 end
 assert(I18n.getLocale() == "en")
 print("unexpanded dialogue templates passed")
+
+-- The template selector feeds rich player presentations without interpolating first.
+smiti.set("fr.rich", "[style=warning]%{name}[/style][pause=0.5]")
+local richPlayer = Dialogue.new({
+  schemaVersion = 8,
+  entry = "s",
+  nodes = {
+    s = {
+      kind = "line",
+      textId = "rich",
+      text = "%{name}",
+      richText = "[em]%{name}[/em]",
+      next = "e",
+    },
+    e = { kind = "end" },
+  },
+}, { locale = "fr-CA", args = { name = "[pause=60]" }, resolveTemplate = I18n.dialogueTemplate })
+richPlayer:start()
+local richNode = richPlayer:snapshot().node
+assert(richNode.text == "[pause=60]" and richNode.presentation.resolvedLocale == "fr")
+assert(#richNode.presentation.pauses == 1 and richNode.presentation.pauses[1].seconds == 0.5)
+assert(richNode.presentation.runs[1].styles[1] == "warning")
+richPlayer:dispose()

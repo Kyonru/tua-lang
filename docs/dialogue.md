@@ -247,10 +247,99 @@ ligature forms. The host owns font coverage, fallback fonts, line breaking, shap
 logical/visual order and bidirectional interaction. Unicode acceptance alone does
 not establish correct multilingual rendering.
 
-This reveal API does not change serialized dialogue schema 7. Custom replacement
-runtimes must implement `Dialogue.reveal` to use it. Styled markup, pronunciation
-hints and source-to-localized style-span mappings remain pending M6 work; translated
+Plain reveal remains compatible with serialized dialogue schema 7. Custom replacement
+runtimes must implement `Dialogue.reveal` to use it. Rich presentations require
+schema 8 as described below; translated
 and substituted text is not reinterpreted as markup by this controller.
+
+## Rich presentations and timing
+
+Schema-8 typed documents support renderer-neutral rich text. The
+[runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-rich)
+shows the complete flow. The `.tdialogue` `@text rich` directive and its editor
+support remain pending; author rich documents as typed data for now.
+
+```tua
+local player = Dialogue.new({
+  schemaVersion = 8,
+  entry = "hello",
+  nodes = {
+    hello = {
+      kind = "line",
+      textId = "hello",
+      text = "Hello %{name}!",
+      richText = "[em]Hello %{name}[/em][pause=0.25][speed=15]![/speed]",
+      next = "done",
+    },
+    done = { kind = "end" },
+  },
+}, { args = { name = "Ada" } })
+player:start()
+local reveal = Dialogue.reveal({ rate = 30 })
+reveal:present(player:snapshot())
+local view = reveal:update(0.1)
+player:update(0.1, view.complete)
+```
+
+`text` is the matching mark-free **template**, with named placeholders preserved
+and literal percent characters encoded as `%%`. `richText` is parsed and owned at
+construction, before any session runs. Mismatched fallbacks are rejected. Choice
+options accept `richText`; disabled reasons accept `richReason` with matching
+`reason`/`reasonId`. Character display names remain plain.
+
+| Mark | Meaning |
+| --- | --- |
+| `[em]text[/em]` | Semantic emphasis |
+| `[style=warning]text[/style]` | Host-defined style key; ASCII identifier, at most 64 bytes |
+| `[speed=15]text[/speed]` | Scoped rate in graphemes/second, greater than zero and at most 1,000 |
+| `[pause=0.25]` | Pause at this boundary, from zero through 60 seconds |
+| `[pronounce="hint"]text[/pronounce]` | Opaque speech hint; host audio behavior is optional |
+
+Marks nest strictly; unknown/mismatched marks and empty paired regions fail.
+Pronunciation marks cannot nest. Timing marks are line-only. Numbers use ordinary
+unsigned decimals (`15` or `0.25`), without exponents. Escaped brackets are literal:
+a Tua string `"\\[em\\]"` displays `[em]`. Placeholder values are inserted after
+parsing and are never interpreted as marks, actions or other placeholders.
+
+With configured catalogs, pass `locale = "fr"` and
+`resolveTemplate = I18n.dialogueTemplate`. A custom callback has the same signature
+and returns `{template, locale?, variant?}`. Rich fields use this callback while
+plain fields/names use `resolve`, if supplied. A legacy `resolve` alone receives
+the stripped template and returns literal final text with no rich presentation.
+Without a resolver, rich fields expand their authored template using owned args or
+context bindings. Failed resolution/validation leaves the previous player state,
+locale and presentation intact. Callbacks cannot mutate the same player.
+
+The owned `node.presentation` contains:
+
+- `text`: final plain text, equal to `node.text`.
+- `runs`: ordered inclusive `firstCluster`/`lastCluster` ranges with `emphasis`,
+  `styles`, optional `rate` and optional `pronunciation`.
+- `pauses`: ordered `afterCluster`/`seconds` pairs, including leading boundary 0.
+- `origins`: final inclusive UTF-8 `startByte`/`endByte`, selected-template
+  `templateStartByte`/`templateEndByte`, and optional placeholder `argument`.
+- Optional actual `resolvedLocale` and plural `variant`.
+
+Choice labels use `option.presentation`; disabled reasons use
+`option.reasonPresentation`. Empty substitutions have `endByte = startByte - 1`.
+Source mappings identify bytes in the selected template, not positions in the
+original-language prose. They do not invent source filenames for dynamic callbacks.
+Runs index logical graphemes, not visual glyphs. Marks cannot divide a final
+combined grapheme, including across substitutions. Renderer/layout shaping and
+bidirectional ordering remain host responsibilities.
+
+Pass the snapshot to `Dialogue.reveal` normally. Leading pauses delay the first
+cluster; trailing pauses keep `complete` false after all text is visible. Remaining
+time carries across pauses and rate changes in the same update. `finish()` and
+reduced motion skip pauses silently; after manual finish immediately call
+`player:update(0, true)`. Locale/context refreshes that force complete text also skip
+pauses. Speech cues remain coalesced to at most one per update. New timing requires
+a new presentation identity; invalid reveal input preserves the previous view.
+
+Limits per field: 65,536 UTF-8 template/resolved bytes, 4,096 tokens, 16 nested
+marks, 256 pauses and 120 seconds of total pauses. Pronunciation hints are at most
+256 bytes. Plain renderers may ignore all styles and draw `node.text`; no fonts,
+images, shaders or audio resources are loaded by the dialogue runtime.
 
 ## Share characters and portraits { #share-characters-between-scripts }
 
@@ -1009,8 +1098,8 @@ form is used. Calls do not change the global locale or expose mutable catalog da
 
 Use `I18n.dialogue` with `Dialogue.new(..., { resolve = ... })`: that callback must
 return a final string. `dialogueTemplate` returns a record and is **not** a drop-in
-resolver. Rich-text parsing, the planned `resolveTemplate` player option and
-styled rendering are not enabled yet. This selector does not validate markup.
+resolver. Use it as `resolveTemplate` for rich schema-8 fields instead. This selector
+does not validate markup itself; the dialogue player validates the selected template.
 
 ### 4. Refresh presentation without replaying events
 

@@ -1,5 +1,6 @@
 -- Optional presentation controller. No game flow, rendering, clocks, or audio IO.
 local Graphemes = require("tuadialogue_graphemes")
+local Timing = require("tuadialogue_timing")
 local Reveal = {}
 local Player = {}
 Player.__index = Player
@@ -69,6 +70,7 @@ function Player:clear()
   self.generation, self.visit, self.revision = nil, nil, nil
   self.text, self.units, self.visible = "", {}, 0
   self.credit, self.sinceCue, self.complete = 0, 0, true
+  self.schedule, self.elapsed = nil, 0
 end
 
 function Player:present(snapshot)
@@ -96,15 +98,22 @@ function Player:present(snapshot)
   local same = self.generation == snapshot.generation and self.visit == snapshot.visit and self.revision == snapshot.presentationRevision
   if same then
     assert(self.text == node.text, "changed text needs a new presentation identity")
+    assert(
+      Timing.same(self.schedule and self.schedule.saved, node.presentation),
+      "changed timing needs a new presentation identity"
+    )
     if snapshot.revealComplete and not self.complete then self:finish() end
     return false
   end
   -- Segment before committing, so malformed UTF-8 does not destroy a valid view.
   local units = Graphemes.segment(node.text)
+  local schedule = Timing.compile(node.presentation, node.text, units, self.rate)
   invalidate(self)
   self.generation, self.visit, self.revision = snapshot.generation, snapshot.visit, snapshot.presentationRevision
   self.text, self.units, self.visible = node.text, units, 0
+  self.schedule, self.elapsed = schedule, 0
   self.credit, self.sinceCue, self.complete = 0, self.interval, #units == 0
+  if schedule then self.complete = schedule.duration == 0 end
   if snapshot.revealComplete or self.reducedMotion then self:finish() end
   return true
 end
@@ -139,17 +148,23 @@ function Player:update(dt)
   assert(finite(dt) and dt >= 0, "reveal dt must be finite and nonnegative")
   if self.complete then return self:snapshot() end
   local before = self.visible
-  -- Bound credit before multiplying; huge finite dt cannot overflow.
-  local remaining = #self.units - self.visible
-  if dt >= (remaining - self.credit) / self.rate then
-    self.visible, self.credit = #self.units, 0
+  if self.schedule then
+    self.elapsed = math.min(self.schedule.duration, 1.7976931348623157e308, self.elapsed + dt)
+    self.visible = Timing.visible(self.schedule, self.elapsed)
+    self.complete = self.elapsed >= self.schedule.duration
   else
-    self.credit = math.min(remaining, self.credit + dt * self.rate)
-    local count = math.floor(self.credit)
-    self.credit = self.credit - count
-    self.visible = math.min(#self.units, self.visible + count)
+    -- Bound credit before multiplying; huge finite dt cannot overflow.
+    local remaining = #self.units - self.visible
+    if dt >= (remaining - self.credit) / self.rate then
+      self.visible, self.credit = #self.units, 0
+    else
+      self.credit = math.min(remaining, self.credit + dt * self.rate)
+      local count = math.floor(self.credit)
+      self.credit = self.credit - count
+      self.visible = math.min(#self.units, self.visible + count)
+    end
+    self.complete = self.visible == #self.units
   end
-  self.complete = self.visible == #self.units
   self.sinceCue = math.min(60, self.sinceCue + math.min(dt, 60))
   local result = self:snapshot()
   if self.speech and self.sinceCue >= self.interval then

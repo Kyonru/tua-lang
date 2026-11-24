@@ -1,3 +1,26 @@
+type RichRun = {
+  firstCluster: number,
+  lastCluster: number,
+  emphasis: boolean,
+  styles: string[],
+  rate?: number,
+  pronunciation?: string,
+}
+type RichOrigin = {
+  startByte: number,
+  endByte: number,
+  templateStartByte: number,
+  templateEndByte: number,
+  argument?: string,
+}
+type RichPresentation = {
+  text: string,
+  runs: RichRun[],
+  pauses: { afterCluster: number, seconds: number }[],
+  origins: RichOrigin[],
+  resolvedLocale?: string,
+  variant?: string,
+}
 -- Compiler-visible declaration; runtime implementation lives in tuadialogue.lua.
 type Instruction = {
   op: "value" | "nil" | "path" | "not" | "and" | "or" | "==" | "!=" | "~=" | "<" | "<=" | ">" | ">=",
@@ -6,6 +29,8 @@ type Instruction = {
 }
 type Condition = Instruction[]
 type Option = {
+  richText?: string,
+  richReason?: string,
   id: string,
   text: string,
   target: string,
@@ -15,6 +40,8 @@ type Option = {
   reasonId?: string,
 }
 type ChoiceView = {
+  presentation?: RichPresentation,
+  reasonPresentation?: RichPresentation,
   id: string,
   text: string,
   target: string,
@@ -65,6 +92,7 @@ type ActionNode = {
 }
 type Expression = { portrait: string, animation?: string }
 type Node = {
+  richText?: string,
   kind: "line",
   text: string,
   textId?: string,
@@ -95,13 +123,22 @@ type Document = {
 }
 type Arguments = { [string]: string | number | boolean }
 type Resolver = (key: string, source: string, args: Arguments, locale: string) -> string
+type TemplateResult = { template: string, locale?: string, variant?: string }
+type TemplateResolver = (
+  key: string,
+  source: string,
+  args: Arguments,
+  locale: string
+) -> TemplateResult
 type Options = {
   transitionBudget?: number,
   locale?: string,
   args?: Arguments,
   resolve?: Resolver,
+  resolveTemplate?: TemplateResolver,
 }
 type PresentationNode = {
+  presentation?: RichPresentation,
   kind: "line" | "choice" | "end",
   text: string,
   textId?: string,
@@ -142,7 +179,7 @@ type Snapshot = {
   node?: PresentationNode,
 }
 -- The adapter consumes presentation fields only; event payloads stay generic.
-type RevealNode = { kind: string, text: string }
+type RevealNode = { kind: string, text: string, presentation?: RichPresentation }
 type RevealInput = {
   generation: number,
   visit: number,

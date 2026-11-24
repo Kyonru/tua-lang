@@ -13200,3 +13200,60 @@ select("hello", "text", {}, 3)
         .hover("src/main.tua", fixture.position("field"))
         .is_some());
 }
+
+#[test]
+fn rich_dialogue_presentations_are_typed_across_modules() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/player.tua
+return Dialogue.new({schemaVersion = 8, entry = "s", nodes = {
+  s = {kind = "line", text = "Hi", richText = "[em]Hi[/em]", next = "e"},
+  e = {kind = "end"},
+}})
+-- file: src/main.tua
+local player = require("player")
+local snapshot = player:snapshot()
+Dialogue.reveal():present(snapshot)
+local node = snapshot.node
+if node then
+  local presentation = node.presentation
+  if presentation then
+    for _, run in ipairs(presentation.runs) do
+      print(run.<|field|>firstCluster)
+      local wrong: string = run.firstCluster
+    end
+  end
+end
+Dialogue.new({entry = "s", nodes = {s = {kind = "end"}}}, {
+  resolveTemplate = function(key, source, args, locale) return "wrong" end,
+})
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2,
+        "{diagnostics:?}"
+    );
+    let labels = completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+    for name in [
+        "firstCluster",
+        "lastCluster",
+        "rate",
+        "styles",
+        "pronunciation",
+    ] {
+        assert!(labels.contains(&name.to_owned()), "{labels:?}");
+    }
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("field"))
+        .is_some());
+}

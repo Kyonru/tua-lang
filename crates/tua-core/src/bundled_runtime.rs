@@ -65,10 +65,24 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: false,
     },
     BundledRuntime {
+        module: "tuadialogue_rich",
+        file_name: "tuadialogue_rich.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_rich.lua"),
+        dependencies: &["tuadialogue_graphemes", "tuadialogue_text"],
+        explicit_import: false,
+    },
+    BundledRuntime {
+        module: "tuadialogue_timing",
+        file_name: "tuadialogue_timing.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_timing.lua"),
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "tuadialogue_reveal",
         file_name: "tuadialogue_reveal.lua",
         source: || include_str!("../../../vendor/runtime/tuadialogue_reveal.lua"),
-        dependencies: &["tuadialogue_graphemes"],
+        dependencies: &["tuadialogue_graphemes", "tuadialogue_timing"],
         explicit_import: false,
     },
     BundledRuntime {
@@ -81,6 +95,7 @@ pub const RUNTIMES: &[BundledRuntime] = &[
             "tuadialogue_conditions",
             "tuadialogue_actions",
             "tuadialogue_reveal",
+            "tuadialogue_rich",
         ],
         explicit_import: true,
     },

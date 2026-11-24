@@ -1,0 +1,20 @@
+-- Schema 8 is currently authored as typed data; @text rich is not enabled yet.
+type Line = { kind: "line", textId: string, text: string, richText: string, next: string }
+type End = { kind: "end" }
+type Scene = { schemaVersion: number, entry: string, nodes: { [string]: Line | End } }
+local scene: Scene = {
+  schemaVersion = 8,
+  entry = "greeting",
+  nodes = {
+    greeting = {
+      kind = "line",
+      textId = "greeting",
+      text = "Hi %{name}!",
+      richText = "[pause=0.5][em]Hi %{name}[/em][speed=2]![/speed][pause=0.5]",
+      next = "done",
+    },
+    done = { kind = "end" },
+  },
+}
+
+return scene

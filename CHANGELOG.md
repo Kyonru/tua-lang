@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Connect schema-8 rich dialogue templates to owned localized presentation runs,
+  literal placeholders, source ranges, and reveal pauses/rates. Typed document
+  authoring is supported; `.tdialogue` rich syntax remains pending.
+
 - Add typed `I18n.dialogueTemplate` to select unexpanded dialogue templates with
   actual locale/plural metadata, preserving the existing string resolver behavior.
 

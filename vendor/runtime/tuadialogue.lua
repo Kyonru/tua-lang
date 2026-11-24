@@ -1,5 +1,10 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 7 }
+local Dialogue = { schemaVersion = 8 }
+local Rich
+local function rich()
+  if not Rich then Rich = require("tuadialogue_rich") end
+  return Rich
+end
 local Conditions
 local function conditions()
   if not Conditions then Conditions = require("tuadialogue_conditions") end
@@ -61,7 +66,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     local payload
     if event.kind ~= nil then
       assert(
-        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7) and event.kind == event.name,
+        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8) and event.kind == event.name,
         "invalid typed event kind"
       )
       assert(event.id ~= nil, "typed events require an explicit ID")
@@ -79,7 +84,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     end
     if event.id ~= nil or event.source ~= nil then
       assert(
-        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7,
+        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8,
         "event identity requires schema version 4 or later"
       )
       assert(
@@ -129,6 +134,7 @@ local nodeFields = {
     kind = true,
     text = true,
     textId = true,
+    richText = true,
     speaker = true,
     speakerKey = true,
     portrait = true,
@@ -153,6 +159,8 @@ local eventFields = {
   source = true,
 }
 local optionFields = {
+  richText = true,
+  richReason = true,
   id = true,
   text = true,
   target = true,
@@ -164,6 +172,7 @@ local optionFields = {
 local playerOptions = {
   locale = true,
   resolve = true,
+  resolveTemplate = true,
   args = true,
   transitionBudget = true,
   handlers = true,
@@ -179,12 +188,20 @@ local function optionalId(value)
   return value == nil or (type(value) == "string" and value ~= "")
 end
 
+local function compiledRich(template, fallback, version, timing)
+  if template == nil then return nil end
+  assert(version == 8, "rich text requires schema version 8")
+  local compiled = rich().parse(template, timing)
+  assert(compiled.plain == fallback, "rich text fallback must match the stripped template")
+  return compiled
+end
+
 -- Validate and own the document before any session can execute it.
 local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -194,7 +211,7 @@ local function document(value)
   local validators
   if value.events ~= nil then
     assert(
-      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7,
+      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
       "event contracts require schema version 5 or later"
     )
     validators = eventDefinitions[value.events]
@@ -202,7 +219,7 @@ local function document(value)
   end
   if value.actions ~= nil then
     assert(
-      value.schemaVersion == 6 or value.schemaVersion == 7,
+      value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
       "action contracts require schema version 6 or later"
     )
     assert(actions().valid(value.actions), "document needs a Dialogue.actions definition")
@@ -224,10 +241,11 @@ local function document(value)
       assert(node.portrait == nil or type(node.portrait) == "string", "invalid portrait")
       assert(node.hold == nil or seconds(node.hold), "invalid hold duration")
       assert(node.fade == nil or seconds(node.fade), "invalid fade duration")
+      owned._rich = compiledRich(node.richText, node.text, value.schemaVersion, true)
       owned.text, owned.speaker, owned.next = node.text, node.speaker, node.next
       owned.portrait, owned.hold, owned.fade = node.portrait, node.hold, node.fade
       if node.expression ~= nil or node.expressions ~= nil then
-        assert(value.schemaVersion == 7, "expressions require schema version 7")
+        assert((value.schemaVersion or 0) >= 7, "expressions require schema version 7 or later")
         assert(
           type(node.expression) == "string" and node.expression ~= "",
           "expression needs a name"
@@ -269,7 +287,7 @@ local function document(value)
       end
     elseif node.kind == "action" then
       assert(
-        value.schemaVersion == 6 or value.schemaVersion == 7,
+        value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
         "actions require schema version 6 or later"
       )
       assert(
@@ -319,6 +337,13 @@ local function document(value)
         seen[option.id] = true
         owned.options[index] = { id = option.id, text = option.text, target = option.target }
         local target = owned.options[index]
+        target._rich = compiledRich(option.richText, option.text, value.schemaVersion, false)
+        target._richReason = compiledRich(
+          option.richReason,
+          option.reason,
+          value.schemaVersion,
+          false
+        )
         if option.visible ~= nil
           or option.enabled ~= nil
           or option.reason ~= nil
@@ -392,6 +417,14 @@ local function newPlayer(source, options)
   assert(optionalId(options.locale), "invalid dialogue locale")
   assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
   assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
+  assert(
+    options.resolveTemplate == nil or type(options.resolveTemplate) == "function",
+    "invalid template resolver"
+  )
+  assert(
+    not options.resolveTemplate or options.locale,
+    "template resolver needs an explicit locale"
+  )
   local budget = options.transitionBudget
   if budget == nil then budget = 256 end
   assert(
@@ -413,6 +446,7 @@ local function newPlayer(source, options)
     visit = 0,
     locale = options.locale,
     resolve = options.resolve,
+    resolveTemplate = options.resolveTemplate,
     args = arguments(options.args == nil and {} or options.args),
     presentationRevision = 0,
     revealComplete = false,
@@ -500,37 +534,53 @@ local function presentation(self, id, locale, facts, locals)
       local visible, enabled = available(option, facts or self.facts, locals or self.locals)
       if visible then
         option.visibleCondition, option.enabledCondition, option.enabled = nil, nil, enabled
-        if enabled then option.reason, option.reasonId = nil, nil end
+        if enabled then option.reason, option.reasonId, option._richReason = nil, nil, nil end
         options[#options + 1] = option
       end
     end
     node.options = options
   end
-  if self.resolve then
-    local function translate(key, source)
-      self.resolving = true
-      local ok, value = pcall(self.resolve, key, source, copy(args), locale)
-      self.resolving = false
-      if not ok then error(value, 0) end
+  local function invoke(callback, key, source)
+    self.resolving = true
+    local ok, value = pcall(callback, key, source, copy(args), locale)
+    self.resolving = false
+    if not ok then error(value, 0) end
+    return value
+  end
+  local function resolveField(compiled, text, key)
+    if compiled and (self.resolveTemplate or not self.resolve or not key) then
+      local selected
+      if self.resolveTemplate and key then
+        selected = invoke(self.resolveTemplate, key, compiled.source)
+        assert(type(selected) == "table", "template resolver must return a template record")
+      end
+      local view = rich().resolve(compiled, args, selected)
+      return view.text, view
+    end
+    if self.resolve and key then
+      local value = invoke(self.resolve, key, text)
       assert(type(value) == "string", "dialogue resolver must return text")
       return value
     end
-    if node.textId then node.text = translate(node.textId, node.text) end
-    if node.speakerKey then node.speaker = translate(node.speakerKey, node.speaker or "") end
-    for _, option in ipairs(node.options) do
-      option.text = translate(option.id, option.text)
-      if option.reasonId then option.reason = translate(option.reasonId, option.reason) end
-    end
+    if self.bindings then return require("tuadialogue_text").format(text, args) end
+    return text
   end
-  if self.bindings then
-    local format = require("tuadialogue_text").format
-    if not self.resolve or not node.textId then node.text = format(node.text, args) end
-    if not self.resolve then
-      for _, option in ipairs(node.options) do
-        option.text = format(option.text, args)
-        if option.reason then option.reason = format(option.reason, args) end
-      end
+  node.text, node.presentation = resolveField(node._rich, node.text, node.textId)
+  node._rich = nil
+  if self.resolve and node.speakerKey then
+    node.speaker = invoke(self.resolve, node.speakerKey, node.speaker or "")
+    assert(type(node.speaker) == "string", "dialogue resolver must return text")
+  end
+  for _, option in ipairs(node.options) do
+    option.text, option.presentation = resolveField(option._rich, option.text, option.id)
+    if option.reason then
+      option.reason, option.reasonPresentation = resolveField(
+        option._richReason,
+        option.reason,
+        option.reasonId
+      )
     end
+    option._rich, option._richReason = nil, nil
   end
   return node
 end
@@ -698,7 +748,7 @@ function Player:dispose()
   self.generation = self.generation + 1
   self.state, self.current, self.document, self.issue = "disposed", nil, nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
-  self.actionHandlers = nil
+  self.actionHandlers, self.resolveTemplate = nil, nil
   self.facts, self.locals, self.localDefaults = nil, nil, nil
   self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
@@ -827,8 +877,8 @@ function Dialogue.context(schemas)
     assert(source.actions == registeredActions, "document uses another action definition")
     assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7,
-      "typed context requires dialogue schema version 2 through 7"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7 or source.schemaVersion == 8,
+      "typed context requires dialogue schema version 2 through 8"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

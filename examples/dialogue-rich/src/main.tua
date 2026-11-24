@@ -1,0 +1,71 @@
+local player = Dialogue.new(require("scene"), { args = { name = "Ada" } })
+player:start()
+local snapshot = player:snapshot()
+local node = snapshot.node
+if node then
+  local presentation = node.presentation
+  if presentation then
+    assert(node.text == "Hi Ada!")
+    assert(presentation.runs[1].emphasis)
+    assert(presentation.origins[2].argument == "name")
+  end
+end
+local reveal = Dialogue.reveal({ rate = 4, speech = true })
+reveal:present(snapshot)
+assert(reveal:update(0.5).visible == 0)
+assert(reveal:update(1.5).visible == 6)
+assert(reveal:update(0.5).visible == 7)
+assert(not reveal:snapshot().complete)
+assert(reveal:update(0.5).complete)
+player:update(0, true)
+assert(player:advance())
+
+-- A host can also use I18n.dialogueTemplate with configured catalogs.
+local localized = Dialogue.new(require("scene"), {
+  locale = "ja",
+  args = { name = "[pause=60]" },
+  resolveTemplate = function(key, source, args, locale)
+    return { template = "[em]%{name}[/em]さん、こんにちは！", locale = "ja" }
+  end,
+})
+localized:start()
+local translated = localized:snapshot().node
+if translated then
+  local presentation = translated.presentation
+  if presentation then
+    assert(translated.text == "[pause=60]さん、こんにちは！")
+    assert(#presentation.pauses == 0)
+    assert(presentation.resolvedLocale == "ja")
+  end
+end
+local accessible = Dialogue.reveal({ reducedMotion = true, speech = true })
+accessible:present(localized:snapshot())
+assert(accessible:snapshot().complete)
+assert(#accessible:update(0).cues == 0)
+player:dispose()
+localized:dispose()
+print("rich dialogue presentation and reveal passed")
+
+-- Rich documents retain typed notifications and emit only declared payloads.
+local events = Dialogue.events({ ready = Save.shape(Save.record({})) })
+local notice = events.new({
+  schemaVersion = 8,
+  documentId = "rich.notice",
+  events = events,
+  entry = "s",
+  nodes = {
+    s = {
+      kind = "line",
+      text = "Ready",
+      richText = "[em]Ready[/em]",
+      next = "e",
+      events = {
+        { kind = "ready", id = "ready", name = "ready", anchor = "shown", delay = 0, payload = {} },
+      },
+    },
+    e = { kind = "end" },
+  },
+})
+notice:start()
+assert(#notice:update(0, false) == 1)
+notice:dispose()

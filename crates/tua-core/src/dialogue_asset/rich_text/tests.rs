@@ -253,3 +253,97 @@ fn public_dialogue_authoring_stays_plain_until_runtime_integration() {
     let rich = plain.replace("@dialogue 1", "@dialogue 1\n@text rich");
     assert!(crate::dialogue_asset::parse_dialogue_source("rich.tdialogue", &rich).is_err());
 }
+
+#[test]
+fn lua_template_parser_matches_shared_rust_contract() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let quote = |value: &str| {
+        let bytes = value
+            .bytes()
+            .map(|byte| format!("\\{byte:03}"))
+            .collect::<String>();
+        format!("\"{bytes}\"")
+    };
+    let mut cases = vec![
+        "Hi [em]%{name}[/em]".to_owned(),
+        r"\[em\] %%{ name } %%%{real}".to_owned(),
+        "[style=warning][speed=0.5]é日本語[/speed][/style]".to_owned(),
+        r#"[pronounce="a ] \"b\" \\ c"]hello[/pronounce]"#.to_owned(),
+        "[pause=0][pause=60]x[pause=60]".to_owned(),
+        "[em][style=a]x[/em][/style]".to_owned(),
+        "[em][/em]".to_owned(),
+        "[speed=.5]x[/speed]".to_owned(),
+        "[speed=1e2]x[/speed]".to_owned(),
+        "[pause=61]x".to_owned(),
+        "%{a.b}".to_owned(),
+        "[pronounce=\"%{name}\"]x[/pronounce]".to_owned(),
+        "[pronounce=\"a\"][pronounce=\"b\"]x[/pronounce][/pronounce]".to_owned(),
+        format!("{}x", "[pause=1.2]".repeat(100)),
+        format!("{}x", "[pause=0]".repeat(257)),
+        format!("{}x{}", "[em]".repeat(17), "[/em]".repeat(17)),
+    ];
+    let alphabet = ["[", "]", "\\", "\"", "%", "{", "}", "é", "a", "\n", "="];
+    let mut state = 31_u32;
+    for _ in 0..200 {
+        let mut source = String::new();
+        for _ in 0..24 {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            source.push_str(alphabet[state as usize % alphabet.len()]);
+        }
+        cases.push(source);
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal rich = require('tuadialogue_rich')\n".to_owned();
+    for field in [FieldKind::Line, FieldKind::Choice, FieldKind::Reason] {
+        for (index, source) in cases.iter().enumerate() {
+            script.push_str(&format!(
+                "do\nlocal ok, result = pcall(rich.parse, {}, {})\n",
+                quote(source),
+                field == FieldKind::Line
+            ));
+            match parse(source, field) {
+                Ok(template) => {
+                    script.push_str(&format!("assert(ok, 'case {index}: ' .. tostring(result))\nassert(result.plain == {})\nassert(#result.tokens == {})\n", quote(&template.plain_template), template.tokens.len()));
+                    for (index, token) in template.tokens.iter().enumerate() {
+                        script.push_str(&format!("assert(result.tokens[{}].first == {} and result.tokens[{}].last == {})\n", index + 1, token.range.start + 1, index + 1, token.range.end));
+                    }
+                }
+                Err(_) => script.push_str(&format!(
+                    "assert(not ok, 'unexpected valid case {index}')\n"
+                )),
+            }
+            script.push_str("end\n");
+        }
+    }
+    let mut ran = false;
+    for interpreter in ["lua", "lua5.1", "luajit"] {
+        if Command::new(interpreter).arg("-v").output().is_err() {
+            continue;
+        }
+        ran = true;
+        let mut child = Command::new(interpreter)
+            .arg("-")
+            .current_dir(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{interpreter}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    if !ran {
+        eprintln!("SKIP rich parser parity: no standalone Lua interpreter");
+    }
+}

@@ -367,17 +367,18 @@ snapshots, segments Unicode 15.1 extended graphemes, exposes inclusive UTF-8 clu
 ranges, and emits at most one eligible speech cue per update. Finish/clear/refresh
 invalidate or suppress stale delivery; reduced motion reveals silently. The host owns
 rendering, shaping and audio. The official 1,187-case grapheme corpus is exercised on
-emitted-runtime tests. Styled spans, authored pauses/speed/pronunciation and mappings
-back to authored/localized markup remain unimplemented; M6 is not complete.
+emitted-runtime tests. Schema-8 typed documents now support rich presentation runs,
+pauses/rates, pronunciation hints and selected-template origin mappings. `.tdialogue`
+rich authoring/editor integration remains pending; M6 is not complete.
 See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-reveal.md).
 
 
-**Styled-text design settled (implementation pending):** the
+**Styled-text contract and runtime:** the
 [contract](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-text-contract.md)
 defines explicit rich-text opt-in, renderer-neutral runs, source mappings, bounded
 marks and reveal timing. A separate unexpanded template resolver preserves literal
-placeholder insertion; existing string resolvers remain compatible. No new syntax
-or API is enabled by this design step.
+placeholder insertion; existing string resolvers remain compatible. Typed runtime
+usage is available; the `@text rich` authoring directive remains disabled.
 
 - [x] Define a renderer-neutral representation for styled text, emphasis, pauses,
   reveal speed and pronunciation hints, with a plain-text fallback.
@@ -401,18 +402,18 @@ or API is enabled by this design step.
   Accepting Unicode strings is not proof of multilingual rendering support.
 
 **Implementation in progress on `feature/tdialogue-rich-text`:** the shared Rust
-text-field parser now validates marks, escapes, source ranges and limits, with
-12 regressions. The `.tdialogue` directive remains disabled until the runtime and
-tooling support it. This is parser infrastructure, not a usable rich-text feature.
+text-field parser and bounded Lua runtime agree on a shared parity corpus. The
+runtime supports typed rich documents and localized template callbacks; the
+`.tdialogue` directive remains disabled until emission and tooling support it.
 
 **Remaining implementation:**
 
 - [x] Implement and test bounded raw text-field tokenization and fallback templates.
 - [ ] Integrate the opt-in directive, versioned document emission and shared editor facts.
 - [x] Add typed `I18n.dialogueTemplate` selection with locale/plural metadata.
-- [ ] Connect template resolution to dialogue players and build owned presentation
-  runs and origin mappings.
-- [ ] Integrate authored rates/pauses with reveal and verify lifecycle semantics.
+- [x] Connect template resolution to dialogue players and build owned presentation
+  runs and origin mappings for schema-8 typed documents.
+- [x] Integrate typed-document rates/pauses with reveal and verify lifecycle semantics.
 - [ ] Qualify styled/localized examples and the acceptance matrix below.
 
 **Acceptance:** tests cover combining marks, emoji sequences, non-Latin text,
@@ -535,6 +536,13 @@ synthetic protocol timing is not presented as perceived UI latency.
   packaged output and module loading under Lua 5.1/LuaJIT and LÖVE, including hosts
   whose module search path omits `?/init.lua`. Keep file moves separate from gameplay
   or dialogue behavior changes; shared examples must not require unrelated features.
+- [ ] Use [SYSL-Text](https://github.com/sysl-dev/SYSL-Text) as presentation inspiration:
+  demonstrate per-presenter defaults, named style mappings for font/color/shadow and
+  optional wave/shake effects, plus layout metrics, wrapping/scrolling and character
+  sound profiles. Keep resources and visual effects in the LÖVE adapter, honor reduced
+  motion, and route gameplay through declared host actions rather than executable
+  inline function tags. Evaluate inline icons/images separately with explicit layout,
+  localization and accessible plain-text fallback rules before adding core syntax.
 - [ ] Add one runnable LÖVE showcase with interchangeable presentation adapters:
   conversation panel, NPC speech bubble, and non-pausing radio message.
 - [ ] Demonstrate shared characters/expressions, localized placeholders, conditional
