@@ -11,6 +11,10 @@ local function actions()
   if not Actions then Actions = require("tuadialogue_actions") end
   return Actions
 end
+function Dialogue.reveal(options)
+  return require("tuadialogue_reveal").new(options)
+end
+
 local Player = {}
 Player.__index = Player
 

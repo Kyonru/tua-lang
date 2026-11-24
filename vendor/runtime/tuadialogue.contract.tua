@@ -141,6 +141,62 @@ type Snapshot = {
   nodeId?: string,
   node?: PresentationNode,
 }
+-- The adapter consumes presentation fields only; event payloads stay generic.
+type RevealNode = { kind: string, text: string }
+type RevealInput = {
+  generation: number,
+  visit: number,
+  presentationRevision: number,
+  revealComplete: boolean,
+  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action",
+  node?: RevealNode,
+}
+type RevealOptions = {
+  rate?: number,
+  speech?: boolean,
+  minCueInterval?: number,
+  reducedMotion?: boolean,
+}
+type Grapheme = {
+  index: number,
+  text: string,
+  startByte: number,
+  endByte: number,
+  speakable: boolean,
+}
+type SpeechCue = {
+  instance: number,
+  sequence: number,
+  generation: number,
+  visit: number,
+  presentationRevision: number,
+  index: number,
+  text: string,
+  startByte: number,
+  endByte: number,
+}
+type RevealView = {
+  text: string,
+  visible: number,
+  total: number,
+  complete: boolean,
+  instance: number,
+  sequence: number,
+  generation?: number,
+  visit?: number,
+  presentationRevision?: number,
+  cues: SpeechCue[],
+}
+local function reveal(options?: RevealOptions): {
+  present: (self: any, snapshot: RevealInput) -> boolean,
+  update: (self: any, dt: number) -> RevealView,
+  finish: (self: any) -> RevealView,
+  clear: (self: any) -> nil,
+  snapshot: (self: any) -> RevealView,
+  clusters: (self: any) -> Grapheme[],
+}
+error("declaration only")
+end
 local function start(self: any, entry?: string): nil
   error("declaration only")
 end

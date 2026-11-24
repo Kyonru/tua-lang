@@ -133,6 +133,125 @@ The output shows `Ready?`, the two choice IDs and labels, then `Goodbye.`.
 The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
 also demonstrates loops, shared characters and both event clocks.
 
+## Reveal text by grapheme cluster
+
+`Dialogue.reveal(options?)` is an optional, renderer-independent presentation
+controller. Give each displayed dialogue player its own controller. It consumes
+snapshots after localization and placeholder expansion, reveals complete Unicode
+extended grapheme clusters, and optionally returns speech-blip cues. It never
+advances the dialogue or plays audio.
+
+The runnable [reveal example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-reveal)
+uses combining accents, emoji sequences, flags, Indic text, and CJK text, plus a
+literal placeholder value that resembles a directive.
+
+```tua
+local player = Dialogue.new(require("scene"))
+local reveal = Dialogue.reveal({
+  rate = 30,
+  speech = true,
+  minCueInterval = 0.05,
+})
+player:start()
+
+local function update(dt: number)
+  reveal:present(player:snapshot())
+  local view = reveal:update(dt)
+  -- Draw view.text, or map view.visible to clusters in your full-text layout.
+  -- Consume view.cues here if your host has a speech-blip audio adapter.
+  local events = player:update(dt, view.complete)
+  return { view = view, events = events }
+end
+
+local function finishReveal()
+  local view = reveal:finish()
+  -- Report the exact host completion now; do not add a second frame of time.
+  local events = player:update(0, true)
+  return { view = view, events = events }
+end
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `rate` | `30` | Grapheme clusters per second; greater than zero, at most 1000 |
+| `speech` | `false` | Emit optional presentation cues |
+| `minCueInterval` | `0.05` | Minimum seconds between cues; 0–60 |
+| `reducedMotion` | `false` | Immediately show the complete line, silently |
+
+Options are captured at creation. `dt` must be finite and nonnegative. Input text
+must be valid UTF-8 and at most 65,536 bytes; invalid input leaves the previous
+presentation intact. Bounds apply to this optional controller, not existing
+plain dialogue playback.
+
+| Method | Behavior |
+| --- | --- |
+| `present(snapshot)` | Accept a new line identity; return whether the active presentation changed |
+| `update(dt)` | Reveal clusters and return a view with at most one new cue |
+| `snapshot()` | Return the current view without emitting cues |
+| `clusters()` | Return an owned cluster list for the whole accepted line |
+| `finish()` | Reveal everything immediately, emit no cues, invalidate earlier cues |
+| `clear()` | Release retained text/clusters and invalidate earlier cues |
+
+A view contains `text`, `visible`, `total`, `complete`, `cues`, and identity fields.
+`visible` and `total` count grapheme clusters, not bytes, code points, or shaped
+glyphs. Clusters contain `index`, `text`, inclusive one-based UTF-8 `startByte` and
+`endByte`, and `speakable`. Fetch `clusters()` once per new presentation rather
+than copying the full list on every frame. Returned views/lists are owned copies.
+
+Selection is keyed by the snapshot's `generation`, `visit`, and
+`presentationRevision`. Re-presenting the same snapshot preserves progress.
+Changing text without changing that identity is an error. Locale/context refreshes
+already marked `revealComplete` appear fully revealed without a speech burst.
+Likewise, after a future/custom restore, honor a completed snapshot or call
+`finish()` before consuming updates. This is not a checkpoint API.
+
+Pass snapshots after line changes, cancellation, and disposal. Non-line states
+clear the controller. A user skip calls `finish()` and reports `update(0, true)`
+to the dialogue player; it does not automatically select a reply or advance a
+line. Authored pauses and per-span speed controls remain part of the pending
+styled-text work; this controller currently uses one rate for the whole line.
+
+### Use speech cues without catch-up bursts
+
+Each cue identifies the controller `instance`, its `sequence`, the dialogue's
+`generation`, `visit`, and `presentationRevision`, plus cluster `index`, `text`,
+`startByte`, and `endByte`. Before playing a delayed cue, compare both the controller
+instance/sequence and the current dialogue identity, and require an active line.
+Finishing, clearing, or accepting another presentation invalidates older sequence
+tokens. Use separate controllers for simultaneous players; tokens are runtime-local,
+not save-file identities.
+
+Only newly revealed clusters containing a Unicode letter or number are eligible.
+Whitespace, punctuation, and emoji without letters/numbers are silent. A long frame
+coalesces eligible clusters to the last one, returning at most one cue. Cues skipped
+by the interval limit are dropped, never queued. `snapshot()`, `finish()`, locale
+refresh, and reduced-motion presentation cannot replay the line as a burst.
+
+Cues describe presentation, not gameplay events or phonemes. The host owns sample
+selection, voice identity, volume/mute, source reuse, polyphony and audio scheduling.
+No proprietary sounds, audio engine, wall clock, or gameplay RNG are used. The
+optional per-character audio-profile/adapter work remains in M7.
+
+### Unicode and layout responsibilities
+
+Segmentation follows the pinned Unicode 15.1 extended-grapheme rules in
+[UAX #29 revision 43](https://www.unicode.org/reports/tr29/tr29-43.html), tested against
+its official conformance corpus. It is not word segmentation, font shaping, or
+bidirectional layout. A grapheme cluster can produce several glyphs, and a shaped
+glyph may cover several logical clusters.
+
+For complex scripts, shape the full resolved text with an appropriate font/layout
+engine and map logical cluster byte ranges to that layout's clusters. The `text`
+prefix is a simple fallback; redrawing a growing prefix can change joining or
+ligature forms. The host owns font coverage, fallback fonts, line breaking, shaping,
+logical/visual order and bidirectional interaction. Unicode acceptance alone does
+not establish correct multilingual rendering.
+
+This reveal API does not change serialized dialogue schema 7. Custom replacement
+runtimes must implement `Dialogue.reveal` to use it. Styled markup, pronunciation
+hints and source-to-localized style-span mappings remain pending M6 work; translated
+and substituted text is not reinterpreted as markup by this controller.
+
 ## Share characters and portraits { #share-characters-between-scripts }
 
 Use an ordinary typed module when several scenes share a cast.

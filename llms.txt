@@ -367,3 +367,17 @@ across lines/speakers/players. Unknown names fail analysis or dynamic constructi
 Selected strings are copied at player construction. Hosts own loading/layout and
 one spriteSheet player per presentation; shared cast records contain no playback
 state. Asset/animation strings do not execute code or load images during analysis.
+
+Optional dialogue reveal: Dialogue.reveal({rate=30,speech=false,minCueInterval=0.05,
+reducedMotion=false}) creates one presentation controller per dialogue player.
+Call present(player:snapshot()), update(dt), then player:update(dt,view.complete).
+finish() reveals silently and invalidates older cues; report player:update(0,true).
+clear() releases text. snapshot() returns text/visible/total/complete/cues plus identity.
+clusters() returns owned Unicode 15.1 extended graphemes with inclusive one-based
+UTF-8 startByte/endByte. Valid UTF-8 is required, maximum 65536 bytes; rate is (0,1000].
+Speech is opt-in: at most one eligible letter/number cluster per update, with a minimum
+interval; excess cues are dropped. Whitespace/punctuation are silent. Cue instance,
+sequence and dialogue generation/visit/presentationRevision reject stale playback.
+Completed locale/context refresh and reduced motion reveal silently. No audio, automatic
+advancement, word segmentation, shaping, bidi layout, markup or checkpoints are implied.
+Styled spans and authored pause/speed syntax remain pending M6; audio profiles remain M7.

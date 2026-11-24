@@ -1,0 +1,5 @@
+@dialogue 1
+[start]
+// @id reveal.hello
+: Café 👩🏽‍🚀 🇯🇵 नमस्ते 中文! (end)
+@event revealed 0 ready

@@ -1,0 +1,6 @@
+@dialogue 1
+@context "context"
+@bind name context.name
+[start]
+// @id reveal.bound
+: Hello %{name} (end)

@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add optional typed `Dialogue.reveal` with Unicode 15.1 grapheme-safe reveal,
+  owned byte-range mappings, silent finish/reduced-motion behavior, and bounded
+  speech-blip cues with lifecycle identity. Styled markup remains pending.
+
 - Shared dialogue characters support named expressions selected with `@expression`,
   with typed metadata, editor queries, per-line portrait resets and host-owned animation.
   Expression scripts emit schema 7; portrait-only scripts remain compatible.

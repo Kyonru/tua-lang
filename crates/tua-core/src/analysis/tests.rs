@@ -13097,3 +13097,63 @@ Cast.Guide: Hello (end)
         .pipeline_diagnostics("src/scene.tdialogue")
         .is_empty());
 }
+
+#[test]
+fn dialogue_reveal_types_survive_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/controller.tua
+return Dialogue.reveal({ speech = true })
+-- file: src/events.tua
+return Dialogue.events({ notice = Save.shape(Save.record({ coins = Save.number(0) })) })
+-- file: src/scene.tdialogue
+@dialogue 1
+@document reveal.typed
+@events "events"
+[start]
+// @id reveal.typed.line
+: Hello (end)
+@emit shown 0 notice [id:reveal.notice] {"coins":1}
+-- file: src/main.tua
+local reveal = require("controller")
+local events = require("events")
+local player = events.new(require("scene"))
+reveal:present(player:snapshot())
+local view = reveal:update(0.1)
+for _, cue in ipairs(view.cues) do
+  local wrong: string = cue.index
+  print(cue.<|field|>text)
+end
+reveal:update("bad")
+local wrongOption = Dialogue.reveal({ rate = "fast" })
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        3,
+        "{diagnostics:?}"
+    );
+    let labels = completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+    for name in [
+        "text",
+        "index",
+        "startByte",
+        "endByte",
+        "sequence",
+        "generation",
+    ] {
+        assert!(labels.contains(&name.to_owned()), "{labels:?}");
+    }
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("field"))
+        .is_some());
+}

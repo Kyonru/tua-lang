@@ -1,0 +1,41 @@
+local scene = require("scene")
+local player = Dialogue.new(scene)
+local reveal = require("controller")
+player:start()
+assert(reveal:present(player:snapshot()))
+local ready = false
+for _ = 1, 200 do
+  -- Presentation first; the host then reports actual completion to dialogue.
+  reveal:present(player:snapshot())
+  local view = reveal:update(0.05)
+  assert(#view.cues <= 1)
+  -- The host may play view.cues after checking identity; this example is silent.
+  for _, event in ipairs(player:update(0.05, view.complete)) do
+    if event.name == "ready" then ready = true end
+  end
+  if view.complete then break end
+end
+assert(ready)
+local complete = reveal:snapshot()
+local node = player:snapshot().node
+assert(node and complete.text == node.text)
+for _, cluster in ipairs(reveal:clusters()) do
+  assert(cluster.text == string.sub(complete.text, cluster.startByte, cluster.endByte))
+end
+local quiet = Dialogue.reveal({ reducedMotion = true, speech = true })
+assert(quiet:present(player:snapshot()))
+assert(quiet:snapshot().complete and #quiet:update(1).cues == 0)
+reveal:clear()
+quiet:clear()
+player:dispose()
+print("grapheme-safe dialogue reveal passed")
+
+-- Reveal consumes final presentation text; inserted values are never commands.
+local context = require("context")
+local bound = context.new(require("bound"), { name = "[pause] @action fake" })
+bound:start()
+local literal = Dialogue.reveal()
+literal:present(bound:snapshot())
+assert(literal:finish().text == "Hello [pause] @action fake")
+literal:clear()
+bound:dispose()

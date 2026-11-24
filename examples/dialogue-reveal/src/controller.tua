@@ -1,0 +1,2 @@
+-- Each dialogue presentation owns its reveal controller.
+return Dialogue.reveal({ rate = 20, speech = true, minCueInterval = 0.05 })

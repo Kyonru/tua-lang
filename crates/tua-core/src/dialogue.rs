@@ -73,7 +73,13 @@ pub(crate) fn module_type() -> Type {
                     &new.return_type,
                 ),
             );
+            let reveal = environment
+                .function("reveal")
+                .and_then(|function| function.as_type())
+                .expect("dialogue reveal contract resolves");
+            let reveal = environment.resolve_nested_aliases(&reveal);
             Type::table([
+                ("reveal", TableField::required(reveal)),
                 ("actions", TableField::required(action_factory)),
                 ("events", TableField::required(event_factory)),
                 ("context", TableField::required(factory)),

@@ -362,6 +362,16 @@ static and does not load images during analysis.
 
 ## M6 — Text presentation and reveal metadata
 
+**Reveal foundation implemented:** optional typed `Dialogue.reveal` consumes resolved
+snapshots, segments Unicode 15.1 extended graphemes, exposes inclusive UTF-8 cluster
+ranges, and emits at most one eligible speech cue per update. Finish/clear/refresh
+invalidate or suppress stale delivery; reduced motion reveals silently. The host owns
+rendering, shaping and audio. The official 1,187-case grapheme corpus is exercised on
+emitted-runtime tests. Styled spans, authored pauses/speed/pronunciation and mappings
+back to authored/localized markup remain the next M6 slice; M6 is not complete.
+See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-reveal.md).
+
+
 - [ ] Define a renderer-neutral representation for styled text, emphasis, pauses,
   reveal speed and pronunciation hints, with a plain-text fallback.
 - [ ] Establish logical text ranges and source mappings through translation,
@@ -369,18 +379,18 @@ static and does not load images during analysis.
   that can inject commands, events or styles.
 - [ ] Specify nesting, unknown marks, duration bounds and malformed-markup errors.
   Keep presentation hints separate from consequential events/actions.
-- [ ] Support grapheme-aware reveal in the example adapter. Specify the mapping
+- [x] Support grapheme-aware reveal in the example adapter. Specify the mapping
   from logical text spans to renderer/layout clusters; do not split combining
   sequences or assume byte offsets equal displayed characters.
 - [ ] Define finish-reveal, skip and reduced-motion behavior, including whether
   presentation pauses are skipped. Preserve an exact host report for `revealed`.
-- [ ] Expose optional speech-blip reveal cues for Animal Crossing-style character
+- [x] Expose optional speech-blip reveal cues for Animal Crossing-style character
   chatter. Derive them from actually revealed grapheme/word boundaries, not bytes
   or render frames. Include stable generation/visit/presentation identity so a host
   can reject stale cues. Whitespace is silent; punctuation may pause or suppress a
   cue. Locale changes, restored presentations and finish-reveal must not replay the
   whole line as a burst. Keep these presentation cues separate from gameplay events.
-- [ ] Document font coverage, shaping and bidirectional-layout responsibilities.
+- [x] Document font coverage, shaping and bidirectional-layout responsibilities.
   Accepting Unicode strings is not proof of multilingual rendering support.
 
 **Acceptance:** tests cover combining marks, emoji sequences, non-Latin text,
