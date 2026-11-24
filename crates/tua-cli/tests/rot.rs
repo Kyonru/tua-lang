@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod support;
@@ -9,11 +10,14 @@ struct Project(PathBuf);
 
 impl Project {
     fn new() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("tua-rot-{}-{nonce}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("tua-rot-{}-{nonce}-{sequence}", std::process::id()));
         fs::create_dir_all(path.join("src")).expect("create source directory");
         fs::write(path.join("tua.toml"), "source = \"src\"\n").expect("write config");
         Self(path)
