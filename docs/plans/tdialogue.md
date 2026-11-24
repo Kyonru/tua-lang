@@ -1,6 +1,6 @@
 # Tua dialogue: implementation plan
 
-Status: M0–M2 complete; M3–M10 planned. Baseline: `46a70a89` (portraits and timed events)
+Status: M0–M3 complete; M4–M10 planned. Baseline: `46a70a89` (portraits and timed events)
 and `2e179341` (dialogue documentation). This plan combines the remaining initial
 workstream with the expanded dialogue improvements. It does not claim those
 improvements are implemented or assign them a released version.
@@ -245,23 +245,44 @@ Installed-editor UI and rendered showcase qualification remain outside this slic
 
 ## M3 — Conditions, branches and choice availability
 
-- [ ] Define a small typed condition language: literals, field reads, comparisons
+- [x] Define a small typed condition language: literals, field reads, comparisons
   and boolean operations. Set precedence, optional-value rules, short-circuiting
   and depth limits; exclude arbitrary calls and side effects.
-- [ ] Add conditional branches and distinct visible/enabled choice states.
+- [x] Add conditional branches and distinct visible/enabled choice states.
   Disabled replies can expose a localized reason, such as “Requires 20 coins.”
-- [ ] Specify choice reevaluation when host facts change. Selection by stable ID
+- [x] Specify choice reevaluation when host facts change. Selection by stable ID
   must revalidate eligibility against the current accepted context; stale UI must
   not authorize a purchase or other action. The host remains authoritative.
-- [ ] Define an explicit fallback for no available choices, rather than leaving a
+- [x] Define an explicit fallback for no available choices, rather than leaving a
   player stuck with an empty selection. Preserve explicit line acknowledgement.
-- [ ] Add a bounded automatic-transition loop for condition-only paths. Yield or
+- [x] Add a bounded automatic-transition loop for condition-only paths. Yield or
   enter a documented issue state on budget exhaustion instead of hanging.
 
 **Acceptance:** tests cover short-circuiting, missing/nil fields, changed context
 between display and selection, hidden versus disabled options, no-choice fallback,
 loops, forward references, deterministic evaluation order and instruction limits.
 The editor diagnoses wrong types and invalid targets at authored source locations.
+
+### M3 completion record
+
+Implemented typed, data-only conditions, branch-only labels, visible/enabled choice
+metadata, localized disabled reasons and explicit no-choice fallback targets. Shared
+context facts power diagnostics and editor path queries, including re-exports.
+Choice submission rechecks accepted facts; ordinary refreshes preserve execution
+identity and events, while fallback transitions create a new visit. Automatic loops
+stop with an inspectable fault and require explicit recovery.
+
+Conditional assets use schema three; legacy/schema-one/schema-two playback remains
+supported. Limits and optional-value semantics are documented in the
+[condition guide](../dialogue.md#conditions-branches-and-available-choices). The
+[example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-conditions)
+and [M3 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M3.md)
+cover emitted Lua, imported typing, stale UI, failure atomicity and native LÖVE with
+JIT off/on. Installed-editor UI and rendered showcase qualification remain M10 work.
+
+The separately requested Animal Crossing-style speech blips are planned under M6
+(reveal cues) and M7 (typed profiles and host audio adapter); M3 introduces no audio
+dependency or automatic gameplay action.
 
 ## M4 — Typed events and registered host actions
 
@@ -494,11 +515,10 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0–M2 are complete; continue with **M3 — conditions, branches and choice
-availability**. Reuse the typed context/path facts, explicit refresh behavior,
-localization adapter and stable execution identities. Keep host gameplay mutations
-in explicit actions; do not introduce arbitrary script execution or replace the
-renderer/storage architecture.
+M0–M3 are complete; continue with **M4 — typed events and registered host actions**.
+Reuse declared schemas, typed context/path facts, stable execution identities and
+bounded transition behavior. Keep gameplay mutations in explicit host actions;
+never execute arbitrary script expressions or replace the host renderer/audio stack.
 
 ## Historical delivery checkpoints
 

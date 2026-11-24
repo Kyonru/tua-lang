@@ -102,10 +102,10 @@ notification API is deferred to M1; the no-replay rule is fixed.
 
 ## D4 — Bounded work and observable failure
 
-Current enforced limits remain unchanged: 8 MiB per textual source, the shared
+At the M0 checkpoint, enforced limits were: 8 MiB per textual source, the shared
 128 MiB/20,000-file project limits, and 64 authored/runtime events per line.
-The current runtime has no arbitrary automatic transitions or pending actions.
-It does **not** yet enforce the following future configuration.
+The M0 runtime had no arbitrary automatic transitions or pending actions. The
+following table was its proposal; the M3 decisions below supersede the implemented rows.
 
 | Future limit | Initial default / ceiling | Milestone and behavior |
 | --- | --- | --- |
@@ -131,6 +131,24 @@ action failures under M7 policy, not indefinite waits.
 
 Keep current programmer-input assertions and v1 method return behavior unchanged.
 Do not retrofit the new fault states into legacy playback during this milestone.
+
+### M3 qualification of automatic work
+
+M3 implements 256 automatic edges per transition/refresh by default, configurable
+from 1 to 4,096. It faults with `transition_budget_exceeded`; restart/cancel/dispose
+are explicit recovery. AST depth is a fixed **32**, rather than a configurable
+ceiling of 128: both authored and runtime inputs reject excess nesting before
+execution. Expressions also cap at 256 tokens/instructions (8 KiB authored text).
+Bounded loops and rejection cases are executable regressions; these limits are not
+performance guarantees. Context data uses the existing Save.shape 32-level/100,000-entry
+validation, rather than a new dialogue-specific serializer.
+
+A no-choice fallback is mandatory for conditional groups and runs when no visible,
+enabled choice remains. Refresh follows it as a new visit; otherwise refresh keeps
+visit/generation and fired events. Ordered comparisons are numeric; absent operands
+return false. Equality supports scalar/nil tests; boolean operations short-circuit
+and treat nil as false without Lua's numeric/string truthiness. The compiler checks
+all paths, including unreachable operands. Locale changes do not reevaluate flow.
 
 ## D5 — Imported-type probe results and API implications
 
