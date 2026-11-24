@@ -456,8 +456,19 @@ registries, branches or conditional choices. Identity/graph/timer validation occ
 before mutation. Restore preserves delivered-event flags and suspension, silently
 completes current-line reveal, and exposes snapshot.restored for host audio policy.
 Rebind resolvers/args; locale is saved. No filesystem, action dispatch, effect
-rollback, partial reveal restoration or exactly-once guarantee is implied. Typed
-locals, action reconciliation and the Save.contract recipe remain pending.
+rollback, partial reveal restoration or exactly-once guarantee is implied.
+Typed-context players export version2 with concrete typed, owned locals validated
+by Save.shape. Supply current facts to context.new; restore rebinds facts and saves
+only locals. Branch/choice conditions, targets, bindings and local defaults enter
+the v2 graph signature; v1 plain graphs stay unchanged. Restore never traverses
+branches. A saved choice with no enabled visible reply under rebound facts/locals
+is rejected without mutation, even with fallback or suspension. Locals are bounded
+separately (16384 entries, depth32, 256KiB strings) before schema validation.
+Graph identity is not a full schema fingerprint: bump checkpointVersion for
+incompatible schema/host semantics. Both versions reject action/event registries.
+Shared context definitions retain checkpoint-local types through imports; construct
+players in the consumer because additional forwarding of constructed players loses
+inference in editor analysis. Action reconciliation and Save recipes remain pending.
 Dialogue player options.history = {capacity, maxBytes?} enables optional history.
 Capacity is 1..1024; maxBytes is 1..1048576 (default65536 retained string bytes).
 player:history() returns owned {entries, capacity, maxBytes, bytes, dropped}.

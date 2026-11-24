@@ -207,7 +207,8 @@ local contextual = context.new({
   nodes = { s = { kind = "line", text = "Hi", next = "e" }, e = { kind = "end" } },
 }, { active = true }, options)
 contextual:start()
-assert(not pcall(contextual.checkpoint, contextual))
+assert(contextual:checkpoint().version == 2)
+assert(contextual:checkpoint().locals.count == 0)
 contextual:dispose()
 print("checkpoint limits and registry exclusions passed")
 

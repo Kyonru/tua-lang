@@ -16,7 +16,9 @@ fn run_conditions(identified: bool) {
     let source = concat!(
         include_str!("fixtures/dialogue-conditions/lifecycle.lua"),
         "\n",
-        include_str!("fixtures/dialogue_history_context.lua")
+        include_str!("fixtures/dialogue_history_context.lua"),
+        "\n",
+        include_str!("fixtures/dialogue_checkpoint_context.lua")
     );
     let context = tua_core::emit::emit_tua_source(
         "context.tua",

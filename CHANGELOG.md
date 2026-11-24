@@ -6,14 +6,19 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add version-2 typed-context dialogue checkpoints with owned, schema-validated
+  locals, rebound gameplay facts, condition/binding graph compatibility and
+  transactional rejection of unavailable saved choices. Plain v1 remains compatible;
+  action/event registry persistence is still excluded.
+
 - Add opt-in bounded dialogue history with original displayed text/locale, accepted
   replies, count/string-byte limits, owned snapshots and explicit redaction/clearing.
   History remains separate from execution checkpoints and releases on disposal.
 
 - Add bounded, versioned checkpoints for plain dialogue line/choice/wait boundaries,
   with graph compatibility validation, transactional fresh-player restore, logical
-  timers and delivered-event flags. Restored presentations remain silent. Typed
-  context/action persistence remains follow-up work.
+  timers and delivered-event flags. Restored presentations remain silent. Action
+  registry persistence remains follow-up work.
 
 - Document and demonstrate a typed host conversation-skip policy that refuses
   non-cancellable pending actions, preserves settled results, and uses existing

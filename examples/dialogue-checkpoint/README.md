@@ -1,7 +1,8 @@
-# Plain-dialogue checkpoints
+# Dialogue checkpoints
 
 Run `tua check`, `tua build`, then `(cd build && lua main.lua)`.
-The example round-trips a line, choice and suspended wait without disk or LÖVE.
+The example round-trips a line, choice and suspended wait without disk or LÖVE,
+then restores typed locals with current gameplay facts in `context_demo.tua`.
 
 Opt in with a stable document ID (`@document`) and host-selected
 `checkpointVersion`. `player:checkpoint()` returns owned JSON-shaped data;
@@ -26,7 +27,15 @@ game context or reveal-controller progress is saved. Core generation/visit token
 are live-session identities, not durable reward or network idempotency keys.
 
 This example does not choose storage or autosave timing. The full `Save.contract`
-recipe, typed-context resume and durable action reconciliation remain later M8
-work. Optional player history is available separately and is excluded from
+recipe and durable action reconciliation remain later M8 work. Optional player history is available separately and is excluded from
 checkpoints. Persisting fired flags does not make external effects
 exactly-once: a crash can happen between delivery and durable acknowledgement.
+
+
+`context_demo.tua` uses a shared context definition and authored branches/conditions.
+Its v2 checkpoint retains typed locals but not facts. Restoring the choice with
+zero coins fails transactionally; updating the fresh player's facts allows retry.
+The host compatibility key must change for incompatible schema semantics even if
+local defaults stay identical. Import shared context definitions and construct
+players in the consumer to retain checkpoint-local inference; additional forwarding
+of already-created players has a known editor-analysis inference limitation.

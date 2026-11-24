@@ -56,7 +56,8 @@ local function encode(value, output, budget, seen, depth)
       assert(budget.bytes <= 262144, "checkpoint string limit exceeded")
       assert(require("tuasave_json").validUtf8(value), "checkpoint strings must be UTF-8")
     elseif kind == "number" then
-      assert(finite(value), "invalid checkpoint number")
+      assert(value == value and value ~= math.huge and value ~= -math.huge,
+        "invalid checkpoint number")
     end
     assert(budget.bytes <= 262144, "checkpoint string limit exceeded")
     local content = tostring(value)
@@ -68,8 +69,8 @@ local function encode(value, output, budget, seen, depth)
 end
 local function signature(player)
   assert(
-    player.checkpointPlain,
-    "checkpoint v1 requires a plain dialogue without registries/context"
+    player.checkpointNoEffects and (player.checkpointPlain or player.copyLocals),
+    "checkpoints cannot contain action or event registries"
   )
   assert(text(player.document.documentId, 256), "checkpoint needs a documentId")
   assert(text(player.checkpointVersion, 256), "checkpoint needs checkpointVersion")
@@ -78,6 +79,10 @@ local function signature(player)
     schema = player.document.schemaVersion or 0,
     nodes = {},
   }
+  if player.copyLocals then
+    graph.bindings = player.bindings
+    graph.localDefaults = player.localDefaults
+  end
   local work = 0
   local function take()
     work = work + 1
@@ -85,8 +90,9 @@ local function signature(player)
   end
   for id, node in pairs(player.document.nodes) do
     take()
-    assert(node.kind == "line" or node.kind == "choice" or node.kind == "wait" or node.kind == "end",
-      "checkpoint v1 cannot contain actions or branches")
+    assert(node.kind == "line" or node.kind == "choice" or node.kind == "wait" or node.kind == "end"
+      or (player.copyLocals and node.kind == "branch"),
+      "checkpoint cannot contain actions or plain-dialogue branches")
     local row = {
       kind = node.kind,
       next = node.next,
@@ -96,6 +102,9 @@ local function signature(player)
       events = {},
       options = {},
     }
+    if player.copyLocals then
+      row.condition, row.yes, row.no = node.condition, node.yes, node.no
+    end
     for _, event in ipairs(node.events or {}) do
       take()
       row.events[#row.events + 1] = {
@@ -108,9 +117,13 @@ local function signature(player)
     end
     for _, option in ipairs(node.options or {}) do
       take()
-      assert(not option.visibleCondition and not option.enabledCondition,
+      assert(player.copyLocals or (not option.visibleCondition and not option.enabledCondition),
         "checkpoint v1 cannot contain conditional choices")
-      row.options[#row.options + 1] = { id = option.id, target = option.target }
+      local choice = { id = option.id, target = option.target }
+      if player.copyLocals then
+        choice.visible, choice.enabled = option.visibleCondition, option.enabledCondition
+      end
+      row.options[#row.options + 1] = choice
     end
     graph.nodes[id] = row
   end
@@ -133,11 +146,20 @@ local fields = {
   suspended = true,
   locale = true,
   fired = true,
+  locals = true,
 }
 local states = { line = "awaiting_advance", choice = "awaiting_choice", wait = "waiting" }
 function Checkpoint.validate(player, value)
   record(value, fields)
-  assert(value.version == 1, "unsupported checkpoint version")
+  assert(value.version == (player.copyLocals and 2 or 1), "unsupported checkpoint version")
+  local locals
+  if player.copyLocals then
+    -- Bound raw data before the schema copier or any resolver touches it.
+    encode(value.locals, {}, { entries = 0, bytes = 0 }, {}, 0)
+    locals = player.copyLocals(value.locals)
+  else
+    assert(value.locals == nil, "plain checkpoint cannot contain locals")
+  end
   local graph = signature(player)
   assert(value.documentId == player.document.documentId, "checkpoint document mismatch")
   assert(value.contentVersion == player.checkpointVersion, "checkpoint content version mismatch")
@@ -178,7 +200,7 @@ function Checkpoint.validate(player, value)
     fired[index] = true
   end
   assert(count == #value.fired, "checkpoint events must be dense")
-  return fired
+  return fired, locals
 end
 function Checkpoint.export(player)
   local node = player.document.nodes[player.current or ""]
@@ -187,7 +209,7 @@ function Checkpoint.export(player)
   for index in pairs(player.fired or {}) do fired[#fired + 1] = index end
   table.sort(fired)
   local value = {
-    version = 1,
+    version = player.copyLocals and 2 or 1,
     documentId = player.document.documentId,
     contentVersion = player.checkpointVersion,
     graph = signature(player),
@@ -199,8 +221,10 @@ function Checkpoint.export(player)
     suspended = player.suspended == true,
     locale = player.locale,
     fired = fired,
+    locals = player.copyLocals and player.locals or nil,
   }
-  Checkpoint.validate(player, value)
+  local _, locals = Checkpoint.validate(player, value)
+  value.locals = locals
   return value
 end
 return Checkpoint

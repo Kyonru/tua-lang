@@ -501,19 +501,25 @@ and the
 choice and wait boundaries, validates graph identity and timers, and preserves
 fired events and suspension. It restores into a fresh player and silently completes
 line reveal. Context/registry documents, branches and conditional choices are
-rejected in this first version. The general checklist below remains open until
-locals, durable action reconciliation and the Save recipe are qualified.
+rejected in version 1. Version 2 now supports typed locals, bindings, branches and
+conditional choices while rebinding current facts. Restore rejects unavailable
+choices without following fallback. Action/event registries remain excluded;
+durable action reconciliation and the Save recipe are still pending.
+See the [typed checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-context-checkpoints.md).
 See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
 
 - [ ] Define a versioned, validated JSON-shaped checkpoint: document identity and
   compatible content version, stable position/choice IDs, locals, locale, logical
   timers, relevant event-delivery/action status, and deterministic execution state.
-- [ ] Specify what is deliberately not saved: closures, GPU/audio objects, opaque
+- [x] Specify what is deliberately not saved: closures, GPU/audio objects, opaque
   host handles, absolute wall-clock timestamps and the whole gameplay context.
   Rebind host context, handlers and presentation after restoring.
-- [ ] Define compatible text edits versus incompatible graph/schema changes.
+- [x] Define compatible text edits versus incompatible graph/schema changes.
   Reject incompatible checkpoints or require explicit migrations; never silently
   jump to a similarly numbered node. Reuse `Save` validation/migration concepts.
+  V2 validates locals against the rebound Save shape and fingerprints conditions,
+  bindings and defaults. The required host key owns incompatible schema/semantic
+  changes not distinguishable from defaults; migration remains explicit.
 - [ ] Choose safe checkpoint boundaries for pending actions. Initially reject or
   defer checkpoints with non-resumable work; resumable actions need an explicit
   host policy and durable identity, not replay-on-load by default.

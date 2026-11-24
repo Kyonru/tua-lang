@@ -1,0 +1,32 @@
+local context = require("context")
+local scene = require("context_scene")
+local options = { checkpointVersion = "harbor-context-v1" }
+local original = context.new(scene, { coins = 10 }, options)
+original:start()
+original:setLocals({ visits = 3 })
+local saved = original:checkpoint()
+local visits: number = saved.locals.visits
+assert(visits == 3 and saved.version == 2)
+
+-- Gameplay facts come from the current run; only dialogue locals are restored.
+local resumed = context.new(scene, { coins = 20 }, options)
+resumed:restore(saved)
+assert(resumed:getContext().coins == 20)
+assert(resumed:getLocals().visits == 3)
+local shown = resumed:snapshot().node
+assert(shown and shown.text == "Visit 3: you have 20 coins.")
+resumed:advance()
+local choice = resumed:checkpoint()
+
+-- Restore rejects an unavailable choice instead of silently following fallback.
+local blocked = context.new(scene, { coins = 0 }, options)
+assert(not pcall(function() blocked:restore(choice) end))
+assert(blocked:snapshot().state == "idle")
+blocked:updateContext({ coins = 5 })
+blocked:restore(choice)
+assert(blocked:choose("harbor.context.buy"))
+original:dispose()
+resumed:dispose()
+blocked:dispose()
+print("typed context checkpoint round trip passed")
+return true

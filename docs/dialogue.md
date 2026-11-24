@@ -1952,14 +1952,70 @@ Graph work is capped at 8,192 node/event/option records, canonical traversal at
 is data, not a cryptographic integrity check. Apply your storage schema/size limits
 before decoding untrusted save files.
 
-This first version rejects **all context-, action- and event-registry documents**,
-branches and conditional choices, not merely currently pending work. Idle,
+Version 1 rejects context documents, branches and conditional choices. Typed
+context players use version 2, described below. **Both versions reject all action-
+and typed-event-registry documents**, not merely currently pending work. Idle,
 completed, cancelled, disposed, faulted and action states cannot be exported.
-Typed locals, durable action reconciliation and a complete
-`Save.contract` recipe remain later M8 work. Existing Save migration/validation
-concepts apply, but checkpoint data is not a promise of exactly-once external
-effects: crashing between an effect and its durable acknowledgement still needs
-host-side atomic persistence or idempotency.
+Durable action reconciliation and a complete `Save.contract` recipe remain later
+work. Checkpoints do not promise exactly-once external effects: crashing between
+an effect and its durable acknowledgement still requires host-side atomic
+persistence or idempotency.
+
+### Restore typed dialogue locals
+
+A player created by an imported `Dialogue.context` definition exports version-2
+checkpoints. The `locals` field retains the definition's concrete type for checking,
+completion and hover. It contains an owned copy validated by the original
+`Save.shape`; whole gameplay facts remain outside the checkpoint.
+
+```tua
+local context = require("context")
+local scene = require("context_scene")
+local options = { checkpointVersion = "harbor-context-v1" }
+local original = context.new(scene, { coins = 10 }, options)
+original:start()
+original:setLocals({ visits = 3 })
+local saved = original:checkpoint()
+
+-- Supply current gameplay facts; restore only the dialogue's local variables.
+local resumed = context.new(scene, { coins = 20 }, options)
+resumed:restore(saved)
+assert(resumed:getLocals().visits == 3)
+assert(resumed:getContext().coins == 20)
+```
+
+The [typed checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue-checkpoint/src/context_demo.tua)
+includes the shared context and authored script. Shared context definitions retain
+checkpoint-local inference through imports and forwarding modules. Construct the
+player where it is consumed: additional forwarding of an already-created player
+currently loses inference in the editor analysis path.
+
+Version 2 supports branches, conditional choices and bindings in the document;
+only line/choice/wait positions are checkpoint boundaries. Restore rebuilds the
+current presentation with saved locals and freshly supplied facts. It does not
+traverse branches, run actions, dispatch notifications, or append history. Future
+transitions evaluate conditions against the rebound facts and restored locals.
+
+At a saved choice, at least one reply must remain visible and enabled under the
+rebound state. Otherwise restore fails and leaves the fresh player idle—even if
+the choice has a fallback or was suspended. The host may update the fresh player's
+facts and retry, or explicitly start a new conversation. Restore never silently
+changes the saved position. Invalid locals, missing binding values and throwing
+resolvers also leave facts, locals and playback state unchanged.
+
+Version-2 graph identity additionally covers compiled branch/choice conditions,
+branch targets, binding definitions/fallbacks and local defaults. Plain version-1
+graphs are unchanged, and the two versions are not interchangeable. Locals must
+pass the current Save shape; optional absent fields, false, finite signed numbers,
+arrays and nested records retain their normal Save semantics. Before validation,
+local data is bounded to 16,384 entries, depth 32 and 256 KiB of strings, separately
+from the graph budget. Cycles, metatables, functions, sparse arrays, invalid UTF-8
+and incompatible values are rejected.
+
+The graph includes defaults, **not a full schema fingerprint**. Bump the required
+host `checkpointVersion` whenever fact/local schema semantics or host behavior
+changes incompatibly, even if defaults stay the same. There is no automatic schema
+migration. Facts, closures, host handlers and media are rebound, never serialized.
 
 
 ## Keep a bounded conversation history

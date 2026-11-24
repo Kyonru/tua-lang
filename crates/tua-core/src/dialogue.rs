@@ -187,6 +187,29 @@ fn definition_type(
     let Type::Table(mut player) = base.clone() else {
         unreachable!()
     };
+    // Context checkpoints carry the concrete local shape through imports, just
+    // like getLocals/setLocals. Plain players retain their version-1 contract.
+    let Type::Function(export) = &player.field("checkpoint").expect("checkpoint contract").ty
+    else {
+        unreachable!()
+    };
+    let Type::Table(mut checkpoint) = (*export.return_type).clone() else {
+        unreachable!()
+    };
+    checkpoint.insert("locals", TableField::required(locals.clone()));
+    let checkpoint = Type::Table(checkpoint);
+    player.insert(
+        "checkpoint",
+        TableField::required(signature(vec![("self", Type::Any)], 1, checkpoint.clone())),
+    );
+    player.insert(
+        "restore",
+        TableField::required(signature(
+            vec![("self", Type::Any), ("checkpoint", checkpoint)],
+            2,
+            Type::nil(),
+        )),
+    );
     for (name, value) in [("getContext", facts.clone()), ("getLocals", locals.clone())] {
         player.insert(
             name,

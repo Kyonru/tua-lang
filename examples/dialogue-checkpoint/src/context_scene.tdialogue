@@ -1,0 +1,17 @@
+@dialogue 1
+@document harbor.context-checkpoint
+@context "context"
+@bind coins context.coins
+@bind visits locals.visits
+[gate]
+@branch locals.visits >= 0 [target:hello] [else:done]
+[hello]
+// @id harbor.context.hello
+: Visit %{visits}: you have %{coins} coins.
+// @id harbor.context.buy
+-> Buy a shell [target:done]
+@enabled context.coins > 0
+@fallback done
+[done]
+// @id harbor.context.done
+: See you next time. (end)

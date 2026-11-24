@@ -1,0 +1,4 @@
+return Dialogue.context({
+  facts = Save.shape(Save.record({ coins = Save.number(0) })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})

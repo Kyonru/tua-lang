@@ -13636,3 +13636,69 @@ player:history().entries[1].kind = "invalid"
         assert!(snapshot.hover("src/main.tua", position).is_some());
     }
 }
+
+#[test]
+fn dialogue_context_checkpoints_preserve_local_types_through_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({ coins = Save.number(0) })),
+  locals = Save.shape(Save.record({ visits = Save.number(0), flag = Save.boolean(false) })),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@document demo
+@context "forward"
+[start]
+// @id demo.hello
+: Hello (end)
+-- file: src/main.tua
+local definition = require("forward")
+local player = definition.new(require("scene"), { coins = 10 }, { checkpointVersion = "v1" })
+player:start()
+local saved = player:checkpoint()
+local visits: number = saved.locals.<|visits|>visits
+local flag: boolean = saved.locals.<|flag|>flag
+saved.locals.visits = visits + 1
+player:restore(saved)
+print(flag)
+-- file: src/bad.tua
+local definition = require("forward")
+local player = definition.new(require("scene"), { coins = 10 }, { checkpointVersion = "v1" })
+local saved = player:checkpoint()
+saved.locals.visits = "wrong"
+local wrong: string = saved.locals.flag
+saved.locals = { visits = 1 }
+player:restore("wrong")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/context.tua", "src/scene.tdialogue", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 4,
+        "{diagnostics:?}"
+    );
+    for marker in ["visits", "flag"] {
+        let position = fixture.position(marker);
+        assert!(
+            completion_labels(&snapshot.completion("src/main.tua", position))
+                .contains(&marker.to_owned())
+        );
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+}

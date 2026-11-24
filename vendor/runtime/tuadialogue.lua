@@ -479,6 +479,7 @@ local function newPlayer(source, options)
     transcript = options.history ~= nil and history().new(options.history) or nil,
     checkpointVersion = options.checkpointVersion,
     checkpointPlain = source.context == nil and source.actions == nil and source.events == nil,
+    checkpointNoEffects = source.actions == nil and source.events == nil,
     actionHandlers = handlers,
     transitionBudget = budget,
     document = document(source),
@@ -852,9 +853,19 @@ end
 
 function Player:restore(value)
   assert(not self.resolving and self.state == "idle", "restore needs a fresh idle player")
-  local fired = require("tuadialogue_checkpoint").validate(self, value)
+  local fired, locals = require("tuadialogue_checkpoint").validate(self, value)
   value = copy(value)
-  local node = presentation(self, value.nodeId, value.locale)
+  if locals then boundArguments(self, self.facts, locals) end
+  if value.state == "awaiting_choice" then
+    local enabled = false
+    for _, option in ipairs(self.document.nodes[value.nodeId].options) do
+      local _, availableNow = available(option, self.facts, locals)
+      if availableNow then enabled = true end
+    end
+    assert(enabled, "checkpoint choice has no enabled replies in rebound context")
+  end
+  local node = presentation(self, value.nodeId, value.locale, self.facts, locals)
+  if locals then self.locals = locals end
   self.current, self.state, self.presentation = value.nodeId, value.state, node
   self.restored = true
   self.locale, self.suspended = value.locale, value.suspended
