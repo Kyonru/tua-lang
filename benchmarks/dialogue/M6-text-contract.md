@@ -3,7 +3,9 @@
 Status: implementation in progress on `feature/tdialogue-rich-text`.
 The shared Rust parser and schema-8 Lua runtime are implemented. Typed documents
 support `richText`, `richReason`, `resolveTemplate`, owned presentations and reveal
-timing. `.tdialogue` authoring/emission and editor integration remain pending.
+timing. Explicit `@text rich` authoring, schema-8 emission, catalog checks and
+mark-name editor queries are implemented; historical checkpoints below retain
+their original scope.
 
 This contract is based on revision `057b0314` and completes the remaining M6
 **design** decisions, not their implementation or acceptance tests.

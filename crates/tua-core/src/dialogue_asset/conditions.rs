@@ -243,7 +243,7 @@ impl Parser<'_> {
             return true;
         }
         if directive == "@reason" {
-            let Some(reason) = self.text(rest, rest_at) else {
+            let Some(reason) = self.text(rest, rest_at, super::rich_text::FieldKind::Reason) else {
                 return true;
             };
             let choice = self

@@ -14,6 +14,10 @@ impl CatalogIndex {
                         std::iter::once(&choice.text).chain(choice.reason.iter())
                     }))
                 {
+                    let template = text.rich.as_ref().map_or(&text.value, |rich| &rich.source);
+                    if let Some(rich) = &text.rich {
+                        self.rich_dialogue.insert(text.id.value.clone(), rich.kind);
+                    }
                     self.entries.entry(text.id.value.clone()).or_default();
                     self.dialogue_sources
                         .entry(text.id.value.clone())
@@ -22,7 +26,7 @@ impl CatalogIndex {
                             locale: String::new(),
                             path: path.clone(),
                             span: text.id.span,
-                            value: CatalogValue::Text(text.value.clone()),
+                            value: CatalogValue::Text(template.clone()),
                             placeholders: dialogue_placeholders(&text.value).unwrap_or_default(),
                         });
                 }
@@ -41,15 +45,30 @@ impl CatalogIndex {
                             .with_code(DiagnosticCode::DOMAIN_I18N));
                     continue;
                 };
+                let check = |text: &str| {
+                    if let Some(kind) = self.rich_dialogue.get(key) {
+                        match crate::dialogue_asset::rich_text::parse(text, *kind) {
+                            Ok(template) => {
+                                check_text(&template.plain_template, &source.placeholders)
+                            }
+                            Err(error) => Some(format!(
+                                "has invalid rich markup at template bytes {}..{}: {}",
+                                error.range.start + 1,
+                                error.range.end,
+                                error.message
+                            )),
+                        }
+                    } else {
+                        check_text(text, &source.placeholders)
+                    }
+                };
                 let invalid = match &entry.value {
                     CatalogValue::Dialogue(_) => {
                         Some("must be scalar text or plural forms, not an array".to_owned())
                     }
                     CatalogValue::Dynamic => None,
-                    CatalogValue::Text(text) => check_text(text, &source.placeholders),
-                    CatalogValue::Plural(forms) => forms
-                        .values()
-                        .find_map(|text| check_text(text, &source.placeholders)),
+                    CatalogValue::Text(text) => check(text),
+                    CatalogValue::Plural(forms) => forms.values().find_map(|text| check(text)),
                 };
                 if let Some(message) = invalid {
                     self.diagnostics
@@ -300,5 +319,69 @@ mod tests {
         assert!(!index
             .guaranteed_result_types(&host.snapshot().config().i18n)
             .contains_key("absent"));
+    }
+}
+
+#[cfg(test)]
+mod rich_catalog_tests {
+    use super::*;
+    use crate::{AnalysisHost, AnalysisSourceKind, I18nCatalogConfig, ProjectConfig};
+
+    #[test]
+    fn rich_catalog_validation_tracks_forms_field_kind_and_source_edits() {
+        let mut config = ProjectConfig::default();
+        config.i18n.enabled = true;
+        config.i18n.catalogs.push(I18nCatalogConfig {
+            locale: "en".into(),
+            path: "en.lua".into(),
+        });
+        let mut host = AnalysisHost::with_config(config);
+        host.set_source_roots([PathBuf::from("src")]);
+        let scene = "@dialogue 1\n@text rich\n[s]\n// @id hello\n: [pronounce=\"100%\"]Hi %{name}[/pronounce]\n// @id go\n-> Go [target:s]\n";
+        host.set_file_with_kind("src/scene.tdialogue", scene, AnalysisSourceKind::Dialogue);
+        host.set_file_with_kind("src/en.lua", "return { en = { hello = { one = '[em]Hi %{name}[/em]', other = '[em]Hi %{name}' }, go = '[pause=0]Go' } }", AnalysisSourceKind::Lua);
+        let diagnostics = host.snapshot().i18n_catalog_diagnostics();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("unclosed rich-text mark")),
+            "{diagnostics:?}"
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("only supported in lines")),
+            "{diagnostics:?}"
+        );
+        host.set_file_with_kind(
+            "src/en.lua",
+            "return { en = { hello = '[pronounce=\"50%\"]%{name}[/pronounce]', go = '[em]Go[/em]' } }",
+            AnalysisSourceKind::Lua,
+        );
+        assert!(!host
+            .snapshot()
+            .i18n_catalog_diagnostics()
+            .iter()
+            .any(
+                |d| d.message.contains("invalid rich markup") || d.message.contains("placeholder")
+            ));
+        host.set_file_with_kind(
+            "src/en.lua",
+            "return { en = { hello = '[unknown]%{name}', go = '[pause=0]Go' } }",
+            AnalysisSourceKind::Lua,
+        );
+        host.set_file_with_kind(
+            "src/scene.tdialogue",
+            scene
+                .replace("@text rich\n", "")
+                .replace("[pronounce=\"100%\"]", "")
+                .replace("[/pronounce]", ""),
+            AnalysisSourceKind::Dialogue,
+        );
+        assert!(!host
+            .snapshot()
+            .i18n_catalog_diagnostics()
+            .iter()
+            .any(|d| d.message.contains("invalid rich markup")));
     }
 }

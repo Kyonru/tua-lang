@@ -406,3 +406,94 @@ fn pronunciation(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) struct MarkInfo {
+    pub name: &'static str,
+    pub insertion: &'static str,
+    pub description: &'static str,
+    pub timing: bool,
+}
+
+pub(crate) const MARKS: &[MarkInfo] = &[
+    MarkInfo { name: "em", insertion: "em]", description: "[em]text[/em]: semantic emphasis; the host chooses its appearance", timing: false },
+    MarkInfo { name: "style", insertion: "style=warning]", description: "[style=key]text[/style]: host-defined style; ASCII identifier, at most 64 bytes", timing: false },
+    MarkInfo { name: "speed", insertion: "speed=30]", description: "[speed=30]text[/speed]: scoped graphemes/second in (0, 1000]; line-only", timing: true },
+    MarkInfo { name: "pause", insertion: "pause=0.25]", description: "[pause=0.25]: wait at this boundary, 0–60 seconds; line-only", timing: true },
+    MarkInfo { name: "pronounce", insertion: "pronounce=\"hint\"]", description: "[pronounce=\"hint\"]text[/pronounce]: opaque speech hint, 1–256 UTF-8 bytes; cannot nest", timing: false },
+];
+
+/// Recover text-field boundaries even while the markup itself is incomplete.
+/// Comments/blank lines may separate the header and explicit opt-in directive.
+pub(crate) fn authoring_field(
+    source: &str,
+    line_number: usize,
+) -> Option<(&str, usize, FieldKind)> {
+    let mut significant = source
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with("//"));
+    if significant.next()?.trim() != "@dialogue 1" || significant.next()?.trim() != "@text rich" {
+        return None;
+    }
+    let line = source.lines().nth(line_number.checked_sub(1)?)?;
+    let trimmed = line.trim_start();
+    let (text, kind) = if let Some(text) = trimmed.strip_prefix("-> ") {
+        (text, FieldKind::Choice)
+    } else if let Some(text) = trimmed.strip_prefix("@reason ") {
+        (text, FieldKind::Reason)
+    } else if !trimmed.starts_with(['@', '[', '/']) {
+        let (speaker, text) = trimmed.split_once(':')?;
+        if !speaker.is_empty() && !super::identifier(speaker) {
+            return None;
+        }
+        (text.strip_prefix(' ').unwrap_or(text), FieldKind::Line)
+    } else {
+        return None;
+    };
+    let offset = line.len() - text.len();
+    let text = if kind == FieldKind::Choice {
+        text.rsplit_once(" [target:").map_or(text, |(body, _)| body)
+    } else {
+        text
+    };
+    Some((text, line[..offset].chars().count() + 1, kind))
+}
+
+/// Find an unescaped mark at a UTF-8 byte cursor, including an unfinished opener.
+/// Quoted pronunciation brackets and escaped literal brackets never become marks.
+pub(crate) fn mark_at(text: &str, cursor: usize) -> Option<(Range<usize>, &str)> {
+    if cursor > text.len() || !text.is_char_boundary(cursor) {
+        return None;
+    }
+    let mut chars = text.char_indices().peekable();
+    while let Some((start, ch)) = chars.next() {
+        if ch == '\\' {
+            chars.next();
+            continue;
+        }
+        if ch != '[' {
+            continue;
+        }
+        let mut quoted = false;
+        let mut end = text.len();
+        let mut closed = false;
+        while let Some((at, ch)) = chars.next() {
+            if quoted && ch == '\\' {
+                chars.next();
+                continue;
+            }
+            if ch == '"' {
+                quoted = !quoted;
+            }
+            if ch == ']' && !quoted {
+                end = at + 1;
+                closed = true;
+                break;
+            }
+        }
+        if cursor > start && (cursor < end || !closed && cursor == end) {
+            let body_end = if closed { end - 1 } else { end };
+            return Some((start..end, &text[start + 1..body_end]));
+        }
+    }
+    None
+}

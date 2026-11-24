@@ -7,7 +7,7 @@
       "match": "^\\s*//.*$"
     },
     {
-      "begin": "^\\s*(@(?:dialogue|document|context|bind|branch|visible|enabled|reason|fallback|character|characters|actions|action|events|emit|event|timing|expression))\\b",
+      "begin": "^\\s*(@(?:dialogue|text|document|context|bind|branch|visible|enabled|reason|fallback|character|characters|actions|action|events|emit|event|timing|expression))\\b",
       "end": "$",
       "beginCaptures": {
         "1": {
@@ -15,6 +15,10 @@
         }
       },
       "patterns": [
+        {
+          "name": "entity.name.tag.tdialogue",
+          "match": "\\[/?(?:em|style|speed|pause|pronounce)(?:=(?:\"(?:\\\\.|[^\"\\\\])*\"|[^\\]\\r\\n]*))?\\]"
+        },
         {
           "name": "entity.name.tag.tdialogue",
           "match": "\\[id:[A-Za-z_][A-Za-z_0-9.-]*\\]"
@@ -70,6 +74,10 @@
     {
       "name": "constant.character.escape.tdialogue",
       "match": "\\\\."
+    },
+    {
+      "name": "entity.name.tag.tdialogue",
+      "match": "\\[/?(?:em|style|speed|pause|pronounce)(?:=(?:\"(?:\\\\.|[^\"\\\\])*\"|[^\\]\\r\\n]*))?\\]"
     }
   ]
 }

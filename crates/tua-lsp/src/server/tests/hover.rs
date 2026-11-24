@@ -1061,3 +1061,31 @@ fn dialogue_shared_characters_have_editor_queries_and_safe_formatting() {
     server.send(completion_request(7, &uri, &incomplete, "Cast."));
     assert_completion_labels(server.output(), 7, ["Traveler"]);
 }
+
+#[test]
+fn rich_dialogue_marks_use_utf16_editor_ranges_and_unsaved_opt_in() {
+    let temp = TempProject::new("dialogue-rich-marks");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n@text rich\n[start]\n// @id hello\n: é🦆[em]Hi[/em][sp\n";
+    temp.write("src/rich.tdialogue", source);
+    let uri = temp.uri_for("src/rich.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(hover_request(2, &uri, source, "em]Hi"));
+    assert_hover_contains(server.output(), 2, "emphasis");
+    let hover = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(hover["range"]["start"], json!({"line":4,"character":5}));
+    server.send(completion_request(3, &uri, source, "[sp"));
+    assert_completion_labels(server.output(), 3, ["speed"]);
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"][0]["textEdit"]["newText"],
+        "speed=30]"
+    );
+    let plain = source.replace("@text rich", "// plain");
+    server.send(did_change(&uri, &plain, 2));
+    server.send(completion_request(4, &uri, &plain, "[sp"));
+    assert_completion_labels(server.output(), 4, []);
+}

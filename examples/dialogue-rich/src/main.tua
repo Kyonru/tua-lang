@@ -1,4 +1,4 @@
-local player = Dialogue.new(require("scene"), { args = { name = "Ada" } })
+local player = Dialogue.new(require("authored"), { args = { name = "Ada" } })
 player:start()
 local snapshot = player:snapshot()
 local node = snapshot.node

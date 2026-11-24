@@ -244,14 +244,27 @@ fn arbitrary_unicode_inputs_terminate_with_valid_ranges() {
 }
 
 #[test]
-fn public_dialogue_authoring_stays_plain_until_runtime_integration() {
+fn rich_authoring_requires_explicit_opt_in() {
     let plain = "@dialogue 1\n[start]\n// @id test\n: \\[em\\]literal\\[/em\\] (end)\n";
     let parsed = crate::dialogue_asset::parse_dialogue_source("plain.tdialogue", plain).unwrap();
     assert_eq!(parsed.sections[0].lines[0].text.value, "[em]literal[/em]");
     let emitted = crate::emit::emit_dialogue_source("plain.tdialogue", plain).unwrap();
     assert!(!emitted.code.contains("schemaVersion = 8"));
     let rich = plain.replace("@dialogue 1", "@dialogue 1\n@text rich");
-    assert!(crate::dialogue_asset::parse_dialogue_source("rich.tdialogue", &rich).is_err());
+    assert!(
+        crate::dialogue_asset::parse_dialogue_source("rich.tdialogue", &rich)
+            .unwrap()
+            .rich_text
+    );
+    assert!(crate::emit::emit_dialogue_source("rich.tdialogue", &rich)
+        .unwrap()
+        .code
+        .contains("schemaVersion = 8"));
+    assert!(crate::dialogue_asset::parse_dialogue_source(
+        "plain.tdialogue",
+        &plain.replace("\\[", "[").replace("\\]", "]")
+    )
+    .is_err());
 }
 
 #[test]

@@ -1,0 +1,6 @@
+@dialogue 1
+@text rich
+@document rich.authored
+[greeting]
+// @id rich.greeting
+: [pause=0.5][em]Hi %{name}[/em][speed=2]![/speed][pause=0.5] (end)

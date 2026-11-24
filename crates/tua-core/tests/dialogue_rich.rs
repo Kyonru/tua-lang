@@ -14,6 +14,15 @@ fn dialogue_rich_execute_emitted_sources() {
     script.push_str(&format!(
         "package.preload.scene = function()\n{scene}\nend\n"
     ));
+    let authored = tua_core::emit::emit_dialogue_source(
+        "authored.tdialogue",
+        &std::fs::read_to_string(example.join("authored.tdialogue")).unwrap(),
+    )
+    .unwrap()
+    .code;
+    script.push_str(&format!(
+        "package.preload.authored = function()\n{authored}\nend\n"
+    ));
     script.push_str(
         &tua_core::emit::emit_tua_source(
             "main.tua",

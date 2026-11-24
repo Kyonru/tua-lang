@@ -103,6 +103,7 @@ mod dialogue_conditions;
 mod dialogue_context;
 mod dialogue_events;
 mod dialogue_queries;
+mod dialogue_rich;
 mod ecs_queries;
 mod editor_queries;
 mod host;

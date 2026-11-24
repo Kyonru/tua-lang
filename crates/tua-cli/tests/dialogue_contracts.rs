@@ -180,3 +180,42 @@ fn dialogue_localization_uses_emitted_runtime_and_non_destructive_extraction() {
         assert!(String::from_utf8_lossy(&output.stderr).contains("needs dialogue schema 1"));
     }
 }
+
+#[test]
+fn rich_authored_dialogue_builds_runs_and_extracts_templates() {
+    let temp = TempDir::new("dialogue-rich-authoring");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    copy_dir_all(&root.join("examples/dialogue-rich"), temp.path()).unwrap();
+    run(temp.path(), "check");
+    run(temp.path(), "build");
+    let output = tua()
+        .arg("dialogue-extract")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let manifest: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let entry = &manifest["entries"]["rich.greeting"];
+    assert_eq!(entry["format"], "rich");
+    assert_eq!(entry["plainTemplate"], "Hi %{name}!");
+    assert!(entry["text"].as_str().unwrap().contains("[pause=0.5]"));
+    assert!(fs::read_to_string(temp.path().join("build/authored.lua"))
+        .unwrap()
+        .contains("schemaVersion = 8"));
+    if let Some(lua) = support::lua_executable() {
+        let output = Command::new(lua)
+            .arg("main.lua")
+            .current_dir(temp.path().join("build"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

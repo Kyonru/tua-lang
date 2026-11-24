@@ -64,7 +64,9 @@ pub fn emit_dialogue_source(
     }
     output.line("return {", entry.span);
     output.line(
-        if document
+        if document.rich_text {
+            "  schemaVersion = 8,"
+        } else if document
             .sections
             .iter()
             .flat_map(|s| &s.lines)
@@ -181,6 +183,9 @@ pub fn emit_dialogue_source(
             output.line(&format!("    [{}] = {{", lua_string_literal(&id)), origin);
             output.field("      kind", "line", origin);
             output.field("      text", &line.text.value, origin);
+            if let Some(rich) = &line.text.rich {
+                output.field("      richText", &rich.source, origin);
+            }
             output.field("      textId", &line.text.id.value, line.text.id.span);
             if let Some(speaker) = &line.speaker {
                 if let Some(name) = speakers.get(speaker.value.as_str()) {
@@ -296,6 +301,9 @@ pub fn emit_dialogue_source(
                     output.line("        {", at);
                     output.field("          id", &choice.text.id.value, choice.text.id.span);
                     output.field("          text", &choice.text.value, at);
+                    if let Some(rich) = &choice.text.rich {
+                        output.field("          richText", &rich.source, at);
+                    }
                     output.field("          target", &choice.target.value, choice.target.span);
                     if let Some(condition) = &choice.visible {
                         output.condition("          visible", condition);
@@ -305,6 +313,9 @@ pub fn emit_dialogue_source(
                     }
                     if let Some(reason) = &choice.reason {
                         output.field("          reason", &reason.value, reason.span);
+                        if let Some(rich) = &reason.rich {
+                            output.field("          richReason", &rich.source, reason.span);
+                        }
                         output.field("          reasonId", &reason.id.value, reason.id.span);
                     }
                     output.line("        },", at);

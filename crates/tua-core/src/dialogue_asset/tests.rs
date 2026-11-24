@@ -207,3 +207,59 @@ fn event_identity_requires_a_document_and_unique_valid_ids() {
         .iter()
         .any(|error| error.message.contains("duplicate event ID")));
 }
+
+#[test]
+fn rich_authoring_preserves_templates_and_checks_field_specific_marks() {
+    let source = "@dialogue 1\n// opt in explicitly\n@text rich\n@context \"story\"\n[start]\n// @id hello\n: [em]Hi %{name}[/em][pause=0.25] 100%\n// @id go\n-> [style=warning]Go[/style] [target:done]\n// @id why\n@reason [em]Not yet[/em]\n[done]\n// @id bye\n: Bye (end)\n";
+    let model = parse_dialogue_source("rich.tdialogue", source).unwrap();
+    let line = &model.sections[0].lines[0];
+    assert!(model.rich_text);
+    assert_eq!(line.text.value, "Hi %{name} 100%%");
+    assert_eq!(
+        line.text.rich.as_ref().unwrap().source,
+        "[em]Hi %{name}[/em][pause=0.25] 100%"
+    );
+    assert_eq!(
+        line.choices[0].text.rich.as_ref().unwrap().kind,
+        rich_text::FieldKind::Choice
+    );
+    assert_eq!(
+        line.choices[0]
+            .reason
+            .as_ref()
+            .unwrap()
+            .rich
+            .as_ref()
+            .unwrap()
+            .kind,
+        rich_text::FieldKind::Reason
+    );
+    let emitted = crate::emit::emit_dialogue_source("rich.tdialogue", source).unwrap();
+    assert!(emitted.code.contains("schemaVersion = 8"));
+    assert!(emitted.code.contains("richText ="));
+    assert!(emitted.code.contains("richReason ="));
+    assert_eq!(emitted.provenance.len(), emitted.code.lines().count());
+    for invalid in [
+        source.replace("@text rich", "@text plain"),
+        source.replace("@text rich", "@text rich\n@text rich"),
+        source.replace("[start]", "[start]\n@text rich"),
+        source.replace("[style=warning]Go[/style]", "[pause=0]Go"),
+        source.replace("[em]Not yet[/em]", "[speed=4]Not yet[/speed]"),
+    ] {
+        assert!(
+            parse_dialogue_source("rich.tdialogue", &invalid).is_err(),
+            "{invalid}"
+        );
+    }
+}
+
+#[test]
+fn rich_markup_diagnostic_ranges_use_unicode_scalar_columns() {
+    let source = "@dialogue 1\n@text rich\n[start]\n// @id hello\n: é🦆[unknown] (end)\n";
+    let errors = parse_dialogue_source("rich.tdialogue", source).unwrap_err();
+    let error = errors
+        .iter()
+        .find(|error| error.message == "unknown rich-text mark")
+        .unwrap();
+    assert_eq!((error.line, error.column), (5, 5));
+}

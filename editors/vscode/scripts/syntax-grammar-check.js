@@ -42,11 +42,20 @@ async function main() {
   });
   const dialogueGrammar = await registry.loadGrammar("text.tdialogue");
   assert(dialogueGrammar, "expected text.tdialogue grammar to load");
-  for (const directive of ["@actions", "@action", "@expression"]) {
+  for (const directive of ["@actions", "@action", "@expression", "@text"]) {
     const result = dialogueGrammar.tokenizeLine(`${directive} purchase`, textmate.INITIAL);
     assert(result.tokens.some((token) => token.scopes.some((scope) => scope.startsWith("keyword"))),
       `expected ${directive} to be highlighted as a dialogue directive`);
   }
+
+  for (const line of [': [em]Hello[/em]', '-> [style=warning]Go[/style] [target:end]', '@reason [em]Wait[/em]', ': [pronounce="a ] b"]Hi[/pronounce]']) {
+    const result = dialogueGrammar.tokenizeLine(line, textmate.INITIAL);
+    assert(result.tokens.some((token) => token.scopes.includes("entity.name.tag.tdialogue")),
+      `expected rich mark highlighting: ${line}`);
+  }
+  const escaped = dialogueGrammar.tokenizeLine(String.raw`: \[em\]literal`, textmate.INITIAL);
+  assert(!escaped.tokens.some((token) => token.scopes.includes("entity.name.tag.tdialogue")),
+    "escaped prose must not be highlighted as a rich mark");
 
   const grammar = await registry.loadGrammar("source.tua");
   assert(grammar, "expected source.tua grammar to load");

@@ -208,8 +208,7 @@ Likewise, after a future/custom restore, honor a completed snapshot or call
 Pass snapshots after line changes, cancellation, and disposal. Non-line states
 clear the controller. A user skip calls `finish()` and reports `update(0, true)`
 to the dialogue player; it does not automatically select a reply or advance a
-line. Authored pauses and per-span speed controls remain part of the pending
-styled-text work; this controller currently uses one rate for the whole line.
+line. Rich presentations can add authored pauses and scoped reveal rates, described below.
 
 ### Use speech cues without catch-up bursts
 
@@ -254,10 +253,35 @@ and substituted text is not reinterpreted as markup by this controller.
 
 ## Rich presentations and timing
 
-Schema-8 typed documents support renderer-neutral rich text. The
-[runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-rich)
-shows the complete flow. The `.tdialogue` `@text rich` directive and its editor
-support remain pending; author rich documents as typed data for now.
+Enable rich text with `@text rich` immediately after `@dialogue 1`, before
+imports, labels or text IDs. Blank lines and ordinary comments may separate them.
+The compiler emits schema 8 with both raw templates and plain fallback templates.
+
+```text
+@dialogue 1
+@text rich
+@document greeting
+[start]
+// @id greeting.hello
+: [em]Hello %{name}[/em][pause=0.25][speed=15]![/speed] (end)
+```
+
+Use `[em]…[/em]`, `[style=warning]…[/style]`, and
+`[pronounce="hint"]…[/pronounce]` for presentation metadata. Lines also support
+`[speed=15]…[/speed]` and `[pause=0.25]`; choices and disabled reasons reject
+timing marks. Existing plain scripts keep their syntax and schema behavior.
+
+The editor provides mark-name completion, hover descriptions and highlighting.
+Shared diagnostics check nesting, mark parameters and field restrictions.
+Static translation catalogs are checked using the source field's rich-text rules;
+dynamic templates and final grapheme alignment are validated at runtime.
+Translations contain raw markup templates; placeholder values remain literal text.
+`tua dialogue-extract` adds `format: "rich"` and `plainTemplate` to rich entries,
+while `text` retains the authored template for translation.
+
+The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-rich)
+uses an authored script and a typed document. Typed schema-8 documents are also
+supported directly:
 
 ```tua
 local player = Dialogue.new({

@@ -162,6 +162,9 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        if let Some(items) = self.dialogue_rich_completion(path, position) {
+            return items;
+        }
         if let Some((module, character, prefix, _)) = self.expression_target(path, position, true) {
             let Some(ty) = self.dialogue_character_type(&module, &character) else {
                 return Vec::new();
@@ -244,6 +247,9 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if let Some(hover) = self.dialogue_rich_hover(path, position) {
+            return Some(hover);
+        }
         if let Some((module, character, expression, span)) =
             self.expression_target(path, position, false)
         {

@@ -25,9 +25,13 @@ pub(crate) fn run(cwd: &Path) -> Result<String, CliError> {
                     .iter()
                     .flat_map(|choice| std::iter::once(&choice.text).chain(choice.reason.iter())),
             ) {
-                let value = serde_json::json!({ "text": text.value,
+                let mut value = serde_json::json!({ "text": text.rich.as_ref().map_or(&text.value, |rich| &rich.source),
                     "path": file.path.strip_prefix(workspace.primary_source_root()).unwrap_or(&file.path),
                     "line": text.id.span.start.line, "documentId": model.document_id.as_ref().map(|id| &id.value) });
+                if text.rich.is_some() {
+                    value["format"] = serde_json::json!("rich");
+                    value["plainTemplate"] = serde_json::json!(text.value);
+                }
                 if entries.insert(text.id.value.clone(), value).is_some() {
                     return Err(CliError::usage(format!(
                         "duplicate dialogue text ID: {}",

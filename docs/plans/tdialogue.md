@@ -362,14 +362,15 @@ static and does not load images during analysis.
 
 ## M6 — Text presentation and reveal metadata
 
-**Reveal foundation implemented:** optional typed `Dialogue.reveal` consumes resolved
+**Complete on the feature branch:** optional typed `Dialogue.reveal` consumes resolved
 snapshots, segments Unicode 15.1 extended graphemes, exposes inclusive UTF-8 cluster
 ranges, and emits at most one eligible speech cue per update. Finish/clear/refresh
 invalidate or suppress stale delivery; reduced motion reveals silently. The host owns
 rendering, shaping and audio. The official 1,187-case grapheme corpus is exercised on
 emitted-runtime tests. Schema-8 typed documents now support rich presentation runs,
 pauses/rates, pronunciation hints and selected-template origin mappings. `.tdialogue`
-rich authoring/editor integration remains pending; M6 is not complete.
+rich authoring, schema-8 emission, catalog checks and mark-name editor queries
+are implemented. See the [authoring qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-authoring.md).
 See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-reveal.md).
 
 
@@ -378,7 +379,7 @@ See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/
 defines explicit rich-text opt-in, renderer-neutral runs, source mappings, bounded
 marks and reveal timing. A separate unexpanded template resolver preserves literal
 placeholder insertion; existing string resolvers remain compatible. Typed runtime
-usage is available; the `@text rich` authoring directive remains disabled.
+usage and explicit `@text rich` authoring are available.
 
 - [x] Define a renderer-neutral representation for styled text, emphasis, pauses,
   reveal speed and pronunciation hints, with a plain-text fallback.
@@ -401,20 +402,20 @@ usage is available; the `@text rich` authoring directive remains disabled.
 - [x] Document font coverage, shaping and bidirectional-layout responsibilities.
   Accepting Unicode strings is not proof of multilingual rendering support.
 
-**Implementation in progress on `feature/tdialogue-rich-text`:** the shared Rust
+**Implemented on `feature/tdialogue-rich-text` (not merged):** the shared Rust
 text-field parser and bounded Lua runtime agree on a shared parity corpus. The
 runtime supports typed rich documents and localized template callbacks; the
-`.tdialogue` directive remains disabled until emission and tooling support it.
+`.tdialogue` directive emits schema 8 with shared diagnostics and editor queries.
 
-**Remaining implementation:**
+**Implementation checklist:**
 
 - [x] Implement and test bounded raw text-field tokenization and fallback templates.
-- [ ] Integrate the opt-in directive, versioned document emission and shared editor facts.
+- [x] Integrate the opt-in directive, versioned document emission and shared editor facts.
 - [x] Add typed `I18n.dialogueTemplate` selection with locale/plural metadata.
 - [x] Connect template resolution to dialogue players and build owned presentation
   runs and origin mappings for schema-8 typed documents.
 - [x] Integrate typed-document rates/pauses with reveal and verify lifecycle semantics.
-- [ ] Qualify styled/localized examples and the acceptance matrix below.
+- [x] Qualify styled/localized examples and the acceptance matrix below.
 
 **Acceptance:** tests cover combining marks, emoji sequences, non-Latin text,
 escaped markup, expanded placeholders, localized span order, pause/skip and invalid
@@ -604,7 +605,7 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0–M5 are complete; continue with **M6 — Text presentation and reveal metadata**.
+M0–M6 are complete; continue with **M7 — Voice and asynchronous actions**.
 Reuse declared schemas, typed context/path facts, stable execution identities and
 bounded transition behavior. Keep gameplay mutations in explicit host actions;
 never execute arbitrary script expressions or replace the host renderer/audio stack.

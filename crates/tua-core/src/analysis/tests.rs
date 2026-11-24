@@ -13257,3 +13257,59 @@ Dialogue.new({entry = "s", nodes = {s = {kind = "end"}}}, {
         .hover("src/main.tua", fixture.position("field"))
         .is_some());
 }
+
+#[test]
+fn rich_dialogue_authoring_queries_recover_and_refresh() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+@text rich
+[start]
+// @id hello
+: é🦆[<|complete|>em]Hi[/em][sp<|partial|>
+// @id go
+-> [<|choice|>em]Go[/em] [target:start]
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let complete = snapshot.completion("src/scene.tdialogue", fixture.position("complete"));
+    assert_eq!(
+        complete
+            .iter()
+            .find(|item| item.label == "em")
+            .unwrap()
+            .insert_text
+            .as_deref(),
+        Some("em")
+    );
+    let labels = completion_labels(&complete);
+    assert!(
+        labels.contains(&"em".into()) && labels.contains(&"pause".into()),
+        "{labels:?}"
+    );
+    let items = snapshot.completion("src/scene.tdialogue", fixture.position("partial"));
+    assert_eq!(completion_labels(&items), vec!["speed"]);
+    let labels =
+        completion_labels(&snapshot.completion("src/scene.tdialogue", fixture.position("choice")));
+    assert!(
+        !labels.contains(&"speed".into()) && labels.contains(&"em".into()),
+        "{labels:?}"
+    );
+    let hover = snapshot
+        .hover("src/scene.tdialogue", fixture.position("complete"))
+        .unwrap();
+    assert!(hover.contents.contains("emphasis"));
+    let file = &fixture.files()[0];
+    host.set_file(
+        &file.path,
+        file.source.replace("@text rich\n", "// plain\n"),
+    );
+    assert!(host
+        .snapshot()
+        .completion("src/scene.tdialogue", fixture.position("complete"))
+        .is_empty());
+}

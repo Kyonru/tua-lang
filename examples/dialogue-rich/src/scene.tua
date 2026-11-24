@@ -1,4 +1,4 @@
--- Schema 8 is currently authored as typed data; @text rich is not enabled yet.
+-- Typed schema-8 alternative to the authored @text rich script.
 type Line = { kind: "line", textId: string, text: string, richText: string, next: string }
 type End = { kind: "end" }
 type Scene = { schemaVersion: number, entry: string, nodes: { [string]: Line | End } }

@@ -8,14 +8,15 @@ language or editor behavior, and migration notes call out those changes.
 
 - Connect schema-8 rich dialogue templates to owned localized presentation runs,
   literal placeholders, source ranges, and reveal pauses/rates. Typed document
-  authoring is supported; `.tdialogue` rich syntax remains pending.
+  authoring and explicit `.tdialogue` `@text rich` scripts are supported, with
+  mark completion/hover, catalog validation and rich translation extraction.
 
 - Add typed `I18n.dialogueTemplate` to select unexpanded dialogue templates with
   actual locale/plural metadata, preserving the existing string resolver behavior.
 
 - Add optional typed `Dialogue.reveal` with Unicode 15.1 grapheme-safe reveal,
   owned byte-range mappings, silent finish/reduced-motion behavior, and bounded
-  speech-blip cues with lifecycle identity. Styled markup remains pending.
+  speech-blip cues with lifecycle identity and authored rich timing.
 
 - Shared dialogue characters support named expressions selected with `@expression`,
   with typed metadata, editor queries, per-line portrait resets and host-owned animation.

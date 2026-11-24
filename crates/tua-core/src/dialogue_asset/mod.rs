@@ -21,7 +21,14 @@ pub struct DialogueName {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DialogueRichText {
+    pub source: String,
+    pub kind: rich_text::FieldKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueText {
+    pub rich: Option<DialogueRichText>,
     pub id: DialogueName,
     /// Decoded literal text; placeholders/effects are not evaluated.
     pub value: String,
@@ -163,6 +170,7 @@ pub(crate) fn character_module_specifiers(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub rich_text: bool,
     pub actions: Option<CharacterImport>,
     pub events: Option<CharacterImport>,
     pub context: Option<CharacterImport>,
@@ -185,6 +193,7 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            rich_text: false,
             actions: None,
             events: None,
             context: None,
@@ -200,6 +209,7 @@ pub fn parse_dialogue_source(
         labels: BTreeSet::new(),
         speakers: BTreeSet::new(),
         header: false,
+        rich_directive_allowed: false,
     };
     if source.len() > crate::input_limits::MAX_SOURCE_BYTES {
         parser.error(span(1, 1, 1), "dialogue source exceeds byte limit");
@@ -249,6 +259,7 @@ struct Parser<'a> {
     labels: BTreeSet<String>,
     speakers: BTreeSet<String>,
     header: bool,
+    rich_directive_allowed: bool,
 }
 
 impl Parser<'_> {
@@ -314,12 +325,29 @@ impl Parser<'_> {
         }
         if !self.header {
             self.header = true;
+            self.rich_directive_allowed = true;
             if syntax != "@dialogue 1" {
                 self.error(at, "first directive must be `@dialogue 1`");
             }
             self.abandon_id();
             return;
         }
+        if syntax.starts_with("@text") {
+            if syntax != "@text rich" {
+                self.error(at, "expected `@text rich`");
+            } else if !self.rich_directive_allowed || self.pending_id.is_some() {
+                self.error(
+                    at,
+                    "declare `@text rich` once immediately after `@dialogue 1`",
+                );
+            } else {
+                self.document.rich_text = true;
+            }
+            self.rich_directive_allowed = false;
+            self.abandon_id();
+            return;
+        }
+        self.rich_directive_allowed = false;
         if self.action_line(raw, number, at) {
             return;
         }
@@ -589,17 +617,44 @@ impl Parser<'_> {
             .push(DialogueSpeaker { id, name, span: at });
     }
 
-    fn text(&mut self, value: &str, at: SourceSpan) -> Option<DialogueText> {
+    fn text(
+        &mut self,
+        value: &str,
+        at: SourceSpan,
+        kind: rich_text::FieldKind,
+    ) -> Option<DialogueText> {
         let Some(id) = self.pending_id.take() else {
             self.error(at, "line or choice needs an explicit `// @id identifier`");
             return None;
         };
-        let value = self.decode(value, at, false)?;
+        let (value, rich) = if self.document.rich_text {
+            match rich_text::parse(value, kind) {
+                Ok(template) => (
+                    template.plain_template,
+                    Some(DialogueRichText {
+                        source: value.to_owned(),
+                        kind,
+                    }),
+                ),
+                Err(error) => {
+                    let position = span(
+                        at.start.line,
+                        at.start.column + value[..error.range.start].chars().count(),
+                        value[error.range].chars().count(),
+                    );
+                    self.error(position, error.message);
+                    return None;
+                }
+            }
+        } else {
+            (self.decode(value, at, false)?, None)
+        };
         if value.trim().is_empty() {
             self.error(at, "dialogue text must not be empty");
             return None;
         }
         Some(DialogueText {
+            rich,
             id,
             value,
             span: at,
@@ -701,7 +756,7 @@ impl Parser<'_> {
             (value, false)
         };
         let value_at = span(at.start.line, value_column, value.chars().count());
-        let Some(text) = self.text(value, value_at) else {
+        let Some(text) = self.text(value, value_at, rich_text::FieldKind::Line) else {
             return;
         };
         let Some(section) = self.document.sections.last_mut() else {
@@ -758,6 +813,7 @@ impl Parser<'_> {
         let Some(text) = self.text(
             value,
             span(at.start.line, at.start.column + 3, value.chars().count()),
+            rich_text::FieldKind::Choice,
         ) else {
             return;
         };

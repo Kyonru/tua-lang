@@ -169,6 +169,7 @@ pub(crate) struct CatalogIndex {
     pub diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
     pub duplicate_keys: BTreeSet<String>,
     pub dialogue_sources: BTreeMap<String, CatalogEntry>,
+    pub rich_dialogue: BTreeMap<String, crate::dialogue_asset::rich_text::FieldKind>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
