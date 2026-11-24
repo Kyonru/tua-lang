@@ -448,12 +448,12 @@ and [wait/suspension qualification](https://github.com/Kyonru/tua-lang/blob/main
   interval and character/word cadence. Allow a per-line override or silence. Keep
   audio asset loading, sample selection/synthesis, mixing and playback in the host
   adapter; the core stores data and emits cues without requiring audio or LÖVE.
-- [ ] Provide an optional LÖVE/`audioSystem` speech-blip adapter example with original
+- [x] Provide an optional LÖVE/`audioSystem` speech-blip adapter example with original
   or appropriately licensed samples. Demonstrate per-character voices, bounded
   polyphony/voices, source reuse, rate limiting and deterministic variation using
   a private seed (never consume gameplay RNG). Do not bundle proprietary sounds
   or assume a phoneme mapping transfers unchanged between spoken languages.
-- [ ] Define speech-blip ownership for concurrent players, pause, skip, line advance,
+- [x] Define speech-blip ownership for concurrent players, pause, skip, line advance,
   cancellation and disposal. Coalesce/drop excess cues when a long frame reveals
   many units; never queue an unbounded catch-up burst. Offer independent chatter
   volume/mute controls, retain readable subtitles when silent, and suppress chatter
@@ -480,6 +480,15 @@ private-RNG reproducibility and concurrent character voices without duplicate cu
 A native voice example verifies ownership and cleanup, missing audio fallback,
 muting, skipping and pause/resume. No required threads, coroutines, wall clock or
 LÖVE dependency enters the core player.
+
+**Host audio example implemented:** `examples/dialogue-audio` supplies typed controller
+and LÖVE backend code, original synthetic samples, five owned Sources per player,
+private RNG, coalesced cues, independent mute, recording locale fallback and explicit
+pause/finish/navigation cleanup. Emitted Lua and native rendered JIT-on/off regressions
+cover ownership and source reuse. Word cadence uses a replaceable ASCII boundary
+callback, not a universal language segmenter. The recording fixture is synthetic;
+real voice acting uses the same cue mapping. Full pending-action skip policy is next. See the
+[audio adapter qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-audio-adapter.md).
 
 ## M8 — Save/resume and bounded conversation history
 

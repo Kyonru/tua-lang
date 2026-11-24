@@ -1,0 +1,65 @@
+local Adapter = require("adapter")
+local Backend = require("backend")
+local scene = require("scene")
+local player = Dialogue.new(scene, { locale = "fr" })
+local audio = Adapter.new(Backend.new(), 71)
+local view = { text = "", complete = false }
+local muted = false
+local voiceMuted = false
+local fast = false
+player:start()
+function love.update(dt: number)
+  local step = dt
+  if fast then step = dt * 4 end
+  local revealed = audio.update(player:snapshot(), step)
+  view = { text = revealed.text, complete = revealed.complete }
+  player:update(step, revealed.complete)
+end
+function love.keypressed(key: string)
+  if key == "space" then
+    if not view.complete then audio.finish()
+    else player:advance() end
+  elseif key == "p" then
+    if player:snapshot().suspended then player:resume()
+    else player:suspend() end
+  elseif key == "m" then
+    muted = not muted
+  elseif key == "v" then
+    voiceMuted = not voiceMuted
+  elseif key == "r" then
+    player:start()
+  elseif key == "f" then
+    fast = not fast
+  elseif key == "l" then
+    if player:snapshot().locale == "en" then player:setLocale("fr")
+    else player:setLocale("en") end
+  elseif key == "escape" then
+    player:cancel()
+  end
+  local chatterGain = 1
+  local voiceGain = 1
+  if muted then chatterGain = 0 end
+  if voiceMuted then voiceGain = 0 end
+  audio.volume(chatterGain, voiceGain)
+  -- Apply navigation/cancellation before the next draw or audio frame.
+  local revealed = audio.update(player:snapshot(), 0)
+  view = { text = revealed.text, complete = revealed.complete }
+end
+function love.draw()
+  love.graphics.clear(0.06, 0.08, 0.12)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print("Dialogue audio · original synthetic sounds", 32, 24)
+  love.graphics.printf(view.text, 32, 90, 700)
+  love.graphics.printf(
+    "Space: finish / advance   P: pause   R: restart   Esc: cancel\nM: chatter mute   V: recording mute   F: fast reveal   L: locale",
+    32,
+    250,
+    700
+  )
+  local snapshot = player:snapshot()
+  love.graphics.print(snapshot.state .. " · " .. (snapshot.locale or "source"), 32, 340)
+end
+function love.quit()
+  audio.dispose()
+  player:dispose()
+end

@@ -1,0 +1,101 @@
+-- Own a fixed set of native Sources per conversation. No allocation during play.
+local function new()
+  local sources: Source[] = {}
+  local paused: Source[] = {}
+  local pools: { [string]: Source[] } = {}
+  local recordings: { [string]: Source } = {}
+  local current: Source | nil = nil
+  local voiceVolume = 1
+  local chatterVolume = 1
+  local function load(path: string): Source
+    local source = love.audio.newSource(path, "static")
+    sources[#sources + 1] = source
+    return source
+  end
+  for _, name in ipairs({ "guide", "robot" }) do
+    local pool: Source[] = {}
+    for index = 1, 2 do pool[index] = load("assets/" .. name .. ".wav") end
+    pools[name] = pool
+  end
+  -- Replace this synthetic recording fixture with your licensed voice recording.
+  recordings["greeting:en"] = load("assets/recording.wav")
+  local function stop()
+    for _, source in ipairs(sources) do source:stop() end
+    paused = {}
+    current = nil
+  end
+  local function pause()
+    paused = {}
+    for _, source in ipairs(sources) do
+      if source:isPlaying() then
+        paused[#paused + 1] = source
+        source:pause()
+      end
+    end
+  end
+  local function resume()
+    for _, source in ipairs(paused) do
+      if source == current or chatterVolume > 0 then source:play() end
+    end
+    paused = {}
+  end
+  local function voice(cue: string, locale: string): boolean
+    local source = recordings[cue .. ":" .. locale]
+    if source == nil then return false end
+    current = source
+    source:setVolume(voiceVolume)
+    source:play()
+    return true
+  end
+  local function speaking(): boolean
+    local source = current
+    return source ~= nil and source:isPlaying()
+  end
+  local function chatter(sampleSet: string, pitch: number, gain: number): boolean
+    local pool = pools[sampleSet]
+    if pool == nil then return false end
+    for _, source in ipairs(pool) do
+      if not source:isPlaying() then
+        source:setPitch(pitch)
+        source:setVolume(gain)
+        source:play()
+        return true
+      end
+    end
+    return false
+  end
+  local function volume(chatterGain: number, voiceGain: number)
+    voiceVolume = voiceGain
+    chatterVolume = chatterGain
+    for _, pool in pairs(pools) do
+      for _, source in ipairs(pool) do
+        if chatterGain == 0 then source:stop() end
+      end
+    end
+    local source = current
+    if source ~= nil then source:setVolume(voiceGain) end
+  end
+  local function dispose()
+    stop()
+    for _, source in ipairs(sources) do source:release() end
+    sources = {}
+    pools = {}
+    recordings = {}
+  end
+  local function wordStart(text: string, startByte: number): boolean
+    if startByte == 1 then return true end
+    return string.match(string.sub(text, startByte - 1, startByte - 1), "[%s%p]") ~= nil
+  end
+  return {
+    stop = stop,
+    pause = pause,
+    resume = resume,
+    voice = voice,
+    speaking = speaking,
+    chatter = chatter,
+    volume = volume,
+    dispose = dispose,
+    wordStart = wordStart,
+  }
+end
+return { new = new }

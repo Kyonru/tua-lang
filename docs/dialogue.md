@@ -1819,8 +1819,19 @@ Profiles are descriptors in this slice: they do not automatically configure
 Adapters must map cadence (including language-appropriate word segmentation), apply
 profile intervals/gain/pitch variation, and use private deterministic RNG rather
 than gameplay RNG. They also own volume/mute, bounded polyphony, missing-asset
-fallback, audio suspension, skip policy and lifecycle cleanup. The optional LÖVE
-speech adapter and recorded-voice orchestration remain pending in M7.
+fallback, audio suspension, skip policy and lifecycle cleanup. The optional
+[dialogue audio example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-audio)
+implements these responsibilities with typed host code and ordinary LÖVE Sources.
+It includes two character voices, fixed source pools, a private pitch RNG, recording
+locale fallback, mute, pause/resume, silent finish and lifecycle cleanup. Replace
+its original synthetic recording fixture with your licensed voice acting.
+
+Run `tua build` then `love build` inside `examples/dialogue-audio`. Space finishes
+text while keeping the recording, then advances and stops it. P pauses/resumes,
+M mutes chatter, V mutes recordings, and R restarts. This is a copyable host policy,
+not a new required audio engine. Its ASCII word-boundary callback is replaceable
+for other languages; pronunciation metadata is not synthesized speech. The full
+skip policy for pending cancellable/non-cancellable actions remains separate.
 
 The [character presentation example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
 includes shared profiles, voice locale metadata, overrides, silence and plain-line reset.

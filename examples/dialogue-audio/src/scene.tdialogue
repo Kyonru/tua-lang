@@ -1,0 +1,20 @@
+@dialogue 1
+@characters Cast "characters"
+[start]
+// @id audio.chatter
+Cast.Guide: Hello! These little sounds follow the text. Café, é, and 👩‍🚀 stay readable.
+@speech character
+// @id audio.robot
+Cast.Robot: My lower voice uses one cue per word, with a limited source pool.
+@speech character
+// @id audio.recording
+Cast.Guide: This longer synthetic cue stands in for your full voice recording.
+@speech character
+@voice {"cue":"greeting","sourceLocale":"en","fallback":"source"}
+// @id audio.missing
+Cast.Guide: Missing audio keeps subtitles and allows chatter to continue.
+@speech character
+@voice {"cue":"missing","sourceLocale":"en","fallback":"silent"}
+// @id audio.quiet
+Cast.Guide: This line explicitly requests silence. (end)
+@speech off

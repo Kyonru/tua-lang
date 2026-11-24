@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a playable typed dialogue audio adapter example with original chatter samples,
+  recording cues, bounded source pools, private pitch variation, independent mute,
+  pause/resume and lifecycle cleanup. Core dialogue stays audio-independent.
+
 - Add schema-10 dialogue voice metadata and typed shared speech profiles, with
   per-line overrides/silence and explicit host-owned locale fallback and mixing.
 

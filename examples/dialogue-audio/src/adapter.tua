@@ -1,0 +1,135 @@
+-- Per-conversation controller. Backends own assets; this module owns cue timing.
+type Profile = {
+  sampleSet: string,
+  pitchMin: number,
+  pitchMax: number,
+  variation: number,
+  gain: number,
+  minCueInterval: number,
+  cadence: "character" | "word",
+}
+type Voice = {
+  cue: string,
+  locale: string,
+  sourceLocale: string,
+  fallback: string,
+  mixSpeech: boolean,
+}
+type Node = { kind: string, text: string, speech?: Profile | "off", voice?: Voice }
+type DialogueInput = {
+  generation: number,
+  visit: number,
+  presentationRevision: number,
+  revealComplete: boolean,
+  suspended?: boolean,
+  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action" | "waiting",
+  node?: Node,
+}
+type Backend = {
+  stop: () -> nil,
+  pause: () -> nil,
+  resume: () -> nil,
+  dispose: () -> nil,
+  voice: (cue: string, locale: string) -> boolean,
+  speaking: () -> boolean,
+  chatter: (sampleSet: string, pitch: number, gain: number) -> boolean,
+  volume: (chatter: number, voice: number) -> nil,
+  wordStart: (text: string, startByte: number) -> boolean,
+}
+local function selectedSpeech(value: Profile | "off" | nil): Profile | nil
+  if value is table then return value end
+  return nil
+end
+local function new(backend: Backend, seed: number)
+  assert(seed >= 1 and seed < 2147483647 and seed % 1 == 0)
+  local reveal = Dialogue.reveal({ rate = 32, speech = true, minCueInterval = 0 })
+  local identity = ""
+  local paused = false
+  local disposed = false
+  local muted = false
+  local gain = 1
+  local elapsed = 60
+  local previousVisible = 0
+  local function random(): number
+    seed = seed * 16807 % 2147483647
+    return (seed - 1) / 2147483646
+  end
+  local function update(snapshot: DialogueInput, dt: number)
+    assert(not disposed, "audio adapter disposed")
+    assert(dt >= 0 and dt < math.huge, "invalid dialogue time")
+    local key = snapshot.generation .. ":" .. snapshot.visit .. ":" .. snapshot.presentationRevision
+    local changed = key ~= identity
+    if changed then
+      backend.stop()
+      identity = key
+      previousVisible = 0
+      elapsed = 60
+    end
+    reveal:present(snapshot)
+    local node = snapshot.node
+    local active = snapshot.state == "awaiting_advance" and node ~= nil and node.kind == "line"
+    if not active then backend.stop() end
+    if changed and active and node ~= nil and node.voice ~= nil then
+      local voice = node.voice
+      assert(voice ~= nil)
+      local found = backend.voice(voice.cue, voice.locale)
+      if not found and voice.fallback == "source" and voice.locale ~= voice.sourceLocale then
+        backend.voice(voice.cue, voice.sourceLocale)
+      end
+    end
+    local suspended = snapshot.suspended == true
+    if suspended and (not paused or changed) then backend.pause() end
+    if not suspended and paused and not changed then backend.resume() end
+    paused = suspended
+    local view = reveal:update(dt)
+    if suspended then return view end
+    elapsed = math.min(60, elapsed + math.min(dt, 60))
+    local before = previousVisible
+    previousVisible = view.visible
+    if not active or node == nil then return view end
+    local profile = selectedSpeech(node.speech)
+    if profile == nil then return view end
+    if muted or elapsed < profile.minCueInterval then return view end
+    if backend.speaking() and (node.voice == nil or not node.voice.mixSpeech) then return view end
+    local eligible = #view.cues > 0
+    if profile.cadence == "word" and eligible then
+      eligible = false
+      local clusters = reveal:clusters()
+      for index = before + 1, view.visible do
+        local cluster = clusters[index]
+        if cluster.speakable and backend.wordStart(node.text, cluster.startByte) then
+          eligible = true
+        end
+      end
+    end
+    if eligible and view.visible > before then
+      local center = (profile.pitchMin + profile.pitchMax) / 2
+      local spread = (profile.pitchMax - profile.pitchMin) * profile.variation
+      local pitch = center + (random() - 0.5) * spread
+      backend.chatter(profile.sampleSet, pitch, profile.gain * gain)
+      elapsed = 0
+    end
+    return view
+  end
+  local function finish()
+    assert(not disposed)
+    local view = reveal:finish()
+    previousVisible = view.visible
+    return view
+  end
+  local function volume(chatter: number, voice: number)
+    assert(chatter >= 0 and chatter <= 1 and voice >= 0 and voice <= 1)
+    muted = chatter == 0
+    gain = chatter
+    backend.volume(chatter, voice)
+  end
+  local function dispose()
+    if disposed then return end
+    disposed = true
+    reveal:clear()
+    backend.stop()
+    backend.dispose()
+  end
+  return { update = update, finish = finish, volume = volume, dispose = dispose }
+end
+return { new = new }
