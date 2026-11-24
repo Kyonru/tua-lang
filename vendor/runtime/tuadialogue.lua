@@ -40,8 +40,33 @@ local function events(value)
   return result
 end
 
+-- Schema field sets are immutable and private; validation does not allocate a
+-- fresh lookup table or an error string for every valid field/session.
+local documentFields = { schemaVersion = true, documentId = true, entry = true, nodes = true }
+local nodeFields = {
+  line = {
+    kind = true,
+    text = true,
+    textId = true,
+    speaker = true,
+    speakerKey = true,
+    portrait = true,
+    next = true,
+    hold = true,
+    fade = true,
+    events = true,
+  },
+  choice = { kind = true, options = true },
+  ["end"] = { kind = true },
+}
+local eventFields = { anchor = true, delay = true, name = true, payload = true }
+local optionFields = { id = true, text = true, target = true }
+local playerOptions = { locale = true, resolve = true, args = true }
+
 local function fields(value, allowed)
-  for key in pairs(value) do assert(allowed[key], "unknown dialogue field: " .. tostring(key)) end
+  for key in pairs(value) do
+    if not allowed[key] then error("unknown dialogue field: " .. tostring(key)) end
+  end
 end
 
 local function optionalId(value)
@@ -58,7 +83,7 @@ local function document(value)
   )
   assert(optionalId(value.documentId), "invalid documentId")
   if value.schemaVersion then
-    fields(value, { schemaVersion = true, documentId = true, entry = true, nodes = true })
+    fields(value, documentFields)
   end
   local nodes = {}
   for id, node in pairs(value.nodes) do
@@ -68,24 +93,7 @@ local function document(value)
       node.kind == "line" or node.kind == "choice" or node.kind == "end",
       "unknown dialogue node kind"
     )
-    if value.schemaVersion then
-      local allowed = { kind = true }
-      if node.kind == "line" then
-        allowed = {
-          kind = true,
-          text = true,
-          textId = true,
-          speaker = true,
-          speakerKey = true,
-          portrait = true,
-          next = true,
-          hold = true,
-          fade = true,
-          events = true,
-        }
-      elseif node.kind == "choice" then allowed.options = true end
-      fields(node, allowed)
-    end
+    if value.schemaVersion then fields(node, nodeFields[node.kind]) end
     local owned = { kind = node.kind }
     if node.kind == "line" then
       assert(type(node.text) == "string", "line needs text")
@@ -101,7 +109,7 @@ local function document(value)
       owned.events = events(node.events)
       if value.schemaVersion then
         for _, event in ipairs(node.events or {}) do
-          fields(event, { anchor = true, delay = true, name = true, payload = true })
+          fields(event, eventFields)
         end
       end
     elseif node.kind == "choice" then
@@ -122,7 +130,7 @@ local function document(value)
         )
         assert(not seen[option.id], "duplicate choice ID")
         assert(type(option.text) == "string" and type(option.target) == "string", "invalid choice")
-        if value.schemaVersion then fields(option, { id = true, text = true, target = true }) end
+        if value.schemaVersion then fields(option, optionFields) end
         seen[option.id] = true
         owned.options[index] = { id = option.id, text = option.text, target = option.target }
       end
@@ -160,7 +168,7 @@ end
 function Dialogue.new(source, options)
   if options == nil then options = {} end
   assert(type(options) == "table", "invalid dialogue options")
-  fields(options, { locale = true, resolve = true, args = true })
+  fields(options, playerOptions)
   assert(optionalId(options.locale), "invalid dialogue locale")
   assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
   assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
@@ -180,6 +188,9 @@ end
 -- Compute presentation before committing a transition; a bad resolver cannot
 -- partially advance the visit or overwrite clocks. Snapshot never calls host code.
 local function presentation(self, id, locale)
+  -- The document is already owned. Without localization, retain only an internal
+  -- reference; snapshot still copies it before exposing anything to the caller.
+  if not self.resolve then return self.document.nodes[id] end
   local node = copy(self.document.nodes[id])
   node.text, node.options = node.text or "", node.options or {}
   if self.resolve then
@@ -312,6 +323,10 @@ end
 
 function Player:snapshot()
   local presentation = copy(self.presentation)
+  if presentation then
+    presentation.text = presentation.text or ""
+    presentation.options = presentation.options or {}
+  end
   return {
     state = self.state,
     generation = self.generation,
