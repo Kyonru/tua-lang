@@ -280,7 +280,13 @@ locale entries and recognized typed literal localization uses in the same projec
 Rename accepts a new final key segment and rejects duplicate IDs, destination
 conflicts and malformed dialogue sources. Computed keys and arbitrary host strings
 are not inferred references. Prose, flow/document/action identity stay unchanged.
-Flow-label rename, formatting and graph preview remain planned.
+Flow-label rename and graph preview remain planned. `tua fmt` includes .tdialogue
+scripts with a dedicated full-document formatter: align structural lines at column
+zero, normalize structural whitespace/blank lines and configured line endings,
+preserve prose spacing, escapes, JSON payloads, IDs and metadata order. Explicit
+paths, --check, --stdin-filepath, LSP document formatting and read-only format preview
+share the implementation. Invalid scripts are not formatted. Dialogue range/on-type
+formatting stays disabled; Lua quote/width/indent options do not rewrite prose.
 
 Before labels, `@characters Cast "dialogue.characters"` imports the module; use
 `Cast.Guide: Hello (end)` as a speaker line. Script completion after `Cast.`, hover,

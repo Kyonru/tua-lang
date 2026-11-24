@@ -1257,6 +1257,37 @@ mod tests {
             .is_some());
     }
 
+    #[test]
+    fn dialogue_format_preview_requires_source_capability_and_never_writes() {
+        let project = TempProject::new();
+        project.write("tua.toml", "source = 'src'\n");
+        let source = "  @dialogue 1\n  [start]\n  // @id hello\n  :  Hello (end)\n";
+        project.write("src/scene.tdialogue", source);
+        let denied = run_api(
+            &project,
+            vec![
+                json!({"jsonrpc":"2.0", "id":1, "method":"tua.api/initialize", "params":{"capabilities":{}}}),
+                json!({"jsonrpc":"2.0", "id":2, "method":"tua.api/formatPreview", "params":{"path":"src/scene.tdialogue"}}),
+            ],
+        );
+        assert_eq!(denied[1]["error"]["code"], -32010);
+        let allowed = run_api(
+            &project,
+            vec![
+                json!({"jsonrpc":"2.0", "id":1, "method":"tua.api/initialize", "params":{"capabilities":{"sourceContext":true}}}),
+                json!({"jsonrpc":"2.0", "id":2, "method":"tua.api/formatPreview", "params":{"path":"src/scene.tdialogue"}}),
+            ],
+        );
+        assert_eq!(
+            allowed[1]["result"]["formatted"],
+            "@dialogue 1\n[start]\n// @id hello\n:  Hello (end)\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(project.root.join("src/scene.tdialogue")).unwrap(),
+            source
+        );
+    }
+
     fn run_api(project: &TempProject, messages: Vec<Value>) -> Vec<Value> {
         let input = messages
             .into_iter()

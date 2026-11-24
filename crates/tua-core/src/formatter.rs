@@ -1,3 +1,4 @@
+mod dialogue;
 mod layout;
 
 use std::{borrow::Cow, collections::BTreeSet, path::Path};
@@ -84,6 +85,13 @@ pub fn format_tua_source(
     options: &FormatOptions,
 ) -> Result<String, Vec<Diagnostic>> {
     let source = source.into();
+    if path
+        .as_ref()
+        .extension()
+        .is_some_and(|extension| extension == "tdialogue")
+    {
+        return dialogue::format(path.as_ref(), &source, options);
+    }
     let parsed = parse_tua_source(path, source)?;
 
     Ok(format_parsed_source(&parsed, options))
@@ -96,6 +104,12 @@ pub fn format_tua_source_range(
     range: SourceSpan,
 ) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
     let path = path.as_ref().to_owned();
+    if path
+        .extension()
+        .is_some_and(|extension| extension == "tdialogue")
+    {
+        return Ok(Vec::new());
+    }
     let source = source.into();
     let formatted = format_tua_source(&path, source.clone(), options)?;
 
@@ -109,6 +123,13 @@ pub fn format_tua_source_on_type(
     position: SourcePosition,
     trigger: &str,
 ) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
+    if path
+        .as_ref()
+        .extension()
+        .is_some_and(|extension| extension == "tdialogue")
+    {
+        return Ok(Vec::new());
+    }
     let source = source.into();
     if !is_on_type_format_trigger(&source, position, trigger) {
         return Ok(Vec::new());

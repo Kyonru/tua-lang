@@ -589,9 +589,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
 - [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,
   `.tdialogue` and catalogs. Reject ambiguous/dynamic references and conflicts;
   preserve stable text/action identity unless that identity is deliberately renamed.
-- [ ] Add a dedicated dialogue formatter that preserves prose whitespace,
-  escapes, IDs, metadata attachment and meaning. Do not run the Lua formatter on
-  scripts. Verify idempotence and parse/semantic round-trip properties.
+- [x] Dedicated full-document dialogue formatter preserves prose whitespace,
+  escapes, IDs, payloads, metadata attachment and meaning. Shared dispatch covers
+  CLI project/explicit/stdin/check modes, LSP document formatting and read-only
+  format preview, without Lua layout. Corpus tests verify idempotence and emitted
+  semantic equivalence apart from source coordinates. Invalid scripts yield no
+  edits; range/on-type formatting and installed-editor UI qualification stay pending.
 - [ ] Diagnose dangling targets, duplicate identities, malformed conditions and
   provably unreachable paths. Distinguish proven impossibility from dynamic
   context; allow declared externally started entry points so they are not falsely

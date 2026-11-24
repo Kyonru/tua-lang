@@ -47,7 +47,7 @@ not choose between them. Text inside comments, spoken prose, and action JSON
 payloads is not a flow reference.
 
 These queries only inspect source. They never run conditions or action handlers.
-Flow-label rename, dialogue formatting and graph preview remain planned.
+Flow-label rename and graph preview remain planned.
 
 ## Rename a text identity
 
@@ -70,6 +70,33 @@ so localization rename is unavailable until it parses again. Unsaved script and
 catalog edits participate in conflict checks. Computed keys and arbitrary host
 strings are not rename targets or inferred references; maintain those mappings
 explicitly. The command does not migrate saved checkpoints or external catalogs.
+
+## Format a script
+
+```sh
+tua fmt src/scene.tdialogue
+tua fmt --check src/scene.tdialogue
+```
+
+Project-wide `tua fmt` includes dialogue scripts. Editor **Format Document** and
+the read-only format preview use the same dedicated dialogue formatter.
+
+The layout keeps declarations, labels and body lines at column zero, removes
+outer blank lines, reduces repeated blank lines to one, and normalizes safe
+structural whitespace. It preserves prose spacing (including trailing spaces),
+quotes, escapes, JSON payloads, stable IDs, and the order of metadata and choices.
+It does not wrap long text or reinterpret it as Lua. Source locations are rebuilt
+from the resulting layout when the script is checked or built.
+
+`line_ending` and `final_newline` follow the project's `[format]` configuration;
+the defaults are LF and a final newline. Lua indentation, quote-style and width
+options do not rewrite dialogue content. Invalid/incomplete scripts produce
+syntax diagnostics and no formatting changes. Range and on-type dialogue
+formatting remain disabled so partial edits cannot detach metadata.
+
+For an unsaved buffer or tool integration, use
+`tua fmt --stdin-filepath src/scene.tdialogue`; it returns formatted text without
+writing the file. Add `--check` to test the layout without emitting text.
 
 ## Your first conversation
 

@@ -36,8 +36,8 @@ tua fmt --check tests/collision.lua
 tua fmt --stdin-filepath tests/collision.lua < tests/collision.lua
 ```
 
-`tua fmt` rewrites project `.tua` files, including the configured typed test root.
-Pass explicit paths to format selected `.tua`, `.lua`, or configured-extension
+`tua fmt` rewrites project `.tua` and `.tdialogue` files, including the configured typed test root.
+Pass explicit paths to format selected `.tua`, `.lua`, `.tdialogue`, or configured-extension
 files with the current project's settings, including files outside the source
 root. Paths must stay within the project; directories, symlinks, and non-source
 files are rejected. Duplicate paths are processed once. Use `--` before a path
@@ -54,7 +54,9 @@ formatted. Invalid syntax, invalid UTF-8, and input above the source byte limit
 (8 MiB) fail. This supports editor buffers and scripts without temporary projects.
 `tua fmt --check` is the non-mutating CI form: it exits unsuccessfully and lists files whose formatted output differs
 from the source. The language server exposes the same formatter for document,
-range, and on-type formatting.
+range, and on-type formatting for Lua/Tua. Dialogue uses a [dedicated full-document
+formatter](dialogue.md#format-a-script) that preserves prose and metadata; dialogue
+range and on-type formatting remain disabled.
 
 ## Layout Rules
 

@@ -7777,3 +7777,43 @@ assert(player:snapshot().state == "completed")
             .contains("return document")
     );
 }
+
+#[test]
+fn fmt_dialogue_supports_project_explicit_stdin_and_parse_failure() {
+    let temp = TempDir::new("fmt-dialogue");
+    fs::write(temp.path().join(CONFIG_FILE), "source = 'src'\n").unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let path = temp.path().join("src/scene.tdialogue");
+    let source = "  @dialogue 1\n  [start]\n  // @id hello\n  :  é🦆  Hello (end)\n";
+    let expected = "@dialogue 1\n[start]\n// @id hello\n:  é🦆  Hello (end)\n";
+    fs::write(&path, source).unwrap();
+    let check = tua()
+        .args(["fmt", "--check"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(!check.status.success());
+    assert_eq!(fs::read_to_string(&path).unwrap(), source);
+    let write = tua().arg("fmt").current_dir(temp.path()).output().unwrap();
+    assert!(write.status.success(), "{write:?}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+    let check = tua()
+        .args(["fmt", "--check", "src/scene.tdialogue"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(check.status.success(), "{check:?}");
+    let stdin = fmt_stdin(
+        &temp,
+        &["fmt", "--stdin-filepath", "buffer.tdialogue"],
+        source.as_bytes(),
+    );
+    assert!(stdin.status.success(), "{stdin:?}");
+    assert_eq!(stdin.stdout, expected.as_bytes());
+    assert!(!temp.path().join("buffer.tdialogue").exists());
+    let invalid = "@dialogue 1\n[start]\n// @id unfinished\n";
+    fs::write(&path, invalid).unwrap();
+    let output = tua().arg("fmt").current_dir(temp.path()).output().unwrap();
+    assert!(!output.status.success());
+    assert_eq!(fs::read_to_string(&path).unwrap(), invalid);
+}

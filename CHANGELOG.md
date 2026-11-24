@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a dedicated dialogue document formatter to CLI project/explicit/stdin/check
+  modes, editor document formatting and read-only previews, preserving prose and
+  metadata without applying Lua layout.
+
 - Add typed dialogue placeholder completion, hover and binding navigation, with
   incomplete-text recovery, imported-context refresh and Unicode-safe name edits.
 

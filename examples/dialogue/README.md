@@ -55,8 +55,8 @@ output, and text IDs must be unique across project dialogue files. Restart this
 host after a rebuild to use the new document.
 
 See the [dialogue guide](../../docs/dialogue.md) for complete authoring examples,
-event dispatch, timing rules, pause policies and the API reference. Translations,
-script formatting and cross-language rename remain pending.
+event dispatch, timing rules, pause policies, translations and the API reference.
+Broader cross-language rename remains pending.
 
 ## Compiler frontend harness
 
@@ -74,3 +74,8 @@ lua asset_host.lua /tmp/intro-dialogue.lua
 
 The harness uses the same bundled player. Its generated output stays outside
 source control.
+
+Use `tua fmt` (or `tua fmt src/intro.tdialogue`) to align the dialogue structure
+without rewriting prose, escapes, IDs or choice order. `tua fmt --check` validates
+the layout, and editor Format Document uses the same implementation. Incomplete
+scripts are left unchanged; dialogue range/on-type formatting is not enabled.

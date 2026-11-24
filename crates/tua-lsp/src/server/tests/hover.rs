@@ -1149,3 +1149,35 @@ fn dialogue_placeholder_queries_replace_names_and_follow_unsaved_bindings() {
     server.send(completion_request(4, &uri, &changed, "%{pla"));
     assert_completion_labels(server.output(), 4, ["playerName"]);
 }
+
+#[test]
+fn dialogue_document_formatting_uses_overlay_and_keeps_prose_literal() {
+    let temp = TempProject::new("dialogue-format");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Disk (end)\n";
+    temp.write("src/scene.tdialogue", source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let edited = "  @dialogue 1\n  [start]\n  // @id hello\n  :  é🦆  Unsaved (end)\n";
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, edited);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id| {
+        json!({"jsonrpc":"2.0", "id":id, "method":"textDocument/formatting", "params":{
+            "textDocument":{"uri":uri}, "options":{"tabSize":4,"insertSpaces":true}
+        }})
+    };
+    server.send(request(2));
+    let edits = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(
+        edits[0]["newText"],
+        "@dialogue 1\n[start]\n// @id hello\n:  é🦆  Unsaved (end)\n"
+    );
+    server.send(did_change(&uri, "@dialogue 1\n[start]", 2));
+    server.send(request(3));
+    assert!(response_with_id(server.output(), 3)["result"].is_null());
+}

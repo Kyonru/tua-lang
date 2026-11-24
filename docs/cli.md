@@ -75,7 +75,8 @@ tua fmt
 tua fmt --check
 ```
 
-Formats project `.tua` source files in place using the built-in formatter.
+Formats project `.tua` and `.tdialogue` source files in place. Dialogue uses its
+own prose-preserving formatter; it is never passed through Lua layout.
 `--check` reports files that would change and exits non-zero without writing.
 Files with parse errors are left unchanged and reported with diagnostics.
 Formatting does not produce lint diagnostics; see [Formatter](formatter.md).

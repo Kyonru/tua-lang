@@ -77,7 +77,7 @@ pub(crate) fn run_fmt(
     let mut formatted_count = 0usize;
 
     for source_file in source_files {
-        if source_file.kind != SourceKind::Tua {
+        if !matches!(source_file.kind, SourceKind::Tua | SourceKind::Dialogue) {
             continue;
         }
 
@@ -166,9 +166,13 @@ fn explicit_path(
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or("");
-    if extension != "lua" && extension != workspace.config().extension && extension != "tua" {
+    if extension != "lua"
+        && extension != workspace.config().extension
+        && extension != "tua"
+        && extension != "tdialogue"
+    {
         return Err(CliError::usage(
-            "formatter paths must name a .tua, .lua, or configured source file",
+            "formatter paths must name a .tua, .lua, .tdialogue, or configured source file",
         ));
     }
     Ok(path)
