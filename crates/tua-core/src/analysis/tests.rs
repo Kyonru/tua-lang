@@ -13576,3 +13576,63 @@ checkpoint.fired = { "wrong" }
         assert!(snapshot.hover("src/main.tua", position).is_some());
     }
 }
+
+#[test]
+fn dialogue_history_keeps_imported_types_and_editor_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/session.tua
+local player = Dialogue.new({ entry = "s", nodes = {
+  s = { kind = "line", text = "Hello", next = "done" },
+  done = { kind = "end" },
+} }, { history = { capacity = 4, maxBytes = 2048 } })
+return player
+-- file: src/forward.tua
+return require("session")
+-- file: src/main.tua
+local player = require("forward")
+player:start()
+local history = player:history()
+local bytes: number = history.<|bytes|>bytes
+for _, entry in ipairs(history.entries) do
+  local text: string = entry.<|text|>text
+  local kind: "line" | "choice" = entry.kind
+  local removed: boolean = player:redactHistory(entry.id)
+  print(text, kind, removed)
+end
+player:clearHistory()
+print(bytes)
+-- file: src/bad.tua
+local player = require("forward")
+player:redactHistory("wrong")
+local wrong: string = player:history().bytes
+player:history().entries[1].kind = "invalid"
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/session.tua", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    let diagnostics = snapshot.pipeline_diagnostics("src/bad.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 3,
+        "{diagnostics:?}"
+    );
+    for marker in ["bytes", "text"] {
+        let position = fixture.position(marker);
+        assert!(
+            completion_labels(&snapshot.completion("src/main.tua", position))
+                .contains(&marker.to_owned())
+        );
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+}

@@ -457,4 +457,14 @@ before mutation. Restore preserves delivered-event flags and suspension, silentl
 completes current-line reveal, and exposes snapshot.restored for host audio policy.
 Rebind resolvers/args; locale is saved. No filesystem, action dispatch, effect
 rollback, partial reveal restoration or exactly-once guarantee is implied. Typed
-locals, action reconciliation, history and the Save.contract recipe remain pending.
+locals, action reconciliation and the Save.contract recipe remain pending.
+Dialogue player options.history = {capacity, maxBytes?} enables optional history.
+Capacity is 1..1024; maxBytes is 1..1048576 (default65536 retained string bytes).
+player:history() returns owned {entries, capacity, maxBytes, bytes, dropped}.
+Entries contain id/kind/nodeId/text and optional documentId/textId/choiceId/speaker/
+speakerKey/locale. Lines record full resolved text on entry; accepted choices record
+before the destination line. Oldest entries are evicted; oversized entries drop.
+Locale/context refreshes preserve original records. No payloads/contexts/media are
+retained. redactHistory(id) removes one record; clearHistory() resets entries/counts
+without recycling IDs. Cancel/restart retain history; dispose releases it.
+Checkpoints exclude history; restore does not append a record. No history import.

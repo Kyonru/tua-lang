@@ -22,9 +22,10 @@ guides cannot silently omit an example.
 
 ## Files
 
-- `src/dialogue.tua` constructs a typed, renderer-independent dialogue player.
-  The separate `examples/dialogue` project also contains the experimental
-  `.tdialogue` frontend harness; asset discovery and localization remain pending.
+- `src/dialogue.tua` constructs a typed, renderer-independent dialogue player and
+  demonstrates bounded history, accepted replies, owned snapshots and redaction.
+  The separate `examples/dialogue` project demonstrates authored `.tdialogue`
+  files; see the [dialogue guide](../../docs/dialogue.md) for the complete workflow.
 
 - `src/logging.tua` shows opt-in `Log` levels, scoped messages, buffered file
   output, and a bounded screen overlay. In the Game Console, filter by level or

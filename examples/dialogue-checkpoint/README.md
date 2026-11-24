@@ -26,6 +26,7 @@ game context or reveal-controller progress is saved. Core generation/visit token
 are live-session identities, not durable reward or network idempotency keys.
 
 This example does not choose storage or autosave timing. The full `Save.contract`
-recipe, typed-context resume, durable action reconciliation and bounded history
-remain later M8 work. Persisting fired flags does not make external effects
+recipe, typed-context resume and durable action reconciliation remain later M8
+work. Optional player history is available separately and is excluded from
+checkpoints. Persisting fired flags does not make external effects
 exactly-once: a crash can happen between delivery and durable acknowledgement.

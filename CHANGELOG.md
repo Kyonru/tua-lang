@@ -6,10 +6,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add opt-in bounded dialogue history with original displayed text/locale, accepted
+  replies, count/string-byte limits, owned snapshots and explicit redaction/clearing.
+  History remains separate from execution checkpoints and releases on disposal.
+
 - Add bounded, versioned checkpoints for plain dialogue line/choice/wait boundaries,
   with graph compatibility validation, transactional fresh-player restore, logical
   timers and delivered-event flags. Restored presentations remain silent. Typed
-  context/action persistence and conversation history remain follow-up work.
+  context/action persistence remains follow-up work.
 
 - Document and demonstrate a typed host conversation-skip policy that refuses
   non-cancellable pending actions, preserves settled results, and uses existing

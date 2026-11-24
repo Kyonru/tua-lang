@@ -11,7 +11,22 @@ local function createPlayer()
       },
       finish = { kind = "end" },
     },
-  })
+  }, { history = { capacity = 16, maxBytes = 8192 } })
 end
 
-return { createPlayer = createPlayer }
+-- History stores the presented line and accepted reply; browsing has no effects.
+local function historyExample()
+  local player = createPlayer()
+  player:start()
+  player:advance()
+  player:choose("yes")
+  local history = player:history()
+  assert(#history.entries == 2)
+  assert(history.entries[2].choiceId == "yes")
+  player:redactHistory(history.entries[1].id)
+  player:clearHistory()
+  player:dispose()
+  return history
+end
+
+return { createPlayer = createPlayer, historyExample = historyExample }

@@ -502,7 +502,7 @@ choice and wait boundaries, validates graph identity and timers, and preserves
 fired events and suspension. It restores into a fresh player and silently completes
 line reveal. Context/registry documents, branches and conditional choices are
 rejected in this first version. The general checklist below remains open until
-locals, durable action reconciliation, the Save recipe and history are qualified.
+locals, durable action reconciliation and the Save recipe are qualified.
 See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
 
 - [ ] Define a versioned, validated JSON-shaped checkpoint: document identity and
@@ -521,9 +521,14 @@ See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob
   consequential actions. Explain the crash window between an external effect and
   recording delivery: exactly-once rewards require host-side atomic persistence
   or idempotency, not merely an in-memory “fired” flag.
-- [ ] Add an optional bounded transcript with text IDs, displayed text/locale,
+- [x] Add an optional bounded transcript with text IDs, displayed text/locale,
   speaker identity and selected replies. Define capacity, eviction, redaction,
   save inclusion and whether history preserves original displayed translations.
+  Implemented opt-in player history with count/string-byte limits, oldest eviction,
+  oversized-record rejection, owned snapshots, redaction and clear/dispose cleanup.
+  Checkpoints exclude history; restore does not replay it. Original displayed text
+  and locale remain unchanged by refreshes. See the
+  [history qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-history.md).
 - [ ] Provide an optional `Save.contract` recipe; leave storage and write timing
   to the host. Keep dialogue restart, checkpoint restore and transcript browsing
   distinct operations.

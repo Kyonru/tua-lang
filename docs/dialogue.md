@@ -1955,8 +1955,75 @@ before decoding untrusted save files.
 This first version rejects **all context-, action- and event-registry documents**,
 branches and conditional choices, not merely currently pending work. Idle,
 completed, cancelled, disposed, faulted and action states cannot be exported.
-Typed locals, durable action reconciliation, transcript history and a complete
+Typed locals, durable action reconciliation and a complete
 `Save.contract` recipe remain later M8 work. Existing Save migration/validation
 concepts apply, but checkpoint data is not a promise of exactly-once external
 effects: crashing between an effect and its durable acknowledgement still needs
 host-side atomic persistence or idempotency.
+
+
+## Keep a bounded conversation history
+
+Enable history when constructing a player. It works with plain conversations and
+with typed-context, event and action players; it does not save their gameplay state.
+
+```tua
+local player = Dialogue.new(scene, {
+  locale = "en",
+  history = { capacity = 100, maxBytes = 65536 },
+})
+player:start()
+
+local history = player:history()
+for _, entry in ipairs(history.entries) do
+  print(entry.speaker or "", entry.text)
+end
+-- Remove one retained entry, for example before sharing a transcript.
+if #history.entries > 0 then
+  player:redactHistory(history.entries[1].id)
+end
+player:clearHistory()
+```
+
+History is disabled by default. `capacity` is required when enabled and accepts
+1–1,024 entries. `maxBytes` defaults to 65,536 and accepts 1–1,048,576; it counts
+**all retained string bytes**, including IDs and locale, not Lua table overhead.
+Oldest entries are evicted until both limits fit. A single entry larger than the
+byte budget is skipped intact; text and identifiers are never truncated.
+`history.dropped` counts evicted and oversized entries. Neither case interrupts
+playback. The capacity bound also limits per-entry table overhead.
+
+A line is recorded when it is presented, with its full resolved plain text—even
+while a renderer is still revealing characters. A choice is recorded only after
+its transition is accepted and its destination presentation resolves successfully.
+It precedes the destination line in history. Invalid, disabled and suspended
+choices, throwing resolvers and transition-budget faults add no selected reply.
+Waits, actions, branches and unselected choices do not produce records.
+
+Each entry has a session-local numeric `id`, `kind` (`"line"` or `"choice"`),
+`nodeId` and `text`. Optional fields are `documentId`, `textId`, `choiceId`,
+`speaker`, `speakerKey` and `locale`. `speakerKey`, when authored, supplies the
+stable localized speaker identity; `speaker` is the displayed name. Selected
+replies use their option ID as `textId`. No context, locals, action/event payloads,
+rich-text trees, portrait or audio objects are retained. The
+[feature example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/dialogue.tua)
+shows capture, browsing and redaction.
+
+Records preserve the original text and locale. Locale/context refreshes do not
+rewrite or duplicate earlier lines. Browsing returns owned records and never
+advances the conversation or replays effects. IDs are not reused after clearing;
+`redactHistory(id)` removes an entry and returns whether it was still retained.
+Redaction does not affect copies previously returned to the host. `clearHistory()`
+releases all entries and resets byte/drop counts. Both operations are forbidden
+inside text resolver callbacks, like other player mutations.
+
+History remains available after cancellation, completion and `start()` restarts;
+call `clearHistory()` at your chosen conversation boundary. `dispose()` releases
+it. Disabled or disposed players return an empty history with zero limits/counts.
+
+Checkpoints deliberately **exclude history**. Restore neither imports earlier
+records nor appends the restored line again. New lines and replies after restore
+are recorded normally. A host may separately persist a returned history snapshot
+under its own Save schema, redaction and retention policy; there is no history
+import API. Transcript browsing and resuming executable dialogue are separate
+operations. Entry IDs are not durable action or reward identifiers.

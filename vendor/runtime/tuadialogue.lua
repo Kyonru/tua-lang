@@ -28,6 +28,8 @@ function Dialogue.reveal(options)
   return require("tuadialogue_reveal").new(options)
 end
 
+local function history() return require("tuadialogue_history") end
+
 local Player = {}
 Player.__index = Player
 local refresh
@@ -182,6 +184,7 @@ local optionFields = {
   reasonId = true,
 }
 local playerOptions = {
+  history = true,
   checkpointVersion = true,
   locale = true,
   resolve = true,
@@ -473,6 +476,7 @@ local function newPlayer(source, options)
     assert(options.handlers == nil, "handlers require an action registry")
   end
   return setmetatable({
+    transcript = options.history ~= nil and history().new(options.history) or nil,
     checkpointVersion = options.checkpointVersion,
     checkpointPlain = source.context == nil and source.actions == nil and source.events == nil,
     actionHandlers = handlers,
@@ -644,7 +648,7 @@ function Player:setLocale(locale)
   return true
 end
 
-function Player:enter(id, locals, facts, resolved, issue)
+function Player:enter(id, locals, facts, resolved, issue, selectedReply)
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if not resolved then
     id, issue = destination(self, id, facts or self.facts, locals or self.locals)
@@ -665,6 +669,12 @@ function Player:enter(id, locals, facts, resolved, issue)
   elseif node.kind == "action" then self.state = "awaiting_action"
   elseif node.kind == "line" then self.state = "awaiting_advance"
   else self.state = "awaiting_choice" end
+  if self.transcript and not issue then
+    if selectedReply then history().push(self.transcript, selectedReply) end
+    if node.kind == "line" then
+      history().push(self.transcript, history().capture(self, nodePresentation))
+    end
+  end
 end
 
 function Player:start(entry)
@@ -791,7 +801,13 @@ function Player:choose(id)
     if option.id == id then
       local _, enabled = available(option, self.facts, self.locals)
       if not enabled then return false end
-      self:enter(option.target)
+      local selected
+      if self.transcript then
+        for _, shown in ipairs(self.presentation.options) do
+          if shown.id == id then selected = history().capture(self, self.presentation, shown) end
+        end
+      end
+      self:enter(option.target, nil, nil, nil, nil, selected)
       return true
     end
   end
@@ -811,6 +827,21 @@ function Player:cancel()
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
   if Actions then Actions.release(self) end
   return true
+end
+
+-- Transcript browsing never advances playback or dispatches events.
+function Player:history()
+  return history().snapshot(self.transcript)
+end
+function Player:clearHistory()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  if self.transcript then history().clear(self.transcript) end
+end
+function Player:redactHistory(id)
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  assert(type(id) == "number" and id >= 1 and id < math.huge and id % 1 == 0,
+    "history entry ID must be a positive integer")
+  return self.transcript ~= nil and history().redact(self.transcript, id)
 end
 
 -- Restore only into a fresh session. Validation and presentation precede mutation.
@@ -874,6 +905,7 @@ function Player:dispose()
   self.deferredChoiceRefresh = nil
   self.state, self.current, self.document, self.issue = "disposed", nil, nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
+  self.transcript = nil
   self.actionHandlers, self.resolveTemplate = nil, nil
   self.facts, self.locals, self.localDefaults = nil, nil, nil
   self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil

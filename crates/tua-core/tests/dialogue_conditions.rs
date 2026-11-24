@@ -13,7 +13,11 @@ fn dialogue_conditions_with_identified_events_emitted_runtime() {
 
 fn run_conditions(identified: bool) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let source = include_str!("fixtures/dialogue-conditions/lifecycle.lua");
+    let source = concat!(
+        include_str!("fixtures/dialogue-conditions/lifecycle.lua"),
+        "\n",
+        include_str!("fixtures/dialogue_history_context.lua")
+    );
     let context = tua_core::emit::emit_tua_source(
         "context.tua",
         include_str!("../../../examples/dialogue-conditions/src/context.tua"),
