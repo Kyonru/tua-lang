@@ -315,6 +315,12 @@ static and does not load images during analysis.
   sequences or assume byte offsets equal displayed characters.
 - [ ] Define finish-reveal, skip and reduced-motion behavior, including whether
   presentation pauses are skipped. Preserve an exact host report for `revealed`.
+- [ ] Expose optional speech-blip reveal cues for Animal Crossing-style character
+  chatter. Derive them from actually revealed grapheme/word boundaries, not bytes
+  or render frames. Include stable generation/visit/presentation identity so a host
+  can reject stale cues. Whitespace is silent; punctuation may pause or suppress a
+  cue. Locale changes, restored presentations and finish-reveal must not replay the
+  whole line as a burst. Keep these presentation cues separate from gameplay events.
 - [ ] Document font coverage, shaping and bidirectional-layout responsibilities.
   Accepting Unicode strings is not proof of multilingual rendering support.
 
@@ -328,6 +334,21 @@ text cannot execute host actions through a translated or substituted value.
 - [ ] Attach optional voice/cue identifiers and pronunciation metadata to lines,
   with explicit subtitle and voice locale/fallback policy. Reuse `audioSystem`
   or host audio through an adapter; do not create another audio engine.
+- [ ] Support optional typed character speech profiles shared across scripts, with
+  a named voice/sample-set identifier, pitch range, variation, gain, minimum cue
+  interval and character/word cadence. Allow a per-line override or silence. Keep
+  audio asset loading, sample selection/synthesis, mixing and playback in the host
+  adapter; the core stores data and emits cues without requiring audio or LÖVE.
+- [ ] Provide an optional LÖVE/`audioSystem` speech-blip adapter example with original
+  or appropriately licensed samples. Demonstrate per-character voices, bounded
+  polyphony/voices, source reuse, rate limiting and deterministic variation using
+  a private seed (never consume gameplay RNG). Do not bundle proprietary sounds
+  or assume a phoneme mapping transfers unchanged between spoken languages.
+- [ ] Define speech-blip ownership for concurrent players, pause, skip, line advance,
+  cancellation and disposal. Coalesce/drop excess cues when a long frame reveals
+  many units; never queue an unbounded catch-up burst. Offer independent chatter
+  volume/mute controls, retain readable subtitles when silent, and suppress chatter
+  during recorded voice by default unless explicitly mixed by the host.
 - [ ] Add host-managed asynchronous action handles with explicit completion,
   failure and cancellation. Define single settlement and handling of synchronous
   completion, immediate failure and late callbacks.
@@ -344,6 +365,9 @@ text cannot execute host actions through a translated or substituted value.
 
 **Acceptance:** fake host handles test success, error, timeout policy, double
 completion, cancel-before-complete, completion-after-reset and interleaved players.
+Speech-blip tests also cover spaces/punctuation, combining marks and emoji, slow
+and accelerated reveal, long-frame catch-up, finish-reveal, locale refresh, mute,
+private-RNG reproducibility and concurrent character voices without duplicate cues.
 A native voice example verifies ownership and cleanup, missing audio fallback,
 muting, skipping and pause/resume. No required threads, coroutines, wall clock or
 LÖVE dependency enters the core player.
