@@ -1,0 +1,37 @@
+{
+  "compiler": {
+    "schemaVersion": 1,
+    "version": "0.11.0",
+    "revision": "370d07253a6904aef20fa9d1f823ac00c66e0392",
+    "dirty": false,
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "executableSha256": "15ee35ebe4fd9598a7d62ecefa71bfac219224b81efd5dfdb58df4c54f740caf"
+  },
+  "compiler_sha256": "15ee35ebe4fd9598a7d62ecefa71bfac219224b81efd5dfdb58df4c54f740caf",
+  "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+  "runtime_sha256": "4328f0480484caa9c194ff57e2ae5c5d9184ac8037d5b6ff1c9e60cf36eec1d6",
+  "input_hashes": {
+    "examples/dialogue-localization/love.lua": "b2fbaebf67ec69f1e07a2c0a3f6bff58e79bd3b40509fd10f26fe7eb3e3af265",
+    "vendor/tests/dialogue_localization_test.lua": "6f892f82974b8ea6460343ec7571e5588a23447ef85fd77cc0c11b21e4d79210",
+    "examples/dialogue-localization/src/main.tua": "59ecdb7cacbc148b6ec8ed3b815884eaa44cbf06ab49782235e363d82d9fe823",
+    "examples/dialogue-localization/src/cast.tua": "e40ab209cf7fbb649de2ab3a5617ea6ba8c9dc2b48b72cd712b5443ed2c20c31",
+    "examples/dialogue-localization/src/scene.tdialogue": "31a67f8b1aa1810e9cb4c9df46e664ecef25942f9335e94856234dc566b2d631",
+    "examples/dialogue-localization/src/locales/en.lua": "19c39e455da33a411d0b5991bf7049e28bdc3314f2d090deac6a6da2c9e1b5bc",
+    "examples/dialogue-localization/src/locales/fr.lua": "7102afda2d1028d55fd1eae13be9c2b57b5c40aab961ba2e198a9bf02c22656a"
+  },
+  "runs": [
+    {
+      "jit": "off",
+      "runtime": "RUNTIME\tLua 5.1\tLuaJIT 2.1.1700008891\tfalse\t11\t5\t0\tMysterious Mysteries",
+      "frames": 240,
+      "screenshot_sha256": "0e10d55e552509b3872d6382a45da9d5440c0d0d2daf73ff158655210a251483"
+    },
+    {
+      "jit": "on",
+      "runtime": "RUNTIME\tLua 5.1\tLuaJIT 2.1.1700008891\ttrue\t11\t5\t0\tMysterious Mysteries",
+      "frames": 240,
+      "screenshot_sha256": "0e10d55e552509b3872d6382a45da9d5440c0d0d2daf73ff158655210a251483"
+    }
+  ]
+}

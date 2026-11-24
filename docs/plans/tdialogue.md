@@ -1,6 +1,6 @@
 # Tua dialogue: implementation plan
 
-Status: M0 complete; M1–M10 planned. Baseline: `46a70a89` (portraits and timed events)
+Status: M0–M1 complete; M2–M10 planned. Baseline: `46a70a89` (portraits and timed events)
 and `2e179341` (dialogue documentation). This plan combines the remaining initial
 workstream with the expanded dialogue improvements. It does not claim those
 improvements are implemented or assign them a released version.
@@ -158,27 +158,27 @@ no production grammar or runtime behavior changed.
   Reproductions are retained; M0 does not silently widen types or promise these
   gaps are fixed.
 
-Future identity/schema/options names and fault states in the decision record are
-**design contracts**, not currently implemented features. The runtime remains at
-the existing version-one behavior. M1 is the next implementation milestone.
+At the M0 checkpoint, identity/schema/options names and fault states in the
+decision record were **design contracts**. M0 retained the existing version-one behavior. M1 below implements its
+localization and emitted-schema contracts.
 
 ## M1 — Localization and translation coverage
 
-- [ ] Map stable line and choice text IDs to the existing catalog index. Decide
+- [x] Map stable line and choice text IDs to the existing catalog index. Decide
   how source prose supplies default text and how catalog extraction/updates work
   without overwriting translator edits.
-- [ ] Add placeholder parsing/validation using the existing `%{name}` convention
+- [x] Add placeholder parsing/validation using the existing `%{name}` convention
   where compatible. Do not conflate a translated dialogue line with the existing
   `I18n.t` string-array result used for other dialogue catalog entries.
-- [ ] Resolve line and choice translations with the established locale fallback
+- [x] Resolve line and choice translations with the established locale fallback
   chain. Provide per-player locale selection without mutating unrelated players.
-- [ ] Define behavior for switching locale during reveal or a choice: preserve
+- [x] Define behavior for switching locale during reveal or a choice: preserve
   stable selection/line IDs and define whether text is re-presented; never replay
   gameplay effects merely because a translation changes.
-- [ ] Validate missing/extra placeholders, entry shape, missing keys and source
+- [x] Validate missing/extra placeholders, entry shape, missing keys and source
   drift. Integrate dialogue coverage and source navigation into the existing
   Localization Explorer. Define warning/error policy for incomplete translations.
-- [ ] Cover character display-name localization without requiring every character
+- [x] Cover character display-name localization without requiring every character
   name to be a catalog key. Plain string names remain valid.
 
 **Acceptance:** two players can show different locales; fallback and missing-entry
@@ -186,6 +186,21 @@ behavior are deterministic; translated choices keep their stable IDs. Tests cove
 plural values, escaping, Unicode text, missing/extra arguments, changed catalogs,
 unsaved edits and runtime replacement. The example includes two locales and a
 clearly incomplete translation to demonstrate coverage diagnostics.
+
+### M1 completion record
+
+Implemented in `e773bec4`, with measured allocation cleanup in `370d0725`.
+The [dialogue guide](../dialogue.md#localize-lines-choices-and-character-names)
+and [English/French example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-localization)
+cover source fallback, scalar/plural placeholders, shared character names,
+independent locales, no-replay presentation refresh and schema compatibility.
+
+The existing Localization Explorer now includes source coverage/navigation;
+read-only extraction preserves translator edits. Watch and unsaved editor changes
+use shared analysis. See the [M1 verification and measurements](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M1.md)
+for exact clean compiler identities, validation, remaining costs and native captures.
+Installed-editor UI and large-catalog performance remain unqualified; M2's typed
+context/argument bindings and the M0 compiler probes are still pending.
 
 ## M2 — Typed context, placeholders and local variables
 
@@ -437,9 +452,9 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-M0 is complete; continue with **M1** using its audit, stable-identity and versioning
-decisions, compatibility fixtures, and minimal localization proposal. Reuse the
-existing catalog index. Do not start by implementing the entire expanded grammar
+M0 and M1 are complete; continue with **M2 — typed context, placeholders and local
+variables**. Reuse the implemented localization adapter, stable identities and
+owned presentation behavior, and address the preserved imported-type probes. Do not start by implementing the entire expanded grammar
 or replacing storage/rendering architecture.
 
 ## Historical delivery checkpoints

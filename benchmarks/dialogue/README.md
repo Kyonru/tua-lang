@@ -144,3 +144,9 @@ this M0 fixture/decision work does not change production semantics.
 The whole `make verify` suite and installed VS Code UI checks were not rerun for
 this test/decision-only milestone; no production compiler/runtime behavior changed.
 This is not a claim of a full release qualification or a performance improvement.
+
+## M1 follow-up
+
+[M1 delivery and measurements](M1.md) retain these frozen M0 inputs and compare
+the implemented localization runtime, including its measured allocation cleanup.
+The original results above remain the historical baseline.
