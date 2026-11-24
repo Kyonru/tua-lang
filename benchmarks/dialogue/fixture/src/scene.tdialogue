@@ -1,0 +1,17 @@
+@dialogue 1
+@characters Cast "characters"
+
+[start]
+// @id baseline.hello
+Cast.Guide: Welcome aboard.
+@timing hold 3 fade 0.35
+@event shown 0.2 pulse "hello"
+@event revealed 0.25 ready
+// @id baseline.again
+-> Again [target:start]
+// @id baseline.leave
+-> Leave [target:finish]
+
+[finish]
+// @id baseline.bye
+: Goodbye. (end)

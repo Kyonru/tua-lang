@@ -1,0 +1,2 @@
+local contracts = require("forward")
+contracts.events:emit("reward", { coins = "many" })

@@ -1,0 +1,3 @@
+local events = signal()
+events:declare("reward", function(payload: { coins: number }) end)
+return events

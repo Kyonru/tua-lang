@@ -1,0 +1,4 @@
+local contracts = require("forward")
+local facts = contracts.view()
+local wrong: string = facts.player.coins
+print(wrong)

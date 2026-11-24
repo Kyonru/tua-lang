@@ -1,0 +1,3 @@
+local contracts = require("forward")
+local facts = contracts.view()
+facts.player.coins = 0

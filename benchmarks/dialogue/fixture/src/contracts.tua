@@ -1,0 +1,7 @@
+-- Existing Tua features only: these are probes, not future Dialogue API calls.
+export type Facts = { player: { name: string, coins: number } }
+local facts: Facts = { player = { name = "Ada", coins = 20 } }
+local function view(): Readonly < Facts > return facts end
+local events = signal()
+events:declare("reward", function(payload: { coins: number }) end)
+return { view = view, events = events }

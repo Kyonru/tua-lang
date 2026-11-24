@@ -1,0 +1,2 @@
+local events = require("event_bus")
+events:emit("reward", { coins = "many" })

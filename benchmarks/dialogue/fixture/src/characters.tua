@@ -1,0 +1,3 @@
+type Character = { name: string, portrait?: string }
+local Guide: Character = { name = "Guide", portrait = "guide.png" }
+return { Guide = Guide }

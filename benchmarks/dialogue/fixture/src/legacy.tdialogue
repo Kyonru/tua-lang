@@ -1,0 +1,8 @@
+@dialogue 1
+@character Narrator "Narrator"
+
+[start]
+// @id legacy.hello
+Narrator: First line.
+// @id legacy.second
+: Second line. (end)
