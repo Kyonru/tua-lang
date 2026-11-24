@@ -84,6 +84,29 @@ pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
                 ),
             ),
             (
+                "dialogueTemplate",
+                field(
+                    vec![
+                        ("key", Type::alias(KEY_TYPE)),
+                        ("source", Type::string()),
+                        (
+                            "args",
+                            Type::dictionary(
+                                Type::string(),
+                                Type::union([Type::string(), Type::number(), Type::boolean()]),
+                            ),
+                        ),
+                        ("locale", Type::alias(LOCALE_TYPE)),
+                    ],
+                    4,
+                    Type::table([
+                        ("template", TableField::required(Type::string())),
+                        ("locale", TableField::optional(Type::string())),
+                        ("variant", TableField::optional(Type::string())),
+                    ]),
+                ),
+            ),
+            (
                 "setLocale",
                 field(vec![("locale", Type::alias(LOCALE_TYPE))], 1, Type::nil()),
             ),

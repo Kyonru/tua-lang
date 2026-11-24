@@ -13157,3 +13157,46 @@ local wrongOption = Dialogue.reveal({ rate = "fast" })
         .hover("src/main.tua", fixture.position("field"))
         .is_some());
 }
+
+#[test]
+fn dialogue_template_types_survive_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/templates.tua
+return { select = I18n.dialogueTemplate }
+-- file: src/main.tua
+local select = require("templates").select
+local result = select("hello", "%{name}", {}, "fr")
+local text: string = result.template
+local locale: string | nil = result.locale
+local variant: string | nil = result.variant
+print(result.<|field|>template)
+local wrong: number = result.template
+select("hello", "text", { name = {} }, "en")
+select("hello", "text", {}, 3)
+"#,
+    );
+    let mut config = ProjectConfig::default();
+    config.i18n.enabled = true;
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/main.tua");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        3,
+        "{diagnostics:?}"
+    );
+    let labels = completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+    for name in ["template", "locale", "variant"] {
+        assert!(labels.contains(&name.to_owned()), "{labels:?}");
+    }
+    assert!(snapshot
+        .hover("src/main.tua", fixture.position("field"))
+        .is_some());
+}

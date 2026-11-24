@@ -409,7 +409,9 @@ tooling support it. This is parser infrastructure, not a usable rich-text featur
 
 - [x] Implement and test bounded raw text-field tokenization and fallback templates.
 - [ ] Integrate the opt-in directive, versioned document emission and shared editor facts.
-- [ ] Implement template resolution, owned presentation runs and origin mappings.
+- [x] Add typed `I18n.dialogueTemplate` selection with locale/plural metadata.
+- [ ] Connect template resolution to dialogue players and build owned presentation
+  runs and origin mappings.
 - [ ] Integrate authored rates/pauses with reveal and verify lifecycle semantics.
 - [ ] Qualify styled/localized examples and the acceptance matrix below.
 

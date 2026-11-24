@@ -99,3 +99,38 @@ local nested = Dialogue.new(scene, {
 nested:start()
 assert(sibling:snapshot().state == "awaiting_advance")
 assert(I18n.getLocale() == "en")
+
+-- Template selection never substitutes, changes global locale, or exposes catalog tables.
+local selected = I18n.dialogueTemplate("harbor.hello", "%{name} %{count}", {
+  name = "[pause=60] %{count}",
+  count = 1,
+}, "fr-CA")
+assert(selected.locale == "fr" and selected.variant == "one")
+assert(selected.template == "Bonjour, %{name} ! Vous avez %{count} pièce.")
+selected.template = "changed"
+assert(I18n.dialogueTemplate("harbor.hello", "%{name} %{count}", { count = 1 }, "fr").template ~= "changed")
+local authored = I18n.dialogueTemplate("absent", "%%{literal} %{name}", {}, "ja")
+assert(authored.template == "%%{literal} %{name}")
+assert(authored.locale == nil and authored.variant == nil)
+local fallback = I18n.dialogueTemplate("harbor.bye", "%{name}", {}, "fr-CA")
+assert(fallback.locale == "en" and fallback.variant == nil)
+smiti.set("en.only_other", { other = "%{count} items" })
+local other = I18n.dialogueTemplate("only_other", "%{count}", { count = 1 }, "en")
+assert(other.variant == "other" and other.template == "%{count} items")
+for _, resolve in ipairs({ I18n.dialogue, I18n.dialogueTemplate }) do
+  fails(function()
+    resolve("harbor.hello", "%{name} %{count}", { count = math.huge }, "en")
+  end, "finite count")
+  fails(function()
+    resolve("harbor.hello", "%{name}", { count = 1 }, "en")
+  end, "extra dialogue placeholder")
+  fails(function()
+    resolve("harbor.bye", "%{name} %{extra}", {}, "en")
+  end, "missing dialogue placeholder")
+  smiti.set("en.invalid_template", { "not scalar" })
+  fails(function()
+    resolve("invalid_template", "plain", {}, "en")
+  end, "must be text or a plural entry")
+end
+assert(I18n.getLocale() == "en")
+print("unexpanded dialogue templates passed")

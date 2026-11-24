@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add typed `I18n.dialogueTemplate` to select unexpanded dialogue templates with
+  actual locale/plural metadata, preserving the existing string resolver behavior.
+
 - Add optional typed `Dialogue.reveal` with Unicode 15.1 grapheme-safe reveal,
   owned byte-range mappings, silent finish/reduced-motion behavior, and bounded
   speech-blip cues with lifecycle identity. Styled markup remains pending.

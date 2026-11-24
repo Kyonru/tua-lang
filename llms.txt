@@ -278,6 +278,13 @@ never executes project modules; emitted scripts use ordinary runtime require.
 Dialogue localization: `Dialogue.new(document, {locale = "fr", resolve = I18n.dialogue,
 args = {name = "Ada", count = 2}})` uses existing configured catalogs and source fallback.
 `%{name}` placeholders take scalar args, `%%` escapes a percent; inserted values are literal.
+`I18n.dialogueTemplate(key, source, args, locale)` returns an owned record with unexpanded
+`template`, optional actual catalog `locale`, and optional actual plural `variant`.
+It reuses dialogue catalog/placeholder validation, requires finite count for plurals,
+and does not change global locale. Source fallback has no locale/variant. Non-count
+args need not be supplied until expansion. This record-returning selector is not a
+replacement for the string-returning `resolve` callback; `resolveTemplate` and rich
+markup integration remain pending.
 Line text IDs and reply IDs are catalog keys; optional character `nameKey` localizes its name.
 `player:setLocale("en")` refreshes presentation without changing visit/generation or replaying events.
 Renderers honor `presentationRevision` and `revealComplete` (show refreshed lines fully).

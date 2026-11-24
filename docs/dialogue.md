@@ -980,6 +980,38 @@ must not mutate the same player, including disposal; this is rejected to avoid
 half-applied transitions. It may use another player. Resolver errors leave the
 previous visit/presentation intact. Resolve text without gameplay side effects.
 
+### Select a template before substitution
+
+`I18n.dialogueTemplate(key, source, args, locale)` selects from the same catalogs
+and validates placeholder names, but leaves `%{name}` and `%%` unexpanded. This is
+useful when a presentation layer must process a template before inserting literal
+argument values. It returns an owned record with `template`, optional `locale`,
+and optional `variant` (the plural form actually used).
+
+```tua
+local selected = I18n.dialogueTemplate(
+  "harbor.hello",
+  "Hello, %{name}! You have %{count} coins.",
+  { name = "Ada", count = 1 },
+  "fr-CA"
+)
+-- selected.template still contains %{name} and %{count}.
+-- With the example catalogs: locale is "fr", variant is "one".
+print(selected.template)
+```
+
+The `args` map is used for plural selection; other placeholder values may be
+absent until a later expansion step. Plural entries require a finite `count`.
+The result reports the actual catalog locale after fallback, not the requested
+locale. Authored-source fallback has neither locale nor variant; scalar catalog
+entries have no variant. A missing plural category reports `"other"` when that
+form is used. Calls do not change the global locale or expose mutable catalog data.
+
+Use `I18n.dialogue` with `Dialogue.new(..., { resolve = ... })`: that callback must
+return a final string. `dialogueTemplate` returns a record and is **not** a drop-in
+resolver. Rich-text parsing, the planned `resolveTemplate` player option and
+styled rendering are not enabled yet. This selector does not validate markup.
+
 ### 4. Refresh presentation without replaying events
 
 ```tua

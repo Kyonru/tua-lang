@@ -3,7 +3,8 @@
 Status: implementation in progress on `feature/tdialogue-rich-text`.
 The shared Rust template parser is implemented and tested; the authoring directive,
 document emission, runtime presentation and editor integration remain pending.
-None of the proposed syntax or Tua APIs below is enabled for game authors yet.
+The `I18n.dialogueTemplate` selector is implemented; rich syntax and the player
+`resolveTemplate` option remain unavailable.
 The shipped `Dialogue.reveal` remains unchanged.
 This contract is based on revision `057b0314` and completes the remaining M6
 **design** decisions, not their implementation or acceptance tests.
@@ -122,7 +123,7 @@ resolveTemplate(key, sourceTemplate, args, locale)
   -> { template: string, locale?: string, variant?: string }
 ```
 
-The proposed `I18n.dialogueTemplate` adapter reuses catalog selection, plural rules,
+The implemented `I18n.dialogueTemplate` adapter reuses catalog selection, plural rules,
 locale fallback and placeholder validation, but returns the selected **unexpanded**
 template. It does not add another catalog or localization runtime. `args` are owned
 scalar copies for plural selection, not services. A missing translation returns
@@ -271,3 +272,32 @@ tua-core` passed 2,141 unit tests (one ignored) and 20 integration tests;
 Tua formatting pass was not applicable. The full workspace/extension gate and
 native LÖVE rendering were not run for this isolated, unconnected parser module;
 they remain required when its authoring/runtime/tooling integration lands.
+
+## Template-selection implementation checkpoint
+
+`I18n.dialogueTemplate` now returns an owned `{template, locale?, variant?}`
+record. It shares catalog lookup, finite plural-count validation and placeholder
+name checking with `I18n.dialogue`; the legacy API still expands once and returns
+a string. The new API preserves percent escapes and placeholders, permits absent
+non-count arguments, reports the actual selected locale/form, and does not expose
+catalog tables or change global locale. Source fallback omits locale/variant.
+
+The localization example and emitted-runtime oracle cover parent/configured/source
+fallback, missing plural forms, escaped placeholders, literal markup-like argument
+values, independent result ownership and errors shared by both APIs. A cross-module
+analysis fixture covers result inference, field completion/hover and invalid argument
+or result types. The selector does not parse rich markup; player `resolveTemplate`,
+rich presentation records, emission and reveal integration remain pending.
+
+Native checks passed in headless LÖVE 11.5 / LuaJIT 2.1.1700008891 with JIT both
+on and off, using compiler-emitted modules; Lua 5.4 also passed the example/oracle.
+Compiler: Tua 0.11.0, aarch64-apple-darwin debug, dirty base
+`ad4944df8457278456a813d355069f5513f8d83c`, executable SHA-256
+`8245a294c0bc0640276f62590b065bc7716ff1b7dda27385f1bae77967e8ce63`.
+These are execution checks, not installed-editor, audio or typography validation.
+
+The complete `make verify` gate passed: 2,142 core unit tests (one ignored),
+508 language-server tests, CLI/emitted-runtime and build-cache suites, workspace
+Clippy, model-contract checks and extension checks. Strict documentation build,
+explicit Lua formatting, typed example formatting/check/build, and diff checks
+also passed. The example retains its intentional missing-French-translation warnings.

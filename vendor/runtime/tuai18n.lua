@@ -39,23 +39,36 @@ end
 
 local dialogueText = require("tuadialogue_text")
 
-function I18n.dialogue(key, source, args, locale)
+local function dialogueTemplate(key, source, args, locale)
   assert(type(source) == "string" and type(args) == "table", "invalid dialogue translation")
   local value, resolvedLocale = smiti.resolve(key, locale)
-  if value == nil then value = source end
+  local variant
+  if value == nil then value, resolvedLocale = source, nil end
   if type(value) == "table" then
     assert(type(value.other) == "string" and value[1] == nil,
       "dialogue translation must be text or a plural entry: " .. key)
     local count = args.count
     assert(type(count) == "number" and count == count and math.abs(count) < math.huge,
       "dialogue plural needs a finite count")
-    value = value[smiti.plural.get(smiti.variants.root(resolvedLocale), count)] or value.other
+    variant = smiti.plural.get(smiti.variants.root(resolvedLocale), count)
+    if not value[variant] then variant = "other" end
+    value = value[variant]
   end
   assert(type(value) == "string", "dialogue translation must be text: " .. key)
   local expected, actual = dialogueText.placeholders(source), dialogueText.placeholders(value)
   for name in pairs(expected) do assert(actual[name], "missing dialogue placeholder: " .. name) end
   for name in pairs(actual) do assert(expected[name], "extra dialogue placeholder: " .. name) end
-  return dialogueText.format(value, args)
+  return value, resolvedLocale, variant
+end
+
+function I18n.dialogueTemplate(key, source, args, locale)
+  local template, resolvedLocale, variant = dialogueTemplate(key, source, args, locale)
+  return { template = template, locale = resolvedLocale, variant = variant }
+end
+
+function I18n.dialogue(key, source, args, locale)
+  local template = dialogueTemplate(key, source, args, locale)
+  return dialogueText.format(template, args)
 end
 
 function I18n.setLocale(locale)

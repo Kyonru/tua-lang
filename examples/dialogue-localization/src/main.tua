@@ -35,3 +35,16 @@ assert(I18n.getLocale() == "en")
 english:dispose()
 french:dispose()
 print("localized dialogue passed")
+
+-- Select first, expand later: placeholder values cannot introduce template syntax.
+local template = I18n.dialogueTemplate(
+  "harbor.hello",
+  "Hello, %{name}! You have %{count} coins.",
+  { name = "[pause=60]", count = 1 },
+  "fr-CA"
+)
+assert(template.template == "Bonjour, %{name} ! Vous avez %{count} pièce.")
+assert(template.locale == "fr" and template.variant == "one")
+local authored = I18n.dialogueTemplate("absent", "Hello %{name}", {}, "fr")
+assert(authored.template == "Hello %{name}")
+assert(authored.locale == nil and authored.variant == nil)

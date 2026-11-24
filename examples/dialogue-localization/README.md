@@ -10,7 +10,7 @@ tua dialogue-extract > /tmp/dialogue-source.json
 ```
 
 The headless example uses two simultaneous players, English/French plural lines,
-a shared localized character, a mid-line locale change, timed events and stable
+unexpanded template selection with fallback/plural metadata, a shared localized character, a mid-line locale change, timed events and stable
 choice IDs. French intentionally omits `harbor.bye`: expect coverage warnings and
 the English fallback at runtime. No images, audio or private game assets are needed.
 
