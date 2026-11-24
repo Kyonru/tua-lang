@@ -289,6 +289,112 @@ contain only positive integer `line` and `column` fields. Duplicate IDs are reje
 before playback. See the runnable
 [event identity example](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue-event-identity).
 
+### Declare typed notification payloads
+
+Use a shared event registry when a string payload is too limited. This builds on
+`Save.shape`'s headless validation and copying; it does not create a save slot or
+require a signal bus.
+
+`events.tua`:
+
+```tua
+return Dialogue.events({
+  reward = Save.shape(Save.record({
+    coins = Save.number(0),
+    item = Save.record({ id = Save.string("") }),
+    bonus = Save.optional(Save.boolean(false)),
+  })),
+})
+```
+
+In `victory.tdialogue`, import that registry before labels, then use `@emit` for
+declared notifications:
+
+```text
+@dialogue 1
+@document victory
+@events "events"
+[start]
+// @id victory.greeting
+: Well done! (end)
+@emit shown 0 reward [id:victory.reward] {"coins":10,"item":{"id":"shell"},"bonus":false}
+@event revealed 0.2 sound.play "celebration"
+```
+
+Payload strings are literal: they are not localized or placeholder-expanded.
+The JSON record is data, never executable Lua. Nested records, arrays, strings,
+finite numbers and booleans are supported. Omit optional fields instead of writing
+`null`. Payloads allow at most 8 KiB of authored JSON, 16 nesting levels and 256
+values. Duplicate keys are errors. The existing limit of 64 notifications per line
+counts both `@emit` and legacy `@event` entries.
+
+Event names, required/unknown fields and payload types are checked against the
+imported module, including re-exports. Completion suggests event names and top-level
+JSON argument keys; hover shows their types and definition lookup opens the contract.
+Numeric bounds and other `Save.shape` constraints are enforced at runtime before
+playback. A registry supports 1–128 event names. Use direct `Dialogue.events(...)`
+and `Save.shape(...)` factory calls to retain specialized inference.
+
+Create the player through the registry. Typed readers return an owned, validated
+payload for their event, or `nil` for another notification:
+
+```tua
+local events = require("events")
+local scene = require("victory")
+local player = events.new(scene)
+player:start()
+for _, event in ipairs(player:update(0, false)) do
+  local reward = events.read.reward(event)
+  if reward then
+    print(reward.coins, reward.item.id)
+  end
+end
+player:dispose()
+```
+
+Declared records carry `kind` and `name`, both equal to the declared name, plus the
+structured `payload` and existing identity/delivery metadata. Legacy notifications
+keep a string `payload` and no `kind`. Use the typed reader to access payload fields;
+checking `event.kind` alone does not currently narrow sibling payload fields in Tua.
+A matching reader validates again and copies its result, so it also rejects a
+payload that the host has since corrupted. A wrong kind/name returns `nil`.
+
+Payloads are captured when the player is constructed, not when their delay expires.
+Changing context, locale, schema defaults, the original document, a snapshot or an
+already-returned payload cannot change a pending notification's captured data.
+Registry validators use the original `Save.shape` descriptors, not mutable public
+`copy` or `defaults` fields. Each emitted delivery owns its nested payload.
+
+These are notifications: handling them does not wait, branch, acknowledge a reward
+or catch host-handler errors. If a handler restarts/cancels a player, use the
+existing generation/visit tokens to reject stale records from the returned batch.
+Registered actions with outcomes and resume policy are separate planned work.
+
+To combine events with context, pass the **same registry instance** in the context
+module's `events` field:
+
+```tua
+local events = require("events")
+return Dialogue.context({
+  events = events,
+  facts = Save.shape(Save.record({ name = Save.string("") })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})
+```
+
+The script declares both `@context "context"` and `@events "events"`. Construct it
+with `context.new(scene, facts)`; the same `events.read` functions handle its results.
+Registry identity is checked at construction. Plain `Dialogue.new` rejects a
+registry-bound script so the host cannot accidentally use its legacy result type.
+
+An `@events` import emits schema **5** and requires `Dialogue.schemaVersion >= 5`.
+Earlier schemas still work. Programmatic events in such documents use
+`{kind = "reward", name = "reward", id = "victory.reward", anchor = "shown", delay = 0,
+payload = {coins = 10, item = {id = "shell"}}}` and set the document's `events` to the
+registry. Unknown events and invalid payloads fail during player construction.
+See the complete [typed events example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-events)
+for multiple event types, legacy notifications, re-exports and context composition.
+
 ### Choose the right timing anchor
 
 | Anchor | Clock starts when | Useful for |

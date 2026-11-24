@@ -1,0 +1,9 @@
+-- Headless validation contracts; no signal bus or gameplay callback is required.
+return Dialogue.events({
+  reward = Save.shape(Save.record({
+    coins = Save.number(0),
+    item = Save.record({ id = Save.string("") }),
+    bonus = Save.optional(Save.boolean(false)),
+  })),
+  portrait = Save.shape(Save.record({ expression = Save.string("neutral") })),
+})

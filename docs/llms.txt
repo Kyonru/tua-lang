@@ -324,6 +324,21 @@ optional eventId, documentId and source={line,column}; legacy records stay uncha
 Source coordinates are diagnostic only. Explicit IDs survive text edits/reordering;
 generation/visit remain per-player delivery tokens, not persisted exactly-once guarantees.
 Programmatic events use id and optional source on schema-4 documents with documentId.
+Typed dialogue notifications (schema 5): export `Dialogue.events({reward =
+Save.shape(Save.record({coins=Save.number(0)}))})`. Before labels declare
+`@events "events"`; schedule `@emit shown 0 reward [id:reward.one] {"coins":10}`.
+An explicit event/document ID is required. JSON records contain data only; null,
+duplicate keys, >8 KiB, >16 nesting levels or >256 values are rejected. Optional
+fields are omitted. Imported names/fields/types are checked; numeric bounds are
+validated by the captured shape at player construction. Registries have 1–128 names.
+Create with events.new(scene); typed notifications have kind=name and owned record
+payloads. Use events.read.reward(event) -> payload|nil for typed field access;
+tag tests do not currently narrow sibling payload fields. Readers validate/copy a
+matching payload. Legacy @event keeps a string payload and no kind. Both count
+against 64 events/line. Context composition passes the same registry to
+Dialogue.context({facts,locals,events=events}); use context.new(scene,facts).
+Payloads are captured on construction. No bus, handlers, action outcomes or save
+persistence are implied. Plain Dialogue.new rejects a registry-bound document.
 Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
 After an utterance, `@event shown 0.2 event.name "payload"` or
 `@event revealed 0.2 event.name` schedules named data (up to 64 per line).

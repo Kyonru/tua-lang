@@ -1,0 +1,10 @@
+@dialogue 1
+@document rewards.example
+@events "forward"
+[start]
+// @id rewards.greeting
+: Well done! (end)
+@emit shown 0 reward [id:rewards.first] {"coins": 10, "item": {"id": "shell"}, "bonus": false}
+@emit shown 0 reward [id:rewards.second] {"coins": 20, "item": {"id": "pearl"}}
+@emit revealed 0.2 portrait [id:rewards.portrait] {"expression": "happy"}
+@event shown 0 celebration "legacy"

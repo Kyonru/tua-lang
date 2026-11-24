@@ -46,7 +46,21 @@ pub(crate) fn module_type() -> Type {
                 &new.parameters[1].ty,
                 &new.return_type,
             );
+            let event_factory = signature(
+                vec![(
+                    "schemas",
+                    Type::dictionary(Type::string(), crate::save::shape_type(Type::Any)),
+                )],
+                1,
+                events_definition(
+                    Type::empty_table(),
+                    &new.parameters[0].ty,
+                    &new.parameters[1].ty,
+                    &new.return_type,
+                ),
+            );
             Type::table([
+                ("events", TableField::required(event_factory)),
                 ("context", TableField::required(factory)),
                 ("new", TableField::required(constructor)),
                 ("schemaVersion", TableField::required(Type::number())),
@@ -178,6 +192,13 @@ fn context_function(
             "schemas",
             Type::table([
                 (
+                    "events",
+                    TableField::optional(Type::table([
+                        ("kind", TableField::required(Type::string_literal("events"))),
+                        ("payloads", TableField::required(Type::Any)),
+                    ])),
+                ),
+                (
                     "facts",
                     TableField::required(crate::save::shape_type(facts.clone())),
                 ),
@@ -214,11 +235,166 @@ pub(crate) fn inferred_context(options: Option<&Type>) -> Option<Type> {
     let Type::Function(new) = &module.field("new")?.ty else {
         unreachable!()
     };
+    let payloads = options.field("events").and_then(|event| {
+        let Type::Table(definition) = &event.ty else {
+            return None;
+        };
+        definition.field("payloads").map(|field| &field.ty)
+    });
+    let document = payloads
+        .map(|p| specialize_events(&new.parameters[0].ty, p))
+        .unwrap_or_else(|| new.parameters[0].ty.clone());
+    let player = payloads
+        .map(|p| specialize_events(&new.return_type, p))
+        .unwrap_or_else(|| (*new.return_type).clone());
     Some(definition_type(
         facts,
         locals,
-        &new.parameters[0].ty,
+        &document,
         &new.parameters[1].ty,
-        &new.return_type,
+        &player,
     ))
+}
+
+/// Reuse one contract specialization for compiler inference, imports and editor queries.
+pub(crate) fn inferred_factory(parts: &[String], argument: Option<&Type>) -> Option<Type> {
+    match parts.get(1)?.as_str() {
+        "context" => inferred_context(argument),
+        "events" => {
+            let Type::Table(schemas) = argument? else {
+                return None;
+            };
+            let mut fields = Vec::new();
+            for (name, field) in schemas.fields() {
+                let Type::Table(shape) = &field.ty else {
+                    return None;
+                };
+                fields.push((
+                    name.to_owned(),
+                    TableField::required(shape.field("defaults")?.ty.clone()),
+                ));
+            }
+            let Type::Table(module) = module_type() else {
+                return None;
+            };
+            let Type::Function(new) = &module.field("new")?.ty else {
+                return None;
+            };
+            Some(events_definition(
+                Type::table(fields),
+                &new.parameters[0].ty,
+                &new.parameters[1].ty,
+                &new.return_type,
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn events_definition(payloads: Type, document: &Type, options: &Type, player: &Type) -> Type {
+    let specialized = specialize_events(player, &payloads);
+    let Type::Table(player_fields) = &specialized else {
+        unreachable!()
+    };
+    let Type::Function(update) = &player_fields.field("update").expect("update contract").ty else {
+        unreachable!()
+    };
+    let Type::Array(notification) = update.return_type.as_ref() else {
+        unreachable!()
+    };
+    let Type::Table(fields) = &payloads else {
+        unreachable!()
+    };
+    let readers = Type::table(fields.fields().map(|(name, field)| {
+        (
+            name.to_owned(),
+            TableField::required(signature(
+                vec![("event", (**notification).clone())],
+                1,
+                Type::union([field.ty.clone(), Type::nil()]),
+            )),
+        )
+    }));
+    Type::table([
+        ("read", TableField::required(readers)),
+        ("kind", TableField::required(Type::string_literal("events"))),
+        (
+            "payloads",
+            TableField::required(Type::Readonly(Box::new(payloads.clone()))),
+        ),
+        (
+            "new",
+            TableField::required(signature(
+                vec![
+                    ("source", specialize_events(document, &payloads)),
+                    ("options", options.clone()),
+                ],
+                1,
+                specialize_events(player, &payloads),
+            )),
+        ),
+    ])
+}
+
+fn specialize_events(ty: &Type, payloads: &Type) -> Type {
+    let payloads = match payloads {
+        Type::Readonly(inner) => inner,
+        value => value,
+    };
+    let Type::Table(payloads) = payloads else {
+        return ty.clone();
+    };
+    specialize_event_contract(ty, payloads)
+}
+
+fn specialize_event_contract(ty: &Type, payloads: &crate::types::TableShape) -> Type {
+    match ty {
+        Type::Table(table) => {
+            if table.field("payload").is_some()
+                && table.field("name").is_some()
+                && (table.field("anchor").is_some() || table.field("generation").is_some())
+            {
+                let mut variants = vec![ty.clone()];
+                for (name, payload) in payloads.fields() {
+                    let mut event = table.clone();
+                    event.insert("kind", TableField::required(Type::string_literal(name)));
+                    event.insert("name", TableField::required(Type::string_literal(name)));
+                    event.insert("payload", TableField::required(payload.ty.clone()));
+                    variants.push(Type::Table(event));
+                }
+                Type::union(variants)
+            } else {
+                let mut result = table.clone();
+                for (name, field) in table.fields() {
+                    let mut field = field.clone();
+                    field.ty = specialize_event_contract(&field.ty, payloads);
+                    result.insert(name, field);
+                }
+                Type::Table(result)
+            }
+        }
+        Type::Array(item) => Type::array(specialize_event_contract(item, payloads)),
+        Type::Dictionary { key, value } => {
+            Type::dictionary((**key).clone(), specialize_event_contract(value, payloads))
+        }
+        Type::Union(items) => Type::union(
+            items
+                .iter()
+                .map(|item| specialize_event_contract(item, payloads)),
+        ),
+        Type::Function(function) => {
+            let mut result = function.clone();
+            for parameter in &mut result.parameters {
+                parameter.ty = specialize_event_contract(&parameter.ty, payloads);
+            }
+            result.return_type = Box::new(specialize_event_contract(&result.return_type, payloads));
+            result.return_types = result
+                .return_types
+                .iter()
+                .map(|value| specialize_event_contract(value, payloads))
+                .collect();
+            Type::Function(result)
+        }
+        _ => ty.clone(),
+    }
 }

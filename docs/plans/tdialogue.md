@@ -292,11 +292,23 @@ uniqueness, owns metadata, and returns `eventId`, `documentId`, and source coord
 Legacy records and schemas remain supported. Identity survives reordering and text
 edits; delivery still uses per-player generation/visit tokens. This is not persistent
 action execution or deduplication. See the [identity validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M4-event-identity.md).
-The remaining items below are not yet complete.
+**Typed notifications implemented:** `Dialogue.events` reuses `Save.shape` runtime
+validation and inferred payload facts. Registry imports and bounded `@emit` JSON
+payloads have shared diagnostics, event/top-level argument completion, hover and
+contract navigation. Typed readers preserve imported payload types; capture occurs
+at player construction. Legacy notifications remain dynamic string events. Context
+composition uses the same registry instance. Actions, results, handler errors and
+persistent action resume policy remain pending; the checklist below covers both
+notifications and those future actions.
+
+Follow-up: general tagged-record sibling-field narrowing is not yet available;
+use `events.read.name(notification)` for checked payload access. Nested JSON key
+completion can be expanded later; nested payload types already validate. See the
+[typed notification validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M4-typed-events.md).
 
 - [ ] Reuse existing declared-event/schema facts where possible to expose a typed
   action/event contract from a `.tua` module. Keep signal buses optional adapters.
-- [ ] Add validated structured payloads and argument completion; retain existing
+- [x] Add validated structured payloads and argument completion; retain existing
   undeclared string-payload events as a compatible, explicitly dynamic path.
 - [ ] Separate notification events from actions whose completion or outcome affects
   flow. Both remain requests to host code, never executable Lua in script text.

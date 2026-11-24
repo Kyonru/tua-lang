@@ -406,6 +406,7 @@ impl AnalysisSnapshot {
             let mut diagnostics = file.diagnostics.clone();
             diagnostics.extend(self.dialogue_character_diagnostics(path.as_ref()));
             diagnostics.extend(self.dialogue_context_diagnostics(path.as_ref()));
+            diagnostics.extend(self.dialogue_event_diagnostics(path.as_ref()));
             diagnostics.extend(self.dialogue_condition_diagnostics(path.as_ref()));
             if config.i18n.enabled {
                 diagnostics.extend(

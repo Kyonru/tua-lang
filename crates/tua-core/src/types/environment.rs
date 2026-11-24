@@ -5834,7 +5834,7 @@ fn infer_first_function_call_return_types(
         return Vec::new();
     };
 
-    if parts.as_slice() == ["Dialogue", "context"]
+    if (parts.as_slice() == ["Dialogue", "context"] || parts.as_slice() == ["Dialogue", "events"])
         && (query
             .locals
             .get("Dialogue")
@@ -5844,7 +5844,7 @@ fn infer_first_function_call_return_types(
     {
         let argument = first_parenthesized_call_argument_after_field(function_call)
             .and_then(|argument| query.type_of(argument));
-        if let Some(ty) = crate::dialogue::inferred_context(argument.as_ref()) {
+        if let Some(ty) = crate::dialogue::inferred_factory(&parts, argument.as_ref()) {
             return vec![ty];
         }
     }

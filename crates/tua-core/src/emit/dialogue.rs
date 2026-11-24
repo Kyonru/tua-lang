@@ -44,9 +44,20 @@ pub fn emit_dialogue_source(
             context.module.span,
         );
     }
+    if let Some(events) = &document.events {
+        output.line(
+            &format!(
+                "local __tua_events = require({})",
+                lua_string_literal(&events.module.value)
+            ),
+            events.module.span,
+        );
+    }
     output.line("return {", entry.span);
     output.line(
-        if document.sections.iter().any(|section| {
+        if document.events.is_some() {
+            "  schemaVersion = 5,"
+        } else if document.sections.iter().any(|section| {
             section
                 .lines
                 .iter()
@@ -92,6 +103,9 @@ pub fn emit_dialogue_source(
             output.line("    },", binding.path.span);
         }
         output.line("  },", context.module.span);
+    }
+    if let Some(events) = &document.events {
+        output.line("  events = __tua_events,", events.module.span);
     }
     if let Some(id) = &document.document_id {
         output.field("  documentId", &id.value, id.span);
@@ -168,6 +182,16 @@ pub fn emit_dialogue_source(
             if !line.events.is_empty() {
                 output.line("      events = {", origin);
                 for event in &line.events {
+                    let typed = event
+                        .data
+                        .as_ref()
+                        .map(|_| format!("kind = {}, ", lua_string_literal(&event.name)))
+                        .unwrap_or_default();
+                    let payload = event
+                        .data
+                        .as_ref()
+                        .map(json_payload)
+                        .unwrap_or_else(|| lua_string_literal(&event.payload));
                     let identity = event
                         .id
                         .as_ref()
@@ -182,11 +206,11 @@ pub fn emit_dialogue_source(
                         .unwrap_or_default();
                     output.line(
                         &format!(
-                            "        {{ {identity}anchor = {}, delay = {}, name = {}, payload = {} }},",
+                            "        {{ {typed}{identity}anchor = {}, delay = {}, name = {}, payload = {} }},",
                             lua_string_literal(&event.anchor),
                             event.delay,
                             lua_string_literal(&event.name),
-                            lua_string_literal(&event.payload)
+                            payload
                         ),
                         event.span,
                     );
@@ -293,5 +317,34 @@ impl Writer {
 
     fn field(&mut self, key: &str, value: &str, origin: SourceSpan) {
         self.line(&format!("{key} = {},", lua_string_literal(value)), origin);
+    }
+}
+
+fn json_payload(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(value) => lua_string_literal(value),
+        serde_json::Value::Bool(value) => value.to_string(),
+        serde_json::Value::Number(value) => value.to_string(),
+        serde_json::Value::Array(values) => format!(
+            "{{ {} }}",
+            values
+                .iter()
+                .map(json_payload)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        serde_json::Value::Object(values) => format!(
+            "{{ {} }}",
+            values
+                .iter()
+                .map(|(key, value)| format!(
+                    "[{}] = {}",
+                    lua_string_literal(key),
+                    json_payload(value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        serde_json::Value::Null => unreachable!("validated event payload excludes null"),
     }
 }

@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Dialogue scripts can import typed notification contracts with `@events` and emit
+  validated structured payloads with `@emit`. Typed readers, context composition
+  and shared diagnostics/editor queries are available; these scripts use schema 5.
+
 - Dialogue timed events can carry explicit document-scoped IDs and source locations.
   Scripts using `[id:...]` emit schema 4; legacy event records remain compatible.
 

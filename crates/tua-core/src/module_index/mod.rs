@@ -1046,7 +1046,8 @@ impl<'a> ExportInferer<'a> {
                 if self.parsed.raw.language == crate::ParsedLanguage::Tua =>
             {
                 if let Some(parts) = field_chain_before_first_call(call) {
-                    if parts.as_slice() == ["Dialogue", "context"]
+                    if (parts.as_slice() == ["Dialogue", "context"]
+                        || parts.as_slice() == ["Dialogue", "events"])
                         && node_span(call).is_some_and(|span| {
                             !crate::scope::scope_map_parsed_source(self.parsed)
                                 .has_non_builtin_binding_at("Dialogue", span.start)
@@ -1054,7 +1055,9 @@ impl<'a> ExportInferer<'a> {
                     {
                         let argument = crate::save::first_argument(call)
                             .map(|argument| self.infer_expression(argument));
-                        if let Some(ty) = crate::dialogue::inferred_context(argument.as_ref()) {
+                        if let Some(ty) =
+                            crate::dialogue::inferred_factory(&parts, argument.as_ref())
+                        {
                             return ty;
                         }
                     }

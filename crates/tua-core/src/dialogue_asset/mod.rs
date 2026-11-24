@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod conditions;
 mod context;
+mod events;
 pub use conditions::{Branch, Condition, ConditionKind};
 pub use context::{DialogueBinding, DialogueLiteral};
 #[cfg(test)]
@@ -43,6 +44,7 @@ pub struct DialogueChoice {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueEvent {
     pub id: Option<DialogueName>,
+    pub data: Option<serde_json::Value>,
     pub anchor: String,
     pub delay: String,
     pub name: String,
@@ -132,7 +134,8 @@ pub(crate) fn character_imports(source: &str) -> Vec<CharacterImport> {
         .enumerate()
         .filter_map(|(index, line)| {
             character_import(line, index + 1)
-                .or_else(|| context::context_import(line, index + 1))?
+                .or_else(|| context::context_import(line, index + 1))
+                .or_else(|| events::event_import(line, index + 1))?
                 .ok()
         })
         .collect()
@@ -154,6 +157,7 @@ pub(crate) fn character_module_specifiers(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
+    pub events: Option<CharacterImport>,
     pub context: Option<CharacterImport>,
     pub bindings: Vec<DialogueBinding>,
     pub document_id: Option<DialogueName>,
@@ -174,6 +178,7 @@ pub fn parse_dialogue_source(
     let mut parser = Parser {
         path: path.as_ref(),
         document: DialogueSource {
+            events: None,
             context: None,
             bindings: Vec::new(),
             document_id: None,
@@ -310,6 +315,9 @@ impl Parser<'_> {
         if self.condition_line(syntax, at) {
             return;
         }
+        if self.event_import_line(raw, number) {
+            return;
+        }
         if self.context_line(raw, number) {
             return;
         }
@@ -321,7 +329,9 @@ impl Parser<'_> {
                 self.document.document_id = self.name(rest.trim(), at);
             }
         } else if let Some(rest) = syntax.strip_prefix("@event ") {
-            self.event(rest, at);
+            self.event(rest, at, false);
+        } else if let Some(rest) = syntax.strip_prefix("@emit ") {
+            self.event(rest, at, true);
         } else if let Some(rest) = syntax.strip_prefix("@timing ") {
             self.timing(rest, at);
         } else if let Some(import) = character_import(raw, number) {
@@ -399,7 +409,7 @@ impl Parser<'_> {
         self.document.sections.last_mut()?.lines.last_mut()
     }
 
-    fn event(&mut self, rest: &str, at: SourceSpan) {
+    fn event(&mut self, rest: &str, at: SourceSpan, typed: bool) {
         let (anchor, rest) = take_word(rest);
         let (delay, rest) = take_word(rest);
         let (name, payload) = take_word(rest);
@@ -426,7 +436,25 @@ impl Parser<'_> {
             );
             return;
         }
-        let payload = if payload.is_empty() {
+        let data = if typed {
+            if self.document.events.is_none() || id.is_none() {
+                self.error(
+                    at,
+                    "@emit requires an @events module and an explicit [id:...] tag",
+                );
+                return;
+            }
+            match events::payload(payload) {
+                Ok(value) => Some(value),
+                Err(message) => {
+                    self.error(at, message);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let payload = if typed || payload.is_empty() {
             String::new()
         } else {
             let Some(quoted) = payload.strip_prefix('"').and_then(|v| v.strip_suffix('"')) else {
@@ -445,6 +473,7 @@ impl Parser<'_> {
             }
             line.events.push(DialogueEvent {
                 id,
+                data,
                 anchor: anchor.into(),
                 delay,
                 name: name.into(),

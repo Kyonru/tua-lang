@@ -1,10 +1,11 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 4 }
+local Dialogue = { schemaVersion = 5 }
 local Conditions
 local function conditions()
   if not Conditions then Conditions = require("tuadialogue_conditions") end
   return Conditions
 end
+local eventDefinitions = setmetatable({}, { __mode = "k" })
 local Player = {}
 Player.__index = Player
 
@@ -33,7 +34,7 @@ local function eventSource(value)
   return { line = value.line, column = value.column }
 end
 
-local function events(value, schemaVersion, documentId, seen)
+local function events(value, schemaVersion, documentId, seen, validators)
   if value == nil then return {} end
   assert(type(value) == "table" and #value <= 64, "a line supports at most 64 events")
   local count, result = 0, {}
@@ -47,10 +48,28 @@ local function events(value, schemaVersion, documentId, seen)
     assert(type(event) == "table" and (event.anchor == "shown" or event.anchor == "revealed"),
       "invalid event anchor")
     assert(seconds(event.delay), "invalid event delay")
-    assert(type(event.name) == "string" and event.name ~= "" and type(event.payload) == "string",
-      "invalid dialogue event")
+    assert(type(event.name) == "string" and event.name ~= "", "invalid dialogue event name")
+    local payload
+    if event.kind ~= nil then
+      assert(schemaVersion == 5 and event.kind == event.name, "invalid typed event kind")
+      assert(event.id ~= nil, "typed events require an explicit ID")
+      local validate = validators and validators[event.name]
+      assert(validate, "unknown typed dialogue event: " .. event.name)
+      local ok, value = pcall(validate, event.payload)
+      if not ok then
+        error("dialogue event " .. event.name .. " (" .. tostring(documentId) .. "/"
+          .. tostring(event.id) .. "): " .. tostring(value), 0)
+      end
+      payload = value
+    else
+      assert(type(event.payload) == "string", "legacy event payload must be a string")
+      payload = event.payload
+    end
     if event.id ~= nil or event.source ~= nil then
-      assert(schemaVersion == 4, "event identity requires schema version 4")
+      assert(
+        schemaVersion == 4 or schemaVersion == 5,
+        "event identity requires schema version 4 or later"
+      )
       assert(
         type(documentId) == "string" and documentId ~= "",
         "event identity requires documentId"
@@ -60,12 +79,13 @@ local function events(value, schemaVersion, documentId, seen)
       seen[event.id] = true
     end
     result[index] = {
+      kind = event.kind,
       id = event.id,
       source = eventSource(event.source),
       anchor = event.anchor,
       delay = event.delay,
       name = event.name,
-      payload = event.payload,
+      payload = payload,
     }
   end
   return result
@@ -80,6 +100,7 @@ local documentFields = {
   nodes = true,
   context = true,
   bindings = true,
+  events = true,
 }
 local nodeFields = {
   line = {
@@ -99,6 +120,7 @@ local nodeFields = {
   ["end"] = { kind = true },
 }
 local eventFields = {
+  kind = true,
   anchor = true,
   delay = true,
   name = true,
@@ -132,12 +154,18 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
   if value.schemaVersion then
     fields(value, documentFields)
+  end
+  local validators
+  if value.events ~= nil then
+    assert(value.schemaVersion == 5, "event contracts require schema version 5")
+    validators = eventDefinitions[value.events]
+    assert(validators, "document needs a Dialogue.events definition")
   end
   local nodes, eventIds = {}, {}
   for id, node in pairs(value.nodes) do
@@ -160,7 +188,13 @@ local function document(value)
       owned.portrait, owned.hold, owned.fade = node.portrait, node.hold, node.fade
       assert(optionalId(node.textId) and optionalId(node.speakerKey), "invalid localization ID")
       owned.textId, owned.speakerKey = node.textId, node.speakerKey
-      owned.events = events(node.events, value.schemaVersion, value.documentId, eventIds)
+      owned.events = events(
+        node.events,
+        value.schemaVersion,
+        value.documentId,
+        eventIds,
+        validators
+      )
       if value.schemaVersion then
         for _, event in ipairs(node.events or {}) do
           fields(event, eventFields)
@@ -291,8 +325,8 @@ end
 
 function Dialogue.new(source, options)
   assert(
-    source.context == nil and source.bindings == nil,
-    "use the context definition's new function"
+    source.context == nil and source.bindings == nil and source.events == nil,
+    "use the context or event definition's new function"
   )
   return newPlayer(source, options)
 end
@@ -487,11 +521,12 @@ function Player:update(dt, revealed)
   for _, item in ipairs(due) do
     local event = node.events[item.index]
     result[#result + 1] = {
+      kind = event.kind,
       eventId = event.id,
       documentId = event.id and self.document.documentId or nil,
       source = copy(event.source),
       name = event.name,
-      payload = event.payload,
+      payload = copy(event.payload),
       generation = self.generation,
       visit = self.visit,
       nodeId = self.current,
@@ -613,18 +648,63 @@ function Player:setLocals(value)
   refresh(self, self.facts, self.copyLocals(value))
 end
 
+function Dialogue.events(shapes)
+  assert(
+    type(shapes) == "table" and getmetatable(shapes) == nil,
+    "event schemas must be a plain record"
+  )
+  local Shape = require("tuasave_shape")
+  local validators, payloads, count = {}, {}, 0
+  for name, shape in pairs(shapes) do
+    assert(
+      type(name) == "string" and name:match("^[A-Za-z_][A-Za-z0-9_.-]*$"),
+      "invalid event name"
+    )
+    local validate, defaults = Shape.get(shape)
+    assert(type(defaults) == "table", "event payload shapes must describe tables")
+    validators[name], payloads[name] = validate, copy(defaults)
+    count = count + 1
+  end
+  assert(count >= 1 and count <= 128, "declare between 1 and 128 events")
+  local readers = {}
+  for name, validate in pairs(validators) do
+    readers[name] = function(event)
+      assert(type(event) == "table", "expected a dialogue notification")
+      if event.kind ~= name or event.name ~= name then return nil end
+      return validate(event.payload)
+    end
+  end
+  local definition = { kind = "events", payloads = payloads, read = readers }
+  eventDefinitions[definition] = validators
+  function definition.new(source, options)
+    assert(source.events == definition, "document uses another event definition")
+    assert(
+      source.context == nil and source.bindings == nil,
+      "use the context definition's new function"
+    )
+    return newPlayer(source, options)
+  end
+  return definition
+end
+
 function Dialogue.context(schemas)
   assert(type(schemas) == "table", "context needs fact and local shapes")
-  fields(schemas, { facts = true, locals = true })
+  fields(schemas, { facts = true, locals = true, events = true })
   local Shape = require("tuasave_shape")
   local copyFacts, initialFacts = Shape.get(schemas.facts)
   local copyLocals, initialLocals = Shape.get(schemas.locals)
+  local registeredEvents = schemas.events
+  assert(
+    registeredEvents == nil or eventDefinitions[registeredEvents],
+    "invalid context event definition"
+  )
   local definition = { kind = "context", facts = copy(initialFacts), locals = copy(initialLocals) }
   function definition.new(source, value, options)
     assert(source.context == definition, "document uses another context definition")
+    assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4,
-      "typed context requires dialogue schema version 2, 3 or 4"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5,
+      "typed context requires dialogue schema version 2 through 5"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

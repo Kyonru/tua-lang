@@ -24,6 +24,7 @@ type ChoiceView = {
 }
 type EventSource = { line: number, column: number }
 type Event = {
+  kind?: nil,
   id?: string,
   source?: EventSource,
   anchor: "shown" | "revealed",
@@ -32,6 +33,7 @@ type Event = {
   payload: string,
 }
 type FiredEvent = {
+  kind?: nil,
   eventId?: string,
   documentId?: string,
   source?: EventSource,
@@ -58,6 +60,7 @@ type Node = {
   | { kind: "end" }
 type Binding = { name: string, path: string, fallback?: string | number | boolean }
 type Document = {
+  events?: { kind: "events" },
   context?: { kind: "context" },
   bindings?: Binding[],
   schemaVersion?: number,

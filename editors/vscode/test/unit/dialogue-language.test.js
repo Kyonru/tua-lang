@@ -46,5 +46,9 @@ test("dialogue grammar highlights imports and speakers without highlighting pros
   assert(condition.some((token) => token.scopes.includes("constant.language.tdialogue")));
   const identified = grammar.tokenizeLine('@event shown 0 pulse [id:arrival.pulse] "soft"', textmate.INITIAL).tokens;
   assert(identified.some((token) => token.scopes.includes("entity.name.tag.tdialogue")));
+  for (const line of ['@events "story.events"', '@emit shown 0 reward [id:reward.one] {"coins":10}']) {
+    const tokens = grammar.tokenizeLine(line, textmate.INITIAL).tokens;
+    assert(tokens.some((token) => token.scopes.includes("keyword.control.tdialogue")));
+  }
   registry.dispose();
 });

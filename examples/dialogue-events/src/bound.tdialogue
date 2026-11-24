@@ -1,0 +1,9 @@
+@dialogue 1
+@document bound.rewards
+@context "context"
+@events "events"
+@bind name context.name
+[start]
+// @id bound.greeting
+: Well done, %{name}! (end)
+@emit shown 0 reward [id:bound.first] {"coins": 5, "item": {"id": "token"}}

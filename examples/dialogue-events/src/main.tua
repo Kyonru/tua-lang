@@ -1,0 +1,37 @@
+local events = require("forward")
+local scene = require("scene")
+local player = events.new(scene)
+player:start()
+local notifications = player:update(0, false)
+assert(#notifications == 3)
+local coins = 0
+for _, event in ipairs(notifications) do
+  local reward = events.read.reward(event)
+  local portrait = events.read.portrait(event)
+  if reward then
+    coins += reward.coins
+    print(reward.item.id)
+  elseif portrait then
+    print(portrait.expression)
+  else
+    local payload = event.payload
+    if type(payload) == "string" then print(payload) end
+  end
+end
+assert(coins == 30)
+assert(#player:update(0, true) == 0)
+local revealed = player:update(0.2, true)
+assert(#revealed == 1 and revealed[1].kind == "portrait")
+player:dispose()
+
+-- The same contracts compose with typed context and localization bindings.
+local context = require("context")
+local bound = require("bound")
+local contextual = context.new(bound, { name = "Captain" })
+contextual:start()
+for _, event in ipairs(contextual:update(0, false)) do
+  local reward = events.read.reward(event)
+  assert(reward and reward.coins == 5)
+end
+contextual:dispose()
+print("typed dialogue events passed")

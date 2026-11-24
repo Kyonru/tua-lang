@@ -1163,7 +1163,8 @@ impl AnalysisSnapshot {
                 })?;
             return Some(crate::store::store_type_from_initial(&initial));
         }
-        if parts.as_slice() == ["Dialogue", "context"]
+        if (parts.as_slice() == ["Dialogue", "context"]
+            || parts.as_slice() == ["Dialogue", "events"])
             && parsed.raw.language == crate::ParsedLanguage::Tua
             && !local_types.contains_key("Dialogue")
             && !self
@@ -1176,7 +1177,7 @@ impl AnalysisSnapshot {
                 .and_then(|argument| {
                     self.project_structured_argument_type(parsed, argument, local_types)
                 });
-            return crate::dialogue::inferred_context(argument.as_ref())
+            return crate::dialogue::inferred_factory(&parts, argument.as_ref())
                 .filter(|_| return_index == 0);
         }
         if parts

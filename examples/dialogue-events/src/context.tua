@@ -1,0 +1,6 @@
+local events = require("events")
+return Dialogue.context({
+  events = events,
+  facts = Save.shape(Save.record({ name = Save.string("") })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})

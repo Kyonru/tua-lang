@@ -33,11 +33,10 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let mut diagnostics = Vec::new();
-        for import in parsed
-            .dialogue_imports
-            .iter()
-            .filter(|import| !super::dialogue_context::is_context_import(&file.source, import))
-        {
+        for import in parsed.dialogue_imports.iter().filter(|import| {
+            !super::dialogue_context::is_context_import(&file.source, import)
+                && !super::dialogue_events::is_event_import(&file.source, import)
+        }) {
             let Some(module) = self.dialogue_module(path, import) else {
                 diagnostics.push(character_error(
                     path,
@@ -89,6 +88,9 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        if let Some(completions) = self.dialogue_event_completion(path, position) {
+            return completions;
+        }
         if let Some(completions) = self.dialogue_context_completion(path, position) {
             return completions;
         }
@@ -141,6 +143,9 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn dialogue_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        if let Some(hover) = self.dialogue_event_hover(path, position) {
+            return Some(hover);
+        }
         if let Some(hover) = self.dialogue_context_hover(path, position) {
             return Some(hover);
         }
@@ -185,6 +190,9 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<Definition> {
+        if let Some(definition) = self.dialogue_event_definition(path, position) {
+            return Some(definition);
+        }
         if let Some(definition) = self.dialogue_context_definition(path, position) {
             return Some(definition);
         }
