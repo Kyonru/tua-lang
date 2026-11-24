@@ -368,21 +368,28 @@ ranges, and emits at most one eligible speech cue per update. Finish/clear/refre
 invalidate or suppress stale delivery; reduced motion reveals silently. The host owns
 rendering, shaping and audio. The official 1,187-case grapheme corpus is exercised on
 emitted-runtime tests. Styled spans, authored pauses/speed/pronunciation and mappings
-back to authored/localized markup remain the next M6 slice; M6 is not complete.
+back to authored/localized markup remain unimplemented; M6 is not complete.
 See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-reveal.md).
 
 
-- [ ] Define a renderer-neutral representation for styled text, emphasis, pauses,
+**Styled-text design settled (implementation pending):** the
+[contract](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M6-text-contract.md)
+defines explicit rich-text opt-in, renderer-neutral runs, source mappings, bounded
+marks and reveal timing. A separate unexpanded template resolver preserves literal
+placeholder insertion; existing string resolvers remain compatible. No new syntax
+or API is enabled by this design step.
+
+- [x] Define a renderer-neutral representation for styled text, emphasis, pauses,
   reveal speed and pronunciation hints, with a plain-text fallback.
-- [ ] Establish logical text ranges and source mappings through translation,
+- [x] Establish logical text ranges and source mappings through translation,
   placeholder expansion and escaping. Keep substituted values as text, not markup
   that can inject commands, events or styles.
-- [ ] Specify nesting, unknown marks, duration bounds and malformed-markup errors.
+- [x] Specify nesting, unknown marks, duration bounds and malformed-markup errors.
   Keep presentation hints separate from consequential events/actions.
 - [x] Support grapheme-aware reveal in the example adapter. Specify the mapping
   from logical text spans to renderer/layout clusters; do not split combining
   sequences or assume byte offsets equal displayed characters.
-- [ ] Define finish-reveal, skip and reduced-motion behavior, including whether
+- [x] Define finish-reveal, skip and reduced-motion behavior, including whether
   presentation pauses are skipped. Preserve an exact host report for `revealed`.
 - [x] Expose optional speech-blip reveal cues for Animal Crossing-style character
   chatter. Derive them from actually revealed grapheme/word boundaries, not bytes
@@ -392,6 +399,13 @@ See the [reveal validation record](https://github.com/Kyonru/tua-lang/blob/main/
   whole line as a burst. Keep these presentation cues separate from gameplay events.
 - [x] Document font coverage, shaping and bidirectional-layout responsibilities.
   Accepting Unicode strings is not proof of multilingual rendering support.
+
+**Remaining implementation:**
+
+- [ ] Implement the opt-in grammar, versioned document data and shared editor facts.
+- [ ] Implement template resolution, owned presentation runs and origin mappings.
+- [ ] Integrate authored rates/pauses with reveal and verify lifecycle semantics.
+- [ ] Qualify styled/localized examples and the acceptance matrix below.
 
 **Acceptance:** tests cover combining marks, emoji sequences, non-Latin text,
 escaped markup, expanded placeholders, localized span order, pause/skip and invalid
