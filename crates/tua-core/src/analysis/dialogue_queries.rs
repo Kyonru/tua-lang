@@ -334,7 +334,11 @@ fn dialogue_text(
         .iter()
         .flat_map(|section| &section.lines)
         .flat_map(|line| {
-            std::iter::once(&line.text).chain(line.choices.iter().map(|choice| &choice.text))
+            std::iter::once(&line.text).chain(
+                line.choices
+                    .iter()
+                    .flat_map(|choice| std::iter::once(&choice.text).chain(choice.reason.iter())),
+            )
         })
         .find(|text| contains(text.id.span, position))
 }

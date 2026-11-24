@@ -302,6 +302,21 @@ cancel retains inspection data; dispose releases it. Players never share mutable
 Bindings cannot be overridden by options.args. Custom resolvers return final formatted text.
 Context-bound assets emit schemaVersion 2 (header remains @dialogue 1); runtime accepts old schemas.
 Use direct built-in factory calls; generic factory wrappers can lose specialized inference.
+Conditional dialogue (schema 3): a branch-only label contains
+`@branch context.coins >= 20 [target:yes] [else:no]`. Field reads, scalars, nil,
+not/and/or, equality and numeric ordering are supported; no calls or arithmetic.
+Precedence: parentheses, not, comparisons, and, or. Boolean operators short-circuit;
+nil is false and missing ordered operands produce false. Wrong types/paths are errors.
+After a choice, `@visible condition` hides it; `@enabled condition` disables it.
+`// @id reason.key` followed by `@reason Text` supplies an optional localized reason.
+Conditional choice groups require `@fallback label`, used if no visible enabled reply
+remains. Snapshot options omit hidden replies; only enabled=false means disabled for
+compatibility with older schemas. choose(id) rechecks current accepted context.
+Context refresh preserves execution identity unless it follows a no-choice fallback.
+Options transitionBudget defaults to 256 (range 1..4096). Budget exhaustion produces
+state=faulted and snapshot.issue={code="transition_budget_exceeded",message,nodeId}.
+Faulted players do no automatic work; start/cancel/dispose provide explicit recovery.
+Conditions have a fixed 32-level/256-instruction runtime limit. Gameplay effects remain host-owned.
 Optional character `portrait: string?` is copied into the line snapshot; hosts load/render it.
 After an utterance, `@event shown 0.2 event.name "payload"` or
 `@event revealed 0.2 event.name` schedules named data (up to 64 per line).

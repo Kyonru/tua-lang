@@ -16,6 +16,13 @@ pub struct BundledRuntime {
 
 pub const RUNTIMES: &[BundledRuntime] = &[
     BundledRuntime {
+        module: "tuadialogue_conditions",
+        file_name: "tuadialogue_conditions.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_conditions.lua"),
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "tuasave_shape",
         file_name: "tuasave_shape.lua",
         source: || include_str!("../../../vendor/runtime/tuasave_shape.lua"),
@@ -33,7 +40,11 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         module: "tuadialogue",
         file_name: "tuadialogue.lua",
         source: || include_str!("../../../vendor/runtime/tuadialogue.lua"),
-        dependencies: &["tuadialogue_text", "tuasave_shape"],
+        dependencies: &[
+            "tuadialogue_text",
+            "tuasave_shape",
+            "tuadialogue_conditions",
+        ],
         explicit_import: true,
     },
     BundledRuntime {

@@ -9,8 +9,10 @@ impl CatalogIndex {
     ) {
         for section in &source.sections {
             for line in &section.lines {
-                for text in std::iter::once(&line.text)
-                    .chain(line.choices.iter().map(|choice| &choice.text))
+                for text in
+                    std::iter::once(&line.text).chain(line.choices.iter().flat_map(|choice| {
+                        std::iter::once(&choice.text).chain(choice.reason.iter())
+                    }))
                 {
                     self.entries.entry(text.id.value.clone()).or_default();
                     self.dialogue_sources

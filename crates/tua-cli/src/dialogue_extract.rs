@@ -20,9 +20,11 @@ pub(crate) fn run(cwd: &Path) -> Result<String, CliError> {
         let model = tua_core::dialogue_asset::parse_dialogue_source(&file.path, &source)
             .map_err(|errors| CliError::from_diagnostics("dialogue extraction failed", errors))?;
         for line in model.sections.iter().flat_map(|section| &section.lines) {
-            for text in
-                std::iter::once(&line.text).chain(line.choices.iter().map(|choice| &choice.text))
-            {
+            for text in std::iter::once(&line.text).chain(
+                line.choices
+                    .iter()
+                    .flat_map(|choice| std::iter::once(&choice.text).chain(choice.reason.iter())),
+            ) {
                 let value = serde_json::json!({ "text": text.value,
                     "path": file.path.strip_prefix(workspace.primary_source_root()).unwrap_or(&file.path),
                     "line": text.id.span.start.line, "documentId": model.document_id.as_ref().map(|id| &id.value) });

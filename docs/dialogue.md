@@ -749,6 +749,135 @@ Create a bound script through its matching `context.new`, not `Dialogue.new`; a
 mismatched definition fails at runtime. Existing structured and schema-one documents,
 renderers, localization, character portraits and event clocks remain supported.
 
+## Conditions, branches and available choices
+
+Conditions read the latest **accepted** context and locals. Mutating the original
+host table has no effect until `updateContext` or `setLocals` accepts a replacement.
+The [conditional shop example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-conditions)
+builds and runs without graphics or audio.
+
+### Route through a branch label
+
+For this section, define the shop's facts in their own module:
+
+```tua title="src/shop/context.tua"
+return Dialogue.context({
+  facts = Save.shape(Save.record({
+    coins = Save.number(0),
+    unlocked = Save.boolean(false),
+    secretUnlocked = Save.boolean(false),
+    bonus = Save.optional(Save.number(0)),
+  })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})
+```
+
+```text
+@dialogue 1
+@context "shop.context"
+[gate]
+@branch context.unlocked and context.coins >= 20 [target:shop] [else:closed]
+[shop]
+// @id shop.welcome
+: Welcome! (end)
+[closed]
+// @id shop.closed
+: Come back later. (end)
+```
+
+A branch is the only content of its label. Both destinations are required; forward
+references are allowed and checked. It advances automatically, without adding a
+blank utterance or requiring input. Ordinary lines still wait for acknowledgement.
+
+The small expression language supports `context.field` / `locals.field`, finite
+numbers (including negative numbers), double-quoted JSON strings, `true`, `false`,
+`nil`, parentheses, `not`, `and`, `or`, `==`, `~=`, `!=`, `<`, `<=`, `>` and `>=`.
+Calls, indexing, arithmetic and assignments are rejected. Analysis never runs the
+imported context module.
+
+Precedence, highest first: parentheses, `not`, comparisons, `and`, `or`. Boolean
+operators accept booleans or nil and return booleans; nil means false, while numbers
+and strings are not implicitly truthy. `and`/`or` evaluate left to right and skip
+unneeded operands. Comparisons require matching scalar types; ordered comparisons
+are numeric only. This avoids language/locale-dependent string ordering.
+
+Optional paths yield nil if an intermediate value is absent. Equality can test nil;
+an ordered comparison with a missing value is false. For example,
+`context.bonus != nil and context.bonus > 0` and `context.bonus > 0` both reject a
+missing bonus. Use `not (context.coins >= 20)`, rather than `not context.coins >= 20`.
+Unknown paths and wrong operand types are diagnosed even in an unreachable operand.
+Completion, hover and definition navigation work on condition paths across imports.
+
+### Hide or disable a reply
+
+```text
+[shop]
+// @id shop.prompt
+: What would you like?
+// @id shop.buy
+-> Buy [target:bought]
+@enabled context.coins >= 20
+// @id shop.buy.reason
+@reason Requires 20 coins.
+// @id shop.secret
+-> Secret offer [target:bought]
+@visible context.secretUnlocked
+// @id shop.leave
+-> Leave [target:done]
+@fallback closed
+```
+
+Declare `@visible` / `@enabled` immediately after their choice; each may occur once.
+An omitted condition means true. A hidden reply is absent from snapshot options.
+A visible, disabled reply has `enabled = false` and cannot be chosen. Its optional
+`reason` is localized using the preceding stable `// @id`; it uses the same bindings,
+translation extraction and coverage checks as line/choice text. Enabled replies omit
+the reason. Schema-three snapshots expose `enabled = true` for available replies;
+older snapshots may omit it, so compatible renderers treat only `false` as disabled.
+
+Conditional choice groups require `@fallback label`. If no **visible and enabled**
+reply remains, entering or refreshing the group automatically follows that target.
+To let players read disabled reasons, include an enabled exit reply. This is an
+explicit branch, not an implicit selection of the first disabled option.
+
+`choose(id)` rechecks the current accepted facts and returns false for a hidden,
+disabled or unknown reply. An old UI snapshot never grants permission. The host must
+still validate and apply gameplay actions such as spending money; dialogue navigation
+does not perform purchases. Updating facts refreshes the current group without
+replaying events or restarting the visit unless its fallback changes the current
+node. A failing resolver leaves the previous facts and presentation intact.
+
+### Bound automatic work and inspect faults
+
+```tua
+local player = context.new(scene, facts, { transitionBudget = 32 })
+player:start()
+local view = player:snapshot()
+if view.issue then
+  print(view.issue.code, view.issue.nodeId)
+end
+```
+
+The default budget is 256 automatic edges per transition/refresh; `transitionBudget`
+accepts integers from 1 to 4,096. Branch and no-choice fallback edges consume it.
+A loop that exceeds the budget enters `faulted` with an owned issue record:
+`{code = "transition_budget_exceeded", message, nodeId}`. No partial line events
+are emitted. `advance` and `choose` return false; `update` returns no events.
+Changing facts or locale does not restart a faulted player. Inspect it, then use
+`start` to retry explicitly, `cancel`, or `dispose` to clean up. Restart resets locals
+under the existing M2 rules; faults do not become save/checkpoint support.
+
+Conditions are limited to 8 KiB of authored expression text, 256 lexical tokens,
+32 AST levels and at most 256 emitted instructions. Runtime documents validate the
+instruction/depth limits too. The evaluator reads owned plain records and never uses
+`load`, `loadstring`, a host method, or a wall clock. Each automatic edge evaluates
+bounded data, and a refresh resolves its route once.
+
+Assets using conditional flow or reasons emit schema **3**, requiring the paired
+runtime (`Dialogue.schemaVersion >= 3`). The authoring header remains `@dialogue 1`.
+Context-only assets still emit schema 2; plain assets still emit schema 1. Existing
+line, event, localization and context APIs remain compatible.
+
 ## Build and import a script
 
 Place scripts under the configured source directory, for example

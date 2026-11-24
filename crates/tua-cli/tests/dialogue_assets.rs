@@ -197,3 +197,27 @@ fn shared_character_modules_build_once_and_validate_each_dialogue_reference() {
         emitted
     );
 }
+
+#[test]
+fn conditional_dialogue_builds_and_extracts_disabled_reasons() {
+    let project = Project::new();
+    project.write(
+        "src/context.tua",
+        include_str!("../../../examples/dialogue-conditions/src/context.tua"),
+    );
+    project.write(
+        "src/scenes/intro.tdialogue",
+        include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue"),
+    );
+    project.write("src/main.tua", "local context = require('context')\nlocal scene = require('scenes.intro')\nlocal player = context.new(scene, {coins = 0, unlocked = true})\nplayer:start()\n");
+    project.success(&["check"]);
+    project.success(&["build"]);
+    assert!(project.0.join("build/tuadialogue_conditions.lua").is_file());
+    let extraction = project.success(&["dialogue-extract"]);
+    assert!(extraction.contains("shop.buy.reason"), "{extraction}");
+    assert!(extraction.contains("Requires 20 coins"), "{extraction}");
+    project.write("src/context.tua", "return Dialogue.context({facts = Save.shape(Save.record({coins = Save.string(''), unlocked = Save.boolean(false), bonus = Save.optional(Save.number(0))})), locals = Save.shape(Save.record({visits = Save.number(0)}))})\n");
+    let output = project.run(&["check"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid condition operands"));
+}

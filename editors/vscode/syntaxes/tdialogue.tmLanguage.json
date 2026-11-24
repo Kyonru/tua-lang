@@ -7,7 +7,7 @@
       "match": "^\\s*//.*$"
     },
     {
-      "begin": "^\\s*(@(?:dialogue|document|context|bind|character|characters|event|timing))\\b",
+      "begin": "^\\s*(@(?:dialogue|document|context|bind|branch|visible|enabled|reason|fallback|character|characters|event|timing))\\b",
       "end": "$",
       "beginCaptures": {
         "1": {
@@ -25,6 +25,14 @@
               "match": "\\\\."
             }
           ]
+        },
+        {
+          "name": "keyword.operator.logical.tdialogue",
+          "match": "\\b(?:and|or|not)\\b|==|~=|!=|<=|>=|[<>]"
+        },
+        {
+          "name": "constant.language.tdialogue",
+          "match": "\\b(?:true|false|nil)\\b"
         },
         {
           "name": "entity.name.type.tdialogue",

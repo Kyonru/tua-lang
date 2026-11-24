@@ -37,9 +37,12 @@ test("dialogue grammar highlights imports and speakers without highlighting pros
   assert(tokens[0].scopes.includes("variable.other.tdialogue"));
   const prose = tokens.find((token) => token.startIndex <= line.indexOf("local") && token.endIndex > line.indexOf("local"));
   assert.deepEqual(prose.scopes, ["text.tdialogue"]);
-  for (const line of ['@event shown 0.2 portrait.pulse', '@timing hold 3 fade 0.35', '@context \"story\"', '@bind name context.player.name']) {
+  for (const line of ['@event shown 0.2 portrait.pulse', '@timing hold 3 fade 0.35', '@context \"story\"', '@bind name context.player.name', '@branch context.ready [target:yes] [else:no]', '@visible context.ready', '@enabled context.coins >= 20', '@reason Requires coins', '@fallback closed']) {
     const tokens = grammar.tokenizeLine(line, textmate.INITIAL).tokens;
     assert(tokens.some((token) => token.scopes.includes("keyword.control.tdialogue")));
   }
+  const condition = grammar.tokenizeLine('@visible not context.hidden and context.coins >= 2 or false', textmate.INITIAL).tokens;
+  assert(condition.some((token) => token.scopes.includes("keyword.operator.logical.tdialogue")));
+  assert(condition.some((token) => token.scopes.includes("constant.language.tdialogue")));
   registry.dispose();
 });

@@ -1,5 +1,27 @@
 -- Compiler-visible declaration; runtime implementation lives in tuadialogue.lua.
-type Option = { id: string, text: string, target: string }
+type Instruction = {
+  op: "value" | "nil" | "path" | "not" | "and" | "or" | "==" | "!=" | "~=" | "<" | "<=" | ">" | ">=",
+  value?: string | number | boolean,
+  path?: string,
+}
+type Condition = Instruction[]
+type Option = {
+  id: string,
+  text: string,
+  target: string,
+  visible?: Condition,
+  enabled?: Condition,
+  reason?: string,
+  reasonId?: string,
+}
+type ChoiceView = {
+  id: string,
+  text: string,
+  target: string,
+  enabled?: boolean,
+  reason?: string,
+  reasonId?: string,
+}
 type Event = { anchor: "shown" | "revealed", delay: number, name: string, payload: string }
 type FiredEvent = {
   name: string,
@@ -20,7 +42,8 @@ type Node = {
   fade?: number,
   events?: Event[],
 }
-  | { kind: "choice", options: Option[] }
+  | { kind: "choice", options: Option[], fallback?: string }
+  | { kind: "branch", condition: Condition, yes: string, no: string }
   | { kind: "end" }
 type Binding = { name: string, path: string, fallback?: string | number | boolean }
 type Document = {
@@ -32,10 +55,12 @@ type Document = {
   nodes: { [string]: Node },
 }
 type Arguments = { [string]: string | number | boolean }
+type Resolver = (key: string, source: string, args: Arguments, locale: string) -> string
 type Options = {
-  locale: string,
+  transitionBudget?: number,
+  locale?: string,
   args?: Arguments,
-  resolve: (key: string, source: string, args: Arguments, locale: string) -> string,
+  resolve?: Resolver,
 }
 type PresentationNode = {
   kind: "line" | "choice" | "end",
@@ -48,14 +73,15 @@ type PresentationNode = {
   fade?: number,
   events?: Event[],
   next?: string,
-  options: Option[],
+  options: ChoiceView[],
 }
 type Snapshot = {
+  issue?: { code: "transition_budget_exceeded", message: string, nodeId: string },
   locale?: string,
   documentId?: string,
   presentationRevision: number,
   revealComplete: boolean,
-  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed",
+  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted",
   generation: number,
   visit: number,
   nodeId?: string,

@@ -406,6 +406,7 @@ impl AnalysisSnapshot {
             let mut diagnostics = file.diagnostics.clone();
             diagnostics.extend(self.dialogue_character_diagnostics(path.as_ref()));
             diagnostics.extend(self.dialogue_context_diagnostics(path.as_ref()));
+            diagnostics.extend(self.dialogue_condition_diagnostics(path.as_ref()));
             if config.i18n.enabled {
                 diagnostics.extend(
                     self.catalog_index_for_path(path.as_ref())
@@ -864,9 +865,9 @@ impl AnalysisSnapshot {
                 }
                 for section in &model.sections {
                     for line in &section.lines {
-                        for text in std::iter::once(&line.text)
-                            .chain(line.choices.iter().map(|choice| &choice.text))
-                        {
+                        for text in std::iter::once(&line.text).chain(line.choices.iter().flat_map(
+                            |choice| std::iter::once(&choice.text).chain(choice.reason.iter()),
+                        )) {
                             ids.entry((workspace.clone(), text.id.value.clone()))
                                 .or_default()
                                 .push((path.clone(), text.id.span));

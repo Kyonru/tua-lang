@@ -12660,3 +12660,64 @@ player:getLocals().visits = 4
         "{diagnostics:?}"
     );
 }
+
+#[test]
+fn dialogue_conditions_use_context_types_and_editor_paths() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({coins = Save.optional(Save.number(0)), open = Save.boolean(false)})),
+  locals = Save.shape(Save.record({visits = Save.number(0)})),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@context "forward"
+[gate]
+@branch context.co<|hover|>ins != nil and context.coins >= 20 [target:gate] [else:gate]
+-- file: src/edit.tdialogue
+@dialogue 1
+@context "forward"
+[gate]
+@branch context.co<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let errors = snapshot.pipeline_diagnostics("src/scene.tdialogue");
+    assert!(errors.is_empty(), "{errors:?}");
+    let hover = snapshot
+        .hover("src/scene.tdialogue", fixture.position("hover"))
+        .unwrap();
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    let complete = snapshot.completion("src/edit.tdialogue", fixture.position("complete"));
+    assert_eq!(completion_labels(&complete), vec!["coins"]);
+    assert_eq!(
+        snapshot
+            .definition("src/scene.tdialogue", fixture.position("hover"))
+            .unwrap()
+            .path,
+        PathBuf::from("src/context.tua")
+    );
+    for condition in [
+        "context.coinz > 0",
+        "context.coins and true",
+        "context.open > 4",
+        "context.coins == \"money\"",
+        "context.coins",
+        "not context.coins",
+    ] {
+        host.set_file("src/scene.tdialogue",format!("@dialogue 1\n@context \"forward\"\n[gate]\n@branch {condition} [target:gate] [else:gate]\n"));
+        let errors = host.snapshot().pipeline_diagnostics("src/scene.tdialogue");
+        assert!(!errors.is_empty(), "{condition}");
+        assert!(errors.iter().any(|d| d.line == 4), "{errors:?}");
+    }
+    assert!(snapshot
+        .pipeline_diagnostics("src/scene.tdialogue")
+        .is_empty());
+}

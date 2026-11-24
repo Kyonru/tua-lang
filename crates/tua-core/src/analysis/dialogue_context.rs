@@ -96,7 +96,7 @@ impl AnalysisSnapshot {
         )
     }
 
-    fn context_path(&self, path: &Path, value: &str) -> Result<(Type, bool), String> {
+    pub(super) fn context_path(&self, path: &Path, value: &str) -> Result<(Type, bool), String> {
         let parts: Vec<_> = value.split('.').collect();
         let root = self
             .context_root(path, parts[0])
@@ -174,13 +174,16 @@ impl AnalysisSnapshot {
                 report(binding.path.span, message);
             }
         }
-        for text in model
-            .sections
-            .iter()
-            .flat_map(|s| &s.lines)
-            .flat_map(|line| {
-                std::iter::once(&line.text).chain(line.choices.iter().map(|c| &c.text))
-            })
+        for text in
+            model
+                .sections
+                .iter()
+                .flat_map(|s| &s.lines)
+                .flat_map(|line| {
+                    std::iter::once(&line.text).chain(line.choices.iter().flat_map(|choice| {
+                        std::iter::once(&choice.text).chain(choice.reason.iter())
+                    }))
+                })
         {
             match crate::i18n::dialogue_placeholders(&text.value) {
                 Err(message) => report(text.span, message),
@@ -288,6 +291,9 @@ fn binding_token(
     position: SourcePosition,
     prefix: bool,
 ) -> Option<(String, SourceSpan)> {
+    if let Some(token) = super::dialogue_conditions::condition_token(source, position, prefix) {
+        return Some(token);
+    }
     let line = source.lines().nth(position.line.checked_sub(1)?)?;
     let rest = line.trim_start().strip_prefix("@bind ")?.trim_start();
     let (_, rest) = rest.split_once(char::is_whitespace)?;

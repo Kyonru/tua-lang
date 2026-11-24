@@ -46,7 +46,19 @@ pub fn emit_dialogue_source(
     }
     output.line("return {", entry.span);
     output.line(
-        if document.context.is_some() {
+        if document.sections.iter().any(|section| {
+            section.branch.is_some()
+                || section.lines.iter().any(|line| {
+                    line.fallback.is_some()
+                        || line.choices.iter().any(|choice| {
+                            choice.visible.is_some()
+                                || choice.enabled.is_some()
+                                || choice.reason.is_some()
+                        })
+                })
+        }) {
+            "  schemaVersion = 3,"
+        } else if document.context.is_some() {
             "  schemaVersion = 2,"
         } else {
             "  schemaVersion = 1,"
@@ -80,6 +92,17 @@ pub fn emit_dialogue_source(
     output.field("  entry", &entry.value, entry.span);
     output.line("  nodes = {", entry.span);
     for section in &document.sections {
+        if let Some(branch) = &section.branch {
+            output.line(
+                &format!("    [{}] = {{", lua_string_literal(&section.label.value)),
+                section.label.span,
+            );
+            output.field("      kind", "branch", section.label.span);
+            output.condition("      condition", &branch.condition);
+            output.field("      yes", &branch.yes.value, branch.yes.span);
+            output.field("      no", &branch.no.value, branch.no.span);
+            output.line("    },", section.label.span);
+        }
         for (index, line) in section.lines.iter().enumerate() {
             let origin = line.text.span;
             let id = node_id(section, index);
@@ -159,6 +182,9 @@ pub fn emit_dialogue_source(
                     origin,
                 );
                 output.field("      kind", "choice", origin);
+                if let Some(fallback) = &line.fallback {
+                    output.field("      fallback", &fallback.value, fallback.span);
+                }
                 output.line("      options = {", origin);
                 for choice in &line.choices {
                     let at = choice.text.span;
@@ -166,6 +192,16 @@ pub fn emit_dialogue_source(
                     output.field("          id", &choice.text.id.value, choice.text.id.span);
                     output.field("          text", &choice.text.value, at);
                     output.field("          target", &choice.target.value, choice.target.span);
+                    if let Some(condition) = &choice.visible {
+                        output.condition("          visible", condition);
+                    }
+                    if let Some(condition) = &choice.enabled {
+                        output.condition("          enabled", condition);
+                    }
+                    if let Some(reason) = &choice.reason {
+                        output.field("          reason", &reason.value, reason.span);
+                        output.field("          reasonId", &reason.id.value, reason.id.span);
+                    }
                     output.line("        },", at);
                 }
                 output.line("      },", origin);
@@ -202,6 +238,38 @@ impl Writer {
             source_span: origin,
             lowering: LoweringKind::Dialogue,
         });
+    }
+
+    fn condition(&mut self, key: &str, condition: &crate::dialogue_asset::Condition) {
+        self.line(&format!("{key} = {{"), condition.span);
+        self.instructions(condition);
+        self.line("      },", condition.span);
+    }
+    fn instructions(&mut self, condition: &crate::dialogue_asset::Condition) {
+        use crate::dialogue_asset::{ConditionKind as K, DialogueLiteral as L};
+        let instruction = match &condition.kind {
+            K::Nil => "op = \"nil\"".to_owned(),
+            K::Value(value) => format!(
+                "op = \"value\", value = {}",
+                match value {
+                    L::String(v) => lua_string_literal(v),
+                    L::Number(v) => v.clone(),
+                    L::Boolean(v) => v.to_string(),
+                }
+            ),
+            K::Path(value) => format!("op = \"path\", path = {}", lua_string_literal(value)),
+            K::Not(_) => "op = \"not\"".to_owned(),
+            K::Binary(op, _, _) => format!("op = {}", lua_string_literal(op)),
+        };
+        self.line(&format!("        {{ {instruction} }},"), condition.span);
+        match &condition.kind {
+            K::Not(a) => self.instructions(a),
+            K::Binary(_, a, b) => {
+                self.instructions(a);
+                self.instructions(b);
+            }
+            _ => {}
+        }
     }
 
     fn field(&mut self, key: &str, value: &str, origin: SourceSpan) {

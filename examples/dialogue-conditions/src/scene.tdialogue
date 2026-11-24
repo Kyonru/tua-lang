@@ -1,0 +1,33 @@
+@dialogue 1
+@document shop.example
+@context "context"
+@bind coins context.coins
+[gate]
+@branch context.unlocked and (context.coins >= 0 or context.bonus != nil) [target:shop] [else:locked]
+[shop]
+// @id shop.welcome
+: You have %{coins} coins.
+@event shown 0 greet "welcome"
+// @id shop.buy
+-> Buy [target:bought]
+@enabled context.coins >= 20
+// @id shop.buy.reason
+@reason Requires 20 coins; you have %{coins}.
+// @id shop.bonus
+-> Bonus [target:bought]
+@visible context.bonus != nil and context.bonus > 0
+// @id shop.leave
+-> Leave [target:done]
+@visible context.unlocked
+@fallback locked
+[bought]
+// @id shop.bought
+: Ask the host to complete the purchase. (end)
+[locked]
+// @id shop.locked
+: The shop is closed. (end)
+[done]
+// @id shop.done
+: Goodbye. (end)
+[loop]
+@branch true [target:loop] [else:done]

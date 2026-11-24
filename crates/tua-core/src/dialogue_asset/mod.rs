@@ -3,7 +3,9 @@ use crate::{Diagnostic, DiagnosticCode, SourcePosition, SourceSpan};
 use std::collections::BTreeSet;
 use std::path::Path;
 
+mod conditions;
 mod context;
+pub use conditions::{Branch, Condition, ConditionKind};
 pub use context::{DialogueBinding, DialogueLiteral};
 #[cfg(test)]
 mod tests;
@@ -31,6 +33,9 @@ pub struct DialogueSpeaker {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueChoice {
+    pub visible: Option<Condition>,
+    pub enabled: Option<Condition>,
+    pub reason: Option<DialogueText>,
     pub text: DialogueText,
     pub target: DialogueName,
 }
@@ -53,6 +58,7 @@ pub struct DialogueTiming {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueLine {
+    pub fallback: Option<DialogueName>,
     pub events: Vec<DialogueEvent>,
     pub timing: Option<DialogueTiming>,
     pub speaker: Option<DialogueName>,
@@ -63,6 +69,7 @@ pub struct DialogueLine {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSection {
+    pub branch: Option<Branch>,
     pub label: DialogueName,
     pub lines: Vec<DialogueLine>,
 }
@@ -299,6 +306,9 @@ impl Parser<'_> {
             self.abandon_id();
             return;
         }
+        if self.condition_line(syntax, at) {
+            return;
+        }
         if self.context_line(raw, number) {
             return;
         }
@@ -349,6 +359,7 @@ impl Parser<'_> {
                         self.error(label.span, format!("duplicate label `{}`", label.value));
                     }
                     self.document.sections.push(DialogueSection {
+                        branch: None,
                         label,
                         lines: Vec::new(),
                     });
@@ -616,7 +627,12 @@ impl Parser<'_> {
             );
             return;
         }
+        if section.branch.is_some() {
+            self.error(at, "branch labels cannot contain utterances");
+            return;
+        }
         section.lines.push(DialogueLine {
+            fallback: None,
             events: Vec::new(),
             timing: None,
             speaker,
@@ -665,7 +681,13 @@ impl Parser<'_> {
             self.error(at, "terminal utterance cannot have choices");
             return;
         }
-        line.choices.push(DialogueChoice { text, target });
+        line.choices.push(DialogueChoice {
+            text,
+            target,
+            visible: None,
+            enabled: None,
+            reason: None,
+        });
     }
 
     fn finish(mut self) -> Result<DialogueSource, Vec<Diagnostic>> {
@@ -710,7 +732,14 @@ impl Parser<'_> {
             }
         }
         for section in &self.document.sections {
-            if section.lines.is_empty() {
+            if let Some(branch) = &section.branch {
+                for target in [&branch.yes, &branch.no] {
+                    if !labels.contains(target.value.as_str()) {
+                        errors.push((target.span, format!("unknown target `{}`", target.value)));
+                    }
+                }
+            }
+            if section.lines.is_empty() && section.branch.is_none() {
                 errors.push((
                     section.label.span,
                     "label needs at least one utterance".into(),
@@ -726,6 +755,25 @@ impl Parser<'_> {
                 ));
             }
             for line in &section.lines {
+                if let Some(target) = &line.fallback {
+                    if !labels.contains(target.value.as_str()) {
+                        errors.push((
+                            target.span,
+                            format!("unknown fallback target `{}`", target.value),
+                        ));
+                    }
+                }
+                if line
+                    .choices
+                    .iter()
+                    .any(|c| c.visible.is_some() || c.enabled.is_some())
+                    && line.fallback.is_none()
+                {
+                    errors.push((
+                        line.text.span,
+                        "conditional choices require an explicit @fallback label".into(),
+                    ));
+                }
                 if let Some(speaker) = &line.speaker {
                     let imported = speaker
                         .value

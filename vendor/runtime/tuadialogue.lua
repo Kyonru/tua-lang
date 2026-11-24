@@ -1,5 +1,10 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 2 }
+local Dialogue = { schemaVersion = 3 }
+local Conditions
+local function conditions()
+  if not Conditions then Conditions = require("tuadialogue_conditions") end
+  return Conditions
+end
 local Player = {}
 Player.__index = Player
 
@@ -63,12 +68,21 @@ local nodeFields = {
     fade = true,
     events = true,
   },
-  choice = { kind = true, options = true },
+  choice = { kind = true, options = true, fallback = true },
+  branch = { kind = true, condition = true, yes = true, no = true },
   ["end"] = { kind = true },
 }
 local eventFields = { anchor = true, delay = true, name = true, payload = true }
-local optionFields = { id = true, text = true, target = true }
-local playerOptions = { locale = true, resolve = true, args = true }
+local optionFields = {
+  id = true,
+  text = true,
+  target = true,
+  visible = true,
+  enabled = true,
+  reason = true,
+  reasonId = true,
+}
+local playerOptions = { locale = true, resolve = true, args = true, transitionBudget = true }
 
 local function fields(value, allowed)
   for key in pairs(value) do
@@ -85,7 +99,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -97,7 +111,7 @@ local function document(value)
     assert(type(id) == "string" and id ~= "", "node IDs must be nonempty strings")
     assert(type(node) == "table", "dialogue node must be a record")
     assert(
-      node.kind == "line" or node.kind == "choice" or node.kind == "end",
+      node.kind == "line" or node.kind == "choice" or node.kind == "end" or node.kind == "branch",
       "unknown dialogue node kind"
     )
     if value.schemaVersion then fields(node, nodeFields[node.kind]) end
@@ -119,9 +133,20 @@ local function document(value)
           fields(event, eventFields)
         end
       end
+    elseif node.kind == "branch" then
+      assert(value.schemaVersion == 3, "branches require schema version 3")
+      assert(
+        optionalId(node.yes) and node.yes and optionalId(node.no) and node.no,
+        "branch needs both targets"
+      )
+      owned.condition, owned.yes, owned.no = conditions().compile(node.condition), node.yes, node.no
     elseif node.kind == "choice" then
       assert(type(node.options) == "table" and #node.options > 0, "choice needs options")
-      owned.options = {}
+      assert(optionalId(node.fallback), "invalid choice fallback")
+      if node.fallback then
+        assert(value.schemaVersion == 3, "fallback requires schema version 3")
+      end
+      owned.options, owned.fallback = {}, node.fallback
       local seen = {}
       local count = 0
       for index in pairs(node.options) do
@@ -140,6 +165,31 @@ local function document(value)
         if value.schemaVersion then fields(option, optionFields) end
         seen[option.id] = true
         owned.options[index] = { id = option.id, text = option.text, target = option.target }
+        local target = owned.options[index]
+        if option.visible ~= nil
+          or option.enabled ~= nil
+          or option.reason ~= nil
+          or option.reasonId ~= nil then
+          assert(value.schemaVersion == 3, "choice conditions/reasons require schema version 3")
+          assert(
+            optionalId(option.reasonId) and (option.reason == nil or type(option.reason) == "string"),
+            "invalid disabled reason"
+          )
+          assert(
+            (option.reason == nil) == (option.reasonId == nil),
+            "disabled reason needs a text ID"
+          )
+          if option.visible ~= nil then
+            target.visibleCondition = conditions().compile(option.visible)
+          end
+          if option.enabled ~= nil then
+            target.enabledCondition = conditions().compile(option.enabled)
+          end
+          if option.visible ~= nil or option.enabled ~= nil then
+            assert(node.fallback, "conditional choices need a fallback")
+          end
+          target.reason, target.reasonId = option.reason, option.reasonId
+        end
       end
     end
     nodes[id] = owned
@@ -147,6 +197,10 @@ local function document(value)
   assert(nodes[value.entry], "missing entry node")
   for _, node in pairs(nodes) do
     if node.next then assert(nodes[node.next], "missing next node") end
+    if node.fallback then assert(nodes[node.fallback], "missing fallback node") end
+    if node.kind == "branch" then
+      assert(nodes[node.yes] and nodes[node.no], "missing branch target")
+    end
     for _, option in ipairs(node.options or {}) do
       assert(nodes[option.target], "missing choice target")
     end
@@ -179,7 +233,14 @@ local function newPlayer(source, options)
   assert(optionalId(options.locale), "invalid dialogue locale")
   assert(options.resolve == nil or type(options.resolve) == "function", "invalid dialogue resolver")
   assert(not options.resolve or options.locale, "dialogue resolver needs an explicit locale")
+  local budget = options.transitionBudget
+  if budget == nil then budget = 256 end
+  assert(
+    type(budget) == "number" and budget % 1 == 0 and budget >= 1 and budget <= 4096,
+    "transitionBudget must be an integer from 1 to 4096"
+  )
   return setmetatable({
+    transitionBudget = budget,
     document = document(source),
     state = "idle",
     generation = 0,
@@ -218,15 +279,66 @@ local function boundArguments(self, facts, locals)
   return arguments(result)
 end
 
+local function available(option, facts, locals)
+  local visible = not option.visibleCondition or conditions().test(option.visibleCondition, facts, locals)
+  local enabled = visible and (not option.enabledCondition or conditions().test(option.enabledCondition, facts, locals))
+  return visible, enabled
+end
+
+-- Resolve automatic nodes in authored order with a fixed per-operation budget.
+local function destination(self, id, facts, locals)
+  local steps = 0
+  while true do
+    local node = self.document.nodes[id]
+    local nextId
+    if node.kind == "branch" then
+      nextId = conditions().test(node.condition, facts, locals) and node.yes or node.no
+    elseif node.kind == "choice" and node.fallback then
+      local any = false
+      for _, option in ipairs(node.options) do
+        local _, enabled = available(option, facts, locals)
+        if enabled then
+          any = true
+          break
+        end
+      end
+      if not any then nextId = node.fallback end
+    end
+    if not nextId then return id end
+    if steps >= self.transitionBudget then
+      return id, {
+        code = "transition_budget_exceeded",
+        message = "Automatic dialogue transition budget exceeded",
+        nodeId = id,
+      }
+    end
+    steps, id = steps + 1, nextId
+  end
+end
+
 -- Compute presentation before committing a transition; a bad resolver cannot
 -- partially advance the visit or overwrite clocks. Snapshot never calls host code.
 local function presentation(self, id, locale, facts, locals)
   -- The document is already owned. Without localization, retain only an internal
   -- reference; snapshot still copies it before exposing anything to the caller.
-  if not self.resolve and not self.bindings then return self.document.nodes[id] end
+  if not self.resolve and not self.bindings and self.document.schemaVersion ~= 3 then
+    return self.document.nodes[id]
+  end
   local args = boundArguments(self, facts or self.facts, locals or self.locals)
   local node = copy(self.document.nodes[id])
   node.text, node.options = node.text or "", node.options or {}
+  if node.kind == "choice" and self.document.schemaVersion == 3 then
+    local options = {}
+    for _, option in ipairs(node.options) do
+      local visible, enabled = available(option, facts or self.facts, locals or self.locals)
+      if visible then
+        option.visibleCondition, option.enabledCondition, option.enabled = nil, nil, enabled
+        if enabled then option.reason, option.reasonId = nil, nil end
+        options[#options + 1] = option
+      end
+    end
+    node.options = options
+  end
   if self.resolve then
     local function translate(key, source)
       self.resolving = true
@@ -238,13 +350,19 @@ local function presentation(self, id, locale, facts, locals)
     end
     if node.textId then node.text = translate(node.textId, node.text) end
     if node.speakerKey then node.speaker = translate(node.speakerKey, node.speaker or "") end
-    for _, option in ipairs(node.options) do option.text = translate(option.id, option.text) end
+    for _, option in ipairs(node.options) do
+      option.text = translate(option.id, option.text)
+      if option.reasonId then option.reason = translate(option.reasonId, option.reason) end
+    end
   end
   if self.bindings then
     local format = require("tuadialogue_text").format
     if not self.resolve or not node.textId then node.text = format(node.text, args) end
     if not self.resolve then
-      for _, option in ipairs(node.options) do option.text = format(option.text, args) end
+      for _, option in ipairs(node.options) do
+        option.text = format(option.text, args)
+        if option.reason then option.reason = format(option.reason, args) end
+      end
     end
   end
   return node
@@ -255,7 +373,11 @@ function Player:setLocale(locale)
   assert(self.state ~= "disposed", "dialogue is disposed")
   assert(type(locale) == "string" and locale ~= "", "invalid dialogue locale")
   if locale == self.locale then return false end
-  local node = self.current and presentation(self, self.current, locale)
+  local node = self.state ~= "faulted" and self.current and presentation(
+    self,
+    self.current,
+    locale
+  ) or nil
   self.locale, self.presentation = locale, node
   self.presentationRevision = self.presentationRevision + 1
   self.revealComplete = self.state == "awaiting_advance"
@@ -265,16 +387,21 @@ function Player:setLocale(locale)
   return true
 end
 
-function Player:enter(id, locals)
+function Player:enter(id, locals, facts, resolved, issue)
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
-  local nodePresentation = presentation(self, id, self.locale, nil, locals)
+  if not resolved then
+    id, issue = destination(self, id, facts or self.facts, locals or self.locals)
+  end
+  local nodePresentation = not issue and presentation(self, id, self.locale, facts, locals) or nil
+  self.issue = issue
   self.presentation, self.revealComplete = nodePresentation, false
   self.presentationRevision = self.presentationRevision + 1
   self.visit = self.visit + 1
   self.elapsed, self.revealedElapsed, self.revealedAt, self.fired = 0, nil, nil, {}
   self.current = id
   local node = self.document.nodes[id]
-  if node.kind == "end" then self.state = "completed"
+  if issue then self.state = "faulted"
+  elseif node.kind == "end" then self.state = "completed"
   elseif node.kind == "line" then self.state = "awaiting_advance"
   else self.state = "awaiting_choice" end
 end
@@ -346,6 +473,8 @@ function Player:choose(id)
   if self.state ~= "awaiting_choice" then return false end
   for _, option in ipairs(self.document.nodes[self.current].options) do
     if option.id == id then
+      local _, enabled = available(option, self.facts, self.locals)
+      if not enabled then return false end
       self:enter(option.target)
       return true
     end
@@ -359,7 +488,7 @@ function Player:cancel()
     return false
   end
   self.generation = self.generation + 1
-  self.state, self.current, self.presentation = "cancelled", nil, nil
+  self.state, self.current, self.presentation, self.issue = "cancelled", nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
   return true
 end
@@ -372,6 +501,7 @@ function Player:snapshot()
   end
   return {
     state = self.state,
+    issue = copy(self.issue),
     generation = self.generation,
     visit = self.visit,
     nodeId = self.current,
@@ -387,7 +517,7 @@ function Player:dispose()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state == "disposed" then return end
   self.generation = self.generation + 1
-  self.state, self.current, self.document = "disposed", nil, nil
+  self.state, self.current, self.document, self.issue = "disposed", nil, nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
   self.facts, self.locals, self.localDefaults = nil, nil, nil
   self.bindings, self.copyFacts, self.copyLocals = nil, nil, nil
@@ -397,6 +527,18 @@ end
 -- Refreshing data changes presentation, not execution identity or event clocks.
 local function refresh(self, facts, locals)
   boundArguments(self, facts, locals)
+  if self.state == "faulted" then
+    self.facts, self.locals = facts, locals
+    return
+  end
+  if self.state == "awaiting_choice" then
+    local id, issue = destination(self, self.current, facts, locals)
+    if issue or id ~= self.current then
+      self:enter(id, locals, facts, true, issue)
+      self.facts, self.locals = facts, locals
+      return
+    end
+  end
   local node = self.current and presentation(self, self.current, self.locale, facts, locals)
   self.facts, self.locals, self.presentation = facts, locals, node
   self.presentationRevision = self.presentationRevision + 1
@@ -441,7 +583,10 @@ function Dialogue.context(schemas)
   local definition = { kind = "context", facts = copy(initialFacts), locals = copy(initialLocals) }
   function definition.new(source, value, options)
     assert(source.context == definition, "document uses another context definition")
-    assert(source.schemaVersion == 2, "typed context requires dialogue schema version 2")
+    assert(
+      source.schemaVersion == 2 or source.schemaVersion == 3,
+      "typed context requires dialogue schema version 2 or 3"
+    )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)
     player.copyFacts, player.copyLocals = copyFacts, copyLocals
