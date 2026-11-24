@@ -1,4 +1,433 @@
-# Tua dialogue implementation workstream
+# Tua dialogue: implementation plan
+
+Status: planned follow-up work. Baseline: `46a70a89` (portraits and timed events)
+and `2e179341` (dialogue documentation). This plan combines the remaining initial
+workstream with the expanded dialogue improvements. It does not claim those
+improvements are implemented or assign them a released version.
+
+The [dialogue guide](../dialogue.md) documents current behavior. Historical
+implementation and verification checkpoints are preserved at the end of this
+file; their old “pending” and branch-status statements are not the current backlog.
+
+## Outcome
+
+Support story conversations, NPC interactions, tutorials, radio dialogue and
+short announcements through the same typed, renderer-independent player.
+
+Authors should be able to share characters, translate dialogue, branch on typed
+state, trigger declared actions, select expressions and voice, and resume safely.
+Game authors retain rendering, input, assets, pause policy and persistent gameplay
+state. The editor uses the same semantic facts as checking and compilation.
+
+## What already exists
+
+Do not implement these again:
+
+- `.tdialogue` parsing, stable project-unique text IDs, labels, lines, choices and
+  explicit endings; generated Lua data and source provenance.
+- Typed `Dialogue` builtin, automatic runtime inclusion only when used, explicit
+  imports and project runtime replacements.
+- Independent players with explicit advance/choose, owned documents/snapshots,
+  cancellation, disposal, generation and visit tokens.
+- Shared typed character modules, name/portrait metadata, character completion,
+  hover, navigation, unsaved overlays and dependency invalidation.
+- Timed string-payload events with `shown` and `revealed` anchors, once-per-visit
+  delivery, deterministic due-event ordering and pending-event cancellation.
+- Optional per-line hold/fade hints; rendering, reveal and expiry remain host-owned.
+- Headless examples and a production game integration with separate bounded
+  conversation/message queues. `BoundedQueue` itself already exists.
+
+## Consolidated scope
+
+| Improvement or carried-forward item | Delivery milestone |
+| --- | --- |
+| Localization IDs/catalog integration, translation coverage and placeholders | M1; typed bindings in M2; styled placeholders in M6 |
+| Typed dialogue context and serializable local variables | M2 |
+| Conditions, conditional choices and branches | M3 |
+| Typed event declarations and registered commands/actions | M4; waiting actions in M7 |
+| Character expressions and portrait variants | M5 |
+| Text emphasis, pauses, reveal speed and pronunciation metadata | M6 |
+| Voice, waits, cancellation and asynchronous host actions | M7 |
+| Save/resume, transcript and prevention of accidental effect replay | M8 |
+| Label/target completion, rename, formatting, diagnostics and preview | M9, with semantic/editor support in each earlier milestone |
+| Native examples: panel, speech bubble and non-pausing radio message | M10 |
+| Deterministic execution limits and independent-session tests | M0, M3, M7 and the shared verification gate |
+| Full upstream and consuming-game qualification | M10 |
+
+The initial plan's portrait delivery and automatic builtin integration are
+complete. “Dedicated script editing” is partially complete: highlighting and
+character queries exist; the remaining capabilities are explicitly listed in M9.
+
+## Design constraints
+
+1. **One semantic implementation.** `tua-core` owns parsing, symbols, types,
+   validation and source mapping. LSP/CLI/extension adapters consume those facts.
+2. **No project execution during analysis.** Inspect declarations and literal
+   metadata; never run handlers, predicates, catalogs or asset loaders for tooling.
+3. **Ordinary typed APIs first.** Reuse `.tua` records, imports, existing generics,
+   signals and helper contracts. Demonstrate compiler gaps with minimal imported
+   fixtures before proposing general language changes.
+4. **No arbitrary Lua inside dialogue files.** Conditions and value references
+   form a small validated expression subset; effects go through declared host
+   actions. Do not add an unrestricted interpreter or plugin registry.
+5. **Host ownership stays explicit.** Core playback has no required LÖVE globals,
+   filesystem, graphics, audio or wall clock. It does not decide to pause a game.
+6. **Preserve compatibility.** Existing version-one scripts, string events,
+   structured documents, `start/advance/choose`, runtime replacement and unused
+   helper omission remain covered. Do not silently reinterpret existing prose.
+7. **Bound new work.** Limit expression depth, automatic transitions, queued work,
+   histories and input sizes. Report exhaustion without freezing an update.
+8. **Use emitted Lua as evidence.** Preserve Lua 5.1/LuaJIT compatibility and verify
+   the real bundled runtime, not only checker acceptance or disposable prototypes.
+9. **Keep content portable.** Use original or appropriately licensed public example
+   assets; never copy private game code, dialogue or artwork into Tua fixtures.
+
+## Reuse existing Tua capabilities
+
+| Existing feature | Reuse or integration work |
+| --- | --- |
+| [Localization](../localization.md) | Catalog index, `%{name}` placeholders, locale/fallback rules, diagnostics and Localization Explorer. Connect dialogue IDs; do not build another localization runtime. |
+| [Signals](../signals.md) | Investigate existing declared-event schema and imported payload inference for dialogue event contracts. Do not force every host to use a signal bus. |
+| [Audio](../audio.md) | Optional voice adapter over `audioSystem` or raw host audio. Keep subtitle and voice locale/fallback selection explicit. |
+| [Sprites](../sprites.md) | Optional expression/animation adapter over `spriteSheet`, with per-player animation ownership. Core retains asset identifiers, not GPU objects. |
+| [Typed saves](../save-contracts.md) | A JSON-shaped dialogue checkpoint and optional `Save` recipe. Core checkpoint export/import remains independent of LÖVE and disk. |
+| Existing build/watch/editor infrastructure | Source maps, module invalidation, unsaved overlays, rename edits, diagnostics, cache and last-valid output. |
+
+## Implementation sequence
+
+| Order | Milestone | Dependencies | Reviewable result |
+| --- | --- | --- | --- |
+| 0 | M0 — Contracts and compatibility | Existing implementation | Documented data/API decisions, compatibility fixtures and baseline measurements |
+| 1 | M1 — Localization | M0 | Localized lines/choices and coverage tooling |
+| 2 | M2 — Context and locals | M0; integrates with M1 | Imported typed context and placeholder bindings |
+| 3 | M3 — Conditions and choices | M2 | Deterministic branching and disabled/hidden replies |
+| 4 | M4 — Typed events/actions | M0, M2 | Declared names, typed payloads and stable action identity |
+| 5 | M5 — Expressions | M0 | Reusable character variants and editor assistance |
+| 6 | M6 — Text presentation | M1, M2 | Renderer-neutral text spans and reveal metadata |
+| 7 | M7 — Voice and waits | M4; integrates with M1/M6 | Cancellable host actions, voice references and waiting state |
+| 8 | M8 — Checkpoints and history | M1–M7 contracts settled | Validated resume policy and bounded transcript |
+| 9 | M9 — Authoring tools | Shared facts from M1–M8 | Formatter, rename, navigation, flow diagnostics and preview |
+| 10 | M10 — Showcase and qualification | M1–M9 | Native examples, documentation and consuming-game evidence |
+
+This is a delivery order, not permission to postpone basic typing/editor support
+until M9. Every new reference or field needs diagnostics, completion, hover and
+navigation where relevant in its own milestone. M9 adds tools that span the whole
+format. Build the showcase skeleton early and extend it after each milestone.
+
+## M0 — Settle contracts and preserve compatibility
+
+- [ ] Audit the parser model, emitted document, bundled contract, runtime,
+  localization index, signals, saves and existing editor queries.
+- [ ] Record exact compiler/runtime revisions and current headless, rendered,
+  allocation and editor workloads. Preserve representative version-one fixtures.
+- [ ] Define stable document, line/text, choice and action identities. Current
+  generated node IDs and event-array positions must not become accidental save IDs.
+- [ ] Decide authored format versioning separately from emitted-document and
+  checkpoint versions. Diagnose unsupported versions clearly; retain old readers
+  or provide an explicit migration path for any incompatible syntax.
+- [ ] Define context, local-state, event and presentation ownership. Specify which
+  snapshots are copied and which state may be shared immutably across players.
+- [ ] Define configurable limits and observable failure states for future
+  automatic transitions, nesting and asynchronous work. Preserve the existing
+  64-event-per-line validation unless an explicit compatible change is justified.
+- [ ] Write small imported-type probes before selecting new APIs. All illustrative
+  syntax/API proposals in implementation reviews must be labeled as proposals
+  until parser, runtime and editor tests establish them.
+
+**Acceptance:** old scripts and structured inputs still check, build and execute;
+independent players and caller-owned data remain isolated; unused runtimes stay
+absent. A short decision record settles each milestone's public contract before
+its implementation expands across compiler and runtime surfaces.
+
+## M1 — Localization and translation coverage
+
+- [ ] Map stable line and choice text IDs to the existing catalog index. Decide
+  how source prose supplies default text and how catalog extraction/updates work
+  without overwriting translator edits.
+- [ ] Add placeholder parsing/validation using the existing `%{name}` convention
+  where compatible. Do not conflate a translated dialogue line with the existing
+  `I18n.t` string-array result used for other dialogue catalog entries.
+- [ ] Resolve line and choice translations with the established locale fallback
+  chain. Provide per-player locale selection without mutating unrelated players.
+- [ ] Define behavior for switching locale during reveal or a choice: preserve
+  stable selection/line IDs and define whether text is re-presented; never replay
+  gameplay effects merely because a translation changes.
+- [ ] Validate missing/extra placeholders, entry shape, missing keys and source
+  drift. Integrate dialogue coverage and source navigation into the existing
+  Localization Explorer. Define warning/error policy for incomplete translations.
+- [ ] Cover character display-name localization without requiring every character
+  name to be a catalog key. Plain string names remain valid.
+
+**Acceptance:** two players can show different locales; fallback and missing-entry
+behavior are deterministic; translated choices keep their stable IDs. Tests cover
+plural values, escaping, Unicode text, missing/extra arguments, changed catalogs,
+unsaved edits and runtime replacement. The example includes two locales and a
+clearly incomplete translation to demonstrate coverage diagnostics.
+
+## M2 — Typed context, placeholders and local variables
+
+- [ ] Bind a script to a declared/imported context shape using ordinary `.tua`
+  types and values wherever practical. Carry the shape across imports/re-exports.
+- [ ] Expose a read-only view of host-owned facts such as player name, inventory,
+  quest state and reputation. Reading context must not invoke arbitrary methods
+  or mutate the supplied game state.
+- [ ] Add explicit per-player local variables with declared primitive/serializable
+  types, defaults and scoped access. Choose a small assignment/update model; keep
+  progression/inventory changes in host actions rather than hidden script writes.
+- [ ] Define when context is sampled/refreshed and when local updates become
+  visible. Specify reset, restart, loop and dispose behavior separately.
+- [ ] Type placeholder arguments against the bound context/locals, including
+  optional values and formatting. Reject wrong paths and incompatible values.
+- [ ] Define checkpoint eligibility: callbacks, userdata, entity objects and
+  external service handles are not serializable dialogue locals.
+
+**Acceptance:** a misspelled context field fails after cross-module import;
+completion and hover show the correct fields; writes through read-only context
+fail. Two players sharing a document cannot share mutable locals accidentally.
+Defaults, nil handling, context replacement and restart behavior have runtime
+regressions without introducing a module-wide `any` boundary.
+
+## M3 — Conditions, branches and choice availability
+
+- [ ] Define a small typed condition language: literals, field reads, comparisons
+  and boolean operations. Set precedence, optional-value rules, short-circuiting
+  and depth limits; exclude arbitrary calls and side effects.
+- [ ] Add conditional branches and distinct visible/enabled choice states.
+  Disabled replies can expose a localized reason, such as “Requires 20 coins.”
+- [ ] Specify choice reevaluation when host facts change. Selection by stable ID
+  must revalidate eligibility against the current accepted context; stale UI must
+  not authorize a purchase or other action. The host remains authoritative.
+- [ ] Define an explicit fallback for no available choices, rather than leaving a
+  player stuck with an empty selection. Preserve explicit line acknowledgement.
+- [ ] Add a bounded automatic-transition loop for condition-only paths. Yield or
+  enter a documented issue state on budget exhaustion instead of hanging.
+
+**Acceptance:** tests cover short-circuiting, missing/nil fields, changed context
+between display and selection, hidden versus disabled options, no-choice fallback,
+loops, forward references, deterministic evaluation order and instruction limits.
+The editor diagnoses wrong types and invalid targets at authored source locations.
+
+## M4 — Typed events and registered host actions
+
+- [ ] Reuse existing declared-event/schema facts where possible to expose a typed
+  action/event contract from a `.tua` module. Keep signal buses optional adapters.
+- [ ] Add validated structured payloads and argument completion; retain existing
+  undeclared string-payload events as a compatible, explicitly dynamic path.
+- [ ] Separate notification events from actions whose completion or outcome affects
+  flow. Both remain requests to host code, never executable Lua in script text.
+- [ ] Give persistent actions stable authored identity. Name plus array position
+  is insufficient: names may repeat and declarations may be reordered.
+- [ ] Preserve `shown`/`revealed` timing, ordering, limits and lifecycle tokens.
+  Decide payload capture time so handlers do not observe accidental later mutations.
+- [ ] Define unknown-action, handler-error and invalid-result behavior. Include
+  source identity in issues and distinguish presentation-only actions from
+  consequential gameplay actions for resume policy.
+
+**Acceptance:** wrong imported event names/payloads fail statically where declared;
+legacy events still work. Emitted-runtime tests cover typed records, repeated
+names, mutation isolation, reentrant handlers, handler failure, cancellation and
+stable identity after harmless text edits. Completion/hover/definition use shared
+core facts rather than an extension-only event index.
+
+## M5 — Character expressions and portrait variants
+
+- [ ] Extend shared character records with named expression metadata. Preserve the
+  existing optional single `portrait` field as the simple/default case.
+- [ ] Allow an utterance to select a declared expression. Validate names across
+  imported/re-exported character modules and support expression completion.
+- [ ] Carry the selected expression and resolved asset identifier to the renderer;
+  define missing/default behavior and per-line reset versus explicit persistence.
+- [ ] Provide an optional static-image and `spriteSheet` adapter recipe. Keep
+  animation playback state per presentation instance and GPU resources host-owned.
+
+**Acceptance:** two speakers and two simultaneous players can show different
+expressions without shared animation state; omitted/unknown expressions behave as
+specified; old portrait-only characters still work. Asset navigation remains
+static and does not load images during analysis.
+
+## M6 — Text presentation and reveal metadata
+
+- [ ] Define a renderer-neutral representation for styled text, emphasis, pauses,
+  reveal speed and pronunciation hints, with a plain-text fallback.
+- [ ] Establish logical text ranges and source mappings through translation,
+  placeholder expansion and escaping. Keep substituted values as text, not markup
+  that can inject commands, events or styles.
+- [ ] Specify nesting, unknown marks, duration bounds and malformed-markup errors.
+  Keep presentation hints separate from consequential events/actions.
+- [ ] Support grapheme-aware reveal in the example adapter. Specify the mapping
+  from logical text spans to renderer/layout clusters; do not split combining
+  sequences or assume byte offsets equal displayed characters.
+- [ ] Define finish-reveal, skip and reduced-motion behavior, including whether
+  presentation pauses are skipped. Preserve an exact host report for `revealed`.
+- [ ] Document font coverage, shaping and bidirectional-layout responsibilities.
+  Accepting Unicode strings is not proof of multilingual rendering support.
+
+**Acceptance:** tests cover combining marks, emoji sequences, non-Latin text,
+escaped markup, expanded placeholders, localized span order, pause/skip and invalid
+nesting. Plain renderers can ignore styles and still display correct text. Styled
+text cannot execute host actions through a translated or substituted value.
+
+## M7 — Voice and asynchronous actions
+
+- [ ] Attach optional voice/cue identifiers and pronunciation metadata to lines,
+  with explicit subtitle and voice locale/fallback policy. Reuse `audioSystem`
+  or host audio through an adapter; do not create another audio engine.
+- [ ] Add host-managed asynchronous action handles with explicit completion,
+  failure and cancellation. Define single settlement and handling of synchronous
+  completion, immediate failure and late callbacks.
+- [ ] Add waiting flow for declared actions or authored durations. Determine which
+  waits use dialogue time, how concurrent waits are bounded, and how completion
+  resumes without recursive unbounded execution.
+- [ ] Specify line-advance and skip policy: finish text, stop/continue voice, cancel
+  cancellable actions, and refuse or defer skipping non-cancellable actions.
+- [ ] Define suspension separately from cancellation. Menus or host suspension
+  must not silently let paused dialogue timers finish; external work behavior is
+  explicit and stale completions cannot resume a replaced player.
+- [ ] Expose pending-action status and source identity for diagnostics without
+  coupling gameplay to inspector availability.
+
+**Acceptance:** fake host handles test success, error, timeout policy, double
+completion, cancel-before-complete, completion-after-reset and interleaved players.
+A native voice example verifies ownership and cleanup, missing audio fallback,
+muting, skipping and pause/resume. No required threads, coroutines, wall clock or
+LÖVE dependency enters the core player.
+
+## M8 — Save/resume and bounded conversation history
+
+- [ ] Define a versioned, validated JSON-shaped checkpoint: document identity and
+  compatible content version, stable position/choice IDs, locals, locale, logical
+  timers, relevant event-delivery/action status, and deterministic execution state.
+- [ ] Specify what is deliberately not saved: closures, GPU/audio objects, opaque
+  host handles, absolute wall-clock timestamps and the whole gameplay context.
+  Rebind host context, handlers and presentation after restoring.
+- [ ] Define compatible text edits versus incompatible graph/schema changes.
+  Reject incompatible checkpoints or require explicit migrations; never silently
+  jump to a similarly numbered node. Reuse `Save` validation/migration concepts.
+- [ ] Choose safe checkpoint boundaries for pending actions. Initially reject or
+  defer checkpoints with non-resumable work; resumable actions need an explicit
+  host policy and durable identity, not replay-on-load by default.
+- [ ] Provide durable idempotency keys or an acknowledgement protocol for
+  consequential actions. Explain the crash window between an external effect and
+  recording delivery: exactly-once rewards require host-side atomic persistence
+  or idempotency, not merely an in-memory “fired” flag.
+- [ ] Add an optional bounded transcript with text IDs, displayed text/locale,
+  speaker identity and selected replies. Define capacity, eviction, redaction,
+  save inclusion and whether history preserves original displayed translations.
+- [ ] Provide an optional `Save.contract` recipe; leave storage and write timing
+  to the host. Keep dialogue restart, checkpoint restore and transcript browsing
+  distinct operations.
+
+**Acceptance:** checkpoint round-trips across line/choice/wait boundaries, schema
+changes, changed documents, corrupt data and locale changes are deterministic.
+Test crashes around an idempotent host action and show that restore does not
+silently duplicate rewards. History remains bounded; records do not retain large
+context objects. Core export/import works without a filesystem or LÖVE.
+
+## M9 — Authoring, diagnostics and preview
+
+- [ ] Extend completion and navigation to labels, choice targets, context fields,
+  placeholders, actions, expressions and voice references using their shared facts.
+- [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,
+  `.tdialogue` and catalogs. Reject ambiguous/dynamic references and conflicts;
+  preserve stable text/action identity unless that identity is deliberately renamed.
+- [ ] Add a dedicated dialogue formatter that preserves prose whitespace,
+  escapes, IDs, metadata attachment and meaning. Do not run the Lua formatter on
+  scripts. Verify idempotence and parse/semantic round-trip properties.
+- [ ] Diagnose dangling targets, duplicate identities, malformed conditions and
+  provably unreachable paths. Distinguish proven impossibility from dynamic
+  context; allow declared externally started entry points so they are not falsely
+  marked unreachable.
+- [ ] Add a static conversation graph/text preview with source navigation and
+  explicit mock-context input. Analysis must not execute project handlers or
+  asset loaders. Keep any opt-in runtime trace clearly separate from static views.
+- [ ] Show actionable runtime issue data: current node/action, wait status,
+  cancelled/stale completion, budget exhaustion and missing translation fallback.
+  Keep tracing bounded and optional; omit sensitive payloads by default.
+- [ ] Preserve fresh results under incomplete edits, unsaved imports, catalog
+  changes, branch edits, watch rebuilds and deleted/recreated modules.
+
+**Acceptance:** CLI/LSP/editor agree on the same fixtures. Tests cover cross-file
+rename conflicts, unsaved buffers, formatter semantic stability and diagnostic
+ranges. Installed-editor checks exercise actual completion/hover/rename/preview;
+synthetic protocol timing is not presented as perceived UI latency.
+
+## M10 — LÖVE showcase, documentation and consuming-game qualification
+
+- [ ] Add one runnable LÖVE showcase with interchangeable presentation adapters:
+  conversation panel, NPC speech bubble, and non-pausing radio message.
+- [ ] Demonstrate shared characters/expressions, localized placeholders, conditional
+  replies, typed actions, both timing anchors, styled reveal, voice/waits, save/resume
+  and bounded history. Use the same player contracts rather than three engines.
+- [ ] Include explicit controls for instant reveal, text-speed adjustment, reduced
+  motion, subtitles, voice mute and keyboard-only choice selection. Expose focus
+  and scrolling clearly; do not claim screen-reader or full shaping support
+  without a corresponding implementation and verification.
+- [ ] Demonstrate separate optional queues with existing `BoundedQueue`, including
+  overflow, channel priority and interruption policy. Keep queue policy in the host.
+- [ ] Maintain a headless counterpart and explain small adoption paths, rather
+  than requiring every game to adopt every showcase feature.
+- [ ] Update `docs/dialogue.md`, the example README and relevant existing feature
+  pages. Update `docs/llms.txt` and regenerate the embedded contract when APIs change;
+  add changelog entries and accurate feature-example/navigation links.
+- [ ] After upstream APIs pass, integrate the relevant adapters in the zombie game
+  in separate changes. Read its instructions, preserve unrelated work, use the
+  rebuilt compiler/runtime, and keep game-specific assets and gameplay out of Tua.
+- [ ] Run native replay coverage at small and large window sizes, multiple players,
+  sustained gameplay announcements, menus, repeated resets and mode changes.
+  Verify input ownership, pause policy, asset cleanup and no duplicate rewards.
+- [ ] Record compiler/revision identity, interpreter/LÖVE versions, JIT status,
+  fixtures/seeds and screenshots/video. Compare update cost, allocation and retained
+  memory on matching workloads; do not label simulation timing as rendered FPS.
+
+**Acceptance:** all three presentations use the same documented engine API and
+remain customizable. Headless and native checks agree on outcomes. The consuming
+game retains conversation priority, bounded messages, reset/disposal and gameplay
+behavior. Documentation examples are checked/built/executed, not just illustrative
+unverified snippets. Record unavailable checks explicitly.
+
+## Shared verification and delivery gate
+
+For each milestone:
+
+1. Add focused parser, semantic, imported-type and runtime regressions before
+   widening the implementation. Inspect emitted Lua and source provenance.
+2. Verify helper-present/helper-absent output, legacy syntax, project runtime
+   replacement, nested/reentrant handlers and multiple independent players.
+3. Exercise applicable CLI check/build/watch/cache invalidation and LSP unsaved
+   overlays. New diagnostics must use the shared analysis path.
+4. Format Tua, authored Lua and Rust separately. Run example checks/builds and
+   native LÖVE tests when behavior depends on rendering/audio/input.
+5. Follow `skills/tua-verification/SKILL.md`: focused checks during iteration,
+   owning suites and `make verify` for cross-cutting work; docs build and relevant
+   editor checks before completion. Report failures, reruns and skipped checks
+   honestly rather than treating a partial gate as a clean full pass.
+6. Record CPU/allocation/editor measurements when claiming an improvement, with
+   warm-up, repetitions, JIT/GC policy and instrumentation status. Avoid absolute
+   timing assertions and do not optimize away validation or lifecycle semantics.
+7. Update this checklist and the owning public docs, then create coherent unsigned
+   commits (`--no-gpg-sign`). Keep unrelated compiler fixes, upstream feature work
+   and game integration separate. No push, publication or release bump is implied.
+
+No milestone is complete with only a parser, a runtime-only API, or editor-only
+behavior. Its typed contract, emitted execution, applicable authoring support,
+compatibility checks, documentation and runnable example must agree.
+
+## First implementation slice
+
+Start with **M0**, followed by **M1**. The first review should contain the current
+API/integration audit, stable-identity and versioning decisions, compatibility
+fixtures, and a minimal localization proposal that reuses the existing catalog
+index. Do not start by implementing the entire expanded grammar or replacing
+storage/rendering architecture.
+
+## Historical delivery checkpoints
+
+<details markdown="1">
+<summary>Initial workstream and its verification records (historical)</summary>
+
+These records describe their original checkpoints. In particular, statements
+about pending features, feature branches or unpublished work below are historical;
+the baseline and milestone checklist above govern the remaining work.
 
 The initial `feature/tdialogue` branches were merged with user approval: Tua
 `4eae2033`, game `5f59118`. Follow-up development is on main for the release after
@@ -245,3 +674,5 @@ The remaining verification stages were then completed separately. The activation
 fixture was updated to expect dialogue selectors and its complete gate rerun.
 No installed VS Code UI validation is claimed. The shared-character headless
 example passes formatting, check/build and emitted Lua execution.
+
+</details>

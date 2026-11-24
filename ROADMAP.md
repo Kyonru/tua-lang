@@ -150,6 +150,18 @@ results.
 
 ## Next
 
+### Expand Typed Dialogue Authoring
+
+- Follow the [consolidated dialogue implementation plan](docs/plans/tdialogue.md),
+  which includes the initial workstream's remaining items and the expanded scope.
+- Start with identity/versioning contracts and existing localization integration;
+  then typed context, conditions, declared actions and richer presentation.
+- Finish with cancellable voice/waits, safe checkpoints/history, authoring tools,
+  three interchangeable LÖVE presentations and consuming-game qualification.
+- Preserve renderer independence, imported typing, existing version-one scripts
+  and opt-in runtime inclusion; reuse existing Tua helpers rather than duplicating
+  localization, audio, saves or queues. This is planned work, not released support.
+
 ### Connect Terminal Agents To Live Editor Debugging
 
 - Terminal agents can discover the bundled CLI from MCP project summaries and
