@@ -67,6 +67,13 @@ pub fn emit_dialogue_source(
         if document
             .sections
             .iter()
+            .flat_map(|s| &s.lines)
+            .any(|line| line.voice.is_some() || line.speech.is_some())
+        {
+            "  schemaVersion = 10,"
+        } else if document
+            .sections
+            .iter()
             .any(|section| section.wait.is_some())
         {
             "  schemaVersion = 9,"
@@ -210,6 +217,33 @@ pub fn emit_dialogue_source(
                 output.field("      richText", &rich.source, origin);
             }
             output.field("      textId", &line.text.id.value, line.text.id.span);
+            if let Some(voice) = &line.voice {
+                output.line(&format!("      voice = {},", json_payload(voice)), origin);
+            }
+            if let Some(speech) = &line.speech {
+                use crate::dialogue_asset::DialogueSpeech;
+                let value = match speech {
+                    DialogueSpeech::Off => lua_string_literal("off"),
+                    DialogueSpeech::Profile(value) => json_payload(value),
+                    DialogueSpeech::Character => {
+                        let speaker = line.speaker.as_ref().expect("validated speaker");
+                        let (alias, member) =
+                            speaker.value.split_once('.').expect("imported speaker");
+                        let index = document
+                            .imports
+                            .iter()
+                            .position(|i| i.alias.value == alias)
+                            .expect("validated import");
+                        format!(
+                            "assert(__tua_characters_{}[{}].speech, \"character speech profile required\")",
+                            index + 1,
+                            lua_string_literal(member)
+                        )
+                    }
+                };
+                output.line(&format!("      speech = {value},"), origin);
+            }
+
             if let Some(speaker) = &line.speaker {
                 if let Some(name) = speakers.get(speaker.value.as_str()) {
                     output.field("      speaker", name, speaker.span);

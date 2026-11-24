@@ -4,8 +4,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 mod actions;
+mod media;
 mod waits;
 pub use actions::DialogueAction;
+pub use media::DialogueSpeech;
 pub use waits::DialogueWait;
 mod conditions;
 mod context;
@@ -73,6 +75,8 @@ pub struct DialogueTiming {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueLine {
+    pub voice: Option<serde_json::Value>,
+    pub speech: Option<DialogueSpeech>,
     pub expression: Option<DialogueName>,
     pub fallback: Option<DialogueName>,
     pub events: Vec<DialogueEvent>,
@@ -351,7 +355,8 @@ impl Parser<'_> {
             return;
         }
         self.rich_directive_allowed = false;
-        if self.wait_line(raw, at) || self.action_line(raw, number, at) {
+        if self.media_line(raw, at) || self.wait_line(raw, at) || self.action_line(raw, number, at)
+        {
             return;
         }
         if self.condition_line(syntax, at) {
@@ -783,6 +788,8 @@ impl Parser<'_> {
             return;
         }
         section.lines.push(DialogueLine {
+            voice: None,
+            speech: None,
             expression: None,
             fallback: None,
             events: Vec::new(),

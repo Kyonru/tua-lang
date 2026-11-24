@@ -37,6 +37,13 @@ pub const RUNTIMES: &[BundledRuntime] = &[
         explicit_import: false,
     },
     BundledRuntime {
+        module: "tuadialogue_media",
+        file_name: "tuadialogue_media.lua",
+        source: || include_str!("../../../vendor/runtime/tuadialogue_media.lua"),
+        dependencies: &[],
+        explicit_import: false,
+    },
+    BundledRuntime {
         module: "tuadialogue_actions",
         file_name: "tuadialogue_actions.lua",
         source: || include_str!("../../../vendor/runtime/tuadialogue_actions.lua"),
@@ -94,6 +101,7 @@ pub const RUNTIMES: &[BundledRuntime] = &[
             "tuasave_shape",
             "tuadialogue_conditions",
             "tuadialogue_actions",
+            "tuadialogue_media",
             "tuadialogue_reveal",
             "tuadialogue_rich",
         ],

@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 9 }
+local Dialogue = { schemaVersion = 10 }
 local Rich
 local function rich()
   if not Rich then Rich = require("tuadialogue_rich") end
@@ -18,6 +18,10 @@ local function actions()
 end
 function Dialogue.actionHandle(options)
   return actions().handle(options)
+end
+
+function Dialogue.speechProfile(profile)
+  return require("tuadialogue_media").speech(profile)
 end
 
 function Dialogue.reveal(options)
@@ -71,7 +75,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     local payload
     if event.kind ~= nil then
       assert(
-        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9) and event.kind == event.name,
+        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9 or schemaVersion == 10) and event.kind == event.name,
         "invalid typed event kind"
       )
       assert(event.id ~= nil, "typed events require an explicit ID")
@@ -89,7 +93,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     end
     if event.id ~= nil or event.source ~= nil then
       assert(
-        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9,
+        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9 or schemaVersion == 10,
         "event identity requires schema version 4 or later"
       )
       assert(
@@ -137,6 +141,8 @@ local nodeFields = {
     failure = true,
   },
   line = {
+    voice = true,
+    speech = true,
     kind = true,
     text = true,
     textId = true,
@@ -196,7 +202,10 @@ end
 
 local function compiledRich(template, fallback, version, timing)
   if template == nil then return nil end
-  assert(version == 8 or version == 9, "rich text requires schema version 8 or later")
+  assert(
+    version == 8 or version == 9 or version == 10,
+    "rich text requires schema version 8 or later"
+  )
   local compiled = rich().parse(template, timing)
   assert(compiled.plain == fallback, "rich text fallback must match the stripped template")
   return compiled
@@ -207,7 +216,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9 or value.schemaVersion == 10,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -217,7 +226,7 @@ local function document(value)
   local validators
   if value.events ~= nil then
     assert(
-      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
+      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9 or value.schemaVersion == 10,
       "event contracts require schema version 5 or later"
     )
     validators = eventDefinitions[value.events]
@@ -225,7 +234,7 @@ local function document(value)
   end
   if value.actions ~= nil then
     assert(
-      value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
+      value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9 or value.schemaVersion == 10,
       "action contracts require schema version 6 or later"
     )
     assert(actions().valid(value.actions), "document needs a Dialogue.actions definition")
@@ -242,6 +251,15 @@ local function document(value)
     local owned = { kind = node.kind }
     if node.kind == "line" then
       assert(type(node.text) == "string", "line needs text")
+      if node.voice ~= nil or node.speech ~= nil then
+        assert(value.schemaVersion == 10, "voice and speech metadata require schema version 10")
+        local Media = require("tuadialogue_media")
+        if node.voice ~= nil then owned.voice = Media.voice(node.voice) end
+        if node.speech ~= nil then
+          if node.speech == "off" then owned.speech = "off"
+          else owned.speech = Media.speech(node.speech) end
+        end
+      end
       assert(node.speaker == nil or type(node.speaker) == "string", "invalid speaker")
       assert(type(node.next) == "string", "line needs a next node")
       assert(node.portrait == nil or type(node.portrait) == "string", "invalid portrait")
@@ -292,13 +310,16 @@ local function document(value)
         end
       end
     elseif node.kind == "wait" then
-      assert(value.schemaVersion == 9, "waits require schema version 9")
+      assert(
+        value.schemaVersion == 9 or value.schemaVersion == 10,
+        "waits require schema version 9 or later"
+      )
       assert(seconds(node.duration) and node.duration <= 86400, "invalid wait duration")
       assert(type(node.next) == "string", "wait needs a next node")
       owned.duration, owned.next, owned.source = node.duration, node.next, eventSource(node.source)
     elseif node.kind == "action" then
       assert(
-        value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
+        value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9 or value.schemaVersion == 10,
         "actions require schema version 6 or later"
       )
       assert(
@@ -541,6 +562,7 @@ local function presentation(self, id, locale, facts, locals)
   local args = boundArguments(self, facts or self.facts, locals or self.locals)
   local node = copy(self.document.nodes[id])
   node.text, node.options = node.text or "", node.options or {}
+  if node.voice then node.voice.locale = locale or node.voice.sourceLocale end
   if node.kind == "choice" and (self.document.schemaVersion or 0) >= 3 then
     local options = {}
     for _, option in ipairs(node.options) do
@@ -951,8 +973,8 @@ function Dialogue.context(schemas)
     assert(source.actions == registeredActions, "document uses another action definition")
     assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7 or source.schemaVersion == 8 or source.schemaVersion == 9,
-      "typed context requires dialogue schema version 2 through 8"
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7 or source.schemaVersion == 8 or source.schemaVersion == 9 or source.schemaVersion == 10,
+      "typed context requires dialogue schema version 2 through 10"
     )
     local player = newPlayer(source, options)
     player.facts, player.locals = copyFacts(value), copyLocals(initialLocals)

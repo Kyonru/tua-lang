@@ -307,3 +307,43 @@ fn duration_waits_are_bounded_explicit_flow_and_emit_schema_nine() {
     assert!(parse_dialogue_source("wait.tdialogue", &source.replace("0.5", "0")).is_ok());
     assert!(parse_dialogue_source("wait.tdialogue", &source.replace("0.5", "86400")).is_ok());
 }
+
+#[test]
+fn media_metadata_is_bounded_and_requires_explicit_opt_in() {
+    let source = include_str!("../../../../examples/dialogue-expressions/src/media.tdialogue");
+    let output = crate::emit::emit_dialogue_source("media.tdialogue", source).unwrap();
+    assert!(output.code.contains("schemaVersion = 10"));
+    assert!(output.code.contains("speech = \"off\""));
+    for invalid in [
+        source.replace(r#""fallback":"silent""#, r#""fallback":"guess""#),
+        source.replace(r#""sourceLocale":"en""#, r#""sourceLocale":"""#),
+        source.replace(r#""pitchMin":0.8"#, r#""pitchMin":4.1"#),
+        source.replace(r#""gain":0.3"#, r#""gain":2"#),
+        source.replace(r#""gain":0.3"#, r#""gain":0.3,"gain":0.2"#),
+        source.replace(
+            "@speech off",
+            "@speech off
+@speech off",
+        ),
+        source.replace("@speech character", "@voice {}"),
+        source.replace("Cast.Guide:", ":"),
+        source.replace(
+            "@text rich",
+            "@text rich
+@voice {}",
+        ),
+    ] {
+        assert!(
+            parse_dialogue_source("bad.tdialogue", &invalid).is_err(),
+            "{invalid}"
+        );
+    }
+    let local = r#"@dialogue 1
+@character Cast.Guide "Guide"
+[start]
+// @id hello
+Cast.Guide: Hi. (end)
+@speech character
+"#;
+    assert!(crate::emit::emit_dialogue_source("local.tdialogue", local).is_err());
+}

@@ -424,6 +424,12 @@ text cannot execute host actions through a translated or substituted value.
 
 ## M7 — Voice and asynchronous actions
 
+**Audio metadata foundation:** schema-10 voice descriptors and typed shared speech
+profiles support explicit line selection, overrides and silence. Locale fallback and
+mixing are declared policy; playback, cadence processing and lifecycle orchestration
+remain host-adapter work. Existing rich runs supply pronunciation hints. See the
+[audio metadata qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-audio-metadata.md).
+
 **Action-handle foundation implemented on the feature branch:** handlers may return
 typed `Dialogue.actionHandle` values. Single settlement, one-visit ownership,
 explicit result consumption and lifecycle invalidation preserve bounded execution.
@@ -434,10 +440,10 @@ excess time; suspension preserves clocks and defers action consumption.
 See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-action-handles.md)
 and [wait/suspension qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-waits-suspension.md).
 
-- [ ] Attach optional voice/cue identifiers and pronunciation metadata to lines,
+- [x] Attach optional voice/cue identifiers and pronunciation metadata to lines,
   with explicit subtitle and voice locale/fallback policy. Reuse `audioSystem`
   or host audio through an adapter; do not create another audio engine.
-- [ ] Support optional typed character speech profiles shared across scripts, with
+- [x] Support optional typed character speech profiles shared across scripts, with
   a named voice/sample-set identifier, pitch range, variation, gain, minimum cue
   interval and character/word cadence. Allow a per-line override or silence. Keep
   audio asset loading, sample selection/synthesis, mixing and playback in the host

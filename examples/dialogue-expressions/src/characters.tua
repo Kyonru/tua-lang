@@ -2,6 +2,15 @@
 return {
   Guide = {
     name = "Guide",
+    speech = Dialogue.speechProfile({
+      sampleSet = "guide.chatter",
+      pitchMin = 0.9,
+      pitchMax = 1.1,
+      variation = 0.2,
+      gain = 0.6,
+      minCueInterval = 0.05,
+      cadence = "character",
+    }),
     portrait = "portraits/guide.png",
     expressions = {
       happy = { portrait = "portraits/guide-happy.png" },

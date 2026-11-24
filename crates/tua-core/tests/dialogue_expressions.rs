@@ -6,8 +6,8 @@ fn dialogue_expressions_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let example = root.join("examples/dialogue-expressions/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
-    for name in ["characters", "forward", "scene"] {
-        let code = if name == "scene" {
+    for name in ["characters", "forward", "scene", "media"] {
+        let code = if matches!(name, "scene" | "media") {
             tua_core::emit::emit_dialogue_source(
                 format!("{name}.tdialogue"),
                 &std::fs::read_to_string(example.join(format!("{name}.tdialogue"))).unwrap(),
@@ -33,6 +33,7 @@ fn dialogue_expressions_execute_emitted_sources() {
         .unwrap(),
     );
     script.push_str(include_str!("fixtures/dialogue_expressions.lua"));
+    script.push_str(include_str!("fixtures/dialogue_media.lua"));
     let mut ran = false;
     for interpreter in ["lua", "lua5.1", "luajit"] {
         if Command::new(interpreter).arg("-v").output().is_err() {

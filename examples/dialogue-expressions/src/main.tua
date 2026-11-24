@@ -21,3 +21,24 @@ assert(secondNode and secondNode.expression == "worried")
 first:dispose()
 second:dispose()
 print("character expressions passed")
+
+-- Descriptors stay renderer/audio neutral; the host resolves actual samples.
+local media = require("media")
+local voiced = Dialogue.new(media, { locale = "fr" })
+voiced:start()
+local node = voiced:snapshot().node
+assert(node ~= nil)
+local voice = node.voice
+assert(voice ~= nil)
+assert(voice.locale == "fr" and voice.sourceLocale == "en")
+assert(voice.fallback == "silent" and not voice.mixSpeech)
+voiced:setLocale("en")
+assert(voiced:advance())
+node = voiced:snapshot().node
+assert(node ~= nil and node.speech == "off")
+assert(voiced:advance())
+assert(voiced:advance())
+node = voiced:snapshot().node
+assert(node ~= nil and node.speech == nil and node.voice == nil)
+voiced:dispose()
+print("voice and speech descriptors passed")

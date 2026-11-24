@@ -102,8 +102,35 @@ type ActionNode = {
   failure: string,
   source?: EventSource,
 }
+type SpeechProfile = {
+  sampleSet: string,
+  pitchMin: number,
+  pitchMax: number,
+  variation: number,
+  gain: number,
+  minCueInterval: number,
+  cadence: "character" | "word",
+}
+type Voice = {
+  cue: string,
+  sourceLocale: string,
+  fallback: "silent" | "source",
+  mixSpeech?: boolean,
+}
+type VoiceView = {
+  cue: string,
+  sourceLocale: string,
+  locale: string,
+  fallback: "silent" | "source",
+  mixSpeech: boolean,
+}
+local function speechProfile(profile: SpeechProfile): SpeechProfile
+  error("declaration only")
+end
 type Expression = { portrait: string, animation?: string }
 type Node = {
+  speech?: SpeechProfile | "off",
+  voice?: Voice,
   richText?: string,
   kind: "line",
   text: string,
@@ -151,6 +178,8 @@ type Options = {
   resolveTemplate?: TemplateResolver,
 }
 type PresentationNode = {
+  speech?: SpeechProfile | "off",
+  voice?: VoiceView,
   presentation?: RichPresentation,
   kind: "line" | "choice" | "end",
   text: string,

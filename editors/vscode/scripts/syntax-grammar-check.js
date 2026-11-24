@@ -42,7 +42,7 @@ async function main() {
   });
   const dialogueGrammar = await registry.loadGrammar("text.tdialogue");
   assert(dialogueGrammar, "expected text.tdialogue grammar to load");
-  for (const directive of ["@actions", "@action", "@expression", "@text", "@wait"]) {
+  for (const directive of ["@actions", "@action", "@expression", "@text", "@wait", "@voice", "@speech"]) {
     const result = dialogueGrammar.tokenizeLine(`${directive} purchase`, textmate.INITIAL);
     assert(result.tokens.some((token) => token.scopes.some((scope) => scope.startsWith("keyword"))),
       `expected ${directive} to be highlighted as a dialogue directive`);

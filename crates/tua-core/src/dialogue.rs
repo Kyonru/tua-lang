@@ -100,6 +100,11 @@ pub(crate) fn module_type() -> Type {
                     &new.return_type,
                 ),
             );
+            let speech = environment
+                .function("speechProfile")
+                .and_then(|function| function.as_type())
+                .expect("speech profile contract");
+            let speech = environment.resolve_nested_aliases(&speech);
             let reveal = environment
                 .function("reveal")
                 .and_then(|function| function.as_type())
@@ -107,6 +112,7 @@ pub(crate) fn module_type() -> Type {
             let reveal = environment.resolve_nested_aliases(&reveal);
             Type::table([
                 ("reveal", TableField::required(reveal)),
+                ("speechProfile", TableField::required(speech)),
                 (
                     "actionHandle",
                     TableField::required(action_handle_constructor()),

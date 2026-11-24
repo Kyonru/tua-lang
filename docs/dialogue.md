@@ -255,7 +255,7 @@ and substituted text is not reinterpreted as markup by this controller.
 
 Enable rich text with `@text rich` immediately after `@dialogue 1`, before
 imports, labels or text IDs. Blank lines and ordinary comments may separate them.
-The compiler emits schema 8 (schema 9 when the script also contains waits),
+The compiler emits schema 8 (schema 9 with waits, or schema 10 with audio metadata),
 with both raw templates and plain fallback templates.
 
 ```text
@@ -1664,7 +1664,7 @@ Use an authored wait when flow should pause before another label:
 
 A wait occupies its own label, with one explicit target and a finite duration from
 0 to 86,400 seconds. It cannot share the label with utterances, branches or actions.
-Scripts containing waits emit schema 9. Earlier scripts keep their previous schema
+Scripts containing waits emit schema 9, or schema 10 when they also declare audio metadata. Earlier scripts keep their previous schema
 selection; older replacement runtimes must add schema-9 support to run wait scripts.
 Typed documents can use `{ kind = "wait", duration = 0.5, next = "greeting" }`.
 
@@ -1719,3 +1719,108 @@ Explicit locale/context refreshes remain available while suspended and retain th
 existing silent reveal-completion policy. An empty-choice fallback is deferred until
 resume; refresh itself cannot navigate the suspended choice. Suspension is not a content lock, an audio
 pause command, a save checkpoint, or cancellation of external work.
+
+
+## Describe voices and character chatter
+
+Audio descriptions are optional schema-10 data. Tua validates and owns them; the host
+loads assets, selects samples, plays/stops sources, and decides how to handle missing
+audio. Subtitles remain available with no audio system or LÖVE dependency.
+
+Declare a shared profile in the character module:
+
+```tua
+return {
+  Guide = {
+    name = "Guide",
+    speech = Dialogue.speechProfile({
+      sampleSet = "guide.chatter",
+      pitchMin = 0.9,
+      pitchMax = 1.1,
+      variation = 0.2,
+      gain = 0.6,
+      minCueInterval = 0.05,
+      cadence = "character",
+    }),
+  },
+}
+```
+
+The constructor provides typed fields and validates numeric bounds at runtime.
+Pitch limits must be ordered within 0.25–4; variation and gain are 0–1; the minimum
+cue interval is 0–60 seconds. `sampleSet` is a nonempty host identifier, at most
+256 UTF-8 bytes. Cadence is `"character"` or `"word"`.
+
+Choose the profile explicitly on a line:
+
+```text
+@dialogue 1
+@characters Cast "characters"
+[start]
+// @id greeting
+Cast.Guide: Welcome.
+@speech character
+@voice {"cue":"guide.greeting","sourceLocale":"en","fallback":"silent"}
+// @id aside
+Cast.Guide: A quiet aside. (end)
+@speech off
+```
+
+`@speech character` requires an imported character with a valid, required `speech`
+profile. Missing or incorrectly typed profiles fail checking; missing dynamic
+profiles fail module loading. Use `@speech off` to mark explicit silence, or provide
+a complete JSON profile to override the shared one:
+
+```text
+@speech {"sampleSet":"guide.soft","pitchMin":0.8,"pitchMax":1.0,"variation":0.1,"gain":0.3,"minCueInterval":0.2,"cadence":"word"}
+```
+
+Each directive follows its utterance before choices and occurs at most once per line.
+Omission means no speech preference; metadata never carries over from another line.
+Explicit selection preserves earlier scripts' schema selection. Scripts with either
+audio directive emit schema 10, which also supports prior waits, rich text, actions
+and expressions. Older replacement runtimes need schema-10 support for these scripts.
+
+Typed line records accept `speech = profile`, `speech = "off"`, and
+`voice = { cue = "guide.greeting", sourceLocale = "en", fallback = "silent" }`.
+Snapshots expose owned `node.speech` and `node.voice` records. Mutating a source
+profile or returned snapshot cannot change a running player's descriptions.
+
+### Voice locale and fallback policy
+
+A voice cue is a logical asset identifier (1–256 bytes), not a path that Tua opens.
+`sourceLocale` names its source recording locale (1–64 bytes). Identifiers may not
+contain ASCII control characters; locale tags are opaque identifiers, not normalized.
+
+The voice snapshot adds `locale`: the player's requested locale, or `sourceLocale`
+when no locale was selected. This remains independent of subtitle catalog fallback.
+The host first attempts the cue in that requested locale:
+
+- `fallback = "silent"`: if unavailable, show subtitles without recorded voice.
+- `fallback = "source"`: if unavailable, try the source-locale recording; otherwise
+  remain silent.
+
+The host determines availability and applies the policy; Tua does not claim a cue
+exists or start playback. Locale refresh updates the descriptor without emitting an
+audio command. Use player generation/visit/presentation identity to avoid replaying
+a recording unintentionally.
+
+`mixSpeech` is optional and defaults to false. Adapters should suppress chatter
+**while recorded voice is actually playing**, unless mixing is explicitly enabled.
+A missing recording does not by itself suppress available chatter. `@speech off`
+always requests no chatter; it does not disable a separately declared recorded cue.
+Rich `[pronounce="hint"]…[/pronounce]` runs provide existing pronunciation metadata;
+hints are not synthesized or interpreted as commands by the core.
+
+### Adapter responsibilities
+
+Profiles are descriptors in this slice: they do not automatically configure
+`Dialogue.reveal` or produce sound. Its existing cues remain grapheme-based.
+Adapters must map cadence (including language-appropriate word segmentation), apply
+profile intervals/gain/pitch variation, and use private deterministic RNG rather
+than gameplay RNG. They also own volume/mute, bounded polyphony, missing-asset
+fallback, audio suspension, skip policy and lifecycle cleanup. The optional LÖVE
+speech adapter and recorded-voice orchestration remain pending in M7.
+
+The [character presentation example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
+includes shared profiles, voice locale metadata, overrides, silence and plain-line reset.

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add schema-10 dialogue voice metadata and typed shared speech profiles, with
+  per-line overrides/silence and explicit host-owned locale fallback and mixing.
+
 - Add schema-9 authored dialogue waits and typed suspension/resume, freezing dialogue
   and reveal clocks while retaining queued host-action results. Older scripts keep
   their existing schema selection.

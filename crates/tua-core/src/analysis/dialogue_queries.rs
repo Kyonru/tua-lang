@@ -76,6 +76,15 @@ impl AnalysisSnapshot {
                         diagnostics.push(character_error(path, speaker.span, message));
                     }
                     Some(ty) => {
+                        if matches!(
+                            line.speech,
+                            Some(crate::dialogue_asset::DialogueSpeech::Character)
+                        ) && !valid_character_speech(&ty)
+                        {
+                            diagnostics.push(character_error(path, speaker.span,
+                                "character needs a required typed speech profile; use Dialogue.speechProfile".into()));
+                        }
+
                         if let Some(expression) = &line.expression {
                             let selected = expression_fields(&ty)
                                 .and_then(|fields| fields.field(&expression.value));
@@ -521,4 +530,54 @@ fn valid_expression(ty: &Type) -> bool {
         && expression
             .fields()
             .all(|(name, _)| matches!(name, "portrait" | "animation"))
+}
+
+fn valid_character_speech(ty: &Type) -> bool {
+    let Type::Table(character) = unreadonly(ty) else {
+        return false;
+    };
+    let Some(field) = character.field("speech").filter(|f| !f.optional) else {
+        return false;
+    };
+    let Type::Table(profile) = unreadonly(&field.ty) else {
+        return false;
+    };
+    let text = profile
+        .field("sampleSet")
+        .is_some_and(|f| !f.optional && is_string(&f.ty));
+    let numbers = [
+        "pitchMin",
+        "pitchMax",
+        "variation",
+        "gain",
+        "minCueInterval",
+    ]
+    .iter()
+    .all(|name| {
+        profile.field(name).is_some_and(|f| {
+            !f.optional && matches!(unreadonly(&f.ty), Type::Primitive(PrimitiveType::Number))
+        })
+    });
+    fn cadence(ty: &Type) -> bool {
+        match unreadonly(ty) {
+            Type::StringLiteral(value) => matches!(value.as_str(), "character" | "word"),
+            Type::Union(types) => !types.is_empty() && types.iter().all(cadence),
+            _ => false,
+        }
+    }
+    text && profile.fields().all(|(name, _)| {
+        matches!(
+            name,
+            "sampleSet"
+                | "pitchMin"
+                | "pitchMax"
+                | "variation"
+                | "gain"
+                | "minCueInterval"
+                | "cadence"
+        )
+    }) && numbers
+        && profile
+            .field("cadence")
+            .is_some_and(|f| !f.optional && cadence(&f.ty))
 }

@@ -13444,3 +13444,75 @@ player:suspend(1)
         assert!(snapshot.hover("src/main.tua", position).is_some());
     }
 }
+
+#[test]
+fn dialogue_speech_profiles_keep_imported_types_and_refresh_diagnostics() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/cast.tua
+return {
+  Guide = {
+    name = "Guide",
+    speech = Dialogue.speechProfile({
+      sampleSet = "guide", pitchMin = 0.8, pitchMax = 1.2, variation = 0.1,
+      gain = 0.5, minCueInterval = 0.1, cadence = "character",
+    }),
+  },
+}
+-- file: src/forward.tua
+return require("cast")
+-- file: src/scene.tdialogue
+@dialogue 1
+@characters Cast "forward"
+[start]
+// @id hello
+Cast.Guide: Hello. (end)
+@speech character
+-- file: src/main.tua
+local cast = require("forward")
+local gain: number = cast.Guide.speech.<|gain|>gain
+print(gain)
+local player = Dialogue.new(require("scene"))
+player:start()
+local node = player:snapshot().node
+if node ~= nil then
+  local voice = node.voice
+  if voice ~= nil then
+    local locale: string = voice.<|locale|>locale
+    print(locale)
+  end
+end
+-- file: src/bad.tua
+local cast = require("forward")
+cast.Guide.speech.cadence = "letters"
+local wrong: string = cast.Guide.speech.gain
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/main.tua", "src/cast.tua", "src/scene.tdialogue"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    assert!(!snapshot.pipeline_diagnostics("src/bad.tua").is_empty());
+    for marker in ["gain", "locale"] {
+        let position = fixture.position(marker);
+        assert!(
+            completion_labels(&snapshot.completion("src/main.tua", position))
+                .contains(&marker.to_owned())
+        );
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+    host.set_file(
+        "src/cast.tua",
+        "return { Guide = { name = 'Guide', speech = 'wrong' } }",
+    );
+    let errors = host.snapshot().pipeline_diagnostics("src/scene.tdialogue");
+    assert!(
+        errors.iter().any(|e| e.message.contains("speech profile")),
+        "{errors:?}"
+    );
+}

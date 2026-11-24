@@ -429,3 +429,22 @@ Pass snapshots to Dialogue.reveal: present tracks suspension, freezes fractional
 reveal/timing and invalidates stale cue sequences. Missing suspended means false for
 older snapshots. finish can reveal silently but cannot navigate. Host audio pause,
 non-cancellable skip policy and checkpointing remain host responsibilities/future work.
+
+Dialogue audio metadata (schema 10): Dialogue.speechProfile takes/returns a typed,
+owned record: sampleSet string (1..256 bytes), pitchMin/pitchMax ordered in [0.25,4],
+variation/gain in [0,1], minCueInterval in [0,60], cadence="character"|"word".
+Shared character exports may contain speech=profile. After an utterance, before
+choices, @speech character selects the imported character's required profile;
+@speech off means explicit chatter silence; @speech JSON-record overrides it.
+@voice {"cue":"id","sourceLocale":"en","fallback":"silent"|"source","mixSpeech":false}
+is optional line metadata. cue is 1..256 bytes, sourceLocale 1..64; no ASCII controls.
+Duplicate directives, unknown fields, invalid ranges and duplicate JSON keys fail.
+Typed line speech is profile|"off"; voice is the descriptor. Omission resets each line.
+Snapshot node.voice adds locale=player locale or sourceLocale and defaults mixSpeech=false.
+Voice availability/fallback are host-owned, separate from subtitle fallback: try requested
+locale; silent falls back to subtitles, source tries the source recording then silence.
+No asset loading, audio playback, synthesis or RNG occurs. Suppress chatter only while
+recorded voice plays unless mixSpeech; off always disables chatter, not recorded voice.
+Profiles do not configure reveal automatically; its existing cues are grapheme-based.
+Word segmentation, profile timing, private RNG, volume, polyphony, audio pause/skip and
+lifecycle cleanup belong to the pending host adapter. Pronunciation uses existing rich runs.

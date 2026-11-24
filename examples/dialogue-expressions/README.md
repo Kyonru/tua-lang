@@ -9,3 +9,7 @@ For a graphical host, supply the images and use the optional static-image or
 `spriteSheet` [adapter recipes](../../docs/dialogue.md#select-character-expressions).
 Keep sprite players per presentation; never put mutable animation state in the cast.
 Generated output is not committed.
+
+The additional `media.tdialogue` script demonstrates shared typed speech profiles,
+per-line overrides/silence, voice cue locale/fallback policy and pronunciation hints.
+These are owned descriptions only; this headless example does not load or play audio.

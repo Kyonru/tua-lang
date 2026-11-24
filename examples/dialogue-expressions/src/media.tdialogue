@@ -1,0 +1,16 @@
+@dialogue 1
+@text rich
+@characters Cast "forward"
+[start]
+// @id media.hello
+Cast.Guide: [pronounce="ahoy"]Hello[/pronounce]!
+@speech character
+@voice {"cue":"guide.hello","sourceLocale":"en","fallback":"silent"}
+// @id media.silent
+Cast.Guide: A quiet aside.
+@speech off
+// @id media.override
+Cast.Guide: A slower voice.
+@speech {"sampleSet":"guide.soft","pitchMin":0.8,"pitchMax":1.0,"variation":0.1,"gain":0.3,"minCueInterval":0.2,"cadence":"word"}
+// @id media.plain
+Cast.Guide: Back to ordinary text. (end)
