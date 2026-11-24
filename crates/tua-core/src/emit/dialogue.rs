@@ -64,7 +64,13 @@ pub fn emit_dialogue_source(
     }
     output.line("return {", entry.span);
     output.line(
-        if document.rich_text {
+        if document
+            .sections
+            .iter()
+            .any(|section| section.wait.is_some())
+        {
+            "  schemaVersion = 9,"
+        } else if document.rich_text {
             "  schemaVersion = 8,"
         } else if document
             .sections
@@ -136,6 +142,23 @@ pub fn emit_dialogue_source(
     output.field("  entry", &entry.value, entry.span);
     output.line("  nodes = {", entry.span);
     for section in &document.sections {
+        if let Some(wait) = &section.wait {
+            output.line(
+                &format!("    [{}] = {{", lua_string_literal(&section.label.value)),
+                section.label.span,
+            );
+            output.field("      kind", "wait", wait.span);
+            output.line(&format!("      duration = {},", wait.duration), wait.span);
+            output.field("      next", &wait.target.value, wait.target.span);
+            output.line(
+                &format!(
+                    "      source = {{ line = {}, column = {} }},",
+                    wait.span.start.line, wait.span.start.column
+                ),
+                wait.span,
+            );
+            output.line("    },", wait.span);
+        }
         if let Some(action) = &section.action {
             output.line(
                 &format!("    [{}] = {{", lua_string_literal(&section.label.value)),

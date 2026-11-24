@@ -4,7 +4,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 mod actions;
+mod waits;
 pub use actions::DialogueAction;
+pub use waits::DialogueWait;
 mod conditions;
 mod context;
 mod events;
@@ -83,6 +85,7 @@ pub struct DialogueLine {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSection {
+    pub wait: Option<DialogueWait>,
     pub action: Option<DialogueAction>,
     pub branch: Option<Branch>,
     pub label: DialogueName,
@@ -348,7 +351,7 @@ impl Parser<'_> {
             return;
         }
         self.rich_directive_allowed = false;
-        if self.action_line(raw, number, at) {
+        if self.wait_line(raw, at) || self.action_line(raw, number, at) {
             return;
         }
         if self.condition_line(syntax, at) {
@@ -446,6 +449,7 @@ impl Parser<'_> {
                         self.error(label.span, format!("duplicate label `{}`", label.value));
                     }
                     self.document.sections.push(DialogueSection {
+                        wait: None,
                         action: None,
                         branch: None,
                         label,
@@ -774,8 +778,8 @@ impl Parser<'_> {
             );
             return;
         }
-        if section.branch.is_some() || section.action.is_some() {
-            self.error(at, "branch/action labels cannot contain utterances");
+        if section.branch.is_some() || section.action.is_some() || section.wait.is_some() {
+            self.error(at, "branch/action/wait labels cannot contain utterances");
             return;
         }
         section.lines.push(DialogueLine {
@@ -882,6 +886,14 @@ impl Parser<'_> {
             }
         }
         for section in &self.document.sections {
+            if let Some(wait) = &section.wait {
+                if !labels.contains(wait.target.value.as_str()) {
+                    errors.push((
+                        wait.target.span,
+                        format!("unknown wait target `{}`", wait.target.value),
+                    ));
+                }
+            }
             if let Some(branch) = &section.branch {
                 for target in [&branch.yes, &branch.no] {
                     if !labels.contains(target.value.as_str()) {
@@ -908,7 +920,11 @@ impl Parser<'_> {
                     }
                 }
             }
-            if section.lines.is_empty() && section.branch.is_none() && section.action.is_none() {
+            if section.lines.is_empty()
+                && section.branch.is_none()
+                && section.action.is_none()
+                && section.wait.is_none()
+            {
                 errors.push((
                     section.label.span,
                     "label needs at least one utterance".into(),

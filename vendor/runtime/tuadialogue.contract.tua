@@ -121,6 +121,7 @@ type Node = {
   | { kind: "choice", options: Option[], fallback?: string }
   | { kind: "branch", condition: Condition, yes: string, no: string }
   | { kind: "end" }
+  | { kind: "wait", duration: number, next: string, source?: EventSource }
   | ActionNode
 type Binding = { name: string, path: string, fallback?: string | number | boolean }
 type Document = {
@@ -166,7 +167,7 @@ type PresentationNode = {
   options: ChoiceView[],
 }
 type ActionIssue = {
-  code: "transition_budget_exceeded" | "action_handler_missing" | "action_handler_error" | "action_result_invalid" | "action_transition_error" | "action_rejected" | "action_cancelled",
+  code: "transition_budget_exceeded" | "action_handler_missing" | "action_handler_error" | "action_result_invalid" | "action_transition_error" | "action_rejected" | "action_cancelled" | "wait_transition_error",
   message: string,
   nodeId: string,
   actionId?: string,
@@ -177,14 +178,22 @@ type ActionIssue = {
   generation?: number,
   visit?: number,
 }
+type WaitView = {
+  duration: number,
+  elapsed: number,
+  remaining: number,
+  source?: EventSource,
+}
 type Snapshot = {
+  suspended: boolean,
+  wait?: WaitView,
   action?: ActionRequest,
   issue?: ActionIssue,
   locale?: string,
   documentId?: string,
   presentationRevision: number,
   revealComplete: boolean,
-  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action",
+  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action" | "waiting",
   generation: number,
   visit: number,
   nodeId?: string,
@@ -193,11 +202,12 @@ type Snapshot = {
 -- The adapter consumes presentation fields only; event payloads stay generic.
 type RevealNode = { kind: string, text: string, presentation?: RichPresentation }
 type RevealInput = {
+  suspended?: boolean,
   generation: number,
   visit: number,
   presentationRevision: number,
   revealComplete: boolean,
-  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action",
+  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action" | "waiting",
   node?: RevealNode,
 }
 type RevealOptions = {
@@ -250,6 +260,8 @@ local function start(self: any, entry?: string): nil
   error("declaration only")
 end
 local function new(source: Document, options?: Options): {
+  suspend: (self: any) -> boolean,
+  resume: (self: any) -> boolean,
   runAction: (self: any) -> boolean,
   setLocale: (self: any, locale: string) -> boolean,
   update: (self: any, dt: number, revealed: boolean) -> FiredEvent[],

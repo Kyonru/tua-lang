@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add schema-9 authored dialogue waits and typed suspension/resume, freezing dialogue
+  and reveal clocks while retaining queued host-action results. Older scripts keep
+  their existing schema selection.
+
 - Add typed `Dialogue.actionHandle` for host-managed asynchronous actions, with
   single settlement, explicit result consumption, pending status and lifecycle-safe
   cancellation. Existing synchronous handlers and authored scripts stay compatible.

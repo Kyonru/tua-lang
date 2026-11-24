@@ -6,4 +6,5 @@ shows actions composed with context, branches, and timed typed notifications.
 It also returns a typed action handle, settles it later, and explicitly consumes
 the result without invoking dialogue transitions from a callback.
 See [the dialogue guide](../../docs/dialogue.md#run-a-registered-host-action).
+The `wait.tdialogue` script also demonstrates a duration wait and suspension.
 Generated `build/` output is not committed.

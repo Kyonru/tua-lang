@@ -70,7 +70,7 @@ function Player:clear()
   self.generation, self.visit, self.revision = nil, nil, nil
   self.text, self.units, self.visible = "", {}, 0
   self.credit, self.sinceCue, self.complete = 0, 0, true
-  self.schedule, self.elapsed = nil, 0
+  self.schedule, self.elapsed, self.suspended = nil, 0, false
 end
 
 function Player:present(snapshot)
@@ -80,9 +80,17 @@ function Player:present(snapshot)
     "invalid presentation identity"
   )
   assert(type(snapshot.revealComplete) == "boolean", "invalid reveal completion flag")
+  assert(
+    snapshot.suspended == nil or type(snapshot.suspended) == "boolean",
+    "invalid suspension flag"
+  )
+  local suspended = snapshot.suspended == true
   local state = snapshot.state
   assert(state == "idle" or state == "awaiting_advance" or state == "awaiting_choice"
-    or state == "awaiting_action" or state == "completed" or state == "cancelled"
+    or state == "waiting"
+    or state == "awaiting_action"
+    or state == "completed"
+    or state == "cancelled"
     or state == "disposed" or state == "faulted", "invalid dialogue snapshot state")
   local active = state == "awaiting_advance"
   local node = snapshot.node
@@ -102,6 +110,8 @@ function Player:present(snapshot)
       Timing.same(self.schedule and self.schedule.saved, node.presentation),
       "changed timing needs a new presentation identity"
     )
+    if self.suspended ~= suspended then invalidate(self) end
+    self.suspended = suspended
     if snapshot.revealComplete and not self.complete then self:finish() end
     return false
   end
@@ -111,7 +121,7 @@ function Player:present(snapshot)
   invalidate(self)
   self.generation, self.visit, self.revision = snapshot.generation, snapshot.visit, snapshot.presentationRevision
   self.text, self.units, self.visible = node.text, units, 0
-  self.schedule, self.elapsed = schedule, 0
+  self.schedule, self.elapsed, self.suspended = schedule, 0, suspended
   self.credit, self.sinceCue, self.complete = 0, self.interval, #units == 0
   if schedule then self.complete = schedule.duration == 0 end
   if snapshot.revealComplete or self.reducedMotion then self:finish() end
@@ -146,7 +156,7 @@ end
 
 function Player:update(dt)
   assert(finite(dt) and dt >= 0, "reveal dt must be finite and nonnegative")
-  if self.complete then return self:snapshot() end
+  if self.suspended or self.complete then return self:snapshot() end
   local before = self.visible
   if self.schedule then
     self.elapsed = math.min(self.schedule.duration, 1.7976931348623157e308, self.elapsed + dt)

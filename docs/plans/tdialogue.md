@@ -428,8 +428,11 @@ text cannot execute host actions through a translated or substituted value.
 typed `Dialogue.actionHandle` values. Single settlement, one-visit ownership,
 explicit result consumption and lifecycle invalidation preserve bounded execution.
 Snapshots expose status and source identity. Host timeouts are explicit rejection;
-authored waits, suspension, skip policy and voice/speech work remain below.
-See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-action-handles.md).
+schema-9 authored waits and explicit suspension are implemented. Skip policy and
+voice/speech work remain below. Wait updates complete at most one wait and discard
+excess time; suspension preserves clocks and defers action consumption.
+See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-action-handles.md)
+and [wait/suspension qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-waits-suspension.md).
 
 - [ ] Attach optional voice/cue identifiers and pronunciation metadata to lines,
   with explicit subtitle and voice locale/fallback policy. Reuse `audioSystem`
@@ -452,12 +455,12 @@ See the [action-handle qualification](https://github.com/Kyonru/tua-lang/blob/ma
 - [x] Add host-managed asynchronous action handles with explicit completion,
   failure and cancellation. Define single settlement and handling of synchronous
   completion, immediate failure and late callbacks.
-- [ ] Add waiting flow for declared actions or authored durations. Determine which
+- [x] Add waiting flow for declared actions or authored durations. Determine which
   waits use dialogue time, how concurrent waits are bounded, and how completion
   resumes without recursive unbounded execution.
 - [ ] Specify line-advance and skip policy: finish text, stop/continue voice, cancel
   cancellable actions, and refuse or defer skipping non-cancellable actions.
-- [ ] Define suspension separately from cancellation. Menus or host suspension
+- [x] Define suspension separately from cancellation. Menus or host suspension
   must not silently let paused dialogue timers finish; external work behavior is
   explicit and stale completions cannot resume a replaced player.
 - [x] Expose pending-action status and source identity for diagnostics without

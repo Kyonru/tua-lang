@@ -1,0 +1,6 @@
+@dialogue 1
+[pause]
+@wait 0.5 [target:done]
+[done]
+// @id wait.done
+: Ready. (end)

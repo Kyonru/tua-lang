@@ -1,5 +1,5 @@
 -- Renderer-independent dialogue playback. No graphics, input or global clock.
-local Dialogue = { schemaVersion = 8 }
+local Dialogue = { schemaVersion = 9 }
 local Rich
 local function rich()
   if not Rich then Rich = require("tuadialogue_rich") end
@@ -26,6 +26,7 @@ end
 
 local Player = {}
 Player.__index = Player
+local refresh
 
 local function copy(value)
   if type(value) ~= "table" then return value end
@@ -70,7 +71,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     local payload
     if event.kind ~= nil then
       assert(
-        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8) and event.kind == event.name,
+        (schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9) and event.kind == event.name,
         "invalid typed event kind"
       )
       assert(event.id ~= nil, "typed events require an explicit ID")
@@ -88,7 +89,7 @@ local function events(value, schemaVersion, documentId, seen, validators)
     end
     if event.id ~= nil or event.source ~= nil then
       assert(
-        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8,
+        schemaVersion == 4 or schemaVersion == 5 or schemaVersion == 6 or schemaVersion == 7 or schemaVersion == 8 or schemaVersion == 9,
         "event identity requires schema version 4 or later"
       )
       assert(
@@ -125,6 +126,7 @@ local documentFields = {
   actions = true,
 }
 local nodeFields = {
+  wait = { kind = true, duration = true, next = true, source = true },
   action = {
     kind = true,
     id = true,
@@ -194,7 +196,7 @@ end
 
 local function compiledRich(template, fallback, version, timing)
   if template == nil then return nil end
-  assert(version == 8, "rich text requires schema version 8")
+  assert(version == 8 or version == 9, "rich text requires schema version 8 or later")
   local compiled = rich().parse(template, timing)
   assert(compiled.plain == fallback, "rich text fallback must match the stripped template")
   return compiled
@@ -205,7 +207,7 @@ local function document(value)
   assert(type(value) == "table" and type(value.nodes) == "table", "dialogue needs nodes")
   assert(type(value.entry) == "string", "dialogue needs an entry ID")
   assert(
-    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
+    value.schemaVersion == nil or value.schemaVersion == 1 or value.schemaVersion == 2 or value.schemaVersion == 3 or value.schemaVersion == 4 or value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
     "unsupported dialogue schemaVersion"
   )
   assert(optionalId(value.documentId), "invalid documentId")
@@ -215,7 +217,7 @@ local function document(value)
   local validators
   if value.events ~= nil then
     assert(
-      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
+      value.schemaVersion == 5 or value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
       "event contracts require schema version 5 or later"
     )
     validators = eventDefinitions[value.events]
@@ -223,7 +225,7 @@ local function document(value)
   end
   if value.actions ~= nil then
     assert(
-      value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
+      value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
       "action contracts require schema version 6 or later"
     )
     assert(actions().valid(value.actions), "document needs a Dialogue.actions definition")
@@ -233,7 +235,7 @@ local function document(value)
     assert(type(id) == "string" and id ~= "", "node IDs must be nonempty strings")
     assert(type(node) == "table", "dialogue node must be a record")
     assert(
-      node.kind == "line" or node.kind == "choice" or node.kind == "end" or node.kind == "branch" or node.kind == "action",
+      node.kind == "line" or node.kind == "choice" or node.kind == "end" or node.kind == "branch" or node.kind == "action" or node.kind == "wait",
       "unknown dialogue node kind"
     )
     if value.schemaVersion then fields(node, nodeFields[node.kind]) end
@@ -289,9 +291,14 @@ local function document(value)
           fields(event, eventFields)
         end
       end
+    elseif node.kind == "wait" then
+      assert(value.schemaVersion == 9, "waits require schema version 9")
+      assert(seconds(node.duration) and node.duration <= 86400, "invalid wait duration")
+      assert(type(node.next) == "string", "wait needs a next node")
+      owned.duration, owned.next, owned.source = node.duration, node.next, eventSource(node.source)
     elseif node.kind == "action" then
       assert(
-        value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8,
+        value.schemaVersion == 6 or value.schemaVersion == 7 or value.schemaVersion == 8 or value.schemaVersion == 9,
         "actions require schema version 6 or later"
       )
       assert(
@@ -523,7 +530,9 @@ end
 -- Compute presentation before committing a transition; a bad resolver cannot
 -- partially advance the visit or overwrite clocks. Snapshot never calls host code.
 local function presentation(self, id, locale, facts, locals)
-  if self.document.nodes[id].kind == "action" then return nil end
+  if self.document.nodes[id].kind == "action" or self.document.nodes[id].kind == "wait" then
+    return nil
+  end
   -- The document is already owned. Without localization, retain only an internal
   -- reference; snapshot still copies it before exposing anything to the caller.
   if not self.resolve and not self.bindings and (self.document.schemaVersion or 0) < 3 then
@@ -620,9 +629,11 @@ function Player:enter(id, locals, facts, resolved, issue)
   self.visit = self.visit + 1
   self.elapsed, self.revealedElapsed, self.revealedAt, self.fired = 0, nil, nil, {}
   self.current = id
+  self.deferredChoiceRefresh = nil
   local node = self.document.nodes[id]
   if issue then self.state = "faulted"
   elseif node.kind == "end" then self.state = "completed"
+  elseif node.kind == "wait" then self.state = "waiting"
   elseif node.kind == "action" then self.state = "awaiting_action"
   elseif node.kind == "line" then self.state = "awaiting_advance"
   else self.state = "awaiting_choice" end
@@ -638,7 +649,31 @@ function Player:start(entry)
   self:enter(entry, locals)
   if locals then self.locals = locals end
   self.generation = self.generation + 1
+  self.suspended = false
   if Actions then Actions.release(self) end
+end
+
+-- Suspension preserves execution identity and queued host results.
+function Player:suspend()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  if self.suspended or (self.state ~= "awaiting_advance" and self.state ~= "awaiting_choice"
+    and self.state ~= "awaiting_action" and self.state ~= "waiting") then return false end
+  self.suspended = true
+  return true
+end
+
+function Player:resume()
+  assert(not self.resolving, "cannot mutate dialogue while resolving text")
+  if not self.suspended then return false end
+  self.suspended = false
+  if self.deferredChoiceRefresh then
+    local ok, message = pcall(refresh, self, self.facts, self.locals)
+    if not ok then
+      self.suspended = true
+      error(message, 0)
+    end
+  end
+  return true
 end
 
 -- The host reports reveal completion; this runtime never reads a wall clock.
@@ -647,6 +682,26 @@ end
 function Player:update(dt, revealed)
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   assert(seconds(dt) and type(revealed) == "boolean", "invalid dialogue update")
+  if self.suspended then return {} end
+  if self.state == "waiting" then
+    local node = self.document.nodes[self.current]
+    self.elapsed = math.min(node.duration, self.elapsed + dt)
+    if self.elapsed >= node.duration then
+      local id = self.current
+      local ok, message = pcall(self.enter, self, node.next)
+      if not ok then
+        self.state, self.presentation = "faulted", nil
+        self.issue = {
+          code = "wait_transition_error",
+          message = type(message) == "string" and message or "Wait transition failed",
+          nodeId = id,
+          source = copy(node.source),
+        }
+      end
+    end
+    -- Discard excess time; never recursively consume another wait or line event.
+    return {}
+  end
   if self.state ~= "awaiting_advance" then return {} end
   local node = self.document.nodes[self.current]
   self.elapsed = math.min(1.7976931348623157e308, self.elapsed + dt)
@@ -690,20 +745,20 @@ end
 
 function Player:runAction()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
-  if self.state ~= "awaiting_action" then return false end
+  if self.suspended or self.state ~= "awaiting_action" then return false end
   return actions().run(self)
 end
 
 function Player:advance()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
-  if self.state ~= "awaiting_advance" then return false end
+  if self.suspended or self.state ~= "awaiting_advance" then return false end
   self:enter(self.document.nodes[self.current].next)
   return true
 end
 
 function Player:choose(id)
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
-  if self.state ~= "awaiting_choice" then return false end
+  if self.suspended or self.state ~= "awaiting_choice" then return false end
   for _, option in ipairs(self.document.nodes[self.current].options) do
     if option.id == id then
       local _, enabled = available(option, self.facts, self.locals)
@@ -721,6 +776,8 @@ function Player:cancel()
     return false
   end
   self.generation = self.generation + 1
+  self.suspended = false
+  self.deferredChoiceRefresh = nil
   self.state, self.current, self.presentation, self.issue = "cancelled", nil, nil, nil
   self.fired, self.revealedElapsed, self.revealedAt = nil, nil, nil
   if Actions then Actions.release(self) end
@@ -735,6 +792,13 @@ function Player:snapshot()
   end
   return {
     state = self.state,
+    suspended = self.suspended == true,
+    wait = self.state == "waiting" and {
+      duration = self.document.nodes[self.current].duration,
+      elapsed = self.elapsed,
+      remaining = math.max(0, self.document.nodes[self.current].duration - self.elapsed),
+      source = copy(self.document.nodes[self.current].source),
+    } or nil,
     action = self.state == "awaiting_action" and actions().request(self) or nil,
     issue = copy(self.issue),
     generation = self.generation,
@@ -752,6 +816,8 @@ function Player:dispose()
   assert(not self.resolving, "cannot mutate dialogue while resolving text")
   if self.state == "disposed" then return end
   self.generation = self.generation + 1
+  self.suspended = false
+  self.deferredChoiceRefresh = nil
   self.state, self.current, self.document, self.issue = "disposed", nil, nil, nil
   self.presentation, self.resolve, self.args, self.locale = nil, nil, nil, nil
   self.actionHandlers, self.resolveTemplate = nil, nil
@@ -761,14 +827,14 @@ function Player:dispose()
   if Actions then Actions.release(self) end
 end
 
--- Refreshing data changes presentation, not execution identity or event clocks.
-local function refresh(self, facts, locals)
+-- Context changes may take an empty-choice fallback; suspension defers it.
+refresh = function(self, facts, locals)
   boundArguments(self, facts, locals)
   if self.state == "faulted" then
     self.facts, self.locals = facts, locals
     return
   end
-  if self.state == "awaiting_choice" then
+  if self.state == "awaiting_choice" and not self.suspended then
     local id, issue = destination(self, self.current, facts, locals)
     if issue or id ~= self.current then
       self:enter(id, locals, facts, true, issue)
@@ -778,6 +844,7 @@ local function refresh(self, facts, locals)
   end
   local node = self.current and presentation(self, self.current, self.locale, facts, locals)
   self.facts, self.locals, self.presentation = facts, locals, node
+  self.deferredChoiceRefresh = self.suspended and self.state == "awaiting_choice"
   self.presentationRevision = self.presentationRevision + 1
   self.revealComplete = self.state == "awaiting_advance"
   if self.revealComplete and self.revealedElapsed == nil then
@@ -884,7 +951,7 @@ function Dialogue.context(schemas)
     assert(source.actions == registeredActions, "document uses another action definition")
     assert(source.events == registeredEvents, "document uses another event definition")
     assert(
-      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7 or source.schemaVersion == 8,
+      source.schemaVersion == 2 or source.schemaVersion == 3 or source.schemaVersion == 4 or source.schemaVersion == 5 or source.schemaVersion == 6 or source.schemaVersion == 7 or source.schemaVersion == 8 or source.schemaVersion == 9,
       "typed context requires dialogue schema version 2 through 8"
     )
     local player = newPlayer(source, options)

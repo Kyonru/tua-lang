@@ -6,8 +6,10 @@ fn dialogue_actions_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let example = root.join("examples/dialogue-actions/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
-    for name in ["actions", "forward", "events", "context", "scene", "bound"] {
-        let code = if matches!(name, "scene" | "bound") {
+    for name in [
+        "actions", "forward", "events", "context", "scene", "bound", "wait",
+    ] {
+        let code = if matches!(name, "scene" | "bound" | "wait") {
             tua_core::emit::emit_dialogue_source(
                 format!("{name}.tdialogue"),
                 &std::fs::read_to_string(example.join(format!("{name}.tdialogue"))).unwrap(),
@@ -34,6 +36,7 @@ fn dialogue_actions_execute_emitted_sources() {
     );
     script.push_str(include_str!("fixtures/dialogue_actions.lua"));
     script.push_str(include_str!("fixtures/dialogue_async_actions.lua"));
+    script.push_str(include_str!("fixtures/dialogue_waits.lua"));
     let mut ran = false;
     for interpreter in ["lua", "lua5.1", "luajit"] {
         if Command::new(interpreter).arg("-v").output().is_err() {

@@ -7,7 +7,7 @@
       "match": "^\\s*//.*$"
     },
     {
-      "begin": "^\\s*(@(?:dialogue|text|document|context|bind|branch|visible|enabled|reason|fallback|character|characters|actions|action|events|emit|event|timing|expression))\\b",
+      "begin": "^\\s*(@(?:dialogue|text|document|context|bind|branch|visible|enabled|reason|fallback|character|characters|actions|action|events|emit|event|wait|timing|expression))\\b",
       "end": "$",
       "beginCaptures": {
         "1": {

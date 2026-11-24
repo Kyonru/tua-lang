@@ -372,8 +372,7 @@ settlement yields until the next runAction. snapshot().action.status exposes rea
 pending, resolved, rejected or cancelled. handle:snapshot() exposes status and optional
 cancellationError. Reject messages and cancellation errors are bounded to 4096 bytes.
 Lifecycle invalidation precedes cleanup, contains cleanup errors, and drops late results.
-Host work/timeout/rollback remain host-owned; no automatic retries, suspension,
-checkpoints, coroutine dispatch or exactly-once guarantees.
+Host work/timeout/rollback remain host-owned; no automatic retries, checkpoints, coroutine dispatch or exactly-once guarantees.
 
 Character expressions (schema 7): exported character records may declare
 expressions={happy={portrait="asset-id", animation="optional-host-animation"}}.
@@ -412,3 +411,21 @@ imports/labels/text IDs (blank lines/comments allowed). This emits schema 8 with
 raw richText/richReason and plain fallbacks. Timing marks are line-only.
 Mark-name completion, hover and static catalog checks share core rich-text rules.
 Dialogue extraction retains raw text and adds format="rich" plus plainTemplate.
+
+Dialogue waits: @wait seconds [target:label] occupies its own label and emits schema 9.
+Duration is finite, 0..86400. Typed node: {kind="wait",duration=number,next=label}.
+Snapshot state is waiting, node absent, wait={duration,elapsed,remaining,source?}.
+update(dt,revealed) uses dialogue time, completes at most one wait, discards excess dt;
+zero waits still need an update. Errors fault once with wait_transition_error.
+player:suspend()/resume() return whether suspension changed. snapshot.suspended is
+boolean; state/visit/generation remain unchanged. Suspended updates freeze clocks/events;
+advance/choose/runAction return false. Resume does not dispatch actions or catch up wall time. Context refresh defers empty-choice
+fallbacks while suspended; resume reconciles them with the transition budget. Resolver
+failure on resume throws and preserves suspended choice state for explicit retry.
+Host actions may settle while suspended; results are consumed only by later runAction.
+A handler that suspends then returns boolean queues its result. Start/cancel/dispose
+clear suspension; cancellation/disposal still invalidate pending handles.
+Pass snapshots to Dialogue.reveal: present tracks suspension, freezes fractional
+reveal/timing and invalidates stale cue sequences. Missing suspended means false for
+older snapshots. finish can reveal silently but cannot navigate. Host audio pause,
+non-cancellable skip policy and checkpointing remain host responsibilities/future work.

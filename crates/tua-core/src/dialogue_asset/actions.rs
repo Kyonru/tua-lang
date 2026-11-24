@@ -84,7 +84,11 @@ impl Parser<'_> {
             self.error(at, "action requires a label");
             return true;
         };
-        if !section.lines.is_empty() || section.branch.is_some() || section.action.is_some() {
+        if !section.lines.is_empty()
+            || section.branch.is_some()
+            || section.action.is_some()
+            || section.wait.is_some()
+        {
             self.error(
                 at,
                 "an action label contains exactly one action and no utterances or branch",

@@ -263,3 +263,47 @@ fn rich_markup_diagnostic_ranges_use_unicode_scalar_columns() {
         .unwrap();
     assert_eq!((error.line, error.column), (5, 5));
 }
+
+#[test]
+fn duration_waits_are_bounded_explicit_flow_and_emit_schema_nine() {
+    let source = "@dialogue 1
+[start]
+@wait 0.5 [target:done]
+[done]
+// @id done
+: Done. (end)
+";
+    let model = parse_dialogue_source("wait.tdialogue", source).unwrap();
+    assert_eq!(model.sections[0].wait.as_ref().unwrap().duration, "0.5");
+    let emitted = crate::emit::emit_dialogue_source("wait.tdialogue", source).unwrap();
+    assert!(emitted.code.contains("schemaVersion = 9"));
+    assert!(emitted.code.contains("duration = 0.5"));
+    for invalid in [
+        source.replace("0.5", "-1"),
+        source.replace("0.5", "NaN"),
+        source.replace("0.5", "86401"),
+        source.replace("[target:done]", "[target:absent]"),
+        source.replace(
+            "@wait 0.5 [target:done]",
+            "@wait 0 [target:done]
+@wait 1 [target:done]",
+        ),
+        source.replace(
+            "[done]",
+            "// @id mixed
+: Mixed. (end)
+[done]",
+        ),
+        source.replace(
+            "[start]
+", "",
+        ),
+    ] {
+        assert!(
+            parse_dialogue_source("wait.tdialogue", &invalid).is_err(),
+            "{invalid}"
+        );
+    }
+    assert!(parse_dialogue_source("wait.tdialogue", &source.replace("0.5", "0")).is_ok());
+    assert!(parse_dialogue_source("wait.tdialogue", &source.replace("0.5", "86400")).is_ok());
+}

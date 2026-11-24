@@ -13393,3 +13393,54 @@ actions.new(require("scene"), {
         assert!(snapshot.hover("src/main.tua", position).is_some());
     }
 }
+
+#[test]
+fn dialogue_waits_and_suspension_have_typed_editor_contracts() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/scene.tdialogue
+@dialogue 1
+[wait]
+@wait 1 [target:done]
+[done]
+// @id done
+: Done. (end)
+-- file: src/main.tua
+local player = Dialogue.new(require("scene"))
+player:start()
+player:<|suspend|>suspend()
+local snapshot = player:snapshot()
+local suspended: boolean = snapshot.suspended
+print(suspended)
+local waiting = snapshot.wait
+if waiting ~= nil then
+  local remaining: number = waiting.<|remaining|>remaining
+  print(remaining)
+end
+player:resume()
+-- file: src/bad.tua
+local player = Dialogue.new(require("scene"))
+local wrong: string = player:snapshot().suspended
+player:suspend(1)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    for path in ["src/scene.tdialogue", "src/main.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+    assert!(!snapshot.pipeline_diagnostics("src/bad.tua").is_empty());
+    for marker in ["suspend", "remaining"] {
+        let position = fixture.position(marker);
+        let items = snapshot.completion("src/main.tua", position);
+        assert!(
+            completion_labels(&items).contains(&marker.to_owned()),
+            "{items:?}"
+        );
+        assert!(snapshot.hover("src/main.tua", position).is_some());
+    }
+}

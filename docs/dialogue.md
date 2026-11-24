@@ -248,14 +248,15 @@ not establish correct multilingual rendering.
 
 Plain reveal remains compatible with serialized dialogue schema 7. Custom replacement
 runtimes must implement `Dialogue.reveal` to use it. Rich presentations require
-schema 8 as described below; translated
+schema 8 or later as described below; translated
 and substituted text is not reinterpreted as markup by this controller.
 
 ## Rich presentations and timing
 
 Enable rich text with `@text rich` immediately after `@dialogue 1`, before
 imports, labels or text IDs. Blank lines and ordinary comments may separate them.
-The compiler emits schema 8 with both raw templates and plain fallback templates.
+The compiler emits schema 8 (schema 9 when the script also contains waits),
+with both raw templates and plain fallback templates.
 
 ```text
 @dialogue 1
@@ -1646,5 +1647,75 @@ inspect the resulting snapshot rather than assume its state stayed unchanged.
 Cancelling dialogue does not guarantee external work stopped or roll back its
 effects. With no cleanup callback, the handle is still invalidated, but the host
 must manage any ongoing work. Timeouts belong to the host in this slice: call
-`reject("timed out")` when its policy expires. Authored waits, explicit suspension,
-non-cancellable skip policy, and checkpointing pending work remain future features.
+`reject("timed out")` when its policy expires. Non-cancellable skip policy and checkpointing pending work remain future features.
+
+## Wait and suspend dialogue
+
+Use an authored wait when flow should pause before another label:
+
+```text
+@dialogue 1
+[delay]
+@wait 0.5 [target:greeting]
+[greeting]
+// @id greeting
+: Welcome back. (end)
+```
+
+A wait occupies its own label, with one explicit target and a finite duration from
+0 to 86,400 seconds. It cannot share the label with utterances, branches or actions.
+Scripts containing waits emit schema 9. Earlier scripts keep their previous schema
+selection; older replacement runtimes must add schema-9 support to run wait scripts.
+Typed documents can use `{ kind = "wait", duration = 0.5, next = "greeting" }`.
+
+After entering a wait, `snapshot().state` is `"waiting"` and `snapshot().node` is
+absent. `snapshot().wait` contains `duration`, `elapsed`, `remaining`, and optional
+source coordinates. The snapshot's node ID and visit identify that wait.
+
+Call `player:update(dt, revealed)` with **dialogue-time seconds** to progress it.
+The reveal flag is irrelevant during a wait. Each update completes at most one wait
+and discards excess time; it does not apply that time to the next wait, line events,
+or host action. A zero-duration wait still needs an update, so a zero-duration cycle
+cannot run unboundedly. Existing automatic branches retain their transition budget.
+Errors thrown while entering the destination fault once with `wait_transition_error`;
+bounded branch faults retain their existing diagnostic. Updates do not retry. `advance()` and `choose()` cannot skip a wait.
+
+### Pause without cancelling
+
+```tua
+player:suspend()
+-- Menu frames may continue calling update; dialogue clocks stay frozen.
+player:update(10, false)
+player:resume()
+```
+
+Both methods return whether they changed suspension. Suspension applies to active
+lines, choices, actions and waits. It preserves state, visit, generation, presentation,
+elapsed time and queued action handles; `snapshot().suspended` reports the flag.
+
+While suspended, `update()` returns no events and advances no clocks.
+`advance()`, `choose()`, and `runAction()` return false. Resuming does not consume an
+action or account for elapsed wall time. If context refresh hid every choice while suspended, resume reconciles that deferred fallback
+using the existing transition budget. If its presentation resolver throws, resume
+throws and leaves the player suspended at the choice so the host can retry explicitly.
+If the game stopped calling update entirely, its first resumed update should use
+the current frame's dialogue time, not the time spent in a menu.
+
+External host operations continue unless the host pauses them itself. They may
+settle their handles during suspension; the next explicit `runAction()` after
+resume consumes the result. If a synchronous handler suspends its player before
+returning a boolean, that result is queued too, without invoking the handler again.
+Cancellation/disposal still invalidate handles. Restart creates a fresh unsuspended
+run; cancel and dispose also clear suspension.
+
+When using `Dialogue.reveal`, pass the suspended snapshot to `present()`.
+Its subsequent updates freeze fractional reveal progress, pauses and speech timing;
+suspension changes invalidate old speech-cue sequence IDs. Pass a fresh snapshot on
+resume. Older snapshots without `suspended` are treated as unsuspended.
+`finish()` can still reveal text silently, but cannot navigate the suspended player.
+The host owns pausing already-playing audio and animation.
+
+Explicit locale/context refreshes remain available while suspended and retain their
+existing silent reveal-completion policy. An empty-choice fallback is deferred until
+resume; refresh itself cannot navigate the suspended choice. Suspension is not a content lock, an audio
+pause command, a save checkpoint, or cancellation of external work.

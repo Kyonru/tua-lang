@@ -228,6 +228,11 @@ function Actions.run(player)
     return failure(player, request, "action_handler_error",
       type(result) == "string" and result or "Action handler failed")
   end
+  if player.suspended and type(result) == "boolean" then
+    local deferred = Actions.handle()
+    deferred:resolve(result)
+    result = deferred
+  end
   if type(result) == "boolean" then return transition(player, request, node, result) end
   if type(result) == "table" and claim(result) then
     player.pendingAction = result
