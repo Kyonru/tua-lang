@@ -5,7 +5,8 @@ line/choice/wait restore. Plain version-1 export and graph identity remain uncha
 Branch/choice conditions, targets, bindings and local defaults join v2 graph
 identity. Full schema semantics remain the host compatibility key's responsibility.
 Actions and typed-event registries are still excluded; no durable effect recovery
-or automatic migration is claimed. The complete Save recipe remains pending.
+or automatic migration is claimed by this slice. The subsequent
+[Save recipe](M8-save-recipe.md) qualifies optional host persistence.
 
 Restore validates/bounds local data before schema copying or resolver callbacks.
 It stages locals and presentation before mutation, rejects a rebound choice with

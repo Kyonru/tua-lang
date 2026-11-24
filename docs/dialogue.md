@@ -2018,6 +2018,38 @@ changes incompatibly, even if defaults stay the same. There is no automatic sche
 migration. Facts, closures, host handlers and media are rebound, never serialized.
 
 
+## Persist checkpoints with Save
+
+The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+includes a typed `Save.contract` recipe for a context-backed conversation:
+
+```tua
+local sessions = require("saved_session") -- Example host module, not a built-in.
+local session = sessions.new(20) -- Rebind the current gameplay facts.
+if not session.load() then session.player:start() end
+
+-- Save only when the host chooses an eligible line, choice or wait boundary.
+session.save()
+session.player:dispose()
+```
+
+`load()` restores into the fresh idle player and returns false only when no
+checkpoint exists. A corrupt, incompatible or currently unavailable checkpoint
+raises an error; present that error instead of silently starting again. Save checks
+the envelope schema, then dialogue restore checks graph identity, timers and the
+current context. The saved locale and locals are retained; current gameplay facts
+are supplied by the host. No action dispatch or transcript replay occurs.
+
+The example's envelope version and concrete local schema belong to the host.
+Adapt the `visits` schema alongside your context, and use explicit migrations for
+incompatible stored data. Core checkpoint versions and the host compatibility key
+have separate roles. The recipe reopens Save before writes to observe uncertain
+prior writes; it assumes one writer and does not promise power-loss durability.
+
+Restarting dialogue, restoring a checkpoint and browsing history are separate
+operations. Restart does not erase the stored checkpoint, and history is not saved
+by this recipe. Storage timing remains a host decision.
+
 ## Recover consequential host actions
 
 The [durable dialogue recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-durable)

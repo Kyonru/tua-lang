@@ -2,8 +2,9 @@
 
 This slice provides an explicit typed host recipe, using existing Dialogue and
 Save APIs. It does not change runtime dispatch, register a new helper, or enable
-core checkpoints for action/event registry documents. General checkpoint-envelope
-Save recipes and action-enabled checkpoint representation remain separate work.
+core checkpoints for action/event registry documents. The subsequent
+[checkpoint-envelope Save recipe](M8-save-recipe.md) is qualified separately;
+action-enabled checkpoint representation remains pending.
 
 ## Protocol and scope
 

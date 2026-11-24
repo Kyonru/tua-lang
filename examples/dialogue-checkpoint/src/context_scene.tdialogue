@@ -15,3 +15,6 @@
 [done]
 // @id harbor.context.done
 : See you next time. (end)
+
+[tide]
+@wait 2 [target:done]

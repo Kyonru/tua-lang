@@ -1,0 +1,8 @@
+export type Backend = {
+  mkdir: (path: string) -> boolean,
+  info: (path: string) -> { size: number } | nil,
+  read: (path: string) -> string | nil,
+  write: (path: string, bytes: string) -> boolean,
+  remove: (path: string) -> boolean,
+  hash: (bytes: string) -> string,
+}

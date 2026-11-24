@@ -26,10 +26,12 @@ the saved locale is restored. No closure, source, external handle, wall-clock ti
 game context or reveal-controller progress is saved. Core generation/visit tokens
 are live-session identities, not durable reward or network idempotency keys.
 
-This example does not choose storage or autosave timing. The full `Save.contract`
-recipe and durable action reconciliation remain later M8 work. Optional player history is available separately and is excluded from
-checkpoints. Persisting fired flags does not make external effects
-exactly-once: a crash can happen between delivery and durable acknowledgement.
+`persistence.tua` and `saved_session.tua` provide an optional `Save.contract`
+recipe for the typed-context scene. Storage calls remain explicit; the example
+never autosaves or substitutes defaults after a load error. Optional player history
+is separate and excluded from checkpoints. For consequential actions, see the
+[durable action recipe](../dialogue-durable/README.md); persisted fired flags alone
+do not make external effects exactly-once.
 
 
 `context_demo.tua` uses a shared context definition and authored branches/conditions.
@@ -39,3 +41,47 @@ The host compatibility key must change for incompatible schema semantics even if
 local defaults stay identical. Import shared context definitions and construct
 players in the consumer to retain checkpoint-local inference; additional forwarding
 of already-created players has a known editor-analysis inference limitation.
+
+## Persist and resume a conversation
+
+In a LÖVE host, use the native Save backend (or pass an explicit backend for tests):
+
+```tua
+local sessions = require("saved_session")
+local session = sessions.new(20) -- Current gameplay coins, not saved facts.
+if not session.load() then
+  session.player:start() -- Explicit new conversation when no checkpoint exists.
+end
+
+-- Call at a host-selected line, choice or wait boundary.
+session.save()
+session.player:dispose()
+```
+
+`load()` requires a fresh idle player. It returns false only for no save or an
+explicit envelope without a checkpoint. Errors propagate to the host for its error
+UI; do not catch them and silently restart. `save()` reopens the contract first,
+so uncertain prior writes are observed and damaged slots block further writes.
+This is a single-writer example, not a concurrency or power-loss guarantee.
+
+The host envelope has its own version (1), independent of the dialogue checkpoint
+version (2). Save validates record shape; restore also checks content key, graph,
+logical timers, locals and choices against current facts. Required schema defaults
+are for explicit defaults construction, not repairs of missing fields. The concrete
+`visits` schema must evolve with the shared context. Change the host compatibility
+key for incompatible semantic changes; author explicit Save migrations if needed.
+The saved locale wins over the newly constructed player's locale.
+
+The small restore adapter explicitly narrows `state`: Save enums currently infer
+`string`, whereas the player requires a literal union. It does not cast to `any`
+or bypass runtime validation. For a plain v1 document, omit `locals` from the Save
+schema and use a plain player; do not pass this v2 envelope to it.
+
+Restarting (`player:start()`), loading (`session.load()`), and reading history are
+separate operations. Restart does not delete an existing save. History is never
+serialized or replayed by this recipe. No effects are dispatched by loading.
+
+Run `python3 verify.py` for typed checks and emitted-Lua fault tests. Add
+`--love /path/to/love` to exercise separate native processes across line, choice
+and suspended-wait boundaries, with JIT on and off. Each native run has an isolated
+save identity and removes its test save files after success.

@@ -1,0 +1,52 @@
+import type { Backend } from "./backend"
+local persistence = require("persistence")
+local context = require("context")
+local scene = require("context_scene")
+
+local function new(coins: number, backend?: Backend)
+  local player = context.new(scene, { coins = coins }, {
+    checkpointVersion = "harbor-context-v1",
+    locale = "en",
+  })
+  -- Explicit load: absence leaves an idle player; corruption never starts a new run.
+  local function load(): boolean
+    local saved, issue = persistence.open(backend):load()
+    if issue then error(issue.code .. ": " .. issue.message) end
+    if not saved then return false end
+    local checkpoint = saved.checkpoint
+    if not checkpoint then return false end
+    local state = checkpoint.state
+    assert(state == "awaiting_advance" or state == "awaiting_choice" or state == "waiting",
+      "invalid checkpoint state")
+    -- Save.enum currently infers string; narrow it at this small typed boundary.
+    player:restore({
+      version = checkpoint.version,
+      documentId = checkpoint.documentId,
+      contentVersion = checkpoint.contentVersion,
+      graph = checkpoint.graph,
+      nodeId = checkpoint.nodeId,
+      state = state,
+      elapsed = checkpoint.elapsed,
+      revealedElapsed = checkpoint.revealedElapsed,
+      revealedAt = checkpoint.revealedAt,
+      suspended = checkpoint.suspended,
+      locale = checkpoint.locale,
+      fired = checkpoint.fired,
+      locals = checkpoint.locals,
+    })
+    return true
+  end
+  local function save()
+    local checkpoint = player:checkpoint()
+    local contract = persistence.open(backend)
+    local _, issue = contract:load()
+    if issue then error(issue.code .. ": " .. issue.message) end
+    local ok, failure = contract:save({ checkpoint = checkpoint })
+    if not ok then
+      if failure then error(failure.code .. ": " .. failure.message) end
+      error("checkpoint write failed; reopen before retrying")
+    end
+  end
+  return { player = player, load = load, save = save }
+end
+return { new = new }

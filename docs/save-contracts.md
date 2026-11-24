@@ -215,3 +215,9 @@ persists intent before dispatch, reopens uncertain writes, and returns a committ
 result on recovery without applying the purchase again. This single-writer recipe
 also stops on damaged-slot issues; it never automatically accepts a potentially
 older receipt. External side effects require an idempotent authority of their own.
+
+For dialogue position persistence, the [checkpoint recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+uses an explicit typed envelope and fresh contracts. Save validates its shape;
+dialogue restore validates content compatibility and rebinds current game facts.
+See [persist checkpoints](dialogue.md#persist-checkpoints-with-save) for ownership
+and error handling.

@@ -505,8 +505,9 @@ rejected in version 1. Version 2 now supports typed locals, bindings, branches a
 conditional choices while rebinding current facts. Restore rejects unavailable
 choices without following fallback. Action/event registries remain excluded;
 a typed host recipe now qualifies single-writer local action reconciliation.
-The full ordinary-dialogue Save recipe and action-enabled checkpoint format remain
-pending; the recipe does not relax core registry exclusions.
+The ordinary-dialogue Save recipe now covers typed-local line/choice/wait
+persistence and explicit host storage timing. The action-enabled checkpoint format
+remains pending; neither recipe relaxes core registry exclusions.
 See the [typed checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-context-checkpoints.md).
 See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-plain-checkpoints.md).
 
@@ -544,9 +545,11 @@ See the [plain checkpoint qualification](https://github.com/Kyonru/tua-lang/blob
   Checkpoints exclude history; restore does not replay it. Original displayed text
   and locale remain unchanged by refreshes. See the
   [history qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-history.md).
-- [ ] Provide an optional `Save.contract` recipe; leave storage and write timing
+- [x] Provide an optional `Save.contract` recipe; leave storage and write timing
   to the host. Keep dialogue restart, checkpoint restore and transcript browsing
-  distinct operations.
+  distinct operations. The typed checkpoint example qualifies native process
+  restarts and injected Save failures; see the
+  [Save recipe qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M8-save-recipe.md).
 
 **Acceptance:** checkpoint round-trips across line/choice/wait boundaries, schema
 changes, changed documents, corrupt data and locale changes are deterministic.

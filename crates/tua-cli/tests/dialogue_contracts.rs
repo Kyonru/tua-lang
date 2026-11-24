@@ -266,3 +266,29 @@ if intent then intent.committed = "wrong" end
     );
     assert!(diagnostics.matches("TL1003").count() >= 3, "{diagnostics}");
 }
+
+#[test]
+fn saved_dialogue_checkpoints_validate_and_rebind_context() {
+    let temp = TempDir::new("dialogue-checkpoint-save");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    copy_dir_all(&root.join("examples/dialogue-checkpoint"), temp.path()).unwrap();
+    run(temp.path(), "check");
+    run(temp.path(), "build");
+    if let Some(lua) = support::lua_executable() {
+        for script in ["main.lua", "../tests/persistence.lua"] {
+            let output = Command::new(&lua)
+                .arg(script)
+                .current_dir(temp.path().join("build"))
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    } else {
+        eprintln!("SKIP checkpoint persistence runtime: no Lua interpreter");
+    }
+}

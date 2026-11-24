@@ -1,0 +1,30 @@
+import type { Backend } from "./backend"
+
+-- Host-owned envelope version; independent from the dialogue checkpoint version.
+local function open(backend?: Backend)
+  return Save.contract({
+    slot = "dialogue_checkpoint_demo",
+    version = 1,
+    max_bytes = 1048576,
+    backend = backend,
+    schema = Save.record({
+      checkpoint = Save.optional(Save.record({
+        version = Save.number(2),
+        documentId = Save.string(""),
+        contentVersion = Save.string(""),
+        graph = Save.string(""),
+        nodeId = Save.string(""),
+        state = Save.enum({ "awaiting_advance", "awaiting_choice", "waiting" }, "awaiting_advance"),
+        elapsed = Save.number(0),
+        revealedElapsed = Save.optional(Save.number()),
+        revealedAt = Save.optional(Save.number()),
+        suspended = Save.boolean(false),
+        locale = Save.optional(Save.string()),
+        fired = Save.array(Save.number(0)),
+        -- This example owns this local schema. Adapt it with your context definition.
+        locals = Save.record({ visits = Save.number(0) }),
+      })),
+    }),
+  })
+end
+return { open = open }

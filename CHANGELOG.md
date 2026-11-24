@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add an optional typed Save-backed dialogue checkpoint recipe with explicit host
+  save/load calls, rebound facts, failure tests and native restart qualification.
+
 - Add a typed durable-dialogue host recipe using Save intents and receipts, with
   crash-window tests and native process-restart qualification. Local gameplay and
   receipts share one save record; core action-checkpoint exclusions stay unchanged.
