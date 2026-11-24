@@ -1268,3 +1268,46 @@ fn dialogue_contract_completion_replaces_whole_tokens_with_utf16_ranges() {
         lsp_position_with_offset(source, "coins", 5)
     );
 }
+
+#[test]
+fn dialogue_context_path_completion_preserves_parent_and_suffix_with_unicode() {
+    let project = TempProject::new("dialogue-context-path");
+    project.write("tua.toml", "source = 'src'\n");
+    let context = "return Dialogue.context({ facts = Save.shape(Save.record({ player = Save.record({ name = Save.string(\"\"), nickname = Save.string(\"\") }) })), locals = Save.shape(Save.record({})) })";
+    project.write("src/context.tua", context);
+    let source = "@dialogue 1\n@context \"context\"\n[start]\n@branch \"é🦆\" != \"\" and context.player.name != \"\" [target:start] [else:start]\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(completion_request(2, &uri, source, "context.player.n"));
+    assert_completion_labels(server.output(), 2, ["name", "nickname"]);
+    let items = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap();
+    let item = items
+        .iter()
+        .find(|item| item["label"] == "nickname")
+        .unwrap();
+    assert_eq!(item["textEdit"]["newText"], "nickname");
+    assert_eq!(
+        item["textEdit"]["range"]["start"],
+        lsp_position_with_offset(source, "player.name", 7)
+    );
+    assert_eq!(
+        item["textEdit"]["range"]["end"],
+        lsp_position_with_offset(source, "player.name", 11)
+    );
+    let context_uri = project.uri_for("src/context.tua");
+    server.send(did_open(&context_uri, context));
+    server.send(did_change(
+        &context_uri,
+        &context.replace("nickname", "newName"),
+        2,
+    ));
+    server.send(completion_request(3, &uri, source, "context.player.n"));
+    assert_completion_labels(server.output(), 3, ["name", "newName"]);
+}

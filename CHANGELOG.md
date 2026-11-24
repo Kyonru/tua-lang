@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Refine dialogue context-path authoring with shared member replacement ranges,
+  imported-type refresh coverage and isolation from branch targets and literals.
+
 - Refine typed dialogue action/event completion with cursor-prefix matching,
   whole-token edits and isolation from nested keys and escaped payload strings.
 

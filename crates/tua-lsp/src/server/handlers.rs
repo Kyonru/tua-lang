@@ -3247,11 +3247,12 @@ fn lsp_completion_array(
     let replacement_span = uri
         .ends_with(".tdialogue")
         .then(|| {
-            tua_core::dialogue_asset::flow::replacement_span(source, position).or_else(|| {
-                tua_core::dialogue_asset::placeholders::replacement_span(source, position).or_else(
-                    || tua_core::dialogue_asset::contracts::replacement_span(source, position),
-                )
-            })
+            tua_core::dialogue_asset::flow::replacement_span(source, position)
+                .or_else(|| {
+                    tua_core::dialogue_asset::placeholders::replacement_span(source, position)
+                })
+                .or_else(|| tua_core::dialogue_asset::contracts::replacement_span(source, position))
+                .or_else(|| tua_core::dialogue_asset::paths::replacement_span(source, position))
         })
         .flatten()
         .or_else(|| tua_core::completion::completion_replacement_span(source, position));

@@ -582,6 +582,10 @@ context objects. Core export/import works without a filesystem or LÖVE.
   whole-token replacement spans for names and top-level payload keys, preserving
   quotes and Unicode ranges. Exclude nested keys and escaped quoted values; verify
   forwarded import refresh and removal. Installed-editor qualification remains open.
+- [x] Context-path authoring refinement: shared recovery for bindings and conditions,
+  member-only replacement spans, Unicode-safe edits and incomplete paths. Exclude
+  branch tags and quoted/default/payload text. Verify forwarded context refresh,
+  deletion, hover and definition; installed-editor qualification remains pending.
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
 - [x] Text-identity refactor slice: explicit rename/reference queries connect

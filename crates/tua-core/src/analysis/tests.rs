@@ -14575,3 +14575,85 @@ return require("contracts")
         .completion(path, fixture.position("name"))
         .is_empty());
 }
+
+#[test]
+fn dialogue_context_paths_refresh_and_do_not_resolve_flow_labels_as_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/context.tua
+return Dialogue.context({
+  facts = Save.shape(Save.record({ name = Save.string(""), nickname = Save.string("") })),
+  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+})
+-- file: src/forward.tua
+return require("context")
+-- file: src/scene.tdialogue
+@dialogue 1
+@context "forward"
+@bind name context.n<|binding|>ame
+[start]
+@branch context.na<|field|>me != "" [target:context.na<|target|>me] [else:start]
+-- file: src/editing.tdialogue
+@dialogue 1
+@context "forward"
+@bind visit locals.v<|local|>isits
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let path = "src/scene.tdialogue";
+    let snapshot = host.snapshot();
+    assert_eq!(
+        completion_labels(&snapshot.completion(path, fixture.position("binding"))),
+        vec!["name", "nickname"]
+    );
+    assert!(snapshot
+        .hover(path, fixture.position("field"))
+        .unwrap()
+        .contents
+        .contains("string"));
+    assert_eq!(
+        snapshot
+            .definition(path, fixture.position("field"))
+            .unwrap()
+            .path,
+        PathBuf::from("src/context.tua")
+    );
+    assert!(snapshot.hover(path, fixture.position("target")).is_none());
+    assert!(snapshot
+        .definition(path, fixture.position("target"))
+        .is_none());
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/editing.tdialogue", fixture.position("local"))),
+        vec!["visits"]
+    );
+    host.set_file(
+        "src/context.tua",
+        "return Dialogue.context({ facts = Save.shape(Save.record({ name = Save.number(0) })), locals = Save.shape(Save.record({})) })",
+    );
+    assert!(host
+        .snapshot()
+        .hover(path, fixture.position("field"))
+        .unwrap()
+        .contents
+        .contains("number"));
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion(path, fixture.position("binding"))
+        ),
+        vec!["name"]
+    );
+    host.remove_file("src/context.tua");
+    assert!(host
+        .snapshot()
+        .hover(path, fixture.position("field"))
+        .is_none());
+    assert!(host
+        .snapshot()
+        .completion(path, fixture.position("binding"))
+        .is_empty());
+}

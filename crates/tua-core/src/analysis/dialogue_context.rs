@@ -1,5 +1,6 @@
 //! Context paths resolve against imported types; analysis never runs project code.
 use super::*;
+use crate::dialogue_asset::paths::token_at as binding_token;
 use crate::dialogue_asset::{placeholders, DialogueBinding, DialogueLiteral};
 use crate::types::PrimitiveType;
 
@@ -377,41 +378,4 @@ impl AnalysisSnapshot {
             context: vec!["Read-only dialogue binding; refreshed explicitly by the host".into()],
         })
     }
-}
-
-fn binding_token(
-    source: &str,
-    position: SourcePosition,
-    prefix: bool,
-) -> Option<(String, SourceSpan)> {
-    if let Some(token) = super::dialogue_conditions::condition_token(source, position, prefix) {
-        return Some(token);
-    }
-    let line = source.lines().nth(position.line.checked_sub(1)?)?;
-    let rest = line.trim_start().strip_prefix("@bind ")?.trim_start();
-    let (_, rest) = rest.split_once(char::is_whitespace)?;
-    let path = rest.split_whitespace().next()?;
-    let offset = line.len() - rest.trim_start().len();
-    let start = line[..offset].chars().count() + 1;
-    let end = start + path.chars().count();
-    if position.column < start || position.column > end {
-        return None;
-    }
-    Some((
-        if prefix {
-            path.chars().take(position.column - start).collect()
-        } else {
-            path.into()
-        },
-        SourceSpan {
-            start: SourcePosition {
-                line: position.line,
-                column: start,
-            },
-            end: SourcePosition {
-                line: position.line,
-                column: end,
-            },
-        },
-    ))
 }

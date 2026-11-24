@@ -60,6 +60,23 @@ host entry-point strings and saved checkpoints are not migrated by this file-loc
 rename. Update those external references separately before using the renamed flow.
 Graph preview remains planned.
 
+## Complete context fields
+
+Use completion after `context.` or `locals.` in `@bind`, `@branch`, `@visible`,
+and `@enabled` directives. Fields come from the imported `Dialogue.context`
+definition. Hover shows the full path's type, including optionality; Go to Definition
+follows its context declaration through forwarded imports.
+
+For example, with the cursor at `context.player.n|ame`, selecting `nickname`
+replaces only `name`, producing `context.player.nickname`. Parent paths, trailing
+members, operators, defaults and branch tags are preserved. Suggestions remain
+available on an incomplete path such as `context.player.` and refresh when the
+imported context changes in an unsaved buffer.
+
+Quoted literals, placeholder-binding names, default strings, payloads and branch
+targets are not context-field query sites. A target such as `[target:context.name]`
+is a flow label even if the context also has a `name` field.
+
 ## Complete typed actions and events
 
 After declaring an `@actions` or `@events` module, completion on an `@action` or

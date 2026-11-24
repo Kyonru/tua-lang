@@ -285,6 +285,10 @@ including choice/wait/branch/action/fallback targets. Rename accepts full dotted
 hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
 reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
 saved checkpoints stay unchanged; migrate external entry references separately.
+Context-field queries in @bind/@branch/@visible/@enabled share path recovery;
+completion replaces only the member at the cursor, preserving parent and trailing
+paths. Incomplete paths and unsaved forwarded context definitions are supported.
+Quoted/default/payload text and branch target labels are not context-field sites.
 Typed @action/@emit name and top-level JSON key completion uses the cursor prefix
 and replaces the full token, preserving quotes and dotted/hyphenated names. Hover
 uses the full token; imported contract changes refresh queries. Nested keys, JSON

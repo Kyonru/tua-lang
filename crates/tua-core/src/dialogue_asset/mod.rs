@@ -7,6 +7,7 @@ mod actions;
 pub mod contracts;
 pub mod flow;
 mod media;
+pub mod paths;
 pub mod placeholders;
 mod waits;
 pub use actions::DialogueAction;
