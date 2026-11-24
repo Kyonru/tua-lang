@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Refine typed dialogue action/event completion with cursor-prefix matching,
+  whole-token edits and isolation from nested keys and escaped payload strings.
+
 - Add file-local dialogue flow references and rename across all target forms,
   validating unsaved scripts and conflicts while preserving prose and payloads.
 

@@ -1,5 +1,6 @@
 //! Typed notification contracts share imported module facts with context/character analysis.
 use super::*;
+use crate::dialogue_asset::contracts::token_at as event_token;
 use crate::dialogue_asset::CharacterImport;
 use crate::DiagnosticCode;
 
@@ -178,7 +179,11 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Option<Vec<Completion>> {
         let file = self.file(path)?;
-        let (name, field, prefix, _) = event_token(&file.source, position)?;
+        let (name, field, token, span) = event_token(&file.source, position)?;
+        let prefix: String = token
+            .chars()
+            .take(position.column - span.start.column)
+            .collect();
         let (_, Type::Table(events)) = self.contract_at(path, position)? else {
             return Some(Vec::new());
         };
@@ -313,90 +318,4 @@ fn check_payload(value: &serde_json::Value, ty: &Type, path: &str) -> Result<(),
         }
     }
     Err(format!("{path} does not match {ty}"))
-}
-
-// Name completion and top-level JSON argument keys also work in incomplete buffers.
-fn event_token(
-    source: &str,
-    position: SourcePosition,
-) -> Option<(String, bool, String, SourceSpan)> {
-    let line = source.lines().nth(position.line.checked_sub(1)?)?;
-    let chars: Vec<_> = line.chars().collect();
-    let cursor = position.column.checked_sub(1)?.min(chars.len());
-    let name_index = if line.trim_start().starts_with("@action ") {
-        1
-    } else {
-        3
-    };
-    if !line.trim_start().starts_with("@emit ") && name_index != 1 {
-        return None;
-    }
-    let words: Vec<_> = line.split_whitespace().collect();
-    let name = words.get(name_index).copied().unwrap_or("").to_owned();
-    let mut start = cursor;
-    while start > 0
-        && (chars[start - 1].is_alphanumeric() || matches!(chars[start - 1], '_' | '.' | '-'))
-    {
-        start -= 1;
-    }
-    let mut end = cursor;
-    while end < chars.len()
-        && (chars[end].is_alphanumeric() || matches!(chars[end], '_' | '.' | '-'))
-    {
-        end += 1;
-    }
-    let before: String = chars[..start].iter().collect();
-    let field = before.contains('{');
-    if !field && before.split_whitespace().count() != name_index {
-        return None;
-    }
-    let key_position = before
-        .strip_suffix('"')
-        .is_some_and(|prefix| prefix.trim_end().ends_with(['{', ',']));
-    if field && (!key_position || !top_level_object(&before)) {
-        return None;
-    }
-    let token: String = chars[start..end].iter().collect();
-    Some((
-        name,
-        field,
-        token,
-        SourceSpan {
-            start: SourcePosition {
-                line: position.line,
-                column: start + 1,
-            },
-            end: SourcePosition {
-                line: position.line,
-                column: end + 1,
-            },
-        },
-    ))
-}
-
-fn top_level_object(source: &str) -> bool {
-    let mut stack = Vec::new();
-    let mut quoted = false;
-    let mut escaped = false;
-    for character in source.chars() {
-        if quoted {
-            if escaped {
-                escaped = false;
-            } else if character == '\\' {
-                escaped = true;
-            } else if character == '"' {
-                quoted = false;
-            }
-        } else {
-            match character {
-                '"' => quoted = true,
-                '{' | '[' => stack.push(character),
-                '}' | ']' => {
-                    stack.pop();
-                }
-                _ => {}
-            }
-        }
-    }
-    stack == ['{']
 }

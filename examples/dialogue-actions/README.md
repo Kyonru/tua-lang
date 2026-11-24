@@ -47,3 +47,8 @@ In `src/scene.tdialogue`, request completion inside `success:done` or
 `failure:declined`, or use Go to Definition to jump to the corresponding label.
 The queries also work while editing an unfinished target; they never execute
 `purchase`.
+
+In the editor, complete an `@action` name or a top-level JSON payload key.
+Suggestions use the text before the cursor and replace the full existing token;
+hover and definition use the declared contract. Payload values and nested keys
+are not completion sites. See the [authoring guide](../../docs/dialogue.md#complete-typed-actions-and-events).

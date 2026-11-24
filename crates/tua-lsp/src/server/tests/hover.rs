@@ -1236,3 +1236,35 @@ fn dialogue_flow_rename_uses_unsaved_targets_and_utf16_ranges() {
     server.send(rename_request(6, &uri, source, "target:start", 9, "next"));
     assert!(response_with_id(server.output(), 6)["result"]["changes"].is_object());
 }
+
+#[test]
+fn dialogue_contract_completion_replaces_whole_tokens_with_utf16_ranges() {
+    let project = TempProject::new("dialogue-contract-completion");
+    project.write("tua.toml", "source = 'src'\n");
+    project.write("src/events.tua", "return Dialogue.events({ reward = Save.shape(Save.record({ coins = Save.number(0), count = Save.number(0) })), reminder = Save.shape(Save.record({})) })");
+    let source = "@dialogue 1\n@events \"events\"\n[start]\n// @id hello\n: Hi (end)\n@emit shown 0 reward {\"note\":\"é🦆\", \"coins\":1}\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(completion_request(2, &uri, source, "0 re"));
+    assert_completion_labels(server.output(), 2, ["reminder", "reward"]);
+    server.send(completion_request(3, &uri, source, "\"co"));
+    assert_completion_labels(server.output(), 3, ["coins", "count"]);
+    let items = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .unwrap();
+    let count = items.iter().find(|item| item["label"] == "count").unwrap();
+    assert_eq!(count["textEdit"]["newText"], "count");
+    assert_eq!(
+        count["textEdit"]["range"]["start"],
+        lsp_position_with_offset(source, "coins", 0)
+    );
+    assert_eq!(
+        count["textEdit"]["range"]["end"],
+        lsp_position_with_offset(source, "coins", 5)
+    );
+}

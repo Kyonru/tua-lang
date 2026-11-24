@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 mod actions;
+pub mod contracts;
 pub mod flow;
 mod media;
 pub mod placeholders;

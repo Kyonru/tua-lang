@@ -288,6 +288,15 @@ impl AnalysisHost {
         position: SourcePosition,
     ) -> Option<(SourcePosition, Vec<Completion>)> {
         let document = self.documents.get(uri)?;
+        // Dialogue names need the DSL cursor/ranges and imported contracts, not
+        // Lua identifier-position adjustment or auto-import augmentation.
+        if document
+            .path
+            .extension()
+            .is_some_and(|extension| extension == "tdialogue")
+        {
+            return None;
+        }
         let source = &document.source;
         let position = identifier_completion_position(source, position);
 
@@ -1349,6 +1358,12 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         completions: &mut Vec<Completion>,
     ) {
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "tdialogue")
+        {
+            return;
+        }
         let existing_labels = completions
             .iter()
             .map(|completion| completion.label.clone())

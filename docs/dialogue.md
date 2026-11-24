@@ -60,6 +60,23 @@ host entry-point strings and saved checkpoints are not migrated by this file-loc
 rename. Update those external references separately before using the renamed flow.
 Graph preview remains planned.
 
+## Complete typed actions and events
+
+After declaring an `@actions` or `@events` module, completion on an `@action` or
+`@emit` name uses that module's typed contract. Completion inside a top-level JSON
+payload key suggests the selected action/event's fields. Hover shows the full
+field type, and Go to Definition follows the imported contract declaration.
+
+When editing `reward` as `re|ward` (where `|` represents the cursor), suggestions
+match `re` and replace the entire existing name. Payload keys behave the same way:
+`"co|ins"` can become `"count"` without leaving a suffix or replacing the quotes.
+Dotted/hyphenated names retain their complete replacement range. Unsaved imported
+contracts refresh these queries, including contracts forwarded through another module.
+
+Payload-value strings, nested JSON keys, comments and ordinary prose are not
+contract-field completion sites. This is top-level key assistance, not a general
+JSON schema editor. These queries inspect types without executing handlers.
+
 ## Rename a text identity
 
 With `[i18n] enabled = true`, use Rename Symbol on an authored text ID, its catalog

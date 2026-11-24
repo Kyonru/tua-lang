@@ -537,6 +537,9 @@ impl AnalysisSnapshot {
     ) -> Vec<Completion> {
         let _profile = profile::span("analysis.query.completion.multi_token");
         let path = path.as_ref();
+        if self.is_dialogue(path) {
+            return Vec::new();
+        }
         let Some(file) = self.file(path) else {
             return Vec::new();
         };

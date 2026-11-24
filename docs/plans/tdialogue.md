@@ -578,6 +578,10 @@ context objects. Core export/import works without a filesystem or LÖVE.
   context types and unsaved bindings. Ignore percent escapes, markup attributes,
   comments and payloads; suppress ambiguous headers. Installed-editor UI checks
   remain pending.
+- [x] Typed action/event authoring refinement: cursor-prefix filtering and shared
+  whole-token replacement spans for names and top-level payload keys, preserving
+  quotes and Unicode ranges. Exclude nested keys and escaped quoted values; verify
+  forwarded import refresh and removal. Installed-editor qualification remains open.
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
 - [x] Text-identity refactor slice: explicit rename/reference queries connect

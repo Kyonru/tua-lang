@@ -285,6 +285,10 @@ including choice/wait/branch/action/fallback targets. Rename accepts full dotted
 hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
 reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
 saved checkpoints stay unchanged; migrate external entry references separately.
+Typed @action/@emit name and top-level JSON key completion uses the cursor prefix
+and replaces the full token, preserving quotes and dotted/hyphenated names. Hover
+uses the full token; imported contract changes refresh queries. Nested keys, JSON
+value strings and prose are not contract-key completion sites.
 Graph preview remains planned. `tua fmt` includes .tdialogue
 scripts with a dedicated full-document formatter: align structural lines at column
 zero, normalize structural whitespace/blank lines and configured line endings,

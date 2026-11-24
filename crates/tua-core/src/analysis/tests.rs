@@ -14515,3 +14515,63 @@ return "start"
     host.set_file(path, changed);
     assert_eq!(host.snapshot().references(path, position, true).len(), 8);
 }
+
+#[test]
+fn dialogue_contract_completion_uses_cursor_prefix_and_refreshes_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/contracts.tua
+return Dialogue.events({
+  reward = Save.shape(Save.record({ coins = Save.number(0), count = Save.number(0) })),
+  reminder = Save.shape(Save.record({ message = Save.string("") })),
+})
+-- file: src/forward.tua
+return require("contracts")
+-- file: src/scene.tdialogue
+@dialogue 1
+@events "forward"
+[start]
+// @id hello
+: Hello (end)
+@emit shown 0 re<|name|>ward {"co<|key|>ins":1}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let path = "src/scene.tdialogue";
+    let snapshot = host.snapshot();
+    assert!(snapshot
+        .multi_token_completion(path, fixture.position("name"), 2)
+        .is_empty());
+    let labels = completion_labels(&snapshot.completion(path, fixture.position("name")));
+    assert!(
+        labels.contains(&"reward".into()) && labels.contains(&"reminder".into()),
+        "{labels:?}"
+    );
+    let fields = completion_labels(&snapshot.completion(path, fixture.position("key")));
+    assert!(
+        fields.contains(&"coins".into()) && fields.contains(&"count".into()),
+        "{fields:?}"
+    );
+    assert!(snapshot
+        .hover(path, fixture.position("key"))
+        .unwrap()
+        .contents
+        .contains("number"));
+    assert!(snapshot
+        .definition(path, fixture.position("name"))
+        .is_some());
+    host.set_file(
+        "src/contracts.tua",
+        "return Dialogue.events({ reset = Save.shape(Save.record({ amount = Save.number(0) })) })",
+    );
+    let labels = completion_labels(&host.snapshot().completion(path, fixture.position("name")));
+    assert_eq!(labels, vec!["reset"]);
+    host.remove_file("src/contracts.tua");
+    assert!(host
+        .snapshot()
+        .completion(path, fixture.position("name"))
+        .is_empty());
+}
