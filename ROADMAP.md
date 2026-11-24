@@ -154,8 +154,9 @@ results.
 
 - Follow the [consolidated dialogue implementation plan](docs/plans/tdialogue.md),
   which includes the initial workstream's remaining items and the expanded scope.
-- Start with identity/versioning contracts and existing localization integration;
-  then typed context, conditions, declared actions and richer presentation.
+- M0 identity/versioning contracts, compatibility probes and baseline evidence
+  are recorded. Next integrate existing localization, then typed context,
+  conditions, declared actions and richer presentation.
 - Finish with cancellable voice/waits, safe checkpoints/history, authoring tools,
   three interchangeable LÖVE presentations and consuming-game qualification.
 - Preserve renderer independence, imported typing, existing version-one scripts

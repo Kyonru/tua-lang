@@ -1,6 +1,6 @@
 # Tua dialogue: implementation plan
 
-Status: planned follow-up work. Baseline: `46a70a89` (portraits and timed events)
+Status: M0 complete; M1–M10 planned. Baseline: `46a70a89` (portraits and timed events)
 and `2e179341` (dialogue documentation). This plan combines the remaining initial
 workstream with the expanded dialogue improvements. It does not claim those
 improvements are implemented or assign them a released version.
@@ -116,21 +116,21 @@ format. Build the showcase skeleton early and extend it after each milestone.
 
 ## M0 — Settle contracts and preserve compatibility
 
-- [ ] Audit the parser model, emitted document, bundled contract, runtime,
+- [x] Audit the parser model, emitted document, bundled contract, runtime,
   localization index, signals, saves and existing editor queries.
-- [ ] Record exact compiler/runtime revisions and current headless, rendered,
+- [x] Record exact compiler/runtime revisions and current headless, rendered,
   allocation and editor workloads. Preserve representative version-one fixtures.
-- [ ] Define stable document, line/text, choice and action identities. Current
+- [x] Define stable document, line/text, choice and action identities. Current
   generated node IDs and event-array positions must not become accidental save IDs.
-- [ ] Decide authored format versioning separately from emitted-document and
+- [x] Decide authored format versioning separately from emitted-document and
   checkpoint versions. Diagnose unsupported versions clearly; retain old readers
   or provide an explicit migration path for any incompatible syntax.
-- [ ] Define context, local-state, event and presentation ownership. Specify which
+- [x] Define context, local-state, event and presentation ownership. Specify which
   snapshots are copied and which state may be shared immutably across players.
-- [ ] Define configurable limits and observable failure states for future
+- [x] Define configurable limits and observable failure states for future
   automatic transitions, nesting and asynchronous work. Preserve the existing
   64-event-per-line validation unless an explicit compatible change is justified.
-- [ ] Write small imported-type probes before selecting new APIs. All illustrative
+- [x] Write small imported-type probes before selecting new APIs. All illustrative
   syntax/API proposals in implementation reviews must be labeled as proposals
   until parser, runtime and editor tests establish them.
 
@@ -138,6 +138,29 @@ format. Build the showcase skeleton early and extend it after each milestone.
 independent players and caller-owned data remain isolated; unused runtimes stay
 absent. A short decision record settles each milestone's public contract before
 its implementation expands across compiler and runtime surfaces.
+
+### M0 completion record
+
+Completed with an audit/decision record and preserved compatibility evidence;
+no production grammar or runtime behavior changed.
+
+- [Contracts and integration audit](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/CONTRACTS.md): stable identity, independent version boundaries,
+  ownership, future work limits/faults, checkpoint consequences and the minimal M1 proposal.
+- [Baseline guide and results](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/README.md): exact compiler/runtime and fixture/harness provenance,
+  separate CPU/allocation runs, native JIT-off/on reference rendering, and actual
+  LSP completion/hover/definition/unsaved-edit workloads.
+- `crates/tua-cli/tests/dialogue_contracts.rs`: old scripts and structured data,
+  two players, mutable input/snapshot isolation, lifecycle, imported types, unused
+  runtime omission, project replacement and unsupported authored versions.
+- Probes establish two explicit integration gaps for M2/M4: unknown context-field
+  reads pass checking, and a declared signal bus nested in a re-exported record
+  accepts an invalid payload. Directly exported buses reject that payload.
+  Reproductions are retained; M0 does not silently widen types or promise these
+  gaps are fixed.
+
+Future identity/schema/options names and fault states in the decision record are
+**design contracts**, not currently implemented features. The runtime remains at
+the existing version-one behavior. M1 is the next implementation milestone.
 
 ## M1 — Localization and translation coverage
 
@@ -414,11 +437,10 @@ compatibility checks, documentation and runnable example must agree.
 
 ## First implementation slice
 
-Start with **M0**, followed by **M1**. The first review should contain the current
-API/integration audit, stable-identity and versioning decisions, compatibility
-fixtures, and a minimal localization proposal that reuses the existing catalog
-index. Do not start by implementing the entire expanded grammar or replacing
-storage/rendering architecture.
+M0 is complete; continue with **M1** using its audit, stable-identity and versioning
+decisions, compatibility fixtures, and minimal localization proposal. Reuse the
+existing catalog index. Do not start by implementing the entire expanded grammar
+or replacing storage/rendering architecture.
 
 ## Historical delivery checkpoints
 
