@@ -121,10 +121,13 @@ call arguments. For example, `local function identity<T>(value: T): T return
 value end` can be called with numbers or strings independently. The same
 inference works for assigned function values, imported module functions, and
 the corresponding unbounded LuaDoc form. Function bodies are checked while
-their binders are symbolic. Inference that depends only on a return type or on
+their binders are symbolic.
+
+Inference that depends only on a return type or on
 the parameter types of a callback is rejected with `TL1015`; generic methods,
 explicit call-site type arguments, and bounded LuaDoc generic parameters are
 not supported. Generic functions and aliases erase from emitted Lua.
+
 To bound analysis work in generated source, Tua caches identical generic call
 specializations for one source-file check and reports one `TL1015` after 4,096
 distinct call instantiations. Splitting generated call-heavy code across files
@@ -148,7 +151,9 @@ Recursive generic aliases remain symbolic when resolution returns to the same
 alias declaration, including when that recursive edge changes its type
 arguments. For example, `Grow<T> = { next: Grow<T[]> }` resolves to one record
 whose `next` field is `Grow<T[]>`; it does not expand into a long chain of
-nested records. Separate depth and work limits still protect unusually deep
+nested records.
+
+Separate depth and work limits still protect unusually deep
 chains of distinct aliases. Full structural expansion is bounded by the number
 of generic alias applications in the walk; member queries substitute the
 requested path lazily so known fields keep their concrete types when the full
@@ -177,11 +182,15 @@ The constructor infers each class parameter independently. Hover and completion
 show the substituted member types, and class parameters are invariant because
 instances are mutable. A bare generic class or an application with the wrong
 number of arguments reports `TL1004`. Generic class types are erased from Lua;
-the generated class remains an ordinary table and metatable. Local generic
+the generated class remains an ordinary table and metatable.
+
+Local generic
 inheritance supports applied parents such as `Child<U> extends Base<U>`;
 non-generic subclasses can specialize a parent such as
 `Score extends Base<number>`. Inherited fields, methods, `super(...)`
-initializer calls, and base assignments keep those parent arguments. To share
+initializer calls, and base assignments keep those parent arguments.
+
+To share
 a class, export `type BoxInstance<T> =
 Box<T>` beside the runtime class value, then pair `import type` with a runtime
 `require`; constructor inference and imported member types preserve the

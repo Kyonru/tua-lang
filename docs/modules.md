@@ -107,10 +107,12 @@ also be declared next to runtime classes using `export protocol Name { ... }`.
 declaration-only module. Named imports, renaming imports, namespace imports,
 and type re-exports are covered in
 [Sharing Types](typing.md#sharing-types-between-modules).
+
 Generic aliases use the same export and import rules. For example,
 `import type { Box } from "./events"` permits `Box<number>` in a type
 annotation; namespace imports use `Events.Box<number>`. Type arguments and the
 alias declaration are erased and add no runtime module load.
+
 To share a generic class, export a generic instance alias beside the runtime
 class value, then import that alias as a type and require the module for the
 constructor:

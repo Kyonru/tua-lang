@@ -37,7 +37,9 @@ Use paths relative to the running LÖVE game root. With `source = "src"` and
 `build/shaders/water.glsl`; both `load_shader` and `#include` use
 `"shaders/..."`. A source path such as `"src/shaders/water.glsl"` exists while
 editing but does not exist inside the built game. ShaderScan suggests the
-build-relative path when it finds that file at runtime. Tua also reports
+build-relative path when it finds that file at runtime.
+
+Tua also reports
 `TL2019` on a literal `load_shader` path when the file exists under the
 configured source root but the literal path will disappear after build. The
 diagnostic names the path to use. Dynamic paths cannot be checked this way.
@@ -99,7 +101,9 @@ last working shader active. A direct load reports the error to its caller;
 an automatic reload prints it once. An automatic retry occurs when the shader
 or an included file changes again. Fixing setup state without editing a file
 requires another explicit `load_shader` call. A successful replacement releases
-the previous shader after the callback returns. The callback's return value
+the previous shader after the callback returns.
+
+The callback's return value
 does not affect activation.
 
 If the first load fails during development, catch the load error so the game
@@ -168,10 +172,12 @@ keeps its final counts; start a new job after fixing a shader to retry it.
 Outside a compilation it notifies completion immediately. If called from
 `on_compiled` during a compilation, it waits for that entry's result and
 progress notification before completing. `cancelled` is true when entries were
-skipped; cancelling after the final entry has completed leaves it false. It
-cannot interrupt a GPU compilation on the main thread. There is no per-frame time
+skipped; cancelling after the final entry has completed leaves it false.
+
+It cannot interrupt a GPU compilation on the main thread. There is no per-frame time
 budget: limiting the queue to one compilation per `update` lets the game draw
 between entries, but a single GPU compilation can still stall that frame.
+
 Some shaders also incur a separate first-draw GPU cost; ShaderScan does not
 warm them up by drawing, so a game that needs that can render with the compiled
 shader during its loading phase.

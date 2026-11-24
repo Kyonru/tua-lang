@@ -103,7 +103,9 @@ Configured test sources receive built-in Busted and LuaAssert types in checking
 and editor features, including DSL functions, hooks, common assertions, and
 `spy`, `stub`, `mock`, and `match` helpers. This works for both `.tua` and `.lua`
 specs. With `[test] source` configured, files under that root receive the types;
-otherwise, `_spec` files under the source root receive them. The declarations
+otherwise, `_spec` files under the source root receive them.
+
+The declarations
 improve diagnostics, completion, hover, and signature help; they do not install
 Busted or add runtime functions. Plugin-specific APIs and custom matchers may
 need project declarations. Use ordinary Tua types in the functions and classes
@@ -184,9 +186,13 @@ external dependencies are excluded.
 LuaCov classifies executable Lua lines. When several generated lines map to one
 Tua line, Tua keeps the largest hit count; it is not a statement or branch count.
 This does not measure branch or function coverage. Coverage reflects only the
-selected tests. A build/backend/reporting error leaves `completed: false`; a
+selected tests.
+
+A build/backend/reporting error leaves `completed: false`; a
 completed run with failing assertions can still produce coverage. Check the
-command exit status too. The destination parent must exist, and coverage and
+command exit status too.
+
+The destination parent must exist, and coverage and
 test results must use different paths. Project `.luacov` configuration is not
 loaded; each run uses isolated statistics and removes them after reporting.
 

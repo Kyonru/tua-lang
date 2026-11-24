@@ -21,9 +21,10 @@ src/player.tua:12:15 error TL1003: type mismatch: expected number, found string
 - The `TLxxxx` code identifies the condition independently of wording.
 - The message explains the values, names, paths, or constraints involved.
 
-Errors block normal build emission. Warnings and hints do not block emission,
-but `check` still fails when enabled diagnostics are present. `lint` considers
-syntax and `TL4xxx` lint diagnostics only.
+Errors block normal build emission and make `tua check` fail. Warnings fail
+`check` only with `--deny-warnings`; hints and information do not. `tua lint`
+checks syntax and lint diagnostics and fails on warnings or errors after
+severity overrides.
 
 !!! note "A code can have more than one severity"
     The code identifies a condition, not a fixed severity. For example,

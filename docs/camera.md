@@ -7,11 +7,26 @@ icon: lucide/video
 `Camera` is a built-in module, like `ECS`. It needs no `require` or
 configuration: when a file uses it, Tua emits
 `local Camera = require("tuacamera")` and `tua build` copies the bundled
-runtime into the output. A file that declares its own `Camera` uses that
+runtime into the output.
+
+A file that declares its own `Camera` uses that
 instead. A global `Camera` assignment in another project file also prevents
 built-in injection. Load that file before using the global; Tua does not
 reorder initialization. Use an explicit local import for precise cross-file
 member types.
+
+The usual order is: move the player, update the camera target, advance the
+camera, draw the world inside the camera, then draw the HUD after it detaches.
+Use the camera conversion helpers when input or UI coordinates cross between
+screen and world space.
+
+| Need | Start with… |
+| --- | --- |
+| Keep a player in view | [Follow a player](#follow-a-player) and [follow styles](#follow-styles) |
+| Constrain the view to a level | [`bounds`](#options) |
+| Apply impact feedback | [Shake](#shake) |
+| Convert pointer or culling coordinates | [Screen and world coordinates](#screen-and-world-coordinates) |
+| Draw another view | [Split screen](#split-screen) |
 
 !!! note "A starting point, not a framework"
     The camera covers the common cases so a game can start moving quickly:
@@ -47,6 +62,9 @@ end
 when `fn` raises an error. Use `attach`/`detach` directly when that reads
 better.
 
+Pass the target's latest world-space position to `follow` before `update`.
+Draw screen-space UI after the camera callback returns.
+
 ## Options
 
 Every option is optional.
@@ -68,6 +86,11 @@ Every option is optional.
 The same settings are available as methods: `setStyle`, `setDeadzone`,
 `setBounds`/`clearBounds`, and `setViewport`/`clearViewport`. `x`, `y`, `zoom`,
 `rotation`, `smoothing`, `lead`, and `pixelPerfect` are plain fields.
+
+`bounds` describes a world rectangle; `viewport` describes a screen rectangle.
+They use different coordinate spaces. Bounds constrain the camera center and
+center a view that is larger than the world. A viewport clips drawing and
+changes coordinate conversions.
 
 ## Follow Styles
 
@@ -120,6 +143,20 @@ local left, top, width, height = cam:visibleBounds()
 shake, and the viewport into account. `visibleBounds` returns the world
 rectangle in view, enlarged to cover a rotated view, which is useful for
 skipping offscreen drawing.
+
+For example, convert a tracked mouse position before comparing it with a
+world-space player. Pointer tracking must be enabled on the input player:
+
+```tua
+local mouseX, mouseY = controls:pointer()
+local worldX, worldY = cam:toWorld(mouseX, mouseY)
+local dx = worldX - player.x
+local dy = worldY - player.y
+```
+
+This produces a direction vector; normalize it only when its length is
+nonzero. See the [input aiming example](input.md#pointer-position-and-movement)
+for the complete device switch and normalization logic.
 
 ## Split Screen
 

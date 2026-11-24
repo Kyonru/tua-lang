@@ -63,6 +63,44 @@ separate docs request when the implementation changed.
   defects and distinguish fixed issues from remaining gaps.
 - Remove stale language such as "not implemented" after behavior lands.
 
+## Feature Page Quality
+
+When writing or revising a feature page, make it useful to someone building a
+real project, not only a reference for people who already know the API:
+
+- Open with what the feature is for, what Tua provides, and what remains the
+  game's responsibility. State runtime availability and injection behavior
+  when they affect how a project starts.
+- Give readers a clear path through the page. Use a short task-oriented guide
+  or links when the topic has several workflows; order the material from a
+  working first use to advanced behavior and reference details.
+- Include complete, readable examples for the important workflows. For a
+  multi-file or configured feature, show the necessary file layout/config and
+  identify which snippets are partial. Prefer runnable repository examples and
+  link to them. Keep Tua snippets aligned with the shared formatter defaults.
+- Explain lifecycle, timing, defaults, error/recovery behavior, and ownership
+  where those details change correct use. Distinguish what static analysis can
+  infer from what remains dynamic or happens only at runtime.
+- Add focused examples for behavior tables alone cannot teach, such as
+  callback ordering, nullable results, frame updates, cancellation, or cleanup.
+  Explain expected results and the common mistake each example avoids.
+- Keep API tables concise and use them as a reference after the walkthrough.
+  Add troubleshooting guidance for likely failure cases instead of repeating
+  the full feature overview.
+- Claim editor previews, navigation, diagnostics, or runtime inspection only
+  when the current implementation supports them. Label source-derived previews
+  and sampled runtime state accurately.
+- Add detail that helps a reader make a decision or use the feature safely;
+  avoid length from duplicated explanations, generic filler, or exhaustive
+  internals that do not affect user code.
+- Edit for brevity after adding detail. Keep each paragraph to one topic,
+  remove prose that repeats a nearby example or table, and put routine editor
+  controls after the main workflow. Preserve constraints and failure behavior.
+
+Before finishing a feature page, check that its main examples match the
+implementation and tests, links resolve, headings form a useful learning path,
+and a reader can identify the next action without scanning every API row.
+
 ## Editor Screenshots
 
 For editor UI changes and release preparation, follow

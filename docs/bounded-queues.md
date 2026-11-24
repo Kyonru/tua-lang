@@ -11,6 +11,11 @@ the runtime. Explicit imports remain supported, including for ordinary Lua. A pr
 compatible module with the same name, following ordinary runtime replacement
 rules. The queue does not own, copy, pool, or dispose its payloads.
 
+Choose a queue when work should wait in arrival order and the game needs a hard
+limit on pending entries. Pick a capacity and a per-update drain budget based on
+the cost of processing one item. The queue reports overflow; it does not decide
+which game event is safe to drop.
+
 ```tua
 type DamageEvent = { target: number, amount: number }
 local initial: DamageEvent[] = {}
@@ -23,6 +28,35 @@ pending.drain(32, function(event)
   print(event.target, event.amount)
 end)
 ```
+
+For example, collision callbacks can enqueue damage and the update loop can
+apply only a bounded number of commands per frame:
+
+```tua
+type DamageCommand = {
+  target: number,
+  amount: number,
+}
+local initial: DamageCommand[] = {}
+local damage = BoundedQueue.new(256, initial)
+
+local function queueDamage(target: number, amount: number)
+  if not damage.push({ target = target, amount = amount }) then
+    print("Damage queue full; rejected total:", damage.rejected())
+  end
+end
+
+function love.update(dt: number)
+  damage.drain(32, function(command)
+    applyDamage(command.target, command.amount)
+  end)
+end
+```
+
+Choose an explicit overflow policy at the call site. This example keeps already
+queued commands and reports rejected new ones; a cosmetic effect queue might
+instead ignore a rejected particle request. The queue never silently evicts an
+older item.
 
 The dense initial array supplies the item type and is copied into the queue.
 Annotate an empty initial array; an untyped `{}` cannot infer a useful payload
@@ -47,10 +81,11 @@ promise. Payload allocations remain the caller's responsibility.
 A drain defers entries pushed by its visitor. Nested drains on the same queue
 return zero. A visitor can pop existing entries; newly pushed entries still wait
 until the next drain. Clearing and repopulating during a callback stops that drain
-before it touches the new generation. A throwing callback leaves the consumed
+before it touches the new generation.
+
+A throwing callback leaves the consumed
 item removed, preserves pending entries, releases the drain guard, and rethrows.
-Callbacks must not yield across this Lua 5.1 `xpcall` boundary. Application-specific
-root budgets, ECS liveness checks, reset rules, and tracing remain in the game.
+Callbacks must not yield across this Lua 5.1 `xpcall` boundary.
 
 Use a queue for bounded FIFO work such as effects or commands. An array is still
 appropriate for indexed data, sorting, or very small collections. Measure the

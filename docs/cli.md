@@ -173,10 +173,14 @@ The cache can be removed independently of `build/` and the ownership manifest.
 Use `tua build --build-report` to explain cache hits, bypasses, unavailable or
 invalid records, identity changes, and added/removed/changed fingerprints. Reports
 are opt-in on stderr; normal stdout and failure semantics stay unchanged. Up to
-eight changed paths are shown. The report includes wall-clock durations for asset
+eight changed paths are shown.
+
+The report includes wall-clock durations for asset
 pipelines, cache probing, combined discovery/analysis/emission, cache publication,
 and total time. These are instrumented build durations, not CPU samples or runtime
-frame timings. A fresh or repaired output tree can prevent publication until a
+frame timings.
+
+A fresh or repaired output tree can prevent publication until a
 subsequent stable build; the report explains this explicitly. `--no-cache` can be
 combined with the report for comparison. No absolute timing threshold is enforced.
 
@@ -211,7 +215,9 @@ before the first manifest are preserved on disk but excluded from packages.
 For a separate output directory, a later build refreshes a bundled helper when
 the build manifest still identifies its existing file as unchanged output from
 Tua. A helper supplied in the source tree, or an output helper changed by hand,
-is preserved. Older output with no recorded ownership is also preserved; remove
+is preserved.
+
+Older output with no recorded ownership is also preserved; remove
 that stale helper from the output directory to let Tua write the current one.
 In-place builds likewise preserve an existing helper because it may be project
 source. Keep custom implementations in the source tree rather than editing a
@@ -384,10 +390,14 @@ Build, watch, dev, and lint do not run this compilation check.
 Use `tua check --love /path/to/love`, `TUA_LOVE`, or put LÖVE on `PATH`. On macOS
 Tua also tries `/Applications/love.app/Contents/MacOS/love`. On Windows use
 `lovec.exe` for console I/O; automatic discovery prefers it. Windows validation
-has not yet been tested on a real LÖVE installation. A graphical session and
+has not yet been tested on a real LÖVE installation.
+
+A graphical session and
 working graphics driver are required for LÖVE. In `auto` mode, failure to start
 or communicate with LÖVE falls back to headless `glslangValidator`. Actual shader
-errors from LÖVE are retained. Find glslang on `PATH` or set `TUA_GLSLANG` to a
+errors from LÖVE are retained.
+
+Find glslang on `PATH` or set `TUA_GLSLANG` to a
 trusted executable. If neither tool exists, Tua prints one skip note (unaffected
 by `--deny-warnings`); other validator failures fail the check.
 

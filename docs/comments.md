@@ -109,11 +109,14 @@ shows both documented functions and class methods in one file.
 | Map a declaration library to runtime modules | Configured `type_libraries` and `---@meta`. |
 | Suppress a Tua diagnostic | `-- tua-ignore-line TLxxxx`, `-- tua-ignore-next-line TLxxxx`, or `-- tua-ignore-file TLxxxx`. |
 
-`---@class` describes a type; it does not construct a runtime class. LuaDoc
+`---@class` describes a type; it does not construct a runtime class.
+
 Unbounded `---@generic T` binds the parameter in documented function
 `---@param`, `---@vararg`, and `---@return` annotations. Bounded LuaDoc generic
 parameters and generic methods are diagnosed or unsupported; native generic
-functions and aliases use the same inference model. Tags including `@cast`,
+functions and aliases use the same inference model.
+
+Tags including `@cast`,
 `@as`, and `@diagnostic` are recognized metadata
 without their full LuaLS type checking behavior. In particular, use Tua's ignore
 directives instead of expecting `---@diagnostic disable` to suppress a Tua

@@ -15,6 +15,18 @@ names for checking and editor tooling. A build lowers the helper to
 `require("tuastatemachine").create` and writes the bundled runtime only when it
 is required.
 
+Start with a literal `initial` state and `events` table. Call the generated
+event methods from input or gameplay code, then use callbacks for guarded or
+deferred transitions. The static preview shows the declared graph; it does not
+replace the machine instance or simulate callback behavior.
+
+| Goal | Start with… |
+| --- | --- |
+| Declare states and transitions | [Configure events](#configure-events) |
+| Guard or defer a transition | [Use callbacks](#use-callbacks) |
+| Inspect the declared routes | [Preview the graph](#preview-the-graph) |
+| Keep computed configuration | [Static and dynamic configurations](#static-and-dynamic-configurations) |
+
 ## Create A Machine
 
 === "Tua"
@@ -88,17 +100,10 @@ statically derived states, event routes, multi-source transitions, wildcard
 transitions, cycles, and self-transitions. Selecting a state or route opens a
 source-linked inspector; double-clicking it jumps to the declaration.
 
-The layout keeps states in ordered columns and reserves separate corridors for
-long forward routes, return routes, same-column transitions, and self-loops.
-Transitions sharing a state get separate attachment points so their arrowheads
-remain traceable in a dense graph. Hover or click an arrow to inspect its
-transition, or double-click it to open the source. Drag empty canvas space to pan; pinch or use
-Control/Command + wheel to zoom. The graph also has Zoom in, Zoom out, and Fit
-buttons, plus `+`, `-`, and `0` shortcuts when the canvas has keyboard focus.
-The machine inspector lists every event route, including routes that cross or
-overlap in a dense graph. Select one there to highlight its diagram edge.
-Each real state receives a distinct, theme-aware
-pastel color for quick visual tracking; the wildcard source stays neutral.
+Drag empty canvas space to pan; pinch or use Control/Command + wheel to zoom.
+Zoom in, Zoom out, and Fit also have keyboard shortcuts: `+`, `-`, and `0`
+when the canvas has focus. Select a route in the inspector to highlight its
+edge when transitions overlap.
 
 The visible preview follows edits; a hidden preview catches up when reopened. It
 can switch between multiple machines in one
@@ -107,13 +112,11 @@ does not execute project code or simulate the machine's current runtime state.
 Computed configurations remain valid Tua, but cannot produce a graph until
 their states and events are visible in a direct table literal.
 
-With the optional development Runtime Inspector enabled, open a particular
-state-machine instance's **Open static state diagram** action to overlay its
-last sampled current state. The banner names the inspected game session and
-shows the sample age. The transitions remain compiler-derived; the outlined
-state is a sample from that one running instance. If the state is absent from
-the diagram, the banner says so instead of claiming a matching route. Ordinary
-previews have no runtime overlay, and packaged games contain no inspector code.
+In the development Runtime Inspector, choose an instance's **Open static
+state diagram** action to overlay its last sampled state. The banner identifies
+the game session, sample age, and any state missing from the diagram.
+The routes still come from source; the overlay does not simulate transitions.
+Ordinary previews have no overlay, and packaged games contain no inspector code.
 
 ## Configure Events
 
@@ -141,6 +144,10 @@ local menu = stateMachine({
 `initial` defaults to `"none"` when omitted. Event methods accept optional Lua
 payload arguments; every callback receives them after the standard callback
 parameters.
+
+Use an array in `from` when one event is valid in several states. Use `"*"`
+only when it should be valid from every state. Callback logic can still cancel
+or defer a declared transition.
 
 ## Use Callbacks
 
@@ -182,6 +189,33 @@ door:open(player)
     `onafter<event>` or `onenter<state>` form so the callback's purpose remains
     clear.
 
+### Resume a deferred transition
+
+Return `self.ASYNC` to keep an event pending while an external operation
+finishes. Resume that same event when the operation completes; call
+`cancelTransition(event)` if the operation is abandoned.
+
+```tua
+local door = stateMachine({
+  initial = "closed",
+  events = {
+    { name = "open", from = "closed", to = "open" },
+  },
+  callbacks = {
+    onenteropen = function(self, event)
+      playOpeningAnimation(function()
+        self:transition(event)
+      end)
+      return self.ASYNC
+    end,
+  },
+})
+```
+
+The transition stays pending until the animation signals completion. If that
+animation can be cancelled, cancel the pending transition as part of the same
+owner's cleanup.
+
 ## Machine API
 
 | Member | Behavior |
@@ -209,6 +243,10 @@ callbacks = {
   end,
 }
 ```
+
+Use `can(event)` to decide whether to offer an action in the current state. The
+event method still performs the transition and runs callbacks, so a check does
+not replace normal event handling.
 
 ## Static And Dynamic Configurations
 

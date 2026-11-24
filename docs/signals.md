@@ -149,7 +149,9 @@ This also works across modules through aliases such as
 `local EnemyEvents = Events.enemies`, when `Events` is a required module.
 Payload locals initialized by methods on imported annotated types also retain
 those return types—for example, `local dead = target:damage(amount)` can supply
-a boolean handler parameter. This uses one project-type refinement pass;
+a boolean handler parameter.
+
+This uses one project-type refinement pass;
 cyclic event-to-event inference and unknown dynamic calls remain conservative.
 An explicit schema takes precedence; conflicting inferred payloads remain
 unknown. Reassigned bus aliases are treated conservatively and do not

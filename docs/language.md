@@ -598,18 +598,14 @@ metatables. Construct them with `Name.new(...)` and call instance methods with
 `value:method(...)`. Classes are final by default; use `open class` for a base
 class and `extends` / `override` for inheritance.
 
-The [Classes guide](classes.md) covers constructors, imported instance types,
-inheritance, protocol contracts, documentation, and initialization order.
-`protocol Name { method(args): ReturnType }` declares a compile-time,
-method-only contract; `class Name implements Protocol` opts a class into it.
-Use `export protocol` and `import type` to share a protocol across modules.
-Protocols and conformance clauses are erased from emitted Lua. Generic type
-parameters are supported for type aliases, free functions, and classes within
-the documented limits. Generic methods, generic protocols, and explicit
-call-site type arguments remain unsupported; see [Typing In Tua](typing.md) for
-the supported generic forms. Read the initialization section before combining
-field defaults with assignments in `init`: defaults run after that class's
-initializer and can overwrite those assignments.
+The [Classes guide](classes.md) covers constructors, inheritance, protocols,
+and initialization order. Field defaults run after `init` and can overwrite
+its assignments.
+
+Protocols declare method contracts and erase from emitted Lua. Type aliases,
+free functions, and classes support generics within the limits described in
+[Typing in Tua](typing.md). Generic methods, generic protocols, and explicit
+call-site type arguments remain unsupported.
 
 ## Functions, Parameters, And Returns
 
@@ -754,17 +750,11 @@ are not asset references, path suggestions or asset-file rename targets. A
 shadowed `love` table is likewise excluded from native constructor metadata.
 Builtin loaders keep path suggestions while their strings are unfinished.
 
-Asset loader string paths also participate in editor tooling. In a configured
-project, completion inside helpers and native LOVE constructors with asset path
-arguments, such as `image "..."`, `sound "..."`, `font("...", 18)`,
-`love.graphics.newImage("...")`, and `love.audio.newSource("...", "stream")`,
-suggests supported project asset paths filtered by loader kind. Hovering an
-asset path shows the asset kind, relative path, inferred LOVE type, validation
-status, extension, and cheap metadata when Tua can read it without running game
-code. Tua also reports obvious missing files, unsupported formats, and source
-type mismatches such as using an audio file where an image is expected. Today
-that optional binary metadata is conservative; for example, valid PNG headers
-can provide dimensions, while audio duration is left unknown.
+Asset-path completion works in helpers such as `image "..."` and native LÖVE
+constructors such as `love.graphics.newImage("...")`. Suggestions are filtered
+by loader kind. Hover shows asset metadata, and diagnostics report missing
+files, unsupported formats, and loader mismatches. See
+[Language Server](lsp.md) for editor behavior and limitations.
 
 A local that holds a shader asset also checks the uniform names it is sent.
 LOVE raises an error at runtime when `Shader:send` or `Shader:sendColor` names
@@ -870,20 +860,15 @@ with a suggested colon call. Editor completions for LOVE methods also prefer
 colon-call snippets; accepting a method completion after `player.setF` can
 replace the dot with `:`.
 
-The editor can also help with common LOVE declarations and helpers. Completion
-after `function love.` can insert callback snippets such as `love.update(dt)`,
-`love.draw()`, and `love.conf(t)`, with generated callback and parameter
-documentation. In `function love.<callback>(...)` declarations, unannotated
-parameters inherit catalog types, so `dt` in `love.update(dt)` is a number.
-Explicit annotations remain authoritative, and a local `love` table keeps its
-own types. Callback declarations may omit unused Lua parameters, but close
-name typos, required extra parameters, and explicitly incompatible parameter
-types report `TL5006`. Code actions can rename close callback typos, apply the
-TL4018 colon-call fix, and rewrite obvious constructors such as
-`love.graphics.newImage("path")` to `image "path"`. Source actions can create
-missing core `love.load`, `love.update`, and `love.draw` declarations, organize
-or sort static imports, remove unused static import bindings, and fix all safe
-diagnostics in the current file.
+Completion after `function love.` inserts callback snippets. Known callbacks
+infer unannotated parameter types, such as `dt: number` in `love.update(dt)`.
+Explicit annotations take precedence, and a local `love` table keeps its own
+types. Unused trailing parameters may be omitted; incompatible declarations
+report `TL5006`.
+
+Code actions can fix callback-name typos and colon calls, convert supported
+constructors to helpers, add missing core callbacks, and organize imports.
+See [Language Server](lsp.md) for the available editor actions.
 
 ### LOVE Color Values
 

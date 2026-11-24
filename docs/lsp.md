@@ -84,18 +84,13 @@ declare accepted globals through `diagnostics.globals`.
 Formatting differences are not diagnostics; editor formatting and
 `tua fmt --check` use the separate formatter.
 
-During typing, Tua reports fast current-file diagnostics first and follows with
-project-aware results after a short debounce. Requests are tied to document
-versions; work from an older edit is cancelled or discarded instead of being
-published over newer text. Saving queues a project diagnostic refresh on the
-background worker without the typing debounce, keeping the coordinator available
-for further edits and requests. When imports or required modules can change a type
-answer, the fast pass defers type mismatches to that project-aware pass rather
-than briefly showing a stale red squiggle.
-For large open files, the fast pass also runs on a worker so parsing and checking
-cannot hold up new completion requests on the input coordinator. It still checks
-the latest document version before publishing. Inlay-hint requests use their own
-worker lane, leaving completion and formatting responsive during hint refreshes.
+While typing, Tua publishes current-file diagnostics first, then project-aware
+results after a short debounce. It defers import-dependent type mismatches to
+the project pass to avoid showing stale errors. Saving requests a project
+refresh immediately.
+
+Analysis runs in background workers where needed. Results from older document
+versions are cancelled or discarded; inlay hints have a separate worker lane.
 
 Cross-file protocol conformance diagnostics include related information linking
 the implementation error to the required method declaration.
@@ -107,6 +102,7 @@ inlay hints remain useful until valid project analysis is available again.
 A callback whose only statement is an unfinished member access retains its
 parameter scope. Known event record fields and inferred loop variables use
 their semantic types in hover as well as completion.
+
 Parse-independent Lua, LOVE, keyword, snippet, and module-path candidates stay
 available even when no valid semantic snapshot exists yet. Ordinary type
 errors do not reduce completion availability.
@@ -214,9 +210,11 @@ unions, callbacks, tuples, and dictionaries use width-aware multiline formatting
 For an indexed assignment, hover reports the collection, index, and assigned
 value independently; the assignment operator itself is not presented as a
 comparison expression.
+
 Nested fields and callback parameters inside built-in helper configurations such
 as `spriteSheet({...})`, `stateMachine({...})`, and `objectPool({...})` use their
 expected schema instead of collapsing to the enclosing call's result type.
+
 Signature help appears after `(` and `,`, re-evaluates at `)`, and supports
 overloads, optional parameters, typed varargs, multiple returns, callback aliases,
 and parameter documentation. Empty call slots select a zero-argument overload
@@ -318,7 +316,9 @@ The first release accepts unauthenticated `http://` endpoints only on
 flight and cancels it on edits, cursor movement, configuration changes,
 provider cancellation, or a newer request. Requests are skipped in comments,
 strings, multi-cursor sessions, and while a normal completion item is selected;
-the deterministic backend may still extend that selected item. These expected
+the deterministic backend may still extend that selected item.
+
+These expected
 cancellations and document-version races are counted locally but do not produce
 warnings. Completion status distinguishes Tua language-server availability
 from Ollama transport, missing-model, and timeout failures.
@@ -332,8 +332,9 @@ ceiling is 256 tokens, with a 5-second timeout; the function lane can use up to
 
 Tua removes FIM/end tokens and duplicated suffix text, then rejects Markdown,
 empty output, stale fingerprints, obvious foreign-language constructs such as
-TypeScript/JavaScript function syntax, and every newly introduced error. The
-model prompt is itself valid commented Tua source. It teaches that ordinary
+TypeScript/JavaScript function syntax, and every newly introduced error.
+
+The model prompt is itself valid commented Tua source. It teaches that ordinary
 Lua/LuaJIT is the base, prefers inferred locals over redundant annotations,
 includes native LOVE 11.x guidance, and carries a bounded inventory of the
 implemented Tua type, class, module, interop, and game-helper features.
@@ -383,7 +384,9 @@ Native class names, fields, and methods support definition, references, prepare
 rename, and project-wide rename. The same identity follows locally inferred
 instances and nominal instances exported through a static module, so navigating
 `Module.player.health` reaches the original class field rather than generated
-Lua or the module's `player` export. Diagnostics and generated-Lua source maps
+Lua or the module's `player` export.
+
+Diagnostics and generated-Lua source maps
 for source-backed class method body lines point back to the original method
 source; compiler-generated code can map to the enclosing class. Resolved
 named table-shape fields are also renameable when Tua can prove their
@@ -514,6 +517,7 @@ definition opens a generated API stub with the same description and a direct
 wiki link. VS Code also bundles the LÖVE 11.5 single-page reference; run
 **Tua: Open LÖVE API Reference (Offline)** from the Command Palette to read it
 without a network connection.
+
 Callbacks are checked against their known signatures while still allowing
 unused trailing Lua parameters to be omitted. Close callback-name typos can
 offer a rename fix.
@@ -556,6 +560,7 @@ from any directory component, such as `stone_f` for
 `assets/tiles/stone_floor.png`. For files under the configured source root,
 suggestions use paths relative to that root rather than a `src/` prefix.
 Files in the configured build output directory are excluded.
+
 Diagnostics cover missing files, unsupported formats, incompatible loader
 types, and filesystem casing mismatches. Image metadata such as PNG dimensions
 is shown when it can be read cheaply.
@@ -572,24 +577,18 @@ durations, registration origins, trim/source metadata, markers, and child
 descriptors from the same compiler model. Set `tua.preview.enabled` to use the experimental
 **Tua: Preview Sprite Animations** webview.
 
-Static state-machine configurations use the same preview gate for
-**Tua: Preview State Machine**. The graph highlights the declared initial
-state, expands multi-source and wildcard event routes, follows source edits,
-and navigates back to state and event declarations. Sprite sheets and state
-machines link directly to their previews from hover; recognized asset-path
-hovers open the resolved asset and reveal it in the Explorer. Images and audio
-use VS Code's native viewers; TTF and OTF fonts open a Tua sample showing
-common text sizes and glyphs, with a load-error state. Type a game label or
-dialogue line into the sample field to compare its appearance at those sizes;
-the text survives preview refreshes. The font sample uses the
-editor renderer, so confirm final appearance in LÖVE. Reopen a font from the
-Assets view or hover link to refresh the existing preview after editing it.
-These actions use source navigation, so unrelated strings that merely look
-like asset paths do not acquire asset links. Preview links trust only
-their registered Tua commands. The graph never runs the project or claims to
-show the machine's live runtime state.
-The Assets view shows a refresh message when inventory analysis takes more than
-a moment and replaces it with the result or an error when the request finishes.
+Run **Tua: Preview State Machine** to inspect declared states and routes;
+see [State Machines](state-machines.md#preview-the-graph) for controls and
+runtime overlays. Sprite sheets and state machines also link to previews
+from hover.
+
+Asset-path hovers open the resolved asset or reveal it in the Explorer. Images
+and audio use VS Code's viewers; fonts open a Tua sample with editable text,
+common sizes, and glyphs. Reopen a font to refresh it after editing. The sample
+uses the editor renderer, so check final appearance in LÖVE.
+
+These links appear only on recognized asset paths. The Assets view reports
+inventory refresh progress and errors.
 
 ### Project Explorers
 
@@ -835,15 +834,13 @@ uniforms should use `:send` to retain static diagnostics and editor support.
 
 ### Shader compilation diagnostics
 
-In trusted workspaces, Tua validates statically referenced shaders with the
-installed LÖVE, falling back to `glslangValidator` in `auto` mode when LÖVE
-cannot validate. Set `[shaders].validate` to `love` or `glslang` to select one
-explicitly. A separate worker waits for 500 ms of idle time, starts LÖVE only
-when shader validation needs it, and closes the process after each batch. It
-caches unchanged inputs, validator selections, and executable identity.
-Installing or replacing a validator invalidates cached outcomes when validation
-next runs. Interactive completion and hover requests do not wait for
-compilation. Stale results are discarded.
+In trusted workspaces, shader validation uses LÖVE with a headless
+`glslangValidator` fallback in `auto` mode. Set `[shaders].validate` to `love`
+or `glslang` to choose explicitly.
+
+Validation starts after 500 ms of idle time and does not block completion or
+hover. Unchanged inputs and validator identities are cached; replacing a
+validator invalidates its results on the next run. Stale results are discarded.
 
 `TL2016` appears on shader lines and loader calls. Open shader buffers are
 validated before saving; saving, closing, changing references, or changing

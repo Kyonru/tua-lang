@@ -38,14 +38,11 @@ Run **Tua: Set Up Tua** to see optional companion extensions for debugging,
 shader highlighting, and file icons. Opening setup installs nothing. The flame
 hot-reload action is included with Tua and needs LÖVE, not another extension.
 
-To use Tua analysis from a coding agent, see
-[External API and MCP](external-api-bridge.md). Supported VS Code agents can
-discover the extension's read-only MCP server in trusted local projects.
-Editor agents also get build, LÖVE run/debug, and debug-context tools. For
-terminal agents, run **Tua: Set Up Agent Tools** from the Command Palette. It
-registers Tua with the selected agent when its CLI is available and shows a
-stable Tua CLI path. If registration is unavailable, it copies manual settings.
-Installing the extension alone does not add `tua` to your shell's `PATH`.
+To connect a coding agent, follow [External API and MCP](external-api-bridge.md).
+Supported editor agents can discover Tua's analysis server and build/run/debug
+tools. For terminal agents, run **Tua: Set Up Agent Tools** to register a client
+and obtain a stable CLI path. Installing the extension does not add `tua` to
+your shell's `PATH`.
 
 For source-mapped LOVE breakpoints, stepping, variables, and watches, continue
 with [Debugging](debugging.md) after installing the Tua extension.

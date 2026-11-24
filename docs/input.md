@@ -9,6 +9,18 @@ icon: lucide/gamepad-2
 runtime behavior while Tua adds completion, checking, name-aware return types,
 and zero-setup build integration.
 
+Create the player once during setup, call `controls:update()` once near the
+start of each `love.update`, then read values and edge states for that frame.
+`pressed()` and `released()` report transitions observed by the most recent
+poll; they are not an event queue independent of the update loop.
+
+| Task | Start with… |
+| --- | --- |
+| Define actions and directional movement | [Controls and pairs](#controls-and-pairs) |
+| Bind keyboard, mouse or controller inputs | [Source strings](#source-strings) |
+| Track pointer movement for aiming | [Pointer position and movement](#pointer-position-and-movement) |
+| Read the complete runtime surface | [Runtime API](#runtime-api) |
+
 === "Tua"
 
     ```tua
@@ -64,6 +76,47 @@ and zero-setup build integration.
     end
     ```
 
+## Move a player and trigger an action
+
+This standalone example combines continuous movement with a single action per
+press. Put it in a LÖVE project's entry module. Hold WASD to move; press Space
+to print a message. Movement uses `dt`, so the speed is measured in pixels per
+second rather than pixels per frame.
+
+```tua
+local player = { x = 160, y = 120 }
+local controls = input({
+  controls = {
+    left = { "key:a" },
+    right = { "key:d" },
+    up = { "key:w" },
+    down = { "key:s" },
+    interact = { "key:space" },
+  },
+  pairs = {
+    move = { "left", "right", "up", "down" },
+  },
+})
+
+function love.update(dt: number)
+  controls:update()
+  local x, y = controls:get("move")
+  player.x = player.x + x * 180 * dt
+  player.y = player.y + y * 180 * dt
+  if controls:pressed("interact") then
+    print("Interact at", player.x, player.y)
+  end
+end
+
+function love.draw()
+  love.graphics.circle("fill", player.x, player.y, 12)
+end
+```
+
+Holding Space does not repeatedly trigger the action. Use `down("interact")`
+instead if the action should run every frame while held. Merge these callbacks
+with your existing update and draw functions when integrating the example.
+
 ## Controls And Pairs
 
 Every key under `controls` becomes an exact input name. A control combines one
@@ -83,6 +136,10 @@ local x, y = controls:get("move") -- both inferred as number
 Tua completes these names in pair declarations and in `get`, `getRaw`, `down`,
 `pressed`, and `released` calls. Unknown static names and pair references are
 reported before the game runs.
+
+Name controls after player actions (`jump`, `confirm`, `move`) rather than
+device details. A keyboard key and a controller button can then drive the same
+action without changing gameplay code.
 
 For an inspected development run, enable the **Input** category in the Runtime
 Inspector to see the active device, bindings, and sampled control and pair
@@ -220,3 +277,15 @@ local controls = input({ controls = {} })
     pair names, completion, and scalar-versus-pair returns. Computed
     configurations remain valid through the generic `Input` type, but Tua does
     not execute Lua code to discover dynamic names.
+
+## Common polling mistakes
+
+- Call `update()` once per frame, before reading actions. Polling repeatedly can
+  consume a press or release edge before gameplay code observes it.
+- Use `pressed()` for one-time actions and `down()` for behavior that continues
+  while the control is held.
+- Keep pause-menu and gameplay input in separate players when they need
+  independent bindings or update policies. Continue polling the menu while
+  gameplay is paused.
+- Enable `pointer = true` only when pointer samples are needed. Pointer methods
+  return values cached by `update()`; they do not poll on demand.

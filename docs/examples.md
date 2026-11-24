@@ -46,21 +46,13 @@ The tour's `coverage.json` maps each documentation **Features** guide to a
 their imports from `src/main.tua`; `make build-features` compiles the sources.
 Both run in repository CI.
 
-It also includes focused modules for native generics and protocols, behavior
-trees, camera, tweening, audio, procedural helpers, the Baton-backed
-`input({...})` helper, state machines, stores, typed save contracts, Signals,
-ECS, object pools,
-sprite sheets, vectors, and Lua interoperability. See the
-[`features` file index](https://github.com/Kyonru/tua-lang/blob/main/examples/features/README.md)
-for the source file for each feature.
-`src/protocols.tua` demonstrates unrelated classes implementing a shared
-method contract, bounded generic helpers that preserve concrete result types,
-and runtime dispatch through a protocol-typed array. Its assertions run with
-Lua without LOVE.
-`src/polymorphism.tua` imports a class hierarchy declared in one module and
-demonstrates typed adapters for unrelated gameplay and UI objects. It also
-serves as a runnable companion to the
-[migration guidance](lua-interop.md#migrate-singleton-tables-and-mixins).
+The [feature file index](https://github.com/Kyonru/tua-lang/blob/main/examples/features/README.md)
+lists the language, game-helper, and Lua interop examples.
+
+For shared class contracts, start with `src/protocols.tua`: it demonstrates
+protocol dispatch and bounded generic helpers, with assertions that run without
+LÖVE. `src/polymorphism.tua` demonstrates imported class hierarchies and typed
+adapters; see the [migration guide](lua-interop.md#migrate-singleton-tables-and-mixins).
 
 `src/timer_services.tua` binds an existing handle-based timer to a typed service
 with cancellation closures. `examples/type-libraries/hump/timer.lua` is a

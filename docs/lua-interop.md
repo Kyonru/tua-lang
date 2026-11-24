@@ -48,6 +48,7 @@ checking or emission. Generated `.lua` files then pass a final Lua 5.1 parse
 before Tua returns an emission artifact; `TL2010` is the blocking safety
 diagnostic if compiler lowering or emission violates that invariant. Plain
 `.lua` files remain outside this transpilation step and are copied unchanged.
+
 Tua analyzes them with LuaJIT syntax, so a Lua module that uses `goto`,
 labels, or LuaJIT number suffixes keeps its inferred exports. `.tua` source
 does not accept `goto`.
@@ -241,6 +242,7 @@ and built-in editor descriptions. This does not establish runtime initialization
 order or infer an exact cross-file global contract: load the defining file
 before use, or use explicit local imports for typed member access. Computed
 global writes such as `_G[name] = value` do not establish this ownership.
+
 The older `ecs` and `tween` globals remain available in Tua source and can be
 imported with the same explicit Lua modules when maintaining existing code.
 
@@ -756,9 +758,13 @@ Tua also recognizes `---@generic`, `---@version`, `---@enum`, `---@meta`,
 `---@module`, `---@diagnostic`, `---@cast`, `---@as`, `---@deprecated`, and
 `---@nodiscard`. `---@deprecated` is resolved across local declarations and
 module exports: uses report `TL4056`, hover shows optional replacement guidance,
-and completion plus semantic tokens identify deprecated APIs. A direct call
+and completion plus semantic tokens identify deprecated APIs.
+
+A direct call
 statement that discards the result of a resolved `---@nodiscard` function reports
-`TL4068`; assigning, returning, or passing that result is valid. Other
+`TL4068`; assigning, returning, or passing that result is valid.
+
+Other
 metadata-only tags are preserved with source spans and documentation but do not
 currently change type checking. `---@meta` also identifies declaration-library
 modules when configured through `type_libraries`; `---@diagnostic` does not

@@ -58,19 +58,16 @@ range, and on-type formatting.
 
 ## Layout Rules
 
-Core token spacing is deliberately not configurable. Assignments, arithmetic,
-comparisons, concatenation, and function-type arrows use one canonical spaced
-form; unary signs, scientific-notation signs, field access, and varargs remain
-compact.
-
-The formatter controls indentation, wrapping, quotes, final newlines, spacing,
-and blank lines. Leading and trailing blank lines are normalized;
-`final_newline` controls the final line terminator.
+Core token spacing has one fixed style; indentation, wrapping, quotes, and
+line endings use the project settings. `final_newline` controls the final
+line terminator.
 
 Spacing follows one style: binary operators and `=` are surrounded by spaces,
 unary `-` and `#` attach to their operand, one-line tables are padded as
 `{ 1, 2 }` while an empty table stays `{}`, and a trailing comment is
-separated from code by one space. A table field starting with unary minus uses
+separated from code by one space.
+
+A table field starting with unary minus uses
 normal field indentation; a subtraction continued from the previous line uses
 continuation indentation. Grouped expressions keep a space after `and`, `or`,
 and `not`, as in `ready and (not stopped)`, while function calls stay compact

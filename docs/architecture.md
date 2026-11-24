@@ -50,11 +50,15 @@ the adapter through `run_stdio_with_shader_validator`; core analysis never
 starts a process. Headless fallback headers are generated from the vendored
 LÖVE 11.5 wrapper by `scripts/generate-shader-headers.py`; core wraps stages and
 maps user diagnostics, while CLI owns bounded glslang processes. Header failures
-remain tool failures instead of being attributed to user source. Editor shader overlays reuse the shared asset inventory.
+remain tool failures instead of being attributed to user source.
+
+Editor shader overlays reuse the shared asset inventory.
 Uniform metadata lives in the asset index as immutable shared models, reused
 by the checker and editor queries. Disk refreshes compare shader content and
 reuse unchanged models; synchronized overlays replace only the current
-snapshot's model. Completion, hover, and definition do not read shader files.
+snapshot's model.
+
+Completion, hover, and definition do not read shader files.
 Models retain GLSL types, array bounds, original declaration spans, entrypoints,
 and read status. Shader-local resolution uses the shared lexical resolver.
 
@@ -131,6 +135,7 @@ project-wide indexes. Updating a file creates new records and indexes; in-flight
 requests retain the previous revision without copying its AST and semantic data.
 Identical builtin alias and local catalogs also share storage across files;
 project-specific additions use copy-on-write storage.
+
 The project type database stores only source-declared aliases and locals in each
 module record. Unqualified builtin type lookups use the shared alias catalog;
 module-qualified lookups cannot accidentally export those builtins.
@@ -149,14 +154,19 @@ events provide normalized module paths and workspace-scoped require roots to
 in a `ModulePathIndex`. `require(...)` and `import(...)` completion query that
 index without walking the live filesystem, so output roots, associated Lua
 files, unsaved documents, and the rest of the query observe one consistent
-revision. Normal `require(...)` and non-relative static imports consume the same
+revision.
+
+Normal `require(...)` and non-relative static imports consume the same
 ordered workspace module map, while child-relative imports use paths near the
 current file. Require-root order remains project-model order so source modules
-keep precedence over duplicate generated modules. The index has its own
+keep precedence over duplicate generated modules.
+
+The index has its own
 revision and is reused across source-content edits until its roots, separator,
 or path inventory changes. Configured roots are indexed recursively; a
 configless workspace indexes direct siblings at its root and around opened or
 watched files instead of recursively walking an unbounded workspace folder.
+
 Closing a document that has no file on disk removes its VFS entry and module
 path, preventing unsaved modules from leaking into later snapshots.
 
@@ -439,30 +449,40 @@ Deterministic inline completion uses a separate host-level query. Core owns
 eligibility, source-only statement snippets, current-file recall, ranking, and
 parse-only validation. The Phase 1 query reads the current VFS document and may
 peek at an exactly matching cached file, but it never constructs a snapshot or
-runs project analysis. The LSP supplies configuration, a fixed deadline, and a
+runs project analysis.
+
+The LSP supplies configuration, a fixed deadline, and a
 cancellation flag, converts protocol ranges, and schedules requests as
 non-interactive newest-wins work on a single speculative worker. That lane
 keeps at most one queued request per document and replaces it in place, so
 cancelled keystroke bursts cannot grow an unbounded queue or occupy the menu
-completion workers. The coordinator prepares an owned source query without
+completion workers.
+
+The coordinator prepares an owned source query without
 parsing, then gives the worker a bounded priority window for returning it. An
 already-completed workspace warm-up may wait for that window, but edits,
-cancellation, menu completion, and ordinary completed requests do not. VS Code
+cancellation, menu completion, and ordinary completed requests do not.
+
+VS Code
 owns the single debounced inline provider and tries deterministic results before
 the optional Ollama path. After its 65 ms debounce, the provider bounds the
 local request to 250 ms with a linked cancellation token; timeout is a transient
 abstention rather than an Ollama fallback trigger.
+
 Disabled or malformed local requests never enter the speculative queue, and a
 panic in candidate generation is contained to that request so the worker can
 serve the next keystroke.
+
 The hidden Phase 2 project-wide exact-retrieval experiment uses an immutable,
 host-owned corpus that is not part of `AnalysisSnapshot`. Background workers
 receive owned source/version inputs and a caller-supplied loaded project model,
 then return immutable per-file tables. The coordinator adopts each table only
-while its effective VFS version and eligibility generation still match. A
-merged base plus a small overlay of replacements and tombstones lets edits
+while its effective VFS version and eligibility generation still match.
+
+A merged base plus a small overlay of replacements and tombstones lets edits
 become stale immediately without mutating shared state; request-time queries
 read only that corpus, the active VFS source, and effective VFS versions.
+
 Module targets are resolved and declared LÖVE callbacks are collected during
 background construction, never by loading a model or reading disk on the
 request path. Callback generation remains deferred pending evaluation; the
@@ -473,11 +493,13 @@ The LSP keeps this source disabled unless its internal experimental source flag
 is explicitly enabled; the extension does not contribute that setting.
 `didChange` only advances the VFS version and moves a per-file deadline; after
 300 ms of idle time, the background lane builds at most 16 files per batch.
+
 Base remerges use the same prepare/build/adopt boundary: construction stays on
 the worker, while the coordinator accepts the result only if the corpus
 identity, VFS lineage, generation, and every input version are still current.
 Corpus queue, adoption, memory, cancellation, and remerge counters are
 available through `tua/cacheStats` and `tua/health`.
+
 The bounded request path uses the currently tuned policy only after semantic
 and current-file sources abstain: comma, operator, and other contexts, at least
 six non-whitespace prefix characters, and at least two supporting matches from
@@ -490,11 +512,15 @@ background build/adopt lifecycle rather than creating another index or worker.
 It adds bounded token-count tables for Tua files when the statistical source is
 explicitly enabled. When project exact retrieval is disabled, statistical-only
 builds omit its original-line tables entirely; the corpus then retains token
-counts and provenance only. Query-side identifier slots use bounded scope facts
+counts and provenance only.
+
+Query-side identifier slots use bounded scope facts
 captured by normal analysis warm-up. The scope cache may retain the last
 analyzed source for small active Tua files so normalized parser positions can
 be mapped back to original coordinates; cold or changed suffixes fall back to
-conservative slots instead of preventing forward typing. Each generated token
+conservative slots instead of preventing forward typing.
+
+Each generated token
 needs evidence from at least two distinct files at the context order that chose
 it, and decoding is bounded by file, byte, candidate, beam, token, deadline,
 and cancellation limits before entering the same suffix and parse-delta
@@ -517,7 +543,9 @@ dataset-relative paths, UTF-16 positions, document versions, edit delays, menu
 state, and the selected completion text/range when present. The relative path
 exposes part of the dataset layout, and selected text can retain source-derived
 identifiers or literals, so the JSONL is potentially sensitive local evaluation
-data even though it omits the document body and absolute URI. The extension
+data even though it omits the document body and absolute URI.
+
+The extension
 normalizes CRLF to LF before hashing, matching the evaluator's canonical
 scenario text. Core generates the evaluator's
 known-truth scenario documents and applies a record only when its hash and

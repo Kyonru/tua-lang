@@ -45,6 +45,18 @@ An enabled project needs at least one catalog. Locale tags use canonical
 hyphenated spelling such as `en` or `pt-BR`; the default and fallback tags
 must have configured catalogs.
 
+Start with the locale files and `[i18n]` settings, then replace literal
+player-facing text with stable catalog keys. Keep gameplay decisions and UI
+layout in your game; the runtime returns translated values and does not draw or
+measure text.
+
+| Task | Start with… |
+| --- | --- |
+| Translate a string or plural value | [Use catalogs at runtime](#use-catalogs-at-runtime) |
+| Find missing keys or compare locales | [Editor assistance](#editor-assistance) |
+| Localize authored dialogue | [Authored dialogue graphs](#authored-dialogue-graphs) |
+| Map voice recordings to translated text | [Spoken audio and subtitles](#spoken-audio-and-subtitles) |
+
 In a `.tua` file, use `I18n` without a `require`:
 
 ```tua
@@ -58,6 +70,8 @@ function love.draw()
 end
 ```
 
+## Use catalogs at runtime
+
 `I18n.t(key, args?, locale?)` returns a translated string, a string array for
 dialogue entries, or `nil` if the key has no usable translation. The optional
 third argument chooses a locale for one lookup without changing the current
@@ -65,14 +79,28 @@ locale. `I18n.getLocale()` returns the current locale;
 `I18n.getLocales()` returns configured catalog tags. `I18n.formatNumber`,
 `I18n.formatPrice`, and `I18n.formatDate` expose the bundled formatter.
 
-The runtime tries the selected locale, each parent tag, and the configured
-fallback locale. A per-call locale follows that chain without consulting or
-changing the player's current locale. It initializes on first `require`, before a lookup, so it does
-not depend on `love.load`. If the adapter itself is reloaded, it retains a
-locale previously chosen with `setLocale`. Restart the game or explicitly
-reload catalog modules to pick up changed Lua catalog data. Restore a player's
-saved locale yourself during startup; Tua does not guess the operating system
-locale.
+Lookups try the selected locale, its parent tags, then the configured fallback.
+A per-call locale uses the same chain without changing the player's selection.
+Restore a saved locale during startup; Tua does not choose one from the operating
+system.
+
+The adapter initializes on first `require` and retains a previously selected
+locale when reloaded. To pick up edited catalog data, restart the game or reload
+the catalog modules explicitly.
+
+Use the optional locale argument for a one-off lookup without changing the
+player's selected locale:
+
+```tua
+local greeting = I18n.t("menu.greeting", { name = "Ada" }, "fr")
+if greeting then
+  love.graphics.print(greeting, 20, 20)
+end
+```
+
+The lookup tries `fr`, then the fallback locale. `I18n.getLocale()` still
+returns the locale selected for the game. A regional tag such as `fr-CA` can
+also use the configured parent catalog when that tag is not listed directly.
 
 ## Editor assistance
 
@@ -81,10 +109,14 @@ their Lua code. It suggests keys in `I18n.t("...")`, locales in
 `I18n.setLocale("...")` and the third `t` argument, and named fields in an
 unfinished argument table. Hover shows a translation and the catalog it came
 from; definition opens that entry. References and rename operate on literal
-uses and catalog entries. Diagnostics cover unknown keys, absent named fields,
+uses and catalog entries.
+
+Diagnostics cover unknown keys, absent named fields,
 unconfigured literal locales, missing plural `other` forms, mismatched
 placeholders, malformed catalog roots, and missing configured files. A catalog
-warning summarizes keys missing in each nonfallback locale. For an unknown key
+warning summarizes keys missing in each nonfallback locale.
+
+For an unknown key
 whose parent is a literal table in the fallback catalog, the quick fix inserts
 a clearly unfinished `TODO` translation there.
 
@@ -110,10 +142,29 @@ is enabled. Use `I18nKey` for a wrapper parameter when you want callers to get
 catalog-key suggestions, key diagnostics, hover, and navigation across imports.
 Both aliases remain open to strings: games can compute
 keys and use regional tags whose parent catalog is configured. Literal calls
-still receive catalog diagnostics. The catalog index reads only literal tables. Computed
+still receive catalog diagnostics.
+
+The catalog index reads only literal tables. Computed
 entries remain runtime Lua; the editor marks them as dynamic and cannot prove
 their result. The checker never executes a catalog. Catalog Lua runs as game
 code when the emitted game loads it, so use trusted catalog files.
+
+When a key is calculated at runtime, handle the nullable result explicitly:
+
+```tua
+local function drawMenuLabel(key: string)
+  local label = I18n.t(key)
+  if label then
+    love.graphics.print(label, 20, 20)
+  else
+    love.graphics.print("?", 20, 20)
+  end
+end
+```
+
+The fallback is useful for keys Tua cannot prove statically. Literal indexed
+keys with consistent string-shaped catalogs can be known to return `string`;
+computed keys can still be missing at runtime.
 
 Translation text still needs a game font containing the selected language's
 glyphs. Tua does not perform text shaping, UI mirroring, or layout overflow
@@ -164,7 +215,9 @@ the literal cue names and referenced asset paths, but it does not infer that
 `intro_en` and `intro_fr` are variants of one line or require a recording for
 every configured locale. Its text fallback chain does not select audio: map
 regional tags such as `fr-CA` to a voice language explicitly if your game uses
-them. For a game that offers independent text and voice languages, use the
+them.
+
+For a game that offers independent text and voice languages, use the
 player's voice-language setting here instead of `I18n.getLocale()`. Keep the
 localized subtitle available when a recording is absent.
 
@@ -182,6 +235,7 @@ When a `.tua` file references the built-in `I18n`, generated Lua imports
 notice, a generated configuration module, and the configured Lua catalogs.
 This also applies when passing or storing `I18n` as a value; an unrelated table
 field named `I18n` does not import it.
+
 Enabled projects that never use `I18n` do not copy the runtime. Disabled
 projects do not gain the built-in or an injected import. A local/imported
 binding named `I18n` takes precedence, and ordinary third-party `require`

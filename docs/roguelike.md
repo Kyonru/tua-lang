@@ -9,6 +9,18 @@ grid algorithms. Tua infers its public types from the runtime annotations, and
 the generated `tuarot.lua` is copied into a build only when the project uses
 `Rot`.
 
+`Rot` supplies algorithms and data, not a renderer or dungeon framework. Use
+seeded streams for repeatable generation, grid helpers for map logic, or noise
+and lighting for variation; your game decides how to draw and interpret the
+results.
+
+| If you want to… | Start with… |
+| --- | --- |
+| Reproduce a run | [Random streams and dice](#random-streams-and-dice) |
+| Create a grid and find a route | [Maps and paths](#maps-and-paths) |
+| Calculate visible cells | [Visibility, noise, grammars, and lights](#visibility-noise-grammars-and-lights) |
+| Inspect a generated sample | [Preview a seeded map in the editor](#preview-a-seeded-map-in-the-editor) |
+
 ```tua
 local rng = Rot.Rng.new(817)
 local maze = Rot.Map.generate(31, 21, "sidewinder", rng)
@@ -61,6 +73,11 @@ The version-1 derivation is fixed: normalize the seed modulo 2147483647, adding
 below 2^53, giving identical results on Lua 5.1 doubles, LuaJIT, and Lua 5.4.
 The byte prefix identifies this algorithm; changing it would change replays.
 
+Save the run seed and keep each stream name stable when a save or replay must
+regenerate the same choices. Adding draws to the `"scenery"` stream then leaves
+the `"weapon-rewards"` stream unchanged. Using `Rng.new(seed)` instead gives one
+shared sequence where adding an earlier draw shifts all later results.
+
 Dice expressions support `dM`, `NdM`, and an optional signed integer bonus.
 Each die count is limited to 1,000 and the side count to one billion.
 
@@ -89,19 +106,35 @@ the search to domain-specific grid data. Current paths use unit movement costs;
 Dijkstra is useful when you want an uninformed search or a baseline to compare
 against A-star.
 
+Handle the no-route case before drawing or following a path. A route is an
+array of grid coordinates, not a LOVE pixel path; convert each point using your
+tile size in the renderer or movement system:
+
+```tua
+local tileSize = 16
+
+if route then
+  for _, point in ipairs(route) do
+    local pixelX = (point.x - 1) * tileSize
+    local pixelY = (point.y - 1) * tileSize
+    love.graphics.rectangle("line", pixelX, pixelY, tileSize, tileSize)
+  end
+else
+  print("No route through this map")
+end
+```
+
 ### Preview a seeded map in the editor
 
-Run **Tua: Preview Seeded Map and Route** from the VS Code Command Palette (or
-the Tua editor context menu). The preview uses a small, isolated Tua project and
-your configured LÖVE executable to generate a sample with the bundled `Rot`
-runtime. Change the algorithm, odd map dimensions, seed, or sight radius and
-select **Generate**. The grid marks walls, the route from `(2, 2)` to the
-opposite interior corner, and cells visible from the start. Select a cell or
-use arrow keys to read its coordinates and state. The sample does not execute
-your game or modify its build. Workspace trust and experimental previews must
-be enabled; the configured LÖVE executable must be available.
-While a new seed is being generated, the view labels the old map as the
-previous sample so its results cannot be mistaken for the new input.
+Run **Tua: Preview Seeded Map and Route** from the Command Palette or Tua
+editor context menu. Enable workspace trust and experimental previews, and
+configure a working LÖVE executable. The preview runs an isolated sample;
+it does not execute your game or modify its build.
+
+Choose an algorithm, odd map dimensions, seed, and sight radius, then select
+**Generate**. The grid shows walls, a route from `(2, 2)` to the opposite
+interior corner, and visible cells. Select a cell or use arrow keys to inspect
+it. During generation, the old map is labeled as the previous sample.
 
 This view is a way to inspect the helper algorithms. It is not a preview of
 your game's own map, path callback, or current runtime state.
@@ -137,3 +170,6 @@ schedulers/event queue, its other dungeon generators, multiple RNG algorithms,
 graphics APIs for rendering; Tua's state-machine and tween modules cover common
 time-based behavior. These omitted features should be added as separate,
 tested APIs when game projects need them.
+
+For a runnable project source, see
+[`examples/features/src/roguelike.tua`](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/roguelike.tua).

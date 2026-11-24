@@ -22,6 +22,18 @@ three simple ideas:
 - **System**: behavior applied to every entity with a required set of
   components.
 
+Build from data outward: define component schemas, create a world, attach
+values to entities, then make a query or system for the combinations a loop
+needs. Keep scene control and a few long-lived objects as ordinary Tua unless
+composition and population iteration make ECS clearer.
+
+| Task | Start with… |
+| --- | --- |
+| Create and update a first entity | [Start with one moving entity](#start-with-one-moving-entity) |
+| Read or remove optional data | [Worlds and queries](#worlds-and-queries) |
+| Type components shared across modules | [Bind a component reader](#bind-a-component-reader) |
+| Inspect source structure or live state | [ECS Explorer](#ecs-explorer) |
+
 ## Start With One Moving Entity
 
 === "Tua"
@@ -80,9 +92,13 @@ components in queries. These checks use the parsed program and project type
 information, so declarations and calls may span lines, imported components are
 resolved through their module exports, and an inferred or annotated variable
 can be passed to `world:add`. Values whose type is genuinely dynamic remain
-permissive. Static component schemas also flow through `world:get`, `world:add`,
+permissive.
+
+Static component schemas also flow through `world:get`, `world:add`,
 and `world:remove`, so returned values expose their fields without local
-annotations. Component schema strings may name local aliases or imported types;
+annotations.
+
+Component schema strings may name local aliases or imported types;
 these references and their alias dependencies count as type uses for unused-type
 and unused-import diagnostics. Unrelated strings and shadowed ECS modules do not.
 Typing `ECS component` also offers a complete starter snippet.
@@ -204,7 +220,9 @@ Use `world:clear()` when leaving a scene and discarding every entity.
 
 Query and system callbacks may update their component values, remove
 components, destroy entities, or clear the world. Clearing stops the active
-iteration. Queue new entities and newly matching components until after the
+iteration.
+
+Queue new entities and newly matching components until after the
 callback returns: inserting keys while Lua is traversing a component table has
 no portable visitation order, so a query does not promise whether those new
 matches run in the same iteration. Component values cannot be `nil`; removing a
@@ -224,7 +242,9 @@ end
 
 The reader checks the component handle when it is created, then returns the
 current payload or `nil` for an entity ID. Its result keeps the component's
-schema, including through module exports and imports. Like `world:get`, it
+schema, including through module exports and imports.
+
+Like `world:get`, it
 returns the actual mutable payload, not a copy; `false` is a valid payload for
 components whose values are booleans. The typed function accepts an `EcsEntityId`
 (number). Runtime lookup follows `get`: unknown or destroyed IDs return `nil`;
@@ -235,6 +255,39 @@ Readers observe replacement, removal, and destruction, and remain usable after
 Treat component handles as immutable definitions. Use a query's supplied values
 when already iterating a matching population; a reader is for indexed lookups,
 not a reason to repeat reads inside every entity callback.
+
+### Share a component schema across modules
+
+Export the component definition from one module and use the same handle in the
+world module. The reader's payload type follows that imported handle:
+
+```tua title="src/components.tua"
+local Position = ECS.component("Position", {
+  x = "number",
+  y = "number",
+})
+return { Position = Position }
+```
+
+```tua title="src/actors.tua"
+local Components = require("components")
+local world = ECS.world()
+local readPosition = world:reader(Components.Position)
+
+local function xPosition(entity: number): number | nil
+  local position = readPosition(entity)
+  if position then
+    return position.x
+  end
+  return nil
+end
+
+return { world = world, readPosition = readPosition, xPosition = xPosition }
+```
+
+The field schema remains available through exports and re-exports. Since lookup
+can return `nil`, guard a reader or `world:get` result before reading payload
+fields.
 
 The ECS Explorer includes reader bindings in its query list as **component
 readers**, with links to their component definitions. Their mutation access is

@@ -123,6 +123,7 @@ release-specific additions and migration notes.
 creates an annotated tag; it does not push or publish. If the workspace is
 still on the previous version, it also moves the `[Unreleased]` notes into a
 dated release section, synchronizes package versions, and commits those files.
+
 If a candidate is already committed at the requested version, the helper
 requires a dated changelog entry with a release summary, complete comparison
 links, matching artifact examples, and an empty `[Unreleased]` section. It

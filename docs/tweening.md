@@ -20,6 +20,13 @@ assignment in another project file also prevents injection. Load the defining
 file before using that global; prefer explicit local imports when you need
 precise cross-file member types.
 
+## A frame-by-frame workflow
+
+Create a tween when an animation starts, advance the appropriate group once per
+frame, and stop or replace it when its target is removed. The `Tween` functions
+share one default group. A separate `Tween.group()` is useful when, for example,
+UI animation should continue while gameplay animation is paused.
+
 ## Animate A Value
 
 `Tween.to(target, seconds, values)` moves each numeric field of `target`
@@ -45,6 +52,8 @@ end
 Every field named in `values` must already hold a number on `target`; flux
 raises an error at the tween's first update otherwise. Starting a tween on a
 field another tween is animating takes that field over from the older tween.
+The target is updated in place. Keep its fields stable while the tween runs,
+and cancel animations when a pooled or destroyed target must no longer change.
 
 ## Chain Settings
 
@@ -98,12 +107,35 @@ function openMenu()
 end
 ```
 
+Update each group once per frame; calling its update twice advances its
+animations twice.
+
 `Tween.remove(t)` and `t:stop()` both stop a tween early.
 
 For a runnable pause menu with separate input routing and a native scenario,
 see [pause-input](https://github.com/Kyonru/tua-lang/tree/main/examples/pause-input).
 Poll input while paused to keep press/release edges current; gate gameplay
 updates separately from UI updates.
+
+## Stop an animation when its target is removed
+
+Keep the returned tween when its lifetime depends on a scene or entity. This
+fragment assumes the game already calls `Tween.update(dt)` each frame:
+
+```tua
+local notification = { alpha = 0 }
+local fade = Tween.to(notification, 0.3, { alpha = 1 })
+
+local function closeNotification()
+  fade:stop()
+  notification.alpha = 0
+end
+```
+
+Call `closeNotification()` when the notification closes. Stopping leaves the
+current field values in place, so the example explicitly hides the target.
+It does not run the completion callback. Release any resources in the owner's
+cleanup path as well; completion alone cannot handle cancellation.
 
 ## What Tua Checks
 
@@ -120,9 +152,9 @@ Every setter in a fluent chain is checked, including later links such as
 Tween instance type keeps completion and hover available for setter methods
 available after each call.
 
-Fields not named in a tween are left alone, and flux never checks that a field
-exists before the tween starts. Use typed tables for the objects you animate,
-so a misspelled field name is caught where you declare it.
+Fields not named in a tween are left alone. When the tween starts, flux checks
+that each target field contains a number; a missing field fails at that point.
+Check the keys in `values` against the target record when diagnosing this error.
 
 ## Replace The Runtime
 
@@ -130,3 +162,14 @@ To change flux's behavior, put your own `tuatween.lua` in the source root.
 The build then emits your file and skips the bundled copy. Checking still uses
 the bundled annotations, so keep the same API, or require your module under a
 different name.
+
+## Common mistakes
+
+- A missing or nonnumeric target field raises a runtime error when the tween
+  starts. Initialize every animated field before creating the tween.
+- An unsupported easing name is a type error. Use names such as `"quadout"`
+  or `"backinout"` rather than an untyped label.
+- Tweens do not advance themselves. Call `Tween.update(dt)` or the owning
+  group's `update(dt)` from the game loop.
+- `:after(...)` starts a follow-up tween after completion. Use `:delay(seconds)`
+  when the current tween should wait before starting.

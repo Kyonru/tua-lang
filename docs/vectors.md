@@ -140,11 +140,9 @@ position += velocity * dt
 position = __tua_vec2(position.x + velocity.x * dt, position.y + velocity.y * dt)
 ```
 
-The result is identical, including floating-point rounding, but the expression
-allocates once. This matters most with the JIT off: in a benchmark updating
-10,000 vectors, `p + v * dt` ran about 2.7 times faster and created half the
-garbage. With the JIT on, LuaJIT already removes the temporary vectors, and
-timings don't change.
+The result preserves floating-point rounding and allocates one vector. This
+can reduce allocation when the JIT is off; LuaJIT may already eliminate the
+temporary vectors when it is on. Measure the effect in your game's hot loops.
 
 ### What Gets Fused
 

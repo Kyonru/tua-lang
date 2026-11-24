@@ -255,11 +255,13 @@ not runtime progress.
 Store changes compare consecutive snapshots. Update counters count successful
 `set`/`update` calls; direct mutations through `get()` change the displayed state
 but do not increment that counter. A new connection starts a fresh comparison.
+
 To inspect the sequence of store updates, enable **Store change history** in
 **Configure Runtime Inspection** or set `tua.runtimeInspector.storeHistory` to
 `true`, then start a new run. The inspector keeps the latest 20 successful
 `set`/`update` calls per store, with a bounded copy of the resulting state.
 History is off by default and does not retain references to game tables.
+
 Pool pressure counts are lifetime values for each inspected pool. A rejected
 release is a `release` call that returned `false`, including a foreign or
 already released object; a call that raises an error is not counted.
@@ -368,14 +370,19 @@ view states that CPU sampling was unavailable.
 
 When timed CPU samples are available, **Open flame chart** opens a converted
 `.cpuprofile` in the optional [Flame Chart Visualizer for JavaScript Profiles](https://marketplace.visualstudio.com/items?itemName=ms-vscode.vscode-js-profile-flame).
-If it is missing, Tua offers to install it. **Export .cpuprofile** in the capture
+If it is missing, Tua offers to install it.
+
+**Export .cpuprofile** in the capture
 view, or **Tua: Export Last LOVE CPU Profile** in the Command Palette, saves a
 copy at a location you choose. The command uses the most recently completed
 capture and explains when it has no timed CPU samples. Open the saved file later
-in VS Code or VSCodium to inspect it. The export has one timeline point per
+in VS Code or VSCodium to inspect it.
+
+The export has one timeline point per
 LuaJIT profiler callback, retaining the latest 4,096 callbacks. A callback may
 represent several samples without separate timestamps, so the flame timeline
 and source lines are approximate.
+
 For longer captures, the chart starts at the earliest retained callback and
 the results view names the number of callbacks evicted from its timeline.
 Older captures and captures without timed samples have no export action. This
@@ -384,11 +391,14 @@ conversion is a CPU sample profile, not a V8 or Lua heap profile.
 Named traces time selected runtime boundaries and show call count, total time,
 and slowest call. Their totals overlap when one boundary invokes another; do
 not add them together as whole-frame time. Trace wrappers are installed only
-for selected categories and restored when capture ends. The latest 32
+for selected categories and restored when capture ends.
+
+The latest 32
 completed traced calls are retained for failure context, without event
 payloads. A failure capture also links the LÖVE traceback to Tua source when
 the generated line has a source-map entry. Recent calls are context, not proof
 that any one call caused the failure.
+
 Errors while loading the game's main module also produce a failure report;
 CPU sampling has not begun at that point, so those reports have no CPU samples.
 
@@ -415,9 +425,13 @@ reached.
 Use **Replay with current build** in the result or **Tua: Replay Last LOVE Input
 Capture**. Tua rebuilds the same project and launches it from another temporary
 directory. Live keyboard and mouse events are ignored during replay, except a
-window quit. Replay uses the recorded frame order and seed, but it does not
+window quit.
+
+Replay uses the recorded frame order and seed, but it does not
 reproduce frame durations, wall-clock time, external I/O, network events,
-arbitrary Lua state, or seeds set later by game code. If any supported input
+arbitrary Lua state, or seeds set later by game code.
+
+If any supported input
 event was dropped, replay is unavailable. Treat it as a debugging aid, not a
 determinism guarantee. The recording is held only in the current editor
 session and is not added to the game build.
@@ -513,10 +527,14 @@ See the runnable store example in `examples/features/src/store.tua`.
 
 The view uses native VS Code tree controls, keyboard navigation, theme icons and
 high-contrast support. Pause, refresh, session selection and ended/stale snapshot
-labels remain the existing inspector controls. At most 128 events and 32 stat
+labels remain the existing inspector controls.
+
+At most 128 events and 32 stat
 lines are presented. Parent traversal is bounded to 16 nodes. Missing parents,
 conflicting evidence, cycles, retention overwrites and invalid/omitted entries
 are labeled explicitly; the runtime transport's existing sampling limits still
-apply. An absent event is not proof that it never occurred. Disable tracing in
+apply. An absent event is not proof that it never occurred.
+
+Disable tracing in
 the game to avoid producing diagnostic events; disabling the inspector alone
 does not change gameplay or stop a game's own recorder.

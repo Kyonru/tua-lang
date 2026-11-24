@@ -85,9 +85,13 @@ terminal agents.
 VS Code agents also get editor tools to build the active Tua project, run a
 LÖVE game, start LÖVE debugging, and inspect recent Tua run output. At a
 breakpoint, the debug-context tool can return a bounded stack and local
-variables from the active Tua debug session. Build, run, and debug use the
+variables from the active Tua debug session.
+
+Build, run, and debug use the
 same editor actions as the Command Palette; their tool calls report when a
-task starts, and the context tool reports its later status. Debugging needs
+task starts, and the context tool reports its later status.
+
+Debugging needs
 LÖVE and the optional Lua debugger extension. These editor tools require a
 trusted local workspace and are available only while the VS Code extension
 is running. They are separate from the read-only MCP server.
@@ -97,9 +101,11 @@ lets you select a client, copies the bundled CLI to a stable path in extension
 storage, and verifies an MCP project-summary call. It registers Tua through
 the selected agent's CLI when available and verifies the saved command and
 workspace arguments. Existing entries with the same name are preserved.
+
 If automatic registration is unavailable, the command copies a client-specific
 snippet to the clipboard for you to merge into existing settings.
 Supported VS Code agents discover Tua through the extension's MCP provider.
+
 The action shows the stable CLI path for terminal `check`, `build`, `test`, and
 `dev` use; it does not change the shell's `PATH`. Start a new agent session
 after setup, and run the command again after an extension update to

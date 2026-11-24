@@ -146,7 +146,9 @@ The leading Source's `tell("seconds")` value is the music clock. The runtime
 emits every skipped beat and bar after a long frame and seeks other layers only
 when their drift exceeds `driftTolerance` (0.03 seconds by default). Different
 tempo scenes leave on the current grid and start on the destination's grid;
-Tua does not pitch-shift or time-stretch music. A quantized transition returns
+Tua does not pitch-shift or time-stretch music.
+
+A quantized transition returns
 `"analysis-pending"` if neither authored nor sufficiently analyzed timing is
 available. Detected timing must meet `analysisConfidence` (0.35 by default).
 Use `loopRegion = { start = 8, finish = 40 }` for a sample-position loop.
@@ -484,9 +486,12 @@ Open **Tua: Show Audio Workbench** to inspect cues and music scenes while you
 edit. The cue view shows the source kind, resolved asset when
 static, bus, effect, gain, pitch, voice limit, overflow, and fade. The scene
 view shows authored tempo, signature, loop region, and its own layers. Each
-source item opens at its declaration. When generated analysis matches a cue
+source item opens at its declaration.
+
+When generated analysis matches a cue
 asset, the view shows its duration, channels, sample rate, peak, and bounded
 energy envelope. That plot is analysis data, not a waveform or live meter.
+
 Tempo analysis appears separately with its confidence; it does not replace
 authored BPM. Computed values are labeled as such, and this static view does
 not invent a live playhead or voice meter.
@@ -496,10 +501,14 @@ asset through `audioSystem:play` in an isolated LÖVE process. **Play scene**
 auditions static streamed layers. **Test transition** starts the selected
 scene, then requests an immediate, beat, or bar transition to another scene
 using `setMusicState`. The status line reports a scheduled or analysis-pending
-transition. Audition is limited to three seconds for a cue and six seconds for
+transition.
+
+Audition is limited to three seconds for a cue and six seconds for
 a scene; the cue play request uses volume 0.6. It never runs your module's
 top-level code. A cue with a computed Source or settings that cannot be reproduced
-statically has its Play button disabled. Scene audition omits the generated
+statically has its Play button disabled.
+
+Scene audition omits the generated
 analysis catalog; when no authored tempo exists, a beat/bar request can report
 `analysis-pending`. An effect rejected by the current LÖVE runtime is reported
 in the status line. Audition is an editing aid, not a measurement of the live
@@ -543,7 +552,9 @@ Supported waveforms are `sine`, `triangle`, `square`, `saw`, and `noise`.
 Square, saw, and triangle use a bounded harmonic sum; noise uses a local
 deterministic seed. Duration is 0.001–2 seconds, sample rate is an integer from
 22,050 to 48,000 Hz, and a render allocates at most 96,000 mono 16-bit
-samples. Optional ADSR stages must fit within the duration; the optional
+samples.
+
+Optional ADSR stages must fit within the duration; the optional
 offline filter is a lowpass cutoff below Nyquist. Samples are capped to the
 valid range, and the returned Source can be cloned by `audioSystem` for voices.
 Rendering is a setup-time operation: do not call it each frame. See the

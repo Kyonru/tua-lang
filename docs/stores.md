@@ -76,7 +76,9 @@ end)
 Completion after `game:get().` offers `score` and `paused`. Signature help for
 `watch` derives one overload per field, so the key and callback value type stay
 connected. Hovering `"score"` shows its state-field type, and definition on the
-key returns to `score` in the initial table. The returned unsubscribe function
+key returns to `score` in the initial table.
+
+The returned unsubscribe function
 is idempotent. The inferred state contract is preserved when the Store is
 returned directly or nested in a required module table, so `update(function(state)`
 does not need a repeated annotation at the use site.

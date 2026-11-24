@@ -14,6 +14,18 @@ Instead of allocating and abandoning a new table for every bullet, particle,
 damage number, or temporary effect, the game acquires an object, uses it, and
 releases it for later reuse.
 
+The useful lifecycle is **acquire → initialize for this use → hand off to the
+active owner → release exactly once**. The pool provides reusable storage and
+reset hooks; the game decides when an object becomes inactive and which system
+owns its release.
+
+| Task | Start with… |
+| --- | --- |
+| Create a typed pool | [Create a typed pool](#create-a-typed-pool) |
+| Reset and dispose values | [Lifecycle API](#lifecycle-api) |
+| Decide whether pooling is appropriate | [When pooling helps](#when-pooling-helps) |
+| Use a pool with ECS | [Pooling and ECS](#pooling-and-ecs) |
+
 ## Create A Typed Pool
 
 === "Tua"
@@ -69,6 +81,42 @@ releases it for later reuse.
     bullets:release(bullet)
     ```
 
+For a particle, set fields for the new spawn after `acquire()` and release the
+same value when its owner retires it:
+
+```tua
+type Particle = {
+  x: number,
+  y: number,
+  age: number,
+}
+
+local particles = objectPool({
+  create = function(): Particle
+    return { x = 0, y = 0, age = 0 }
+  end,
+  reset = function(particle: Particle)
+    particle.x = 0
+    particle.y = 0
+    particle.age = 0
+  end,
+})
+
+local function spawnParticle(x: number, y: number)
+  local particle = particles:acquire()
+  particle.x = x
+  particle.y = y
+  return particle
+end
+
+local function retireParticle(particle: Particle)
+  particles:release(particle)
+end
+```
+
+Call `retireParticle` when the particle expires. If an ECS component owns it,
+release it during component removal or scene cleanup.
+
 !!! tip "Annotate the factory return"
     A return annotation such as `Bullet` lets completion, hover, checking,
     signatures, and inlay hints carry the item type through
@@ -117,6 +165,11 @@ local effects = objectPool({
 
 Calling `clear()` also disposes objects that are currently active. Do it only
 when the owning scene or game state is being torn down.
+
+Reset should remove state from the previous use, not initialize the next one.
+For a projectile, clear position, velocity and visibility in `reset`; assign
+its spawn position and velocity after `acquire()`. This makes the new-use
+initialization visible at the call site.
 
 ## When Pooling Helps
 

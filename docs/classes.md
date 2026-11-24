@@ -53,7 +53,9 @@ particle:update(0.016)
 `override`, `final` methods, and `super(...)` are supported. Generic classes can
 be declared locally or shared through an exported generic instance alias; their
 constructor arguments infer the instance type, and fields and methods
-substitute the class parameters. Static members, private members,
+substitute the class parameters.
+
+Static members, private members,
 getters/setters, mixins, and multiple inheritance are not currently supported.
 The base named by `extends` must be declared in the same module. Imported
 classes remain usable as instance types and runtime values, but cross-module
@@ -86,10 +88,12 @@ instantiated member types, and `Box<number>` cannot be assigned to
 `Box<string>` because class parameters are invariant for mutable instances.
 Generic class declarations and applications erase before Lua emission: the
 runtime class remains the ordinary table and metatable generated for `Box`.
+
 In an inheritance chain, a generic class can apply its parent parameters
 with `extends Base<T>`. Parent fields and methods use the applied types, and
 `super(...)` checks the parent initializer with those same types. Assigning a
 generic subclass to a base class preserves the inherited type arguments.
+
 A non-generic subclass may also fix those arguments, such as
 `final class Score extends Value<number>`. The specialized types flow through
 its constructor, `self`, inherited members, and assignments to `Value<number>`;
@@ -254,20 +258,24 @@ from a base class can satisfy a protocol requirement, and a subclass inherits
 the base class's conformance. A class can list multiple protocols after
 `implements`; every requirement is checked, including same-named methods that
 must satisfy each contract's signature.
+
 Method compatibility follows function variance: an implementation must accept
 every argument allowed by the protocol and may return a narrower type. A
 method that accepts only a subset of protocol inputs or may return an extra
 type is rejected. A signature mismatch diagnostic names the incompatible
-parameter or return slot and shows its expected and actual types. Required
-argument counts, typed varargs, and every declared return slot are checked too;
+parameter or return slot and shows its expected and actual types.
+
+Required argument counts, typed varargs, and every declared return slot are checked too;
 diagnostics explain when an implementation requires an optional argument,
 omits protocol varargs, or declares the wrong number of return values.
+
 Missing-method and incompatible-signature diagnostics include a related
 location on the protocol requirement, including when the contract is imported.
 An incompatible subclass override also identifies inherited protocol
 requirements, including imported protocols implemented by a local base class,
 and links to each declaration while keeping the primary range on the overriding
 method name.
+
 Whitespace and Lua comments may separate `export`, `protocol`, the protocol
 name, and the opening brace in a declaration header.
 
@@ -284,20 +292,26 @@ the imported type. See [Sharing Types Between Modules](modules.md#share-types-wi
 for module boundaries. Namespace type imports qualify the contract in the class
 header, for example `import type Contracts from "./contracts"` followed by
 `final class Actor implements Contracts.Updatable`.
+
 Protocol arrays can be initialized with values from unrelated conforming
 classes. Tua rejects assigning an existing concrete class array to a protocol
 array because writes through that mutable view could put a different
 conforming class into the original concrete array; create a fresh
 protocol-typed array literal instead.
+
 Protocol bodies currently describe methods only. They do not declare fields,
-default implementations, or protocol inheritance. From a protocol-typed
+default implementations, or protocol inheritance.
+
+From a protocol-typed
 method call, completion, hover signatures, and signature help use the declared
 requirement; method hover and signature help omit the implicit receiver. Go to
 definition opens the requirement and go to implementation
 lists the statically known conforming methods in the workspace, including
 methods found through type-only imports. Inlay hints and type explanations
 preserve protocol member types. Comments on protocol requirements are shown in
-hover documentation for protocol-typed method calls. References and rename
+hover documentation for protocol-typed method calls.
+
+References and rename
 connect the requirement, statically known implementations, and protocol-typed
 calls across the workspace. The [feature-tour
 example](https://github.com/Kyonru/tua-lang/blob/main/examples/features/src/protocols.tua)
@@ -308,6 +322,7 @@ last valid project types until the incomplete edit is repaired.
 Protocol type names also complete in class `implements` clauses, including
 while the declaration header is still being written. Generic protocol bounds
 also complete in multiline class headers before the closing `>` is typed.
+
 While a protocol body is missing its closing brace, the editor keeps completed
 requirements and surrounding module bindings available. It ignores
 recoverable unfinished lines in its temporary analysis copy; your source stays
@@ -470,6 +485,7 @@ Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. Runtime `is` checks use the class table
 keys in `__is`, including inherited classes; numeric type IDs are local to each
 compiled file. `Class.new(...)` constructs instances.
+
 Within each class, the `init` body runs before that class's field defaults; this
 ordering is preserved across inheritance and constructor optimization. A default
 therefore overwrites a value assigned to the same field by `init`. For a value

@@ -12,6 +12,18 @@ files use `local Save = require("tuasave")`.
 Passing or storing the built-in `Save` value also imports it; a table field
 named `Save` does not.
 
+For a typical save flow, define a versioned contract, load it before building
+game state, bind the relevant store, and poll the binding from `love.update`.
+Flush at a deliberate checkpoint such as `love.quit`. Loading does not write or
+migrate the slot by itself; keep recovery choices in the game.
+
+| If you need to… | Start with… |
+| --- | --- |
+| Validate data without using files | [Validate data without persistence](#validate-data-without-persistence) |
+| Declare a save and connect it to game state | [Declare a save contract](#declare-a-save-contract) |
+| Read an older save safely | [Validate historical save data before migration](#validate-historical-save-data-before-migration) |
+| Recover from damaged or incompatible data | [Recovery and errors](#recovery-and-errors) |
+
 ## Validate data without persistence
 
 `Save.shape(Save.record({...}))` provides `{defaults, copy}` without a slot, backend,
@@ -58,8 +70,9 @@ return Profile
 `Save.optional`, and `Save.enum` make a small JSON-shaped schema. A required
 field needs a default; optional fields may be absent. Arrays have dense numeric
 indices, and an empty array stays distinct from an empty record. The root
-schema must be a record. `Profile:defaults()` returns a fresh deep copy. A
-literal schema gives completion and type checking for the snapshot, including
+schema must be a record. `Profile:defaults()` returns a fresh deep copy.
+
+A literal schema gives completion and type checking for the snapshot, including
 after importing `Profile` from another file. A computed schema remains valid at
 runtime, but editor types can be less specific.
 
@@ -92,6 +105,12 @@ Known function signatures are checked against `(old: any) -> Snapshot`; invalid
 return shapes and extra required parameters are rejected. Loading
 does not rewrite files.
 
+Load before constructing systems that depend on saved values. Keep the loaded
+snapshot separate from the persistence binding: the contract validates and
+copies data, while `bind()` observes one store field and schedules writes.
+
+### Validate historical save data before migration
+
 Optional `migration_schemas` validate historical input before calling a migration:
 
 ```tua
@@ -112,10 +131,14 @@ local Profile = Save.contract({
 
 Each historical schema must be a record and have a matching direct migration for
 an integer version below the current version. Historical descriptors are copied
-when the contract is created. Validation rejects missing/unknown fields, invalid
+when the contract is created.
+
+Validation rejects missing/unknown fields, invalid
 values and mismatched JSON arrays/objects; defaults do not repair old data.
 A successful check gives the callback an owned plain-data copy without decoder
-markers. Failure returns `invalid_migration_input` in phase `validate`, does not
+markers.
+
+Failure returns `invalid_migration_input` in phase `validate`, does not
 call the migration or rewrite files, and blocks writes under the normal error
 policy. The callback result is still validated against the current schema.
 
@@ -139,30 +162,26 @@ Neither `set` nor `update` performs serialization or filesystem I/O.
 ## Recovery and errors
 
 Each slot has two files under `__tua_saves/` in LÖVE's save directory. Writes
-target the inactive file, read it back, and verify its length and SHA-256
-checksum before advancing the generation. If one slot is damaged and the other
-contains a valid snapshot, `load()` returns that snapshot with
-`issue.code == "damaged_slot_unverified"`. The damaged slot's generation cannot
-be trusted, even if part of its header is readable: the selected snapshot
-could be newer or older. The contract blocks writes until the game tells the
-player and calls `Profile:acceptRecovery()`, explicitly accepting the risk of
-overwriting the damaged slot. Any other load error, including a future save
-version, stays blocked. `Profile:reset()` is an explicit destructive choice:
-it removes both slot files and returns fresh defaults. Do not call it without
-an appropriate player-facing recovery choice.
+verify the inactive file's length and SHA-256 checksum before advancing the
+generation.
+
+If only one file is valid, `load()` returns its snapshot with
+`damaged_slot_unverified`. The damaged file may contain newer progress, so
+writes remain blocked until the player accepts recovery. Other load errors,
+including a future save version, also block writes. Use the
+[recovery table below](#choose-a-recovery-response) to choose a response.
 
 Every `SaveIssue` has `code`, `message`, `slot`, `phase` (`read`, `decode`,
-`migrate`, `validate`, `write`, or `verify`), and `recoverable`. A failed write
-keeps a binding dirty and scheduled retries back off. The slot name is a
-1–64 character ASCII identifier; it cannot contain path separators. The
-default payload cap is 128 KiB, configurable up to 4 MiB with `max_bytes`.
-The lower default avoids accidentally scheduling a large synchronous write
-from a game update. On one macOS LÖVE 11.5 run, a 1 MiB payload took roughly
-80 ms to save and 187 ms to reload; measure your target hardware before
-raising the cap for an autosave binding.
-Decoding also limits nesting and entry counts. The JSON subset rejects cycles,
-sparse arrays, non-finite numbers, invalid UTF-8, functions, userdata, unknown
-record fields, and oversized input.
+`migrate`, `validate`, `write`, or `verify`), and `recoverable`.
+
+Slot names must be 1–64 ASCII identifier characters without path separators.
+The payload cap defaults to 128 KiB and can be raised to 4 MiB with `max_bytes`.
+Saving is synchronous; measure on target hardware before increasing the cap
+for autosave.
+
+Decoding limits nesting and entry counts. It rejects cycles, sparse arrays,
+non-finite numbers, invalid UTF-8, functions, userdata, unknown record fields,
+and oversized input.
 
 Set a stable `t.identity` in `conf.tua` before loading saves. The checksum
 detects accidental corruption; it is not an anti-cheat signature. The two-slot
@@ -170,3 +189,19 @@ protocol does not guarantee power-loss durability (`fsync`), concurrent game
 process coordination, or cloud-sync conflict resolution. The LSP never reads
 player save files. Packaged games exclude `__tua_saves/`, and a custom
 `tuasave.lua` in the project can replace the bundled runtime.
+
+### Choose a recovery response
+
+Treat load issues as product decisions instead of silently replacing data:
+
+| Load result | Recommended response |
+| --- | --- |
+| `nil, nil` | Start from `Profile:defaults()`; this is a new slot. |
+| Snapshot and no issue | Continue with the validated snapshot. |
+| Snapshot with `damaged_slot_unverified` | Offer the recovered snapshot, explain that the other generation may be newer, and call `acceptRecovery()` only after the player accepts the risk. |
+| No usable snapshot or another issue | Keep writes blocked; offer a deliberate retry, backup restore, or reset path. |
+
+`reset()` deletes both generations; it is not a repair operation. Keep it behind
+an explicit confirmation when progress matters. If a write fails, retain the
+binding and surface the issue. Scheduled retries use backoff, while `flush()`
+lets the game decide when to try synchronously again.
