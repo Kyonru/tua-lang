@@ -80,13 +80,13 @@ dependency graph.
 
 ## M0 — Establish conventions
 
-- [ ] Audit the current feature docs, examples and selected compiler for each guide.
-- [ ] Record each tutorial's owning example, required assets and verification command.
-- [ ] Use the dialogue starter as a reference for scope, not a mandatory controller
+- [x] Audit the current feature docs, examples and selected compiler for each guide.
+- [x] Record each tutorial's owning example, required assets and verification command.
+- [x] Use the dialogue starter as a reference for scope, not a mandatory controller
       architecture or visual template.
-- [ ] Define common README headings: run, controls, expected behavior, try a change,
+- [x] Define common README headings: run, controls, expected behavior, try a change,
       verification and next steps.
-- [ ] Define where native replay evidence and compiler/runtime provenance are kept;
+- [x] Define where native replay evidence and compiler/runtime provenance are kept;
       retain only useful screenshots in docs, not entire capture frame sequences.
 
 Acceptance: every proposed guide has a confirmed starting point; uncertainties are
@@ -276,7 +276,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | Milestone | Status | Example / commits / evidence |
 | --- | --- | --- |
 | Existing dialogue starter | Complete | `examples/dialogue/first-conversation`; `b1d4d112`, `edb2c04c`, `52647cee` |
-| M0 | Pending | |
+| M0 | Complete | API/source audit below; no runtime changes required |
 | M1 | Pending | |
 | M2 | Pending | |
 | M3 | Pending | |
@@ -288,3 +288,50 @@ other contributors' work separate. Do not push or publish without authorization.
 | M9 | Pending | |
 | M10 | Pending | |
 | M11 | Pending | |
+
+## M0 audit and implementation baseline
+
+Audited against compiler 0.11.0, embedded revision
+`e0033fc65d3b78f9be8aba3e427aa9a239782354`, release aarch64-apple-darwin,
+SHA-256 `3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec`.
+This identifies the selected development binary, not a feature promise for every
+0.11.0 distribution. Re-record provenance when selecting a different compiler.
+
+The focused pages linked in each milestone and corresponding `examples/features`
+source confirm the relevant entry points. This is an API/example audit, not a claim
+that all ten future compositions have passed runtime qualification.
+
+| Guide | Owning example decision | Existing source to consult | Asset / API boundary |
+| --- | --- | --- | --- |
+| M1 | New `examples/tutorials/playable-character` | `features/src/input.tua`, `sprites.tua`, `camera.tua` | Original vector atlas, bundled PNG; `input`, `spriteSheet`, `Camera.new` |
+| M2 | Extend `examples/pause-input` | `features/src/state_machine.tua`, existing pause scenario | Primitives; add explicit title/state-machine flow without weakening held-input tests |
+| M3 | Extend `examples/love-save` | `features/src/save_contracts.tua` | No assets; versioned `Save.contract`, historical schemas and explicit recovery |
+| M4 | New `examples/tutorials/enemy-wave` | `features/src/ecs.tua`, `object_pool.tua` | Primitives; `ECS`, query/lifecycle APIs, optional `objectPool` effect |
+| M5 | New `examples/tutorials/responsive-weapon` | Pooling/tween/camera feature sources | Primitives; bounded reuse and cosmetic feedback remain separate |
+| M6 | New `examples/tutorials/scene-audio` | `examples/audio-system`, `features/src/audio.tua` | Small generated/licensed audio; `audioSystem` sources and bus ownership |
+| M7 | New `examples/tutorials/first-shader` | `features/src/shaders.tua`, `shader_preload.tua` | Authored GLSL; existing `ShaderScan` setup/preload callbacks |
+| M8 | New `examples/tutorials/enemy-decisions` | `features/src/behavior_tree.tua`, `behavior_tree_ecs.tua` | Primitives; tree definition versus per-actor runner, context checking |
+| M9 | New `examples/tutorials/translate-a-game` | `features/src/localization.tua`, `examples/dialogue/localization` | Plain catalogs and built-in font for selected Latin locales; opt-in i18n |
+| M10 | New `examples/tutorials/slow-frame` | Existing profiler workflow in `docs/debugging.md` | Primitives; workload bounds, no second profiler or timing thresholds |
+
+For each owning example, run `tua fmt --check`, explicit formatting checks for
+its Lua harness, `tua check`, and `tua build` inside that directory. Use
+`scripts/love_replay.py --project <owner> --scenario <owner>/tests/replay.lua`
+for new LÖVE scenarios; retain the existing pause scenario-module command when
+extending that example. Supply the exact compiler, LÖVE executable, frame count
+and a new output directory in each README's completed recipe. Specialized save,
+audio and performance checks are specified in their milestone and must be added
+before those guides can be marked complete.
+
+Evidence convention: native captures live outside tracked source by default;
+store a compact qualification record under `benchmarks/tutorials/<slug>.md` with
+commands, compiler/runtime identity, outcomes and limitations. Retain selected
+screenshots under `docs/assets/tutorials/<slug>/` only when used in the guide,
+with provenance. Do not commit all replay frames. Example READMEs use Run,
+Controls, Expected behavior, Try a change, Verification and Next steps headings.
+
+M1-specific audit findings: Baton normalizes diagonal pairs before applying its
+deadzone; repeated `sprite:play` on the active animation preserves its progress;
+`Camera:draw` restores the world transform before HUD drawing. Focus handling is
+host policy. Existing atlas provenance was not sufficiently clear for a new
+standalone tutorial, so M1 will use an original, reproducible SVG atlas instead.
