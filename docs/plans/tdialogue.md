@@ -642,7 +642,7 @@ context objects. Core export/import works without a filesystem or LÖVE.
   expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
   levels and finite numbers within ±2^53 for interpreter portability. Arrays are
   rejected. This does not validate imported context schemas or execute a dialogue.
-  Transport/UI controls are implemented below; placeholder substitution and
+  Transport/UI controls are implemented below; text presentation and
   route-state presentation remain pending.
 - [x] Explicit mock input in the editor: drafts stay in memory and only apply on
   Evaluate conditions. Core probes branch/visibility/availability conditions
@@ -651,6 +651,15 @@ context objects. Core export/import works without a filesystem or LÖVE.
   Clear, refresh, document switching and in-flight response ordering are covered.
   The LSP accepts optional JSON text; no host code or imported schemas execute.
   This is not conversation traversal, fallback selection or action simulation.
+- [x] Mock-text foundation: resolve explicit scalar `args` and all `@bind` paths
+  once, with binding precedence, nil-only defaults and false preservation. Format
+  the parser's plain templates with one-pass named substitution and percent escapes;
+  replacement values never become markup or placeholders. Rich source uses the
+  shared mark-free template. Missing/invalid bindings or arguments report source
+  locations. Retained argument text and each output are capped at 64 KiB, including
+  numeric expansion. Numeric previews use deterministic decimal formatting; Lua
+  `tostring` spelling can differ by runtime. The editor still displays authored text;
+  text transport/presentation and locale resolution are not implemented by this slice.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

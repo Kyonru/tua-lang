@@ -996,7 +996,9 @@ Source refreshes reuse the last applied JSON. **Use authored view** stops evalua
 and keeps the draft available. Closing the preview or switching to another dialogue
 clears both draft and applied input; they are not saved to project files or settings.
 
-Input accepts only `context` and `locals` record roots, with no arrays. Limits are
+Input accepts `context` and `locals` record roots, with no arrays. An optional
+`args` record of strings, booleans and numbers is also accepted for the shared
+text formatter; the current editor still displays authored text. Limits are
 64 KiB of JSON, 4,096 values, 32 nesting levels and finite numbers within ±2⁵³.
 At most 4,096 conditions are tested per request, with a notice if truncated.
 Imported context schemas are not validated against this input. Portraits, audio,

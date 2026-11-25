@@ -293,7 +293,9 @@ condition is tested independently, with boolean results or source-linked errors;
 all routes stay visible. Use authored view clears evaluation. Closing the preview
 or switching dialogue clears in-memory mock input. Mock input is bounded to 64 KiB,
 4,096 values, 32 levels and finite numbers within ±2^53; arrays are rejected.
-Missing fields/null mean nil. No imported schema validation, handlers, portraits,
+Missing fields/null mean nil. An optional scalar args record is accepted for the
+core text formatter; the current editor still displays authored text. No imported
+schema validation, handlers, portraits,
 audio, text substitution, traversal simulation or rich-text rendering occurs.
 At most 4,096 conditions are tested; large views also explicitly limit displayed
 sections/lines/routes. Graphical layout remains planned.
