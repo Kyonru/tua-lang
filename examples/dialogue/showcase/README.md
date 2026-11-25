@@ -80,3 +80,5 @@ The presenter illustrates grapheme-aware wrapping and explicit keyboard focus. I
 does not implement a screen-reader bridge, bidirectional layout or full shaping.
 Radio is intentionally concise; longer interactive content belongs in the scrollable
 conversation presenter. Host actions are declared; rich text never executes code.
+
+Restoring a checkpoint keeps the host’s current language preference for both the conversation and radio.

@@ -136,6 +136,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
   local function restore()
     local restored = createPlayer()
     restored:restore(saved)
+    restored:setLocale(settings.locale)
     player:dispose()
     player = restored
     audio.reset()
