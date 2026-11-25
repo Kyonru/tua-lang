@@ -1,0 +1,61 @@
+-- Host-owned layout data: stable speaker keys, never translated names or portrait filenames.
+export type Layout = {
+  portrait: "left" | "right" | "none", anchor: "screen" | "actor", x: number, y: number,
+}
+type Override = {
+  portrait?: "left" | "right" | "none",
+  anchor?: "screen" | "actor",
+  x?: number,
+  y?: number,
+}
+local defaults: Layout = { portrait = "none", anchor = "screen", x = 0.5, y = 0.65 }
+local characters: { [string]: Override } = {
+  ["cast.mara.name"] = { portrait = "left", anchor = "actor", x = 0.08, y = 1 },
+  ["cast.ivo.name"] = { portrait = "right", anchor = "actor", x = 0.92, y = 1 },
+  ["cast.beacon.name"] = { portrait = "none", anchor = "screen", x = 1, y = 0 },
+}
+-- This scene raises Ivo's bubble slightly; his character default still controls its side.
+local scene: { [string]: Override } = { ["cast.ivo.name"] = { y = 0.7 } }
+-- A line changes only the bubble anchor. Mara's portrait remains in its left slot.
+local lines: { [string]: Override } = {
+  ["staging.mara.center"] = { anchor = "screen", x = 0.5, y = 0 },
+}
+local function merge(base: Layout, override: Override | nil): Layout
+  if override == nil then
+    return { portrait = base.portrait, anchor = base.anchor, x = base.x, y = base.y }
+  end
+  return {
+    portrait = override.portrait or base.portrait,
+    anchor = override.anchor or base.anchor,
+    x = override.x or base.x,
+    y = override.y or base.y,
+  }
+end
+local function resolve(speakerKey: string | nil, textId: string | nil): Layout
+  local layout = merge(defaults, characters[speakerKey or ""])
+  layout = merge(layout, scene[speakerKey or ""])
+  return merge(layout, lines[textId or ""])
+end
+local function geometry(layout: Layout, width: number, height: number, choice: boolean)
+  local portraitSize = width < 800 and 80 or 112
+  local portraitY = height - 72 - portraitSize
+  local top = 136
+  local bottom = portraitY - 24
+  local w = math.min(width - 128, choice and 620 or 580)
+  local h = math.min(choice and 250 or 190, bottom - top - (choice and 0 or 20))
+  -- The normalized position describes the available travel of the whole box, not its center.
+  local x = 32 + (width - 64 - w) * math.max(0, math.min(1, layout.x))
+  local y = top + (bottom - top - h) * math.max(0, math.min(1, layout.y))
+  local targetX = layout.portrait == "right" and width - 32 - portraitSize / 2 or 32 + portraitSize / 2
+  return {
+    x = x,
+    y = y,
+    width = w,
+    height = h,
+    tailX = layout.anchor == "actor" and targetX or nil,
+    tailY = layout.anchor == "actor" and portraitY or nil,
+    portraitSize = portraitSize,
+    portraitY = portraitY,
+  }
+end
+return { resolve = resolve, geometry = geometry }

@@ -19,6 +19,7 @@ package.loaded.presenter = {
   new = function()
     return {
       update = noop,
+      portrait = noop,
       dispose = noop,
       draw = function(node)
         drawn[#drawn + 1] = node.kind
@@ -116,5 +117,11 @@ for key, mode in ipairs({
   love.keypressed(tostring(key))
   assert(host.settings.mode == mode)
 end
+love.keypressed("f4")
+assert(host.settings.entry == "staging")
+love.draw()
+love.keypressed("f4")
+assert(host.settings.entry == "start")
+love.draw()
 love.quit()
 print("SHOWCASE_UI_OK completed channels hidden; choice focus valid")

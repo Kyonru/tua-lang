@@ -3,6 +3,7 @@ local Backend = require("backend")
 local Presenter = require("presenter")
 local Theme = require("theme")
 local Styles = require("styles")
+local Staging = require("staging_layout")
 local host = Controller.new(Backend.new(), Backend.new())
 local presenter = Presenter.new()
 local title = love.graphics.newFont("assets/fonts/lora.ttf", 32)
@@ -22,6 +23,10 @@ function love.keypressed(key: string)
     elseif settings.portrait == "right" then settings.portrait = "above"
     elseif settings.portrait == "above" then settings.portrait = "none"
     else settings.portrait = "left" end
+  elseif key == "f4" then
+    settings.entry = settings.entry == "staging" and "start" or "staging"
+    settings.mode = "bubble"
+    host.reset()
   elseif key == "f3" then
     settings.entry = settings.entry == "rich" and "start" or "rich"
     host.reset()
@@ -84,16 +89,23 @@ function love.draw()
   love.graphics.setFont(title)
   love.graphics.setColor(0.94, 0.92, 0.85)
   love.graphics.print(
-    settings.entry == "start" and "The last light" or (settings.entry == "rich" and "Words with character" or "A short introduction"),
+    settings.entry == "staging" and "Across the water" or (settings.entry == "start" and "The last light" or (settings.entry == "rich" and "Words with character" or "A short introduction")),
     32,
     47
   )
   love.graphics.setFont(caption)
   local style = Styles.name(settings.mode)
   love.graphics.setColor(0.72, 0.77, 0.75)
-  love.graphics.printf(style .. "  /  Portrait: " .. settings.portrait, 32, 91, width - 64, "left")
   love.graphics.printf(
-    "1–7  Style     O  Portrait     H  Controls",
+    style
+    .. (settings.entry == "staging" and "  /  Character staging · F4 to return" or "  /  Portrait: " .. settings.portrait),
+    32,
+    91,
+    width - 64,
+    "left"
+  )
+  love.graphics.printf(
+    settings.entry == "staging" and "1–7  Style     F4  Return     H  Controls" or "1–7  Style     O  Portrait     H  Controls",
     32,
     height - 33,
     width - 64,
@@ -108,8 +120,41 @@ function love.draw()
   local node = snapshot.node
   if node and (snapshot.state == "awaiting_advance" or snapshot.state == "awaiting_choice") then
     local appliedScroll = 0
-    maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
-      settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, settings.portrait, showRadio)
+    if settings.entry == "staging" then
+      local layout = Staging.resolve(node.speakerKey, node.textId)
+      local box = Staging.geometry(layout, width, height, snapshot.state == "awaiting_choice")
+      local mara = node.speakerKey == "cast.mara.name"
+      local ivo = node.speakerKey == "cast.ivo.name"
+      presenter.portrait(
+        mara and (node.portrait or "mara") or "mara",
+        32,
+        box.portraitY,
+        box.portraitSize,
+        mara
+      )
+      presenter.portrait(
+        ivo and (node.portrait or "ivo") or "ivo",
+        width - 32 - box.portraitSize,
+        box.portraitY,
+        box.portraitSize,
+        ivo
+      )
+      love.graphics.setFont(caption)
+      love.graphics.setColor(0.82, 0.86, 0.82)
+      love.graphics.print("Mara · west pier", 32, box.portraitY + box.portraitSize + 8)
+      love.graphics.printf(
+        "Ivo · east pier",
+        32,
+        box.portraitY + box.portraitSize + 8,
+        width - 64,
+        "right"
+      )
+      maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
+        settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, "none", false, box)
+    else
+      maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
+        settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, settings.portrait, showRadio)
+    end
     settings.scroll = appliedScroll or math.min(settings.scroll, maxScroll)
   end
   local radioNode = radio.node
@@ -152,7 +197,7 @@ function love.draw()
         "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
         .. tostring(facts.permit) ..
         "\nP   Pause   " .. tostring(settings.paused)
-        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text tour\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
+        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text   F4   Staging\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
         .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
         .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
         .. " revealed · Tokens: " .. stats.rewards,

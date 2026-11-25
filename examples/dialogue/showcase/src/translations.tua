@@ -1,5 +1,16 @@
 -- Catalog lookup returns a template, never interpolated executable markup.
 local french: { [string]: string } = {
+  ["staging.mara.left"] = "Je surveillerai la [em]jetée ouest[/em]. Ivo, peux-tu prendre l'autre côté ?",
+  ["staging.ivo.right"] = "J'y suis déjà. Garde ta lampe levée. Je la vois de l'autre côté de l'eau.",
+  ["staging.beacon.radio"] = "[style=radio]Canal sept.[/style] Les deux lampes sont visibles. Je garde le canal supérieur libre.",
+  ["staging.mara.question"] = "Il y a quelque chose sur la carte que vous devriez voir tous les deux.",
+  ["staging.inspect"] = "Poser la carte entre nous.",
+  ["staging.finish"] = "Rester chacun de notre côté.",
+  ["staging.mara.center"] = "Ici, [style=highlight]entre les deux balises[/style]. C'est là que les courants se rencontrent.",
+  ["staging.mara.return"] = "C'est tout ce que je voulais vous montrer. Je retourne à la jetée ouest.",
+  ["staging.ivo.reply"] = "Et moi, je reste à l'est. Deux lampes, une traversée.",
+  ["staging.narration"] = "De part et d'autre de l'eau, les lampes se répondent.",
+  ["staging.goodnight"] = "Alors garde ta lumière stable. Nous reparlerons quand la marée changera.",
   ["rich.palette"] = "[em]Port du Phare[/em]. [style=success]Canal ouvert[/style]. [style=warning]Évitez les rochers[/style]. [style=radio]Nous vous entendons[/style].",
   ["rich.clues"] = "La carte dit [style=strike]prendre le grand chenal[/style]. Mes notes disent [style=highlight][em]trois balises blanches[/em][/style]. Gardez la dernière [style=underline]à gauche[/style].",
   ["rich.aside"] = "[style=thought]Et si personne ne répond ?[/style] [pause=0.4][style=whisper]Ne dis pas à Mara que j'ai dit ça.[/style]",

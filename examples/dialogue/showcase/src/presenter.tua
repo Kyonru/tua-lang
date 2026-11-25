@@ -9,16 +9,27 @@ export type Cluster = { index: number, text: string }
 export type Node = {
   text: string,
   speaker?: string,
+  speakerKey?: string,
+  textId?: string,
   portrait?: string,
   expression?: string,
   presentation?: { runs: Run[] },
   options: { text: string, enabled?: boolean, reason?: string }[],
+}
+export type Placement = {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  tailX?: number,
+  tailY?: number,
 }
 local function new()
   local portraits = Portraits.new()
   local pixel = love.graphics.newFont("assets/fonts/pixelifysans.ttf", 24)
   local mono = love.graphics.newFont("assets/fonts/spacemono.ttf", 18)
   local body = love.graphics.newFont("assets/fonts/manrope.ttf", 21)
+  local compact = love.graphics.newFont("assets/fonts/manrope.ttf", 18)
   local literary = love.graphics.newFont("assets/fonts/lora.ttf", 22)
   local nameFont = love.graphics.newFont("assets/fonts/manrope.ttf", 16)
   local label = love.graphics.newFont("assets/fonts/manrope.ttf", 12)
@@ -29,7 +40,10 @@ local function new()
   local function update(dt: number) clock += dt end
   local function draw(node: Node, clusters: Cluster[], visible: number, mode: string,
     reduced: boolean, subtitles: boolean, selected: number, scroll: number,
-    portraitPosition: string = "left", reserveAnnouncement: boolean = false): (number, number)
+    portraitPosition: string = "left", reserveAnnouncement: boolean = false, placement: Placement | nil = nil):(
+      number,
+      number
+    )
     if disposed then return 0, 0 end
     local width, height = love.graphics.getDimensions()
     local theme = Theme.palette(mode)
@@ -49,6 +63,12 @@ local function new()
       y = 112
       h = 100
     end
+    if placement then
+      x = placement.x
+      y = placement.y
+      w = placement.width
+      h = placement.height
+    end
     local portrait = node.portrait
     local hasPortrait = portrait ~= nil and portraitPosition ~= "none" and not announcement
     local side = hasPortrait and (portraitPosition == "left" or portraitPosition == "right")
@@ -64,23 +84,29 @@ local function new()
     if mode == "tactics" then font = pixel end
     if mode == "terminal" then font = mono end
     if announcement then font = label end
+    if placement and width < 800 then font = compact end
     local _, textLines = font:getWrap(node.text, tw)
-    if not announcement and #node.options == 0 then
+    if placement == nil and not announcement and #node.options == 0 then
       h = math.min(h, math.max(side and portraitSize + 56 or 180, #textLines * 32 + 110))
       y = height - h - 84
     end
-    if reserveAnnouncement and height < 650 then
+    if placement == nil and reserveAnnouncement and height < 650 then
       y = math.max(y, 226)
       h = height - 84 - y
     end
     local framed = mode == "mythic" or mode == "tactics"
-    if framed and y < 146 then
+    if placement == nil and framed and y < 146 then
       y = 146
       h = height - 84 - y
     end
     local ty = y + (announcement and 42 or (framed and 48 or 72))
     local viewport = h - (announcement and 50 or (framed and 86 or 110))
     local lineHeight = announcement and 19 or 32
+    if placement then
+      ty = y + 50
+      viewport = h - 86
+      lineHeight = width < 800 and 26 or 32
+    end
     local speaker = node.speaker or (#node.options > 0 and "YOUR REPLY" or "THE CROSSING")
     if transmission then speaker = "CH. 07  /  " .. speaker end
     love.graphics.push("all")
@@ -89,7 +115,18 @@ local function new()
       love.graphics.rectangle("fill", x, y, w, h, mode == "bubble" and 18 or 2)
     end
     if mode == "bubble" then
-      love.graphics.polygon("fill", x + 48, y + h - 1, x + 62, y + h + 14, x + 83, y + h - 1)
+      if placement then
+        local tailX = placement.tailX
+        local tailY = placement.tailY
+        if tailX and tailY then
+          local base = math.max(x + 24, math.min(x + w - 24, tailX))
+          local tip = math.max(base - 24, math.min(base + 24, tailX))
+          love.graphics.polygon("fill", base - 10, y + h - 1, tip,
+            y + h + math.min(20, math.max(0, tailY - y - h)), base + 10, y + h - 1)
+        end
+      else
+        love.graphics.polygon("fill", x + 48, y + h - 1, x + 62, y + h + 14, x + 83, y + h - 1)
+      end
     end
     love.graphics.setColor(theme.accent)
     if mode == "panel" then
@@ -175,6 +212,7 @@ local function new()
     end
     if #clusters > 0 then cy += lineHeight end
     local choiceFont = (mode == "tactics" or mode == "terminal") and font or body
+    if placement and width < 800 then choiceFont = compact end
     local rows: { y: number, height: number, text: string, reason: string }[] = {}
     local focusTop = 0
     local focusBottom = 0
@@ -268,9 +306,20 @@ local function new()
     mono:release()
     body:release()
     literary:release()
+    compact:release()
     label:release()
     nameFont:release()
   end
-  return { draw = draw, update = update, dispose = dispose }
+  local function portrait(id: string, x: number, y: number, size: number, active: boolean)
+    if disposed then return end
+    love.graphics.push("all")
+    portraits.draw(id, "", x, y, size)
+    if not active then
+      love.graphics.setColor(0.075, 0.105, 0.12, 0.48)
+      love.graphics.rectangle("fill", x, y, size, size, 3, 3)
+    end
+    love.graphics.pop()
+  end
+  return { draw = draw, portrait = portrait, update = update, dispose = dispose }
 end
 return { new = new }

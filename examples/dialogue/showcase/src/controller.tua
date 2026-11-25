@@ -3,6 +3,7 @@ local Styles = require("styles")
 local Audio = require("audio")
 local Translations = require("translations")
 local scene = require("scene")
+local stagingScene = require("staging")
 local radioScene = require("radio")
 import type { Backend } from "audio"
 
@@ -33,8 +34,9 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     transcript = false,
     historyScroll = 0,
   }
-  local function createPlayer()
-    return Story.new(scene, { name = "Ada", permit = true }, {
+  local function createPlayer(entry: string)
+    local document = entry == "staging" and stagingScene or scene
+    return Story.new(document, { name = "Ada", permit = true }, {
       locale = "en",
       history = { capacity = 8, maxBytes = 2048 },
       checkpointVersion = "harbor-showcase-v1",
@@ -52,7 +54,8 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
       },
     })
   end
-  local player = createPlayer()
+  local player = createPlayer(settings.entry)
+  local stagingDocument = settings.entry == "staging"
   local radio = Dialogue.new(radioScene, { locale = "en", resolveTemplate = Translations.resolve })
   local audio = Audio.new(conversationBackend, 71)
   local radioAudio = Audio.new(radioBackend, 99)
@@ -64,12 +67,25 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
   local radioAge = 0
   local disposed = false
   local focusedChoice = ""
+  local function startEntry(entry: string)
+    if stagingDocument ~= (entry == "staging") then
+      player:dispose()
+      player = createPlayer(entry)
+      player:setLocale(settings.locale)
+      audio.reset()
+      stagingDocument = entry == "staging"
+    end
+    settings.entry = entry
+    player:start(entry)
+  end
   local function active(): boolean
     local state = player:snapshot().state
     return state == "awaiting_advance" or state == "awaiting_choice"
       or state == "awaiting_action" or state == "waiting"
   end
-  local function modal(): boolean return active() and Styles.modal(settings.mode) end
+  local function modal(): boolean
+    return active() and (settings.entry == "staging" or Styles.modal(settings.mode))
+  end
   local function enqueue(channel: string): boolean
     local accepted = false
     if channel == "conversation" then accepted = conversationQueue.push(settings.entry)
@@ -106,7 +122,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     -- Resolve modal handoffs before advancing the background channel's clock.
     if not settings.paused and not active() then
       local nextEntry = conversationQueue.pop()
-      if nextEntry then player:start(nextEntry) end
+      if nextEntry then startEntry(nextEntry) end
     end
     local blocked = modal()
     if blocked or settings.paused then radio:suspend() else radio:resume() end
@@ -170,11 +186,12 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     return true
   end
   local function restore()
-    local restored = createPlayer()
+    local restored = createPlayer(savedEntry)
     restored:restore(saved)
     restored:setLocale(settings.locale)
     player:dispose()
     player = restored
+    stagingDocument = savedEntry == "staging"
     settings.entry = savedEntry
     settings.notice = "Checkpoint restored."
     audio.reset()
@@ -193,7 +210,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     settings.selected = 1
     settings.scroll = 0
     radioAge = 0
-    player:start(settings.entry)
+    startEntry(settings.entry)
     update(0)
   end
   local function locale()

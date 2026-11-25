@@ -1,6 +1,7 @@
 return {
   Guide = {
     name = "Mara",
+    nameKey = "cast.mara.name",
     portrait = "mara",
     expressions = {
       happy = { portrait = "mara.happy" },
@@ -19,6 +20,7 @@ return {
   },
   Courier = {
     name = "Ivo",
+    nameKey = "cast.ivo.name",
     portrait = "ivo",
     expressions = { happy = { portrait = "ivo.happy" }, worried = { portrait = "ivo.worried" } },
     speech = Dialogue.speechProfile({
@@ -33,6 +35,7 @@ return {
   },
   Robot = {
     name = "Beacon",
+    nameKey = "cast.beacon.name",
     portrait = "beacon",
     speech = Dialogue.speechProfile({
       sampleSet = "robot",

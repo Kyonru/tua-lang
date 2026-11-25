@@ -1,0 +1,44 @@
+@dialogue 1
+@text rich
+@document harbor.staging
+@characters Cast "characters"
+@context "story"
+@actions "actions"
+@events "events"
+[staging]
+// @id staging.mara.left
+Cast.Guide: I'll watch the [em]west pier[/em] from here. Ivo, can you take the other side?
+@expression happy
+@speech character
+// @id staging.ivo.right
+Cast.Courier: Already there. Keep your lamp raised. I can see it from across the water.
+@expression happy
+@speech character
+// @id staging.beacon.radio
+Cast.Robot: [style=radio]Channel seven.[/style] Both lamps are visible. I'll keep the upper channel clear.
+@speech character
+// @id staging.mara.question
+Cast.Guide: There is something on the chart that both of you should see.
+@speech character
+// @id staging.inspect
+-> Bring the chart between us. [target:staging_chart]
+// @id staging.finish
+-> Keep watch from our own sides. [target:staging_end]
+[staging_chart]
+// @id staging.mara.center
+Cast.Guide: Here, [style=highlight]between the two markers[/style]. This is where the currents meet.
+@expression resolved
+@speech character
+// @id staging.mara.return
+Cast.Guide: That's all I needed to show you. I'll go back to the west pier now.
+@speech character
+// @id staging.ivo.reply
+Cast.Courier: And I'll stay on the east side. Two lamps, one crossing.
+@speech character
+// @id staging.narration
+: Across the water, the lamps answer each other. (end)
+@speech off
+[staging_end]
+// @id staging.goodnight
+Cast.Guide: Then keep your light steady. We'll talk again when the tide turns. (end)
+@speech character
