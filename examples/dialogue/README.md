@@ -7,6 +7,7 @@ examples require LÖVE 11.5 and run with `love build` from the scenario director
 
 | Scenario | Start here for |
 | --- | --- |
+| [showcase](showcase/README.md) | Three LÖVE presentations, controls, queues and a headless oracle |
 | [basics](basics/README.md) | Lines, choices, shared characters and timed events |
 | [context](context/README.md) | Typed facts and placeholder bindings |
 | [conditions](conditions/README.md) | Conditional choices and local state |

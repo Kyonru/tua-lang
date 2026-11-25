@@ -1,0 +1,1 @@
+return Dialogue.events({ signal = Save.shape(Save.record({ phase = Save.string("") })) })

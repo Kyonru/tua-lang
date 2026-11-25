@@ -1,0 +1,22 @@
+-- Catalog lookup returns a template, never interpolated executable markup.
+local french: { [string]: string } = {
+  ["harbor.welcome"] = "Bienvenue au [em]port du Phare[/em], %{name}. [style=wave]La maree monte.[/style]",
+  ["harbor.recording"] = "Test radio. Cet enregistrement synthetique remplace une voix complete.",
+  ["harbor.collect"] = "Prendre le jeton du port",
+  ["harbor.reason"] = "Un permis du port est necessaire.",
+  ["harbor.leave"] = "Regarder la maree",
+  ["harbor.done"] = "[style=warning]Restez curieux.[/style] Une nouvelle traversee vous attend.",
+  ["harbor.failed"] = "Le jeton n'a pas pu etre recupere.",
+  ["harbor.radio"] = "[style=radio]Radio du port[/style] : un navire approche. Continuez.",
+}
+local function resolve(
+  key: string,
+  source: string,
+  args: { [string]: string | number | boolean },
+  locale: string
+)
+  local translated = french[key]
+  if locale == "fr" and translated then return { template = translated, locale = "fr" } end
+  return { template = source, locale = "en" }
+end
+return { resolve = resolve }

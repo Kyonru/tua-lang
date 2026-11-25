@@ -1,0 +1,197 @@
+local Story = require("story")
+local Audio = require("audio")
+local Translations = require("translations")
+local scene = require("scene")
+local radioScene = require("radio")
+import type { Backend } from "audio"
+
+-- The host owns channel priority, queues, rewards and settings. The player owns flow.
+local function new(conversationBackend: Backend, radioBackend: Backend)
+  local rewards = 0
+  local shown = 0
+  local revealed = 0
+  local initial: string[] = {}
+  local conversationQueue = BoundedQueue.new(2, initial)
+  local radioQueue = BoundedQueue.new(4, initial)
+  local rejected = 0
+  local settings = {
+    speed = 1,
+    reducedMotion = false,
+    subtitles = true,
+    voiceMuted = false,
+    paused = false,
+    mode = "panel",
+    selected = 1,
+    scroll = 0,
+    locale = "en",
+  }
+  local function createPlayer()
+    return Story.new(scene, { name = "Ada", permit = true }, {
+      locale = "en",
+      history = { capacity = 8, maxBytes = 2048 },
+      checkpointVersion = "harbor-showcase-v1",
+      checkpointEffects = "settled",
+      resolveTemplate = Translations.resolve,
+      handlers = {
+        collect = function(payload: { amount: number }): boolean
+          rewards += payload.amount
+          return true
+        end,
+      },
+    })
+  end
+  local player = createPlayer()
+  local radio = Dialogue.new(radioScene, { locale = "en", resolveTemplate = Translations.resolve })
+  local audio = Audio.new(conversationBackend, 71)
+  local radioAudio = Audio.new(radioBackend, 99)
+  player:start()
+  local saved = player:checkpoint()
+  local view = audio.update(player:snapshot(), 0)
+  local radioView = radioAudio.update(radio:snapshot(), 0)
+  local radioAge = 0
+  local disposed = false
+  local function active(): boolean
+    local state = player:snapshot().state
+    return state == "awaiting_advance" or state == "awaiting_choice"
+      or state == "awaiting_action" or state == "waiting"
+  end
+  local function enqueue(channel: string): boolean
+    local accepted = false
+    if channel == "conversation" then accepted = conversationQueue.push("start")
+    else accepted = radioQueue.push("start") end
+    if not accepted then rejected += 1 end
+    return accepted
+  end
+  local function update(dt: number)
+    if disposed then return end
+    local blocked = active() and settings.mode == "panel"
+    if settings.paused then player:suspend() else player:resume() end
+    if blocked or settings.paused then radio:suspend() else radio:resume() end
+    audio.volume(0.6, settings.voiceMuted and 0 or 1)
+    radioAudio.volume(0.4, settings.voiceMuted and 0 or 1)
+    view = audio.update(player:snapshot(), dt * settings.speed)
+    if settings.reducedMotion and not settings.paused then view = audio.finish() end
+    for _, event in ipairs(player:update(dt, view.complete)) do
+      local payload = event.payload
+      if payload is table then
+        if payload.phase == "shown" then shown += 1 else revealed += 1 end
+      end
+    end
+    if not settings.paused and player:snapshot().state == "awaiting_action" then
+      player:runAction()
+    end
+    radioView = radioAudio.update(radio:snapshot(), dt * settings.speed)
+    if settings.reducedMotion and not settings.paused and not blocked then
+      radioView = radioAudio.finish()
+    end
+    radio:update(dt, radioView.complete)
+    if not settings.paused then
+      if not active() then
+        local nextEntry = conversationQueue.pop()
+        if nextEntry then player:start(nextEntry) end
+      end
+      if not blocked then
+        if radioView.complete then radioAge += dt end
+        if radioAge >= 1.5 then radio:advance() end
+        local state = radio:snapshot().state
+        if state == "idle" or state == "completed" or state == "cancelled" then
+          local nextEntry = radioQueue.pop()
+          if nextEntry then
+            radio:start(nextEntry)
+            radioAge = 0
+          end
+        end
+      end
+    end
+    view = audio.update(player:snapshot(), 0)
+    radioView = radioAudio.update(radio:snapshot(), 0)
+  end
+  local function advance()
+    if settings.paused then return end
+    local snapshot = player:snapshot()
+    local node = snapshot.node
+    if snapshot.state == "awaiting_choice" and node then
+      local option = node.options[settings.selected]
+      if option and option.enabled ~= false then player:choose(option.id) end
+      settings.selected = 1
+    elseif not view.complete then
+      view = audio.finish()
+    else
+      player:advance()
+    end
+    settings.scroll = 0
+    update(0)
+  end
+  local function save(): boolean
+    if player:snapshot().state == "awaiting_action" then return false end
+    saved = player:checkpoint()
+    return true
+  end
+  local function restore()
+    local restored = createPlayer()
+    restored:restore(saved)
+    player:dispose()
+    player = restored
+    audio.reset()
+    settings.selected = 1
+    settings.scroll = 0
+    update(0)
+  end
+  local function reset()
+    player:cancel()
+    radio:cancel()
+    conversationQueue.clear()
+    radioQueue.clear()
+    player:clearHistory()
+    settings.selected = 1
+    settings.scroll = 0
+    radioAge = 0
+    player:start()
+    update(0)
+  end
+  local function locale()
+    settings.locale = settings.locale == "en" and "fr" or "en"
+    player:setLocale(settings.locale)
+    radio:setLocale(settings.locale)
+    update(0)
+  end
+  local function dispose()
+    if disposed then return end
+    disposed = true
+    conversationQueue.clear()
+    radioQueue.clear()
+    audio.dispose()
+    radioAudio.dispose()
+    player:dispose()
+    radio:dispose()
+  end
+  return {
+    player = function() return player end,
+    radio = radio,
+    settings = settings,
+    update = update,
+    advance = advance,
+    save = save,
+    restore = restore,
+    reset = reset,
+    locale = locale,
+    enqueue = enqueue,
+    active = active,
+    dispose = dispose,
+    clusters = audio.clusters,
+    radioClusters = radioAudio.clusters,
+    view = function() return view end,
+    radioView = function() return radioView end,
+    metrics = function()
+      return {
+        rewards = rewards,
+        shown = shown,
+        revealed = revealed,
+        rejected = rejected,
+        conversations = conversationQueue.count(),
+        messages = radioQueue.count(),
+      }
+    end,
+  }
+end
+return { new = new }

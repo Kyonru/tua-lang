@@ -1,0 +1,37 @@
+@dialogue 1
+@text rich
+@document harbor.showcase
+@characters Cast "characters"
+@context "story"
+@actions "actions"
+@events "events"
+@bind name context.name
+[start]
+// @id harbor.welcome
+Cast.Guide: Welcome to [em]Beacon Harbor[/em], %{name}. [style=wave]The tide is turning.[/style]
+@speech character
+@expression happy
+@emit shown 0 signal [id:harbor.shown] {"phase":"shown"}
+@emit revealed 0.1 signal [id:harbor.revealed] {"phase":"revealed"}
+// @id harbor.recording
+Cast.Robot: Radio check. This synthetic recording stands in for a full voice line.
+@voice {"cue":"greeting","sourceLocale":"en","fallback":"source"}
+// @id harbor.collect
+-> Collect the harbor token [target:collect]
+@enabled context.permit
+// @id harbor.reason
+@reason A harbor permit is required.
+// @id harbor.leave
+-> Watch the tide instead [target:wait]
+@fallback failed
+[collect]
+@action collect [id:harbor.collect.action] [success:wait] [failure:failed] {"amount":1}
+[wait]
+@wait 0.5 [target:done]
+[done]
+// @id harbor.done
+Cast.Guide: [style=warning]Stay curious.[/style] Your next crossing is waiting. (end)
+@speech character
+[failed]
+// @id harbor.failed
+Cast.Guide: The token could not be collected. (end)

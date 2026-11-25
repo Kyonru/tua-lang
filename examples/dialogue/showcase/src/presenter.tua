@@ -1,0 +1,152 @@
+-- Layout/resources belong to this adapter; the dialogue runtime supplies graphemes and styles.
+export type Run = { firstCluster: number, lastCluster: number, emphasis: boolean, styles: string[] }
+export type Cluster = { index: number, text: string }
+export type Node = {
+  text: string,
+  speaker?: string,
+  expression?: string,
+  presentation?: { runs: Run[] },
+  options: { text: string, enabled?: boolean, reason?: string }[],
+}
+local function new()
+  local body = love.graphics.newFont(20)
+  local emphasis = love.graphics.newFont(23)
+  local label = love.graphics.newFont(13)
+  local disposed = false
+  local clock = 0
+  local function update(dt: number) clock += dt end
+  local function draw(node: Node, clusters: Cluster[], visible: number, mode: string,
+    reduced: boolean, subtitles: boolean, selected: number, scroll: number): number
+    if disposed then return 0 end
+    local width, height = love.graphics.getDimensions()
+    local w = math.min(width - 48, (mode == "radio" or mode == "announcement") and 410 or 720)
+    local x = (width - w) / 2
+    local h = math.min(230, height - 260)
+    local y = math.max(105, height - 125 - h)
+    if mode == "bubble" then
+      w = math.min(width - 64, 520)
+      x = (width - w) / 2
+      y = 115
+    elseif mode == "radio" or mode == "announcement" then
+      x = width - w - 24
+      y = 100
+      h = 145
+      if mode == "announcement" then y = math.max(245, height - 280) end
+    end
+    love.graphics.push("all")
+    love.graphics.setColor(0.035, 0.09, 0.14, 0.94)
+    love.graphics.rectangle("fill", x, y, w, h, 14, 14)
+    if mode == "bubble" then
+      love.graphics.polygon("fill", x + 54, y + h - 1, x + 74, y + h + 22, x + 86, y + h - 1)
+    end
+    love.graphics.setColor(0.38, 0.82, 0.78)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", x, y, w, h, 14, 14)
+    love.graphics.setFont(label)
+    love.graphics.print(node.speaker or "Harbor", x + 54, y + 14)
+    -- A host-owned procedural portrait avoids any required image format or asset library.
+    love.graphics.circle("fill", x + 28, y + 26, 13)
+    love.graphics.setColor(0.04, 0.16, 0.22)
+    love.graphics.circle("fill", x + 24, y + 23, 2)
+    love.graphics.circle("fill", x + 32, y + 23, 2)
+    if node.expression == "happy" then
+      love.graphics.line(x + 23, y + 29, x + 28, y + 32, x + 33, y + 29)
+    end
+    love.graphics.intersectScissor(x + 14, y + 43, w - 28, math.max(1, h - 57))
+    local cx = 0
+    local cy = 0
+    local runs: Run[] = {}
+    if node.presentation then runs = node.presentation.runs end
+    for index, cluster in ipairs(clusters) do
+      local font = body
+      local wave = false
+      local warning = false
+      for _, run in ipairs(runs) do
+        if index >= run.firstCluster and index <= run.lastCluster then
+          if run.emphasis then font = emphasis end
+          for _, style in ipairs(run.styles) do
+            if style == "wave" then wave = true end
+            if style == "warning" then warning = true end
+          end
+        end
+      end
+      -- Prefer word boundaries, with grapheme fallback for a word wider than the panel.
+      local previous: Cluster | nil = clusters[index - 1]
+      if cluster.text ~= " " and (previous == nil or previous.text == " ") then
+        local wordWidth = 0
+        for nextIndex = index, #clusters do
+          local nextCluster = clusters[nextIndex]
+          if nextCluster.text == " " or nextCluster.text == "\n" then break end
+          wordWidth += font:getWidth(nextCluster.text)
+        end
+        if cx > 0 and cx + wordWidth > w - 36 then
+          cx = 0
+          cy += 29
+        end
+      end
+      local cw = font:getWidth(cluster.text)
+      if cx + cw > w - 36 or cluster.text == "\n" then
+        cx = 0
+        cy += 29
+      end
+      if index <= visible and subtitles and cluster.text ~= "\n" then
+        local dy = wave and not reduced and math.sin(clock * 4 + index * 0.5) * 3 or 0
+        local dx = warning and not reduced and math.sin(clock * 17 + index) or 0
+        love.graphics.setFont(font)
+        love.graphics.setColor(0, 0, 0, 0.45)
+        love.graphics.print(cluster.text, x + 19 + cx + dx, y + 46 + cy + dy - scroll)
+        if warning then love.graphics.setColor(1, 0.75, 0.42)
+        else love.graphics.setColor(0.92, 0.96, 0.97) end
+        love.graphics.print(cluster.text, x + 18 + cx + dx, y + 45 + cy + dy - scroll)
+      end
+      if cluster.text ~= "\n" then cx += cw end
+    end
+    if not subtitles then
+      love.graphics.setFont(body)
+      love.graphics.setColor(0.92, 0.96, 0.97)
+      love.graphics.print("Subtitles off · S to restore", x + 18, y + 45)
+    end
+    cy += 29
+    love.graphics.setFont(body)
+    for index, option in ipairs(node.options) do
+      local focused = index == selected
+      if focused then
+        love.graphics.setColor(0.16, 0.36, 0.42)
+        love.graphics.rectangle("fill", x + 15, y + 42 + cy - scroll, w - 30, 29, 4, 4)
+      end
+      if option.enabled ~= false then love.graphics.setColor(0.92, 0.96, 0.97)
+      else love.graphics.setColor(0.64, 0.7, 0.75) end
+      love.graphics.print((focused and "> " or "  ") .. option.text, x + 18, y + 45 + cy - scroll)
+      cy += 34
+      local reason = option.reason
+      if focused and option.enabled == false and reason then
+        love.graphics.setFont(label)
+        love.graphics.printf(reason, x + 22, y + 45 + cy - scroll, w - 44)
+        cy += 30
+        love.graphics.setFont(body)
+      end
+    end
+    love.graphics.setScissor()
+    love.graphics.setFont(label)
+    love.graphics.setColor(0.65, 0.82, 0.86)
+    local maxScroll = math.max(0, cy - (h - 60))
+    if maxScroll > 0 then
+      love.graphics.print(
+        "PgUp / PgDn · " .. math.floor(scroll) .. " / " .. math.ceil(maxScroll),
+        x + 18,
+        y + h - 17
+      )
+    end
+    love.graphics.pop()
+    return maxScroll
+  end
+  local function dispose()
+    if disposed then return end
+    disposed = true
+    body:release()
+    emphasis:release()
+    label:release()
+  end
+  return { draw = draw, update = update, dispose = dispose }
+end
+return { new = new }

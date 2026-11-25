@@ -1,0 +1,96 @@
+local Controller = require("controller")
+local Backend = require("backend")
+local Presenter = require("presenter")
+local host = Controller.new(Backend.new(), Backend.new())
+local presenter = Presenter.new()
+local title = love.graphics.newFont(28)
+local caption = love.graphics.newFont(14)
+local elapsed = 0
+local maxScroll = 0
+function love.update(dt: number)
+  host.update(dt)
+  if not host.settings.paused and not (host.active() and host.settings.mode == "panel") then
+    elapsed += dt
+  end
+  if not host.settings.paused then presenter.update(dt) end
+end
+function love.keypressed(key: string)
+  local settings = host.settings
+  if key == "space" or key == "return" then host.advance()
+  elseif key == "1" then settings.mode = "panel"
+  elseif key == "2" then settings.mode = "bubble"
+  elseif key == "3" then settings.mode = "radio"
+  elseif key == "up" then settings.selected = math.max(1, settings.selected - 1)
+  elseif key == "down" then
+    local node = host.player():snapshot().node
+    if node then settings.selected = math.min(#node.options, settings.selected + 1) end
+  elseif key == "pageup" then settings.scroll = math.max(0, settings.scroll - 58)
+  elseif key == "pagedown" then settings.scroll = math.min(maxScroll, settings.scroll + 58)
+  elseif key == "f" then settings.speed = settings.speed == 1 and 3 or 1
+  elseif key == "m" then settings.reducedMotion = not settings.reducedMotion
+  elseif key == "s" then settings.subtitles = not settings.subtitles
+  elseif key == "v" then settings.voiceMuted = not settings.voiceMuted
+  elseif key == "p" then settings.paused = not settings.paused
+  elseif key == "l" then host.locale()
+  elseif key == "q" then host.enqueue("conversation")
+  elseif key == "n" then host.enqueue("radio")
+  elseif key == "f5" then host.save()
+  elseif key == "f9" then host.restore()
+  elseif key == "r" then host.reset()
+  elseif key == "escape" then love.event.quit() end
+  host.update(0)
+end
+function love.draw()
+  local width, height = love.graphics.getDimensions()
+  love.graphics.clear(0.12, 0.25, 0.34)
+  love.graphics.setColor(0.17, 0.36, 0.44)
+  love.graphics.rectangle("fill", 0, height * 0.45, width, height)
+  love.graphics.setColor(0.28, 0.51, 0.56)
+  for row = 1, 9 do
+    local x = (elapsed * 20 + row * 91) % (width + 120) - 120
+    love.graphics.line(x, height * 0.45 + row * 24, x + 100, height * 0.45 + row * 24)
+  end
+  love.graphics.setColor(0.78, 0.51, 0.32)
+  love.graphics.rectangle("fill", width * 0.2, height * 0.5, width * 0.6, 28)
+  love.graphics.rectangle("fill", width * 0.25, height * 0.5, 18, 100)
+  love.graphics.rectangle("fill", width * 0.7, height * 0.5, 18, 100)
+  love.graphics.setColor(0.96, 0.78, 0.5)
+  love.graphics.circle("fill", width / 2, height * 0.5 - 32, 18)
+  love.graphics.setColor(0.3, 0.66, 0.61)
+  love.graphics.rectangle("fill", width / 2 - 20, height * 0.5 - 15, 40, 30, 8, 8)
+  love.graphics.setColor(0.95, 0.97, 0.96)
+  love.graphics.setFont(title)
+  love.graphics.print("Beacon Harbor", 24, 20)
+  love.graphics.setFont(caption)
+  local settings = host.settings
+  love.graphics.print(
+    "1 Conversation  /  2 Speech bubble  /  3 Radio     ·     " .. settings.mode,
+    24,
+    57
+  )
+  local snapshot = host.player():snapshot()
+  local node = snapshot.node
+  if node then
+    maxScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
+      settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll)
+    settings.scroll = math.min(settings.scroll, maxScroll)
+  end
+  local radio = host.radio:snapshot()
+  local radioNode = radio.node
+  if radioNode and not (host.active() and settings.mode == "panel") then
+    presenter.draw(radioNode, host.radioClusters(), host.radioView().visible, "announcement",
+      settings.reducedMotion, settings.subtitles, 0, 0)
+  end
+  love.graphics.setFont(caption)
+  love.graphics.setColor(0.95, 0.97, 0.96)
+  local stats = host.metrics()
+  love.graphics.printf("Space / Enter: reveal, advance or choose · Arrows: choose · PgUp / PgDn: scroll\nF: speed " .. settings.speed .. "x · M: reduced motion " .. tostring(settings.reducedMotion) .. " · S: subtitles " .. tostring(settings.subtitles) .. " · V: voice mute " .. tostring(settings.voiceMuted) .. "\nL: " .. settings.locale .. " · P: pause · R: reset · F5 / F9: checkpoint · Q: queue talk · N: radio\nTokens " .. stats.rewards .. " · Queued " .. stats.conversations .. "/2 + " .. stats.messages .. "/4 · Rejected " .. stats.rejected,
+    24, height - 92, width - 48)
+end
+function love.quit()
+  host.dispose()
+  presenter.dispose()
+  title:release()
+  caption:release()
+end
+return host

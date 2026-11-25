@@ -1,0 +1,6 @@
+return Dialogue.actions({
+  collect = {
+    payload = Save.shape(Save.record({ amount = Save.number(1) })),
+    effect = "consequential",
+  },
+})

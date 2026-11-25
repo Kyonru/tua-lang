@@ -743,18 +743,18 @@ synthetic protocol timing is not presented as perceived UI latency.
   motion, and route gameplay through declared host actions rather than executable
   inline function tags. Evaluate inline icons/images separately with explicit layout,
   localization and accessible plain-text fallback rules before adding core syntax.
-- [ ] Add one runnable LÖVE showcase with interchangeable presentation adapters:
+- [x] Add one runnable LÖVE showcase with interchangeable presentation adapters:
   conversation panel, NPC speech bubble, and non-pausing radio message.
-- [ ] Demonstrate shared characters/expressions, localized placeholders, conditional
+- [x] Demonstrate shared characters/expressions, localized placeholders, conditional
   replies, typed actions, both timing anchors, styled reveal, voice/waits, save/resume
   and bounded history. Use the same player contracts rather than three engines.
-- [ ] Include explicit controls for instant reveal, text-speed adjustment, reduced
+- [x] Include explicit controls for instant reveal, text-speed adjustment, reduced
   motion, subtitles, voice mute and keyboard-only choice selection. Expose focus
   and scrolling clearly; do not claim screen-reader or full shaping support
   without a corresponding implementation and verification.
-- [ ] Demonstrate separate optional queues with existing `BoundedQueue`, including
+- [x] Demonstrate separate optional queues with existing `BoundedQueue`, including
   overflow, channel priority and interruption policy. Keep queue policy in the host.
-- [ ] Maintain a headless counterpart and explain small adoption paths, rather
+- [x] Maintain a headless counterpart and explain small adoption paths, rather
   than requiring every game to adopt every showcase feature.
 - [ ] Update `docs/dialogue.md`, the example README and relevant existing feature
   pages. Update `docs/llms.txt` and regenerate the embedded contract when APIs change;

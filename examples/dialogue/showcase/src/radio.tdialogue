@@ -1,0 +1,7 @@
+@dialogue 1
+@text rich
+@characters Cast "characters"
+[start]
+// @id harbor.radio
+Cast.Robot: [style=radio]Harbor radio[/style]: a new vessel is approaching. Keep moving. (end)
+@speech character
