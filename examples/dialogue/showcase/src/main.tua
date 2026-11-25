@@ -42,12 +42,13 @@ function love.keypressed(key: string)
 end
 function love.draw()
   local width, height = love.graphics.getDimensions()
+  local motion = host.settings.reducedMotion and 0 or elapsed
   love.graphics.clear(0.12, 0.25, 0.34)
   love.graphics.setColor(0.17, 0.36, 0.44)
   love.graphics.rectangle("fill", 0, height * 0.45, width, height)
   love.graphics.setColor(0.28, 0.51, 0.56)
   for row = 1, 9 do
-    local x = (elapsed * 20 + row * 91) % (width + 120) - 120
+    local x = (motion * 20 + row * 91) % (width + 120) - 120
     love.graphics.line(x, height * 0.45 + row * 24, x + 100, height * 0.45 + row * 24)
   end
   love.graphics.setColor(0.78, 0.51, 0.32)

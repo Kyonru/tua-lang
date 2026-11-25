@@ -61,12 +61,14 @@ local function new()
       local font = body
       local wave = false
       local warning = false
+      local radioStyle = false
       for _, run in ipairs(runs) do
         if index >= run.firstCluster and index <= run.lastCluster then
           if run.emphasis then font = emphasis end
           for _, style in ipairs(run.styles) do
             if style == "wave" then wave = true end
             if style == "warning" then warning = true end
+            if style == "radio" then radioStyle = true end
           end
         end
       end
@@ -96,6 +98,7 @@ local function new()
         love.graphics.setColor(0, 0, 0, 0.45)
         love.graphics.print(cluster.text, x + 19 + cx + dx, y + 46 + cy + dy - scroll)
         if warning then love.graphics.setColor(1, 0.75, 0.42)
+        elseif radioStyle then love.graphics.setColor(0.45, 0.88, 0.85)
         else love.graphics.setColor(0.92, 0.96, 0.97) end
         love.graphics.print(cluster.text, x + 18 + cx + dx, y + 45 + cy + dy - scroll)
       end
