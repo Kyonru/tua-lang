@@ -65,9 +65,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
   end
   local function update(dt: number)
     if disposed then return end
-    local blocked = active() and settings.mode == "panel"
     if settings.paused then player:suspend() else player:resume() end
-    if blocked or settings.paused then radio:suspend() else radio:resume() end
     audio.volume(0.6, settings.voiceMuted and 0 or 1)
     radioAudio.volume(0.4, settings.voiceMuted and 0 or 1)
     view = audio.update(player:snapshot(), dt * settings.speed)
@@ -81,16 +79,19 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     if not settings.paused and player:snapshot().state == "awaiting_action" then
       player:runAction()
     end
+    -- Resolve modal handoffs before advancing the background channel's clock.
+    if not settings.paused and not active() then
+      local nextEntry = conversationQueue.pop()
+      if nextEntry then player:start(nextEntry) end
+    end
+    local blocked = active() and settings.mode == "panel"
+    if blocked or settings.paused then radio:suspend() else radio:resume() end
     radioView = radioAudio.update(radio:snapshot(), dt * settings.speed)
     if settings.reducedMotion and not settings.paused and not blocked then
       radioView = radioAudio.finish()
     end
     radio:update(dt, radioView.complete)
     if not settings.paused then
-      if not active() then
-        local nextEntry = conversationQueue.pop()
-        if nextEntry then player:start(nextEntry) end
-      end
       if not blocked then
         if radioView.complete then radioAge += dt end
         if radioAge >= 1.5 then radio:advance() end
