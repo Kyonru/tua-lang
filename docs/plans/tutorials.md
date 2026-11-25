@@ -1,42 +1,127 @@
 # Tua tutorials: implementation plan
 
-Status: planned. The [first playable dialogue](../tutorials/first-dialogue.md)
-is implemented and provides the initial model for this series. This plan covers
-10 additional tutorials; it does not authorize new runtime APIs or release claims.
+Status: in progress; reorganized around **one evolving game with runnable chapter
+checkpoints**, as requested. M0–M4 delivered useful foundations, but the standalone
+feature-by-feature format is superseded by the chapter plan below. The existing
+[first playable dialogue](../tutorials/first-dialogue.md) remains a short entry point.
+This plan does not authorize new runtime APIs or release claims.
 
 ## Outcome
 
-Help someone build a small working game feature before introducing its optional
-capabilities. Tutorials teach composition and ownership. Feature pages remain the
-source of truth for APIs, defaults, compatibility and detailed lifecycle rules.
+Help someone build a small playable arena game, adding a meaningful capability in
+each chapter. The same character, enemies, controls and progress continue throughout.
+Tutorials teach how APIs work together: who owns state, what updates first, what
+pauses, and what survives a restart. A chapter needs a playable outcome rather than
+merely demonstrating an API. Feature pages own small focused examples, API defaults,
+compatibility and detailed lifecycle reference material.
 
 Each tutorial must answer: what will I build, what do I need, how do I run it,
 what should happen, and what can I add next?
 
+## One evolving project
+
+The flagship tutorial is a small arena game. Begin with a movable Kenney character
+and a playable/pause loop; add a weapon and enemy waves together, then deepen that
+same game. Keep the art, layout and controls consistent. No grid backgrounds or
+generic dashboard decoration. Use Kenney assets when artwork is needed, with bundled
+licenses and provenance; primitives are fine for bullets, hit indicators and HUD.
+
+The working first result should remain small. Advanced chapters are optional stops
+on the same path, not prerequisites for firing the first shot. Do not introduce a
+framework, project generator or all future systems in chapter one.
+
+### Runnable chapter checkpoints
+
+- Own the series under `examples/tutorials/arena-game/checkpoints/` and its guide
+  under `docs/tutorials/arena-game/`. A series README lists chapters, prerequisites,
+  controls and exact commands. Each checkpoint has its own `tua.toml`, `src/`,
+  README, `.gitignore` and relevant tests.
+- Use numbered, stable folders such as `01-playable-loop` and `02-combat-waves`.
+  Every folder runs independently. No imports from a later checkpoint, another
+  tutorial or the zombie game; the reader can copy one folder and work from it.
+- Author a chapter by extending the preceding checkpoint. Explain the actual file
+  changes, preserve recognizable names and show the same game growing. Do not replace
+  the architecture wholesale each chapter or expose later concepts in early code.
+- A small amount of source duplication is intentional so each checkpoint is a real
+  learning boundary. Do not maintain an additional mutable `latest` copy. The index
+  links to the highest completed checkpoint.
+- Bundle only the assets required at each checkpoint. Record hashes so repeated
+  assets can be verified. Avoid runtime downloads or special asset-generation steps.
+- When correcting a copied defect, inspect every later checkpoint containing it and
+  run their affected regressions. Keep finished checkpoints runnable after compiler
+  updates; they are maintained examples, not frozen binaries.
+- Each chapter explains its starting point, changed files, new behavior and a short
+  experiment. Test the cumulative project, not only the new helper in isolation.
+
+## Chapter delivery plan (authoritative)
+
+These chapters replace the old one-API-topic delivery order. The M sections below
+retain detailed acceptance requirements and historical evidence; their old completion
+status does **not** establish that the integrated chapters are complete.
+
+| Chapter / checkpoint | Playable outcome | APIs and requirements carried forward | Status |
+| --- | --- | --- | --- |
+| C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Pending |
+| C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Pending; weapon model prototype verified, not an integrated checkpoint |
+| C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Pending |
+| C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Pending |
+| C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Pending |
+| C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal/nonmodal ownership | Pending |
+| C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Pending |
+| C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Pending |
+| C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Pending |
+
+C2 deliberately merges weapons and waves: a pool exhaustion rule affects when a shot
+can exist; a swept collision selects a live ECS enemy; one accepted hit changes health;
+feedback observes the result without deciding damage. Teach those connections rather
+than an isolated dummy-target shooter followed by an unrelated enemy example.
+
+For C1, combine existing movement and game-flow behavior into a coherent small host;
+do not simply paste two entry points together. For C2, agree on one world-space aim
+conversion and simulation clock so camera feedback cannot alter hit results. Carry
+pause, focus and reset policy into every later chapter. For C7, define a checkpoint
+boundary (for example, between waves) before choosing what to persist; saving a live
+combat snapshot is not an implicit requirement.
+
+### Immediate work and migration
+
+- [ ] C1: create the first combined checkpoint from the qualified M1/M2 foundations,
+      with native movement/pause/restart verification and a cumulative walkthrough.
+- [ ] C2: adapt the weapon prototype to live ECS enemies and the C1 player/camera.
+      Keep its rate, pooling and swept-collision tests; add nearest-enemy selection,
+      one-hit/one-damage, pause/reset and feedback-independent outcome regressions.
+- [ ] Fold later M requirements into the same game in chapter order above; do not
+      add new independent `scene-audio`, `first-shader` or `enemy-decisions` projects.
+- [ ] Publish a project landing page and chapter navigation when C1 is runnable.
+      Until then, keep the current guides honest about being standalone foundations.
+- [ ] Review each existing standalone guide after its replacement is qualified.
+      Move short API-only material into its owning reference page; use a concise
+      redirect/link for superseded guide URLs where supported by the docs stack.
+- [ ] Preserve existing example paths and tests until their consumers are audited.
+      `pause-input`, `love-save` and the dialogue starter are existing reference
+      examples, not automatically deletable duplicates.
+- [ ] Remove redundant tutorial-only projects only after documenting their replacement,
+      updating links and preserving any unique regression coverage. Keep migration
+      cleanup separate from gameplay/chapter changes.
+
+The current M5 prototype checks cadence at 30/60/120/144 Hz, bounded reuse, expiration,
+swept target crossing, reset and disposal against emitted Lua. It has not received
+native rendering qualification or been integrated with enemies. It is implementation
+input for C2, not a completed chapter or a new published tutorial.
+
 ## Organization and boundaries
 
-- Publish completed guides under `docs/tutorials/` in the existing **Tutorials**
-  navigation section. Keep this implementation plan out of public navigation.
-- Add a concise tutorial index when the second guide is ready. Group guides by
-  reader goals; do not turn the index into a prerequisite checklist.
-- Prefer existing focused examples when they already provide an approachable
-  starting point. Otherwise use `examples/tutorials/<slug>/` with its own
-  `tua.toml`, README, typed source and focused verification. Choose and record
-  the owning example during each tutorial's API audit.
-- Preserve the existing dialogue starter location. Do not move working examples
-  merely to make their directories match new ones.
-- All final examples run independently. Conceptual prerequisites are optional
-  reading; no example imports source from another tutorial or the zombie game.
-- Use existing Tua features first. Confirm exact APIs and supported behavior in
-  the selected compiler before writing snippets. Report demonstrated gaps with
-  minimal reproductions; keep upstream fixes separate from tutorial changes.
-- Keep source in `.tua`; generated Lua remains build output. Prefer readable
-  concrete code over building a framework for the tutorial series.
-- Keep scenes simple and specific to the lesson. Do not use grid backgrounds or
-  generic dashboard/card decoration; only retain landmarks that teach spatial behavior.
-- Prefer Kenney assets when a tutorial needs artwork; include source and license.
-  Bundle small, appropriately licensed assets only where needed. Use primitives
-  elsewhere; avoid mandatory downloads, accounts or network access at runtime.
+- Publish completed chapters in the **Tutorials** navigation section. Keep this plan
+  out of public navigation. Put a project outcome before the chapter list.
+- Keep short first-use examples on reference pages; cross-link to the game chapter
+  for composition. A useful existing standalone entry point may remain available.
+- Use existing Tua features and inspect current docs/source before choosing APIs.
+  Report demonstrated gaps with minimal reproductions; keep upstream fixes separate.
+- Keep source in `.tua`; generated Lua remains ignored build output. Prefer readable,
+  concrete code over a reusable tutorial framework.
+- The single-game series is the current scope. Additional conversation-only or visual
+  scene series require a distinct learning outcome; do not create them merely to
+  accommodate another API.
 
 ## Teaching contract
 
@@ -50,17 +135,17 @@ Each guide follows the same small structure, with length determined by its subje
 5. Offer two or three experiments with an observable expected result.
 6. Link optional next features and likely troubleshooting cases to their owners.
 
-Keep the final runnable source authoritative. Validate cumulative code from the
-steps; do not maintain several copied projects for each stage unless the guide
-actually needs independently runnable variants. Keep test scaffolding out of the
-main learning path and explain it in the example README.
+Keep each chapter's runnable checkpoint authoritative. Validate the cumulative edits
+from the previous checkpoint, not just explanatory excerpts. The selected chapter
+checkpoint structure intentionally permits independently runnable stages. Keep test
+scaffolding out of the main learning path and explain it in the checkpoint README.
 
 Clearly separate engine defaults from example policy: starting state, input maps,
 pausing, volume, save location, pool limits and timing should not look like implicit
 Tua behavior. Avoid performance promises, arbitrary target frame rates and examples
 that require every helper to demonstrate one feature.
 
-## Delivery order
+## Original milestone map (requirements and historical evidence)
 
 | Milestone | Tutorial / proposed slug | Why this order |
 | --- | --- | --- |
@@ -77,9 +162,9 @@ that require every helper to demonstrate one feature.
 | M10 | Find and fix a slow frame / `slow-frame` | Uses completed workload patterns to teach evidence-based tuning |
 | M11 | Qualify the complete learning path | Check discoverability, consistency and executable instructions |
 
-M1–M3 are the first delivery tranche. Later guides can ship independently after
-confirming their own API/example baseline. This order is editorial, not a runtime
-dependency graph.
+This table records the original topic breakdown, not the current shipping order.
+Use C1–C9 above for new work. Retain the M acceptance requirements when integrating
+their behavior into chapters.
 
 ## M0 — Establish conventions
 
@@ -284,7 +369,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M2 | Complete | `examples/pause-input`; `257701a2`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/game-flow.md) |
 | M3 | Complete | `examples/love-save`; `46a9df23`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/save-and-resume.md) |
 | M4 | Complete | `examples/tutorials/enemy-wave`; `936b615a`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/enemy-wave.md) |
-| M5 | Pending | |
+| M5 | Integration pending | Weapon model prototype; deliver with M4 in C2, not as an isolated tutorial |
 | M6 | Pending | |
 | M7 | Pending | |
 | M8 | Pending | |
@@ -292,7 +377,10 @@ other contributors' work separate. Do not push or publish without authorization.
 | M10 | Pending | |
 | M11 | Pending | |
 
-## M0 audit and implementation baseline
+## Original M0 audit and implementation baseline
+
+The owning-example decisions below are historical; chapter ownership above supersedes
+new standalone project proposals.
 
 Audited against compiler 0.11.0, embedded revision
 `e0033fc65d3b78f9be8aba3e427aa9a239782354`, release aarch64-apple-darwin,
@@ -374,4 +462,5 @@ M4 now includes a standalone Kenney enemy wave, live component readers, determin
 click targeting, reset/disposal checks and optional bounded rings. Native replay
 checks the actual callbacks and drawing; no runtime or compiler changes were needed.
 
-Next: M5, a weapon that feels responsive.
+Next: C1, the combined playable loop. Then integrate the M5 weapon groundwork with
+M4 enemy lifecycle in C2; do not publish another isolated weapon tutorial.
