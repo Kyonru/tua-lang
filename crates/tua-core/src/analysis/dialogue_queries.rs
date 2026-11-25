@@ -504,7 +504,11 @@ impl AnalysisSnapshot {
         let (alias, name) = token.split_once('.')?;
         let import = imports.iter().find(|import| import.alias.value == alias)?;
         let module = self.dialogue_module(path, import)?;
-        let export = self.module_graph.export(&module, name)?;
+        let source = self.module_graph.export_type_source_path(&module, name)?;
+        let export = self
+            .module_graph
+            .export(source, name)
+            .or_else(|| self.module_graph.export(&module, name))?;
         Some(Definition {
             path: export.module_path.clone(),
             span: export.definition_span,

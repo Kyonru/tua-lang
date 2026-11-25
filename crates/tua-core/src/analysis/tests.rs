@@ -13058,6 +13058,10 @@ Cast.Guide: Hello (end)
         ),
         vec!["talking"]
     );
+    let speaker = snapshot
+        .definition("src/scene.tdialogue", SourcePosition { line: 5, column: 8 })
+        .unwrap();
+    assert_eq!(speaker.path, PathBuf::from("src/cast.tua"));
     let position = fixture.position("expression");
     assert!(snapshot
         .hover("src/scene.tdialogue", position)
