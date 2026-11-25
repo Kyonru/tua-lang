@@ -10,6 +10,7 @@ pub mod flow;
 mod media;
 pub mod paths;
 pub mod placeholders;
+pub mod preview;
 pub mod voice;
 mod waits;
 pub use actions::DialogueAction;

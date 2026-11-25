@@ -624,6 +624,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   provably unreachable paths. Distinguish proven impossibility from dynamic
   context; allow declared externally started entry points so they are not falsely
   marked unreachable.
+- [x] Static preview foundation: `AnalysisSnapshot::dialogue_preview` exposes the
+  shared parsed document and source-located choice/fallback/wait/branch/action
+  routes. Text, conditions, timing and presentation metadata remain authored data;
+  no imports, handlers or assets execute, and no reachability is inferred. Missing
+  or malformed overlays return no preview; deletion/recreation refresh is tested.
+  This is a core query only, not an editor command or runtime simulation.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

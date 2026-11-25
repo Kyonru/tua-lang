@@ -14782,3 +14782,80 @@ fn dialogue_voice_completion_escapes_insertions_as_json_content() {
     edited.replace_range(start..end, item.insert_text.as_ref().unwrap());
     assert!(crate::dialogue_asset::parse_dialogue_source("b.tdialogue", &edited).is_ok());
 }
+
+#[test]
+fn dialogue_preview_preserves_authored_routes_text_and_overlay_lifecycle() {
+    use crate::dialogue_asset::preview::DialogueRouteKind;
+    let path = "scene.tdialogue";
+    let source = include_str!("../../../../examples/dialogue-conditions/src/scene.tdialogue");
+    let mut host = AnalysisHost::new();
+    host.set_file(path, source);
+    let original = host.snapshot();
+    let preview = original.dialogue_preview(path).unwrap();
+    assert_eq!(preview.document.sections[0].label.value, "gate");
+    assert_eq!(
+        preview.document.sections[1].lines[0].text.value,
+        "You have %{coins} coins."
+    );
+    assert_eq!(preview.routes.len(), 8);
+    assert_eq!(preview.routes[0].kind, DialogueRouteKind::BranchTrue);
+    assert_eq!(
+        preview.routes[2].kind,
+        DialogueRouteKind::Choice { line: 0, choice: 0 }
+    );
+    assert_eq!(
+        preview.routes[5].kind,
+        DialogueRouteKind::Fallback { line: 0 }
+    );
+    // Even the literal-true branch retains both authored edges. No path is simulated.
+    assert_eq!(preview.routes[7].kind, DialogueRouteKind::BranchFalse);
+    for route in &preview.routes {
+        let start = crate::source_text::byte_for_position(source, route.target.span.start).unwrap();
+        let end = crate::source_text::byte_for_position(source, route.target.span.end).unwrap();
+        assert_eq!(&source[start..end], route.target.value);
+    }
+    host.set_file(path, source.replace("You have", "Possédez"));
+    assert!(host
+        .snapshot()
+        .dialogue_preview(path)
+        .unwrap()
+        .document
+        .sections[1]
+        .lines[0]
+        .text
+        .value
+        .starts_with("Possédez"));
+    host.set_file(path, "@dialogue 1\n[broken");
+    assert!(host.snapshot().dialogue_preview(path).is_none());
+    assert!(original.dialogue_preview(path).is_some());
+    host.remove_file(path);
+    assert!(host.snapshot().dialogue_preview(path).is_none());
+    host.set_file(path, source);
+    assert_eq!(
+        host.snapshot().dialogue_preview(path).unwrap().routes,
+        preview.routes
+    );
+    host.set_file("plain.tua", "local x = 1");
+    assert!(host.snapshot().dialogue_preview("plain.tua").is_none());
+}
+
+#[test]
+fn dialogue_preview_actions_waits_and_terminal_sections_do_not_execute_or_fall_through() {
+    use crate::dialogue_asset::preview::DialogueRouteKind;
+    let source = include_str!("../../../../examples/dialogue-actions/src/scene.tdialogue");
+    let mut host = AnalysisHost::new();
+    // The actions module is deliberately unavailable: structure needs no handler.
+    host.set_file("scene.tdialogue", source);
+    let preview = host.snapshot().dialogue_preview("scene.tdialogue").unwrap();
+    assert_eq!(preview.routes.len(), 2);
+    assert_eq!(preview.routes[0].kind, DialogueRouteKind::ActionSuccess);
+    assert_eq!(preview.routes[1].kind, DialogueRouteKind::ActionFailure);
+    host.set_file(
+        "scene.tdialogue",
+        "@dialogue 1\n[start]\n@wait 0.5 [target:done]\n[done]\n// @id goodbye\n: Bye (end)\n",
+    );
+    let preview = host.snapshot().dialogue_preview("scene.tdialogue").unwrap();
+    assert_eq!(preview.routes.len(), 1);
+    assert_eq!(preview.routes[0].kind, DialogueRouteKind::Wait);
+    assert_eq!(preview.routes[0].target.value, "done");
+}
