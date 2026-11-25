@@ -48,7 +48,10 @@ love build
 Press **1–4** for the original styles, **5–7** for the additional reference-based
 styles, and **O** to cycle portrait placement.
 **H** opens controls/diagnostics, **Tab** opens the scrollable recent transcript, and
-**F2** switches between the longer story and the short feature demonstration. **Space** finishes reveal, then advances;
+**F2** switches between the longer story and the short feature demonstration.
+**F3** opens a rich-text tour with nested emphasis, highlights, underline/strike,
+thought/whisper text, colors, motion, scoped reveal speed and pauses. These are
+showcase renderer treatments built on the existing rich-text marks. **Space** finishes reveal, then advances;
 **Up/Down** and **Enter** select replies. **F** changes reveal speed, **M** reduces
 motion, **S** toggles subtitles and **V** mutes recorded voice. **L** switches
 language, **P** pauses, **R** resets, **Q/N** queue conversations/announcements,

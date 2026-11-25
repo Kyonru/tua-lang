@@ -78,3 +78,12 @@ Inspect the last choice after keyboard scrolling, the disabled explanation, conc
 radio, and completed states. The old crash/empty-panel/locale/priority/focus tests remain.
 Bundled Lorelei portraits are deliberately replaceable: use `node.portrait` as the lookup ID
 for your own licensed illustration or animation adapter.
+
+## Rich text
+
+Named line treatments live in `rich_styles.tua`. Their decorations do not alter
+layout metrics: fully measured text keeps wrapping stable while it reveals. Motion
+is limited to small offsets; M disables it. Colors adapt to dark and pale panels.
+Emphasis, underline and highlight may combine, while story prose uses effects only
+on meaningful phrases. F3 is the deliberately denser sampler. Preserve plain history,
+literal placeholders and localized templates when adding treatments.

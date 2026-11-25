@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Expand Beacon Harbor rich-text presentation with an F3 bilingual tour, nested
+  decorations, thought/whisper treatments, palette-aware colors and timed reveal.
+
 - Add bundled Lorelei portrait variants and three additional reference-based dialogue
   frames to Beacon Harbor; retain the four original styles and portrait backgrounds.
 

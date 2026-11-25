@@ -44,6 +44,39 @@ scroll; keyboard focus brings the newly selected reply into view.
 | Transmission | Subtitles |
 | ![Transmission receiver](screenshots/transmission.png) | ![Unframed subtitles without a portrait](screenshots/subtitles.png) |
 
+## Rich text tour
+
+Press **F3** for *Words with character*, a six-line English/French tour. Switch among
+all seven UI styles while reading. F3 again returns to the main story.
+
+![Rich text with highlighting, emphasis, strikethrough and underline](screenshots/rich-text.png)
+
+```text
+[style=strike]take the wide channel[/style]
+[style=highlight][em]three white markers[/em][/style]
+[style=underline]on your left[/style]
+[style=thought]What if nobody answers?[/style]
+[style=whisper]Don't tell Mara.[/style]
+[style=wave]The water won't sit still[/style]
+[style=shake]neither will my hands[/style]
+[speed=8]Slowly. One breath.[/speed][pause=0.6] [speed=65]Now pull![/speed]
+```
+
+`success`, `warning` and `radio` also provide palette-aware text colors. Emphasis
+adds accented, heavier strokes; nested styles combine. Unknown style keys remain
+ordinary text. `warning` retains its previous small shake. **M** disables wave/shake
+and finishes reveal immediately; static decorations remain visible. **Space** can
+finish timed text without playing a backlog of typing sounds.
+
+These are host-defined `[style=…]` keys in `rich_styles.tua`, using Tua's existing
+rich-text contract. No new language tags, inline scripts, or engine dependencies
+were added. Decorations apply to line text; the current choice/reason renderer
+keeps its plain wrapped layout. Pronunciation hints remain metadata for an audio
+adapter, rather than a text-to-speech feature in this example.
+
+The main story uses the same treatments for clues, uncertainty and important
+callbacks. History stays plain, and interpolated names cannot inject markup.
+
 ## Read the story
 
 The default `start` entry contains **33 utterances**, a returning information hub,
@@ -81,7 +114,7 @@ restoring a checkpoint also restores which story entry it belongs to.
 | P / R | Pause both channels / restart |
 | Q / N | Queue a conversation / non-blocking radio announcement |
 | F5 / F9 | Save / restore an in-memory checkpoint |
-| F2 | Long story / short feature demonstration |
+| F2 / F3 | Long story or short demo / rich-text tour |
 | Escape | Close an overlay, otherwise quit and release resources |
 
 ## Find a feature
@@ -119,7 +152,7 @@ screen-reader bridge, bidirectional text layout, or full script shaping in this 
 | `story.tua`, `actions.tua`, `events.tua` | Typed facts, locals, actions and notification payloads |
 | `controller.tua` | Host channel priority, queues, checkpoints and story-local memory |
 | `characters.tua`, `translations.tua` | Shared character metadata and French templates |
-| `presenter.tua`, `frames.tua`, `styles.tua`, `theme.tua`, `portraits.tua` | Layout, palettes, fonts, expression art and reveal rendering |
+| `presenter.tua`, `frames.tua`, `styles.tua`, `theme.tua`, `portraits.tua`, `rich_styles.tua` | Layout, palettes, fonts, expression art and reveal rendering |
 | `audio.tua`, `backend.tua` | Cue policy and owned native Sources |
 | `main.tua` | Minimal stage, keyboard routing, overlays and lifecycle callbacks |
 
@@ -134,6 +167,7 @@ these styles, queues or a particular game-pause policy.
 python3 verify.py --tua ../../../target/release/tua
 python3 verify.py --tua ../../../target/release/tua --love /path/to/love --output /tmp/dialogue-lifecycle
 python3 verify.py --tua ../../../target/release/tua --love /path/to/love --scenario styles --output /tmp/dialogue-styles --video
+python3 verify.py --tua ../../../target/release/tua --love /path/to/love --scenario rich --output /tmp/dialogue-rich --video
 ```
 
 Each output directory must be new. Headless checks validate portrait hashes, distinct expression images and image disposal,
