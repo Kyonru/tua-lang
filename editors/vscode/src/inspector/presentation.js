@@ -172,6 +172,19 @@ function presentObject(object, prefix, previous) {
           tooltip: `Root result after tick ${item.tick}; no per-node outcome is inferred` })) });
       break;
     }
+    case "dialogues": {
+      summary = `${data.state || "Unknown state"}${data.nodeId ? ` · ${data.nodeId}` : ""}${data.suspended ? " · suspended" : ""}`;
+      children = [];
+      for (const [key, label] of [["nodeId", "Current node"], ["documentId", "Document"], ["issueCode", "Issue code"]]) {
+        if (data[key] !== undefined) children.push(row(prefix, key, label, data[key]));
+      }
+      if (data.wait) children.push({ id: prefix + "/wait", label: "Wait", children: valueNodes(data.wait, prefix + "/wait") });
+      if (data.action) children.push({ id: prefix + "/action", label: "Action", children: valueNodes(data.action, prefix + "/action") });
+      for (const key of ["generation", "visit"]) {
+        if (data[key] !== undefined) details.push(row(prefix, key, key === "visit" ? "Visit" : "Generation", data[key]));
+      }
+      break;
+    }
     case "audio": {
       const buses = data.buses && typeof data.buses === "object" ? data.buses : {};
       const voices = Object.values(data.voices || {}).filter(value => value && typeof value === "object").slice(0, 64);

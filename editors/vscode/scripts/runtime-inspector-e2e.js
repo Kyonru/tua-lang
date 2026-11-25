@@ -21,6 +21,10 @@ const kind = (entry, name, binding) => entry.snapshot?.objects.find(object => ob
 async function main() {
   fs.mkdirSync(output);
   for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool", "tuastore", "baton", "tuabehavior", "tuaaudio"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
+  const runtime = path.resolve(__dirname, "../../../vendor/runtime");
+  for (const name of fs.readdirSync(runtime).filter(name => name.startsWith("tuadialogue") && name.endsWith(".lua"))) {
+    fs.copyFileSync(path.join(runtime, name), path.join(output, name));
+  }
   fs.writeFileSync(path.join(output, "conf.lua"), `io.stdout:setvbuf("no")
 function love.conf(t)
   t.window.visible = false; t.window.width = 64; t.window.height = 64
@@ -59,10 +63,17 @@ store:subscribe(function() end)
 store:watch("score", function() end)
 store:set({ score = 1 })
 store:update(function(state) state.score = 2 end)
+local Dialogue = require("tuadialogue")
+local dialogue = Dialogue.new({ schemaVersion = 9, documentId = "native", entry = "wait", nodes = {
+  wait = { kind = "wait", duration = 100, next = "done" },
+  done = { kind = "end" }
+} })
+dialogue:start()
 local player = "unknown"
 function love.load(args) player = args[1] or "unknown" end
 function love.update(dt)
   controls:update()
+  dialogue:update(dt, false)
   assert(runner:update(dt) == "running")
   audio:update(dt)
   data.player = player
@@ -115,6 +126,10 @@ end
     assert.equal(Object.values(behavior.history)[0].status, "running");
     assert.equal(kind(player.entry, "audio", "audio").buses.sfx.gain, 0.5);
     assert.equal(kind(player.entry, "audio", "audio").activeVoices, 0);
+    const dialogue = kind(player.entry, "dialogues");
+    assert.equal(dialogue.state, "waiting");
+    assert.equal(dialogue.documentId, "native");
+    assert(dialogue.wait.elapsed > 0 && dialogue.wait.remaining < 100);
     const component = Object.values(kind(player.entry, "ecs", "world").entities["1"])[0];
     assert.equal(component.player, player.session.title); assert.equal(component.self, "<cycle>");
     assert(component.huge.length < 250);
@@ -155,7 +170,7 @@ end
   assert(!contents.stdout.includes("Tua editor-only inspector"));
   assert(!contents.stdout.includes("shim.lua"));
   assert(!contents.stdout.includes("127.0.0.1"));
-  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store/input/behavior/audio snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
+  console.log("Native runtime inspector passed: two players, ECS/state/signal/pool/store/input/behavior/audio/dialogue snapshots, pause/refresh/resume, live files, independent exit, cleanup, and inspector-free package.");
 }
 main().catch(error => { console.error([...inspector.entries.values()].map(entry => ({ title: entry.session.title, status: entry.status, sequence: entry.snapshot?.sequence }))); console.error(error); process.exitCode = 1; }).finally(async () => {
   for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");

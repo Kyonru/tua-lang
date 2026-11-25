@@ -10,6 +10,7 @@ local categories = options.categories or {
   inputs = true,
   behaviors = true,
   audio = true,
+  dialogues = true,
 }
 local inspect = assert(loadfile(directory .. "/snapshot.lua"))()
 inspect.configure(options)
@@ -265,6 +266,9 @@ local function instrument(name, module)
       return definition
     end
     wrapped[module.new] = true
+  elseif categories.dialogues and name == "tuadialogue" and type(module) == "table" then
+    local instrumentDialogue = assert(loadfile(directory .. "/dialogue.lua"))()(inspect, wrapped)
+    module = instrumentDialogue(module)
   elseif categories.audio and name == "tuaaudio" and type(module) == "function" then
     module = constructor(module, "audio", audioData)
     package.loaded[name] = module

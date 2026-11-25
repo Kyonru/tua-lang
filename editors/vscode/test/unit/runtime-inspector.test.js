@@ -306,6 +306,7 @@ package.path = runtime .. '/?.lua;' .. package.path
 local store = require('tuastore')
 local pool = require('tuaobjectpool')
 local machine = require('tuastatemachine').create
+local dialogue = require('tuadialogue').new
 local original = loadfile
 loadfile = function(file)
  if file:match('transport.lua$') then return function() return function(_, _, _, interval) assert(interval == 1000); return function() end end end end
@@ -314,6 +315,7 @@ end
 local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'test', { categories = { stores = true }, updateInterval = 1000 })
 assert(require('tuaobjectpool') == pool)
 assert(require('tuastatemachine').create == machine)
+assert(require('tuadialogue').new == dialogue)
 assert(require('tuastore') ~= store)
 local keep = require('tuastore')({ health = 100 })
 keep:update(function(value) value.health = 80 end)
@@ -356,4 +358,109 @@ io.write(inspect.snapshot(), '\\n')`;
   assert.equal(first.data.recent["20"].sequence, 981);
   assert.equal(second.data.recent["1"].name, "last");
   assert.equal(second.id, first.id);
+});
+
+test("dialogue sampling is redacted, passive, weakly retained and covers typed constructors", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. "/?.lua;" .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. "/transport.lua" then
+    return function() return function() return function() end end end
+  end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token", { categories = { dialogues = true } })
+local Dialogue = require("tuadialogue")
+local create = Dialogue.new
+assert(require("tuadialogue").new == create)
+local player = Dialogue.new({
+  schemaVersion = 9,
+  documentId = "test",
+  entry = "wait",
+  nodes = {
+    wait = { kind = "wait", duration = 10, next = "line" },
+    line = { kind = "line", text = "SECRET dialogue text", next = "done" },
+    done = { kind = "end" },
+  },
+})
+player:start()
+player:update(2, false)
+player.snapshot = function() error("inspector must not copy full snapshots") end
+player.facts = setmetatable({}, { __index = function() error("must not read facts") end })
+io.write(inspect.snapshot(), "\\n")
+player:update(8, false)
+io.write(inspect.snapshot(), "\\n")
+player:cancel()
+io.write(inspect.snapshot(), "\\n")
+player:dispose()
+io.write(inspect.snapshot(), "\\n")
+player = nil
+collectgarbage("collect")
+collectgarbage("collect")
+io.write(inspect.snapshot(), "\\n")
+local shape = require("tuasave_shape").register({}, {}, function(value) return value end)
+local events = Dialogue.events({ noticed = shape })
+local eventPlayer = events.new({
+  schemaVersion = 5,
+  events = events,
+  entry = "done",
+  nodes = { done = { kind = "end" } },
+})
+local context = Dialogue.context({ facts = shape, locals = shape })
+local contextPlayer = context.new(
+  {
+    schemaVersion = 9,
+    context = context,
+    bindings = {},
+    entry = "done",
+    nodes = { done = { kind = "end" } },
+  },
+  {}
+)
+local actions = Dialogue.actions({ reward = { payload = shape, effect = "presentation" } })
+local handle = Dialogue.actionHandle()
+local actionPlayer = actions.new({
+  schemaVersion = 9,
+  documentId = "actions",
+  actions = actions,
+  entry = "act",
+  nodes = {
+    act = {
+      kind = "action",
+      id = "reward.id",
+      name = "reward",
+      payload = { secret = "SECRET payload" },
+      success = "done",
+      failure = "done",
+    },
+    done = { kind = "end" },
+  },
+}, { handlers = { reward = function() return handle end } })
+actionPlayer:start()
+io.write(inspect.snapshot(), "\\n")
+actionPlayer:runAction()
+io.write(inspect.snapshot(), "\\n")
+handle:cancel()
+actionPlayer:runAction()
+io.write(inspect.snapshot(), "\\n")
+assert(eventPlayer and contextPlayer)
+`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /SECRET|facts|payload|message/);
+  const frames = result.stdout.trim().split("\n").map(JSON.parse);
+  assert.deepEqual(frames[0].objects[0].data.wait, { duration: 10, elapsed: 2, remaining: 8 });
+  assert.equal(frames[1].objects[0].data.state, "awaiting_advance");
+  assert.equal(frames[2].objects[0].data.state, "cancelled");
+  assert.equal(frames[3].objects[0].data.state, "disposed");
+  assert.equal(frames[4].objects.length, 0);
+  assert.equal(frames[5].objects.length, 3);
+  const action = frames[5].objects.find(object => object.data.action)?.data.action;
+  assert.deepEqual(action, { id: "reward.id", name: "reward", handleAttached: false });
+  assert.equal(frames[6].objects.find(object => object.data.action)?.data.action.handleAttached, true);
+  assert.equal(frames[7].objects.find(object => object.data.state === "faulted").data.issueCode, "action_cancelled");
 });

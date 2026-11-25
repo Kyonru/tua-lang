@@ -257,3 +257,16 @@ test("empty snapshots and sampling limits remain explicit", () => {
   const tree = new InspectorTree({ entries: new Map([["host", { session: { id: "host", active: true }, snapshot: { objects: [], truncated: true } }]]) });
   assert.deepEqual(tree.getChildren().map(node => node.label), ["No runtime objects yet", "Snapshot limits reached"]);
 });
+
+test("dialogue players present sampled waits and issue codes without inventing traces", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const view = presentObject({ kind: "dialogues", data: {
+    state: "waiting", nodeId: "pause", suspended: true, wait: { remaining: 3 },
+    issueCode: "branch_budget", generation: 2, visit: 4,
+  } }, "dialogue");
+  assert.equal(view.summary, "waiting · pause · suspended");
+  assert(view.children.some(row => row.label === "Wait"));
+  assert(view.children.some(row => row.label === "Issue code"));
+  assert.equal(view.details.length, 2);
+  assert.doesNotMatch(JSON.stringify(view), /history|trace/);
+});

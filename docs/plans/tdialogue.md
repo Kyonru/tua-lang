@@ -676,6 +676,11 @@ context objects. Core export/import works without a filesystem or LÖVE.
   cover navigation, focus, zoom, narrow panes and refresh state. No handlers or
   loaders execute; runtime tracing remains separate. Installed-extension qualification
   and richer localized/styled text remain pending.
+- [x] Runtime diagnostic sampling foundation: the opt-in inspector wraps direct
+  and typed player constructors, samples current state/node/action, wait timings,
+  suspension and issue codes, and uses existing bounded transport/weak retention.
+  It omits text, context, payloads, error messages and history, and calls no player
+  methods or handlers. Current samples do not claim complete transition tracing.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.

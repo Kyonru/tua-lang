@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add opt-in dialogue player sampling to the Runtime Inspector, showing state,
+  waits, action IDs and issue codes while omitting text, context and payloads.
+
 - Preserve open LSP buffers after disk deletion so incremental edits, diagnostics
   and dialogue previews remain synchronized through file recreation.
 

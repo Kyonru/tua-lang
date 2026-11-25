@@ -250,6 +250,7 @@ not runtime progress.
 | State machines | Current state and pending transition | Async phase |
 | Entities and components | Entity IDs and component values | Counts represent sampled entities |
 | Signals | Listeners and recent events, newest first | Latest 20 event names; no payloads |
+| Dialogue players | Current state, node, wait and action | Issue code, suspension, generation and visit; no text or payloads |
 | Object pools | Active, available, and capacity counts | Peak simultaneous active count and rejected releases since creation; creation site and runtime ID |
 
 Store changes compare consecutive snapshots. Update counters count successful
@@ -266,6 +267,16 @@ Pool pressure counts are lifetime values for each inspected pool. A rejected
 release is a `release` call that returned `false`, including a foreign or
 already released object; a call that raises an error is not counted.
 
+Dialogue players show sampled state, current node/document IDs, generation/visit,
+suspension, wait duration/elapsed/remaining time, action ID/name and whether a
+completion handle is attached, plus the current issue code. A handle being attached
+does not say whether it has settled; the player observes that on its next action
+poll. Sampling never advances the player or invokes resolvers/handlers. Dialogue
+text, facts, locals, action/event payloads, error messages and transcript contents
+are omitted. These are bounded current-state samples, not a complete event trace:
+short-lived states may fall between samples. Missing-translation fallback and
+stale-completion history are not collected yet.
+
 ### Control updates
 
 | Action | Effect |
@@ -277,7 +288,8 @@ already released object; a call that raises an error is not counted.
 
 Use **Configure Runtime Inspection** (gear) to choose categories and update
 frequency. `tua.runtimeInspector.categories` accepts `ecs`, `states`, `signals`,
-`pools`, `stores`, `inputs`, `behaviors`, and `audio` (all enabled by default). Only selected categories receive
+`pools`, `stores`, `inputs`, `behaviors`, `audio`, and `dialogues` (all selected by
+default when inspection is enabled). Only selected categories receive
 runtime wrappers; restart running games to change collection. An empty array
 skips the shim entirely on new launches.
 

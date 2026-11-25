@@ -968,6 +968,15 @@ must be strings in structured documents, including `""` when empty. The runtime
 validates and copies these fields. Negative/nonfinite update times and nonboolean
 reveal flags are errors.
 
+## Inspect a running dialogue
+
+Enable the [Runtime Inspector](debugging.md#live-runtime-inspector) and restart the
+game. The **Dialogue players** group shows sampled state, node/action IDs, waits
+and issue codes for `Dialogue.new` and typed context/action/event constructors.
+It omits dialogue text, context values, payloads and error messages. Inspection
+never runs handlers or advances the conversation. Sampling can miss brief states;
+this is not event tracing or a missing-translation report.
+
 ## Preview the authored conversation
 
 Open a `.tdialogue` file and run **Tua: Preview Dialogue**. Enable experimental
