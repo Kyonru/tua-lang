@@ -264,6 +264,9 @@ impl AnalysisSnapshot {
                 })
                 .collect();
         }
+        if let Some(items) = self.dialogue_voice_completion(path, position) {
+            return items;
+        }
         if let Some(items) = self.dialogue_placeholder_completion(path, position) {
             return items;
         }
@@ -360,6 +363,9 @@ impl AnalysisSnapshot {
                 documentation: None,
                 context: vec!["Flow target in this dialogue file".into()],
             });
+        }
+        if let Some(hover) = self.dialogue_voice_hover(path, position) {
+            return Some(hover);
         }
         if let Some(hover) = self.dialogue_placeholder_hover(path, position) {
             return Some(hover);

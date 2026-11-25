@@ -14688,3 +14688,97 @@ fn dialogue_expression_completion_refreshes_forwarded_literal_keys() {
         vec!["face.halo"]
     );
 }
+
+#[test]
+fn dialogue_voice_queries_join_authored_ids_and_refresh_without_asset_claims() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/a.tdialogue
+@dialogue 1
+[start]
+// @id a
+: guide.hello (end)
+@voice {"cue":"guide.he<|cue|>llo","sourceLocale":"en","fallback":"silent"}
+-- file: src/b.tdialogue
+@dialogue 1
+[start]
+// @id b
+: Hello (end)
+@voice {"cue":"guide.hello","sourceLocale":"fr","fallback":"silent"}
+-- file: src/bad.tdialogue
+@voice {"cue":"guide.hidden","sourceLocale":"en","fallback":"silent"}
+-- file: src/editing.tdialogue
+@dialogue 1
+[start]
+// @id edit
+: Hello (end)
+@voice {"cue":"guide.h<|edit|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    let snapshot = host.snapshot();
+    let path = "src/a.tdialogue";
+    let position = fixture.position("cue");
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/editing.tdialogue", fixture.position("edit"))),
+        vec!["guide.hello"]
+    );
+    assert_eq!(snapshot.references(path, position, false).len(), 2);
+    assert_eq!(snapshot.references(path, position, true).len(), 2);
+    assert!(snapshot
+        .hover(path, position)
+        .unwrap()
+        .context
+        .join(" ")
+        .contains("host"));
+    assert!(snapshot.definition(path, position).is_none());
+    assert!(snapshot.prepare_rename(path, position).is_none());
+    let other = fixture
+        .source("src/b.tdialogue")
+        .replace("guide.hello", "guide.hi");
+    host.set_file("src/b.tdialogue", other);
+    assert_eq!(host.snapshot().references(path, position, false).len(), 1);
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion("src/editing.tdialogue", fixture.position("edit"))
+        ),
+        vec!["guide.hello", "guide.hi"]
+    );
+    host.remove_file("src/b.tdialogue");
+    assert_eq!(
+        completion_labels(
+            &host
+                .snapshot()
+                .completion("src/editing.tdialogue", fixture.position("edit"))
+        ),
+        vec!["guide.hello"]
+    );
+}
+
+#[test]
+fn dialogue_voice_completion_escapes_insertions_as_json_content() {
+    let mut host = AnalysisHost::new();
+    let candidate = "@dialogue 1\n[start]\n// @id a\n: Hello (end)\n@voice {\"cue\":\"a\\\"b\",\"sourceLocale\":\"en\",\"fallback\":\"silent\"}\n";
+    let source = "@dialogue 1\n[start]\n// @id b\n: Hello (end)\n@voice {\"cue\":\"a\",\"sourceLocale\":\"en\",\"fallback\":\"silent\"}\n";
+    host.set_file("a.tdialogue", candidate);
+    host.set_file("b.tdialogue", source);
+    let position = SourcePosition {
+        line: 5,
+        column: 17,
+    };
+    let snapshot = host.snapshot();
+    let items = snapshot.completion("b.tdialogue", position);
+    let item = items.iter().find(|item| item.label == "a\"b").unwrap();
+    assert_eq!(item.insert_text.as_deref(), Some(r#"a\"b"#));
+    let range = crate::dialogue_asset::voice::replacement_span(source, position).unwrap();
+    let start = crate::source_text::byte_for_position(source, range.start).unwrap();
+    let end = crate::source_text::byte_for_position(source, range.end).unwrap();
+    let mut edited = source.to_owned();
+    edited.replace_range(start..end, item.insert_text.as_ref().unwrap());
+    assert!(crate::dialogue_asset::parse_dialogue_source("b.tdialogue", &edited).is_ok());
+}

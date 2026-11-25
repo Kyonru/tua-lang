@@ -1361,3 +1361,61 @@ fn dialogue_expression_completion_replaces_dotted_names_and_rejects_bad_attachme
     ));
     assert_completion_labels(server.output(), 4, []);
 }
+
+#[test]
+fn dialogue_voice_completion_and_references_respect_json_unicode_and_project_scope() {
+    let project = TempProject::new("dialogue-voice-authoring");
+    project.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id a\n: Hello (end)\n@voice {\"sourceLocale\":\"é🦆\",\"cue\":\"guide.hello\",\"fallback\":\"silent\"}\n";
+    project.write("src/a.tdialogue", source);
+    project.write("src/b.tdialogue", &source.replace("// @id a", "// @id b"));
+    project.write("src/nested/tua.toml", "source = 'src'\n");
+    project.write(
+        "src/nested/src/c.tdialogue",
+        &source.replace("guide.hello", "guide.hidden"),
+    );
+    let uri = project.uri_for("src/a.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let nested_uri = project.uri_for("src/nested/src/c.tdialogue");
+    let mut nested_open = did_open(&nested_uri, &source.replace("guide.hello", "guide.hidden"));
+    nested_open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(nested_open);
+    server.send(completion_request(2, &uri, source, "guide.h"));
+    assert_completion_labels(server.output(), 2, ["guide.hello"]);
+    let item = &response_with_id(server.output(), 2)["result"][0];
+    assert_eq!(item["textEdit"]["newText"], "guide.hello");
+    assert_eq!(
+        item["textEdit"]["range"]["start"],
+        lsp_position_with_offset(source, "guide.hello", 0)
+    );
+    assert_eq!(
+        item["textEdit"]["range"]["end"],
+        lsp_position_with_offset(source, "guide.hello", 11)
+    );
+    server.send(references_request(3, &uri, source, "guide.hello", 7, false));
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let other_uri = project.uri_for("src/b.tdialogue");
+    server.send(did_open(
+        &other_uri,
+        &source.replace("// @id a", "// @id b"),
+    ));
+    server.send(did_change(
+        &other_uri,
+        &source
+            .replace("// @id a", "// @id b")
+            .replace("guide.hello", "guide.hi"),
+        2,
+    ));
+    server.send(completion_request(4, &uri, source, "guide.h"));
+    assert_completion_labels(server.output(), 4, ["guide.hello", "guide.hi"]);
+}

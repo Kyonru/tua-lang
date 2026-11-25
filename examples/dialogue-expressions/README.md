@@ -18,3 +18,8 @@ Try completing an `@expression` name after a character utterance. Suggestions us
 that character's declared expressions and replace the whole name, including dots
 or hyphens. Choices and duplicate expression metadata end that editing context.
 See [expression authoring](../../docs/dialogue.md#complete-character-expressions).
+
+Inside an `@voice` cue string, use completion to reuse an authored cue in this
+project, or Find References to locate other dialogue uses. These queries do not
+load audio or resolve files; the host owns cue-to-recording mappings. See
+[voice-cue authoring](../../docs/dialogue.md#find-authored-voice-cues).

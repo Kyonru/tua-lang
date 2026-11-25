@@ -1231,6 +1231,12 @@ impl AnalysisSnapshot {
             return (!is_cancelled()).then_some(references);
         }
 
+        if self.is_dialogue(path) {
+            if let Some(references) = self.dialogue_voice_references(path, position) {
+                return (!is_cancelled()).then_some(references);
+            }
+        }
+
         if self.is_dialogue(path)
             && self.file(path).is_some_and(|file| {
                 crate::dialogue_asset::flow::name_at(&file.source, position).is_some()

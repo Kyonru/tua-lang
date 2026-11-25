@@ -285,6 +285,13 @@ including choice/wait/branch/action/fallback targets. Rename accepts full dotted
 hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
 reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
 saved checkpoints stay unchanged; migrate external entry references separately.
+Within @voice cue strings, completion reuses decoded cue IDs from valid dialogue
+scripts in the same project; hover and Find References describe authored uses,
+including different locales. JSON-aware edits preserve quotes/escapes and support
+unfinished strings and unsaved refresh. Malformed candidate scripts, separately
+indexed project roots and arbitrary host strings are excluded. Open a nested project
+or add its root to load its config; queries do not discover unopened nested configs. No audio-file definition, availability
+check or external asset rename is inferred; the host resolves voice resources.
 Expression authoring follows parser metadata attachment rules and imported
 character definitions. Completion replaces the whole dotted/hyphenated name using
 the cursor prefix; duplicate expressions, choices and invalid owners suppress

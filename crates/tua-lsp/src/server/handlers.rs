@@ -3256,6 +3256,7 @@ fn lsp_completion_array(
                 .or_else(|| {
                     tua_core::dialogue_asset::expressions::replacement_span(source, position)
                 })
+                .or_else(|| tua_core::dialogue_asset::voice::replacement_span(source, position))
         })
         .flatten()
         .or_else(|| tua_core::completion::completion_replacement_span(source, position));

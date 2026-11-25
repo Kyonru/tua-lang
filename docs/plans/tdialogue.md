@@ -590,8 +590,16 @@ context objects. Core export/import works without a filesystem or LÖVE.
   rules instead of backward text scanning; preserve full dotted/hyphenated name edits.
   Reject duplicates and invalid ownership; verify forwarded imports and unsaved
   character refresh. Installed-editor qualification remains pending.
-- [ ] Extend completion and navigation to labels, choice targets, context fields,
-  placeholders, actions, expressions and voice references using their shared facts.
+- [x] Authored voice-cue completion, hover and project-scoped Find References use
+  decoded IDs and JSON-aware ranges, with unsaved refresh and incomplete-string
+  recovery. Exclude malformed candidate scripts, separately indexed project roots
+  and unrelated text. Scope follows loaded configs; automatic discovery of unopened
+  nested projects remains a workspace follow-up.
+  Cue assets remain host-owned; file definition/rename is not inferred.
+- [x] Source authoring queries cover labels, choice targets, context fields,
+  placeholders, actions, expressions and authored voice references using shared
+  facts. Installed-editor qualification remains pending; voice resource discovery
+  would require an explicit host catalog contract, not guessed filesystem paths.
 - [x] Text-identity refactor slice: explicit rename/reference queries connect
   authored line/choice/reason IDs, locale entries and recognized typed localization
   calls. Preserve namespace and unrelated prose/flow/action identities. Reject

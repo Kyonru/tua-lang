@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add project-scoped authored voice cue completion, hover and references, with
+  JSON-safe edits and explicit separation from host audio resource resolution.
+
 - Refresh direct `return require(...)` facade exports from current editor overlays
   instead of retaining stale types inferred from disk.
 

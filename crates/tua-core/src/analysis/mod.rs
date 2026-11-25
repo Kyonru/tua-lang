@@ -104,6 +104,7 @@ mod dialogue_context;
 mod dialogue_events;
 mod dialogue_queries;
 mod dialogue_rich;
+mod dialogue_voice;
 mod ecs_queries;
 mod editor_queries;
 mod host;

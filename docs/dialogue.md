@@ -60,6 +60,27 @@ host entry-point strings and saved checkpoints are not migrated by this file-loc
 rename. Update those external references separately before using the renamed flow.
 Graph preview remains planned.
 
+## Find authored voice cues
+
+Inside the JSON `cue` string of an `@voice` directive, request completion to reuse
+cue IDs from valid dialogue scripts in the same project. For example, typing
+`"cue":"guide.h|ello"` filters on `guide.h` and replaces the entire string content,
+leaving the quotes intact. JSON escapes are preserved correctly. Suggestions also
+work in an unfinished cue string, and update from unsaved script edits.
+
+Hover identifies the logical cue. **Find References** finds other authored
+`@voice` occurrences with the same decoded ID, including different source locales.
+All occurrences are uses, so Include Declaration does not change the result.
+Malformed scripts are excluded from reference results and suggestion candidates;
+separately indexed project roots, comments, prose, event payloads and arbitrary
+host strings are outside this reference set. Scope follows the analysis workspace:
+open a nested project's file or add its root to the workspace to load its config;
+unopened nested configs are not automatically discovered by this query.
+
+These are source references, not an audio catalog. Tua does not infer audio file
+paths, verify recordings, provide Go to Definition for a cue, or rename external
+asset mappings. The host still resolves locale-specific audio and availability.
+
 ## Complete character expressions
 
 After an imported character's utterance, type `@expression ` to see its declared
