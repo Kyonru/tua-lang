@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a save/resume tutorial with typed historical migration, UI-isolated autosave,
+  confirmed reset, explicit recovery and two-process persistence verification.
+
 - Add a game-flow tutorial and extend the pause/input example with typed title,
   playing and paused states, explicit focus policy and transition-frame input ownership.
 

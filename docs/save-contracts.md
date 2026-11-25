@@ -24,6 +24,9 @@ migrate the slot by itself; keep recovery choices in the game.
 | Read an older save safely | [Validate historical save data before migration](#validate-historical-save-data-before-migration) |
 | Recover from damaged or incompatible data | [Recovery and errors](#recovery-and-errors) |
 
+For a small runnable introduction, follow [Save and resume a run](tutorials/save-and-resume.md).
+It starts with checkpoints, then adds autosave, historical validation and recovery UI.
+
 ## Validate data without persistence
 
 `Save.shape(Save.record({...}))` provides `{defaults, copy}` without a slot, backend,

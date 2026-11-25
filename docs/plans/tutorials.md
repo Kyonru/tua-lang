@@ -126,12 +126,12 @@ one transition; repeated pause/resume/restart does not duplicate entities or cal
 
 Reference: [typed save contracts](../save-contracts.md).
 
-- [ ] Start with a small progress record and explicit save/load controls.
-- [ ] Define validation, defaults and user-visible outcomes for absent or invalid saves.
-- [ ] Introduce a historical schema and migration only after basic save/resume works.
-- [ ] Explain supported recovery guarantees and failure boundaries using the existing
+- [x] Start with a small progress record and explicit save/load controls.
+- [x] Define validation, defaults and user-visible outcomes for absent or invalid saves.
+- [x] Introduce a historical schema and migration only after basic save/resume works.
+- [x] Explain supported recovery guarantees and failure boundaries using the existing
       implementation; do not describe an ordinary file write as crash-safe.
-- [ ] Save serializable progress, not entity IDs, runtime objects or resource handles.
+- [x] Save serializable progress, not entity IDs, runtime objects or resource handles.
 
 Acceptance: a second launch restores progress; missing, corrupt, old and unsupported
 future saves follow the documented policy. Fixtures use an isolated save identity
@@ -282,7 +282,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M0 | Complete | API/source audit below; no runtime changes required |
 | M1 | Complete | `examples/tutorials/playable-character`; `8a11c484`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/playable-character.md) |
 | M2 | Complete | `examples/pause-input`; `257701a2`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/game-flow.md) |
-| M3 | Pending | |
+| M3 | Complete | `examples/love-save`; `46a9df23`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/save-and-resume.md) |
 | M4 | Pending | |
 | M5 | Pending | |
 | M6 | Pending | |
@@ -358,4 +358,16 @@ requires explicit resume. Reset replaces tween groups and retains input edge sta
 The legacy replay and new lifecycle replay both passed, including 100 transition
 cycles. The qualification record includes exact commands and platform limitations.
 
-Next: M3, save and resume a run using the existing `examples/love-save` owner.
+Next milestone at the time of M2 completion was M3; see its completion below.
+
+## M3 completion
+
+Published save/resume guidance from explicit checkpoints through autosave, typed
+historical migration and deliberate recovery/reset policy. The existing example
+now separates UI state from saved progress and confirms deletion. Two isolated
+LÖVE processes verified persistence plus missing/corrupt/old/future data paths,
+write retry and reset failures. Native UI replay and documentation checks passed.
+The qualification record retains a selected-compiler missing-field diagnostic
+probe for rechecking against a rebuilt current compiler; no new runtime API was needed.
+
+Next: M4, a wave of enemies using ECS lifecycle and optional pooled defeat effects.

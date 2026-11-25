@@ -1,0 +1,22 @@
+{
+  "compiler": {
+    "schemaVersion": 1,
+    "version": "0.11.0",
+    "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+    "dirty": false,
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+  },
+  "identity": "tua-save-tutorial-d2d42ab6e38b457b99dee3b821d6829d",
+  "love_executable": "/Applications/love.app/Contents/MacOS/love",
+  "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+  "test_sha256": "2f9d6e8032b4c4c522b37678b9ccd111a9121cab6c8e0b4516106cd1a6c37563",
+  "timing": "functional persistence checks, not performance measurements",
+  "runtime": {
+    "love": "11.5.0",
+    "lua": "LuaJIT 2.1.1700008891",
+    "jit_enabled": false
+  },
+  "status": "passed"
+}
