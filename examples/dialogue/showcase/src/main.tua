@@ -69,6 +69,7 @@ function love.draw()
     24,
     57
   )
+  love.graphics.print(settings.notice, 24, 80)
   local snapshot = host.player():snapshot()
   local node = snapshot.node
   if node then

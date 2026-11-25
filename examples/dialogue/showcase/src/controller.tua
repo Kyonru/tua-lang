@@ -24,6 +24,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     selected = 1,
     scroll = 0,
     locale = "en",
+    notice = "",
   }
   local function createPlayer()
     return Story.new(scene, { name = "Ada", permit = true }, {
@@ -123,8 +124,13 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     update(0)
   end
   local function save(): boolean
-    if player:snapshot().state == "awaiting_action" then return false end
+    local state = player:snapshot().state
+    if state ~= "awaiting_advance" and state ~= "awaiting_choice" and state ~= "waiting" then
+      settings.notice = "No checkpoint available here. Continue or restart the conversation."
+      return false
+    end
     saved = player:checkpoint()
+    settings.notice = "Checkpoint saved."
     return true
   end
   local function restore()

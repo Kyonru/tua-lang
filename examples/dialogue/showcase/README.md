@@ -40,6 +40,9 @@ chatter, recorded voice and a bounded eight-entry / 2 KiB transcript. Setting
 `host.player():updateContext({ name = "Ada", permit = false })` disables the token
 reply. The default permit is granted. Radio has its own player and audio controller.
 
+F5 reports when saving is unavailable (for example, after completion) and keeps
+the previous checkpoint. Saving is supported at line, choice and wait boundaries.
+
 The token action is session-local demonstration state. F5/F9 restores a settled
 conversation into a fresh player without reissuing that action. This is **not** a
 crash-safe game-save transaction; use the independent [durable example](../durable/README.md)
