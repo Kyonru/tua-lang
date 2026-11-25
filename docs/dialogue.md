@@ -27,7 +27,9 @@ Start with [your first conversation](#your-first-conversation), then add
 ## Try the LÖVE showcase
 
 [Beacon Harbor](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/showcase)
-uses the same player for a conversation panel, an NPC bubble and a radio message.
+uses the same player for cinematic, storybook, transmission and unframed subtitle presentations.
+The longer story includes a question hub, three outcomes, and a relationship-dependent
+ending variant. Portraits can sit left, right, above the panel, or be hidden.
 It includes a second independent announcement player, English/French templates,
 shared characters, conditional replies, typed actions, chatter, voice, waits,
 checkpoint restore and a bounded transcript.
@@ -41,14 +43,17 @@ tua build
 love build
 ```
 
-Press **1/2/3** to change presentation. **Space** finishes reveal, then advances;
+Press **1/2/3/4** to change presentation and **O** to cycle portrait placement.
+**H** opens controls/diagnostics, **Tab** opens the scrollable recent transcript, and
+**F2** switches between the longer story and the short feature demonstration. **Space** finishes reveal, then advances;
 **Up/Down** and **Enter** select replies. **F** changes reveal speed, **M** reduces
 motion, **S** toggles subtitles and **V** mutes recorded voice. **L** switches
 language, **P** pauses, **R** resets, **Q/N** queue conversations/announcements,
 and **F5/F9** capture/restore an in-memory checkpoint. Page Up/Down scroll content.
 
-Panel mode pauses the harbor and suspends radio; bubble and radio modes let the
-harbor continue. These are example host policies. The engine does not decide
+Cinematic mode gives the conversation modal priority and suspends radio; the other
+styles permit concurrent announcements. The background stays quiet so dialogue is
+the focus. These are example host policies. The engine does not decide
 whether your game pauses or which channel owns input. Two conversation and four
 announcement waiting slots reject overflow. A restore creates a fresh player and
 stops stale presentation/audio; it does not replay a settled token action.
@@ -63,7 +68,7 @@ privacy and external effects remain the game's responsibility.
 | Need | Start with |
 | --- | --- |
 | Plain conversations | `snapshot.node.text`, explicit `advance`/`choose`; [basics](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/basics) |
-| Custom styled text | `presenter.tua`: semantic run names, owned fonts, shadows, wrapping and scroll metrics |
+| Custom styled text | `presenter.tua`: semantic run names, owned fonts, portrait layouts, wrapping and scroll metrics |
 | Chatter or recorded voice | `audio.tua` plus an injected backend; [focused audio example](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/audio) |
 | Non-pausing messages | A separate player; optionally borrow the bounded host queue |
 | Headless testing | `controller.tua` with fake backends, executed by `tests/controller.lua` |

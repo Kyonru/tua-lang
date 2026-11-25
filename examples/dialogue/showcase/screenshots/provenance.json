@@ -1,0 +1,61 @@
+{
+  "replay": {
+    "status": "passed",
+    "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+    "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+    "seed": 71,
+    "frames": 328,
+    "fps": 30,
+    "dt": 0.03333333333333333,
+    "gc_policy": "project-controlled / unknown",
+    "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+    "audio_captured": false,
+    "identity": "tua-replay-778b970928544dcb9b4bf9d301493d62",
+    "scenario": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/dialogue/showcase/tests/styles.lua",
+    "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+    "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+    "love_executable": "/Applications/love.app/Contents/MacOS/love",
+    "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+    "compiler_provenance": {
+      "schemaVersion": 1,
+      "version": "0.11.0",
+      "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+      "dirty": false,
+      "target": "aarch64-apple-darwin",
+      "profile": "release",
+      "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+    },
+    "revision": "0beb55db51cb20bc81f6ee1d72d4af81265c4521",
+    "worktree_dirty": true,
+    "scenario_sha256": "1acf5d7335c3a35660bac99ccbd80e8ef5651ac50960100ea75d2e1810760af8",
+    "love_version": "11.5.0",
+    "lua_version": "LuaJIT 2.1.1700008891",
+    "jit_enabled": false
+  },
+  "screenshots": {
+    "cinematic": {
+      "frame": 6,
+      "sha256": "9295ea814ccf59ccbe7b31da4f49b7fdb877815e95245fc0144a92351801c4e4"
+    },
+    "storybook": {
+      "frame": 38,
+      "sha256": "673bd0a0e6c4f9c3e15513e924db66aaeb9b312ccfa863c18df3832513206435"
+    },
+    "transmission": {
+      "frame": 70,
+      "sha256": "fc631457a4658d5b1a5d77666335e4a9abd0e96f77be3d0b6062e85b18bd43c3"
+    },
+    "subtitles": {
+      "frame": 122,
+      "sha256": "01b588c6def0ec50ab02d4657f8d39e17ed1ff5b5510050b7afaa9d72b9b0d5c"
+    },
+    "choices": {
+      "frame": 275,
+      "sha256": "a70048983d3fc717bb3636507e01d27092a64edb3d960f7407c236bffdd04374"
+    },
+    "french-radio": {
+      "frame": 299,
+      "sha256": "c31ab404048228588db2d962a800731ed94651ca281a4d966d69b31014709fa2"
+    }
+  }
+}

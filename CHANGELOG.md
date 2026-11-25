@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Expand Beacon Harbor with a branching bilingual story, remembered choices, four
+  dialogue-focused UI styles, independent portrait placement, and scrollable history.
+  Add native visual coverage across styles, portrait layouts and window sizes.
+
 - Add Beacon Harbor, a runnable LÖVE dialogue showcase with interchangeable presenters,
   headless/native checks, localized rich text, optional audio, bounded channels and
   explicit accessibility controls; document small adoption paths and icon tradeoffs.
