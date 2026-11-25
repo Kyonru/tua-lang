@@ -10,6 +10,8 @@ The scene uses Kenney characters on a plain background.
 
 ![Seven enemies remain after a defeat, with an optional ring at the hit](../assets/tutorials/enemy-wave/defeat.png)
 
+For these systems in one evolving game, continue with [combat and waves](arena-game/combat-waves.md).
+
 ## Run it first
 
 Install [Tua and LÖVE](../installation.md), then open

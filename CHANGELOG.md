@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Qualify all eight arena tutorial checkpoints from clean source copies; add a repeatable
+  path check, finish chapter navigation and clarify shared save ownership and prerequisites.
+
 - Add the arena profiling chapter with bounded waves, existing inspector/profiler workflows,
   differential checks and paired timing/allocation probes; document the limited CPU result.
 

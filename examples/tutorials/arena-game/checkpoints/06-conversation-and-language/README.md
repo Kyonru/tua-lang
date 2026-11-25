@@ -72,4 +72,4 @@ functional scenarios, not human usability or international-font qualification.
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/conversation-and-language.md).
-Next: save between-wave progress and preferences without serializing live runtime objects.
+Continue with [chapter 7: save progress](../07-save-progress/README.md).

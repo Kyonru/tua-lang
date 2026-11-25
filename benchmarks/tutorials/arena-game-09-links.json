@@ -1,0 +1,21 @@
+{
+  "localLinksChecked": 1104,
+  "repositoryTargetsChecked": [
+    "benchmarks/tutorials/arena-game-08.md",
+    "examples/tutorials/arena-game/checkpoints/01-playable-loop",
+    "examples/tutorials/arena-game/checkpoints/02-combat-waves",
+    "examples/tutorials/arena-game/checkpoints/03-enemy-decisions",
+    "examples/tutorials/arena-game/checkpoints/04-sound",
+    "examples/tutorials/arena-game/checkpoints/05-visual-feedback",
+    "examples/tutorials/arena-game/checkpoints/06-conversation-and-language",
+    "examples/tutorials/arena-game/checkpoints/07-save-progress",
+    "examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests"
+  ],
+  "assetHashesChecked": 45,
+  "externalUrlsNotFetched": [
+    "https://github.com/Kyonru/tua-lang",
+    "https://interfaceingame.com/screenshots/star-wars-battlefront-ii-pause-menu/",
+    "https://zensical.org/"
+  ],
+  "errors": []
+}

@@ -158,4 +158,5 @@ correctness checks.
 - Measure the full rendered game separately before deciding whether draw, simulation
   or another system should be the next target.
 
-Next: verify the full chapter sequence from a clean checkout.
+You have reached the end of the playable series. Return to the [chapter index](index.md)
+to revisit a system, or extend the game while keeping its lifecycle and outcome checks.

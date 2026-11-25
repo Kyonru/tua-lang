@@ -60,4 +60,4 @@ It clears enemies through combat lifecycle APIs to reach the boundary. Retain th
 inherited gameplay (350 frames), dialogue (60) and shader (50) scenarios too.
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/save-progress.md).
-Next: profile this same game with reproducible workloads.
+Continue with [chapter 8: profile the game](../08-profile-the-game/README.md).

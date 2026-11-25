@@ -13,6 +13,8 @@ in development builds for the release after 0.11.0. The version number alone is
 not sufficient to identify those builds. Prefer a terminal? The
 [headless walkthrough](../dialogue.md#your-first-conversation) uses the same player.
 
+For these systems in one evolving game, continue with [between-wave dialogue and language](arena-game/conversation-and-language.md).
+
 ## 1. Run a conversation
 
 From a checkout of the Tua repository:

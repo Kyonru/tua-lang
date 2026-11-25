@@ -10,6 +10,8 @@ player should see when loading cannot safely continue.
 
 ![A saved score and explicit save/reset controls](../assets/tutorials/save-and-resume/progress.png)
 
+For these systems in one evolving game, continue with [persistent progress in the arena](arena-game/save-progress.md).
+
 ## Run it first
 
 Use a current Tua compiler and LÖVE 11.5. From the repository root:

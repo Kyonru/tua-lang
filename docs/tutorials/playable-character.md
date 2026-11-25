@@ -10,6 +10,8 @@ The text at the top and bottom stays fixed while the world moves.
 
 ![A character moving away from its starting marker](../assets/tutorials/playable-character/movement.png)
 
+For these systems in one evolving game, continue with [movement and game flow](arena-game/playable-loop.md).
+
 ## Run it first
 
 You need LÖVE 11.5 and a current Tua compiler. From a Tua repository checkout:

@@ -10,6 +10,8 @@ This example uses a moving marker so the answer is visible. It needs no artwork.
 
 ![Paused game with resume, restart and title controls](../assets/tutorials/game-flow/paused.png)
 
+For these systems in one evolving game, continue with [movement and game flow](arena-game/playable-loop.md).
+
 ## Run the example
 
 From a Tua checkout, with a current compiler and LÖVE 11.5:

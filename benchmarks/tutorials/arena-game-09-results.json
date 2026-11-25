@@ -1,0 +1,844 @@
+{
+  "compiler": {
+    "schemaVersion": 1,
+    "version": "0.11.0",
+    "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+    "dirty": false,
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+  },
+  "revision": "6acfc6e4cfbddc803d90db91c52c797721e14082",
+  "worktreeDirty": true,
+  "scope": "agent-led clean-copy functional qualification; not a human walkthrough or benchmark",
+  "native": "requested",
+  "chapters": [
+    {
+      "chapter": "01-playable-loop",
+      "trackedSourceSha256": "2ee93cb3acd7ecb79777c652442cc195e43f47230662e6885a4ae830e7bd4bd3",
+      "headlessSuites": [
+        "movement",
+        "session"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 125,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 125,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-07689ef8f42f47ed85b2327f4a3b2870",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/01-playable-loop/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "87b01fc9ec4dc17c9832441d3e12caf2a5b55751c6109d9dc5eab49a026a4969",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "02-combat-waves",
+      "trackedSourceSha256": "af579896ac4083b5b6b8b915759f1c6f5fe67efac055e872f2728a3301a88314",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 125,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 125,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-333b1747ac48457a8c5804d44f88689e",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/02-combat-waves/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "6e42ab7876603c19db1db4091f59468fdd6c7448d4217b5aed43b8bf60d8a70a",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "03-enemy-decisions",
+      "trackedSourceSha256": "07dfaa3ee2821b9719a2d292b7ced936078177d831fe09e553c325aa481996cb",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-19815fc429b24461a0bfd07e10628e60",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/03-enemy-decisions/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "5e2bb426ae13440442e6a1904056cd9e9871d95f346c12124ac4bf13964d8f4e",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "04-sound",
+      "trackedSourceSha256": "b97bca82715c6f5fb60f76f2773c8cbc878777eb50c0dc8f254611eb9df49ef2",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions",
+        "soundscape"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-5ef8b0d84c0f4d1e99d2fb44e871328d",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/04-sound/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "3af927d89b2ee73dfc0bec46314c10df7731e09ed01984c17e2bc9b74eb65e3d",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "05-visual-feedback",
+      "trackedSourceSha256": "c7a7ea91bed6cf959b0a68fff30cebf483bf8d14dea7663915149fbc8b89f2e1",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions",
+        "soundscape"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-6d189a06e43542bd9a79ec0fc38a2e68",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/05-visual-feedback/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "3af927d89b2ee73dfc0bec46314c10df7731e09ed01984c17e2bc9b74eb65e3d",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "shader-replay",
+          "frames": 50,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 50,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-c24a65c97696476e94a0b24760918b51",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/05-visual-feedback/tests/shader-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "19759a100fa8234c85993605c855486fb63269fda6b37a90b26137f03e98eb3c",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "06-conversation-and-language",
+      "trackedSourceSha256": "ec8d99afaa58491a0eec5a70f3ec53afdbd1475edb18a6baef8302d2c01aea62",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions",
+        "soundscape",
+        "conversation"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-dd6ee70c842d496686adfd8987266d60",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/06-conversation-and-language/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "3af927d89b2ee73dfc0bec46314c10df7731e09ed01984c17e2bc9b74eb65e3d",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "shader-replay",
+          "frames": 50,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 50,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-0cc40449f5b24453a6fc96feeb4b4203",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/06-conversation-and-language/tests/shader-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "19759a100fa8234c85993605c855486fb63269fda6b37a90b26137f03e98eb3c",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "dialogue-replay",
+          "frames": 60,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 60,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-b9ad1ccd2e2844cea26580ef354574b5",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/06-conversation-and-language/tests/dialogue-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "aeeb6377c699dd52a98429572b2087f21c8c717771141f955a3ef99f5c5599b6",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "07-save-progress",
+      "trackedSourceSha256": "9e8125982102fe0510f81e9cc5b39ba27f48564c0289fa211586de9a5c808863",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions",
+        "soundscape",
+        "conversation"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-873b0d72e8b94015a65bebe441a9b07e",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/07-save-progress/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "3af927d89b2ee73dfc0bec46314c10df7731e09ed01984c17e2bc9b74eb65e3d",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "shader-replay",
+          "frames": 50,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 50,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-fc25568949e941e591858750117ab56f",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/07-save-progress/tests/shader-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "19759a100fa8234c85993605c855486fb63269fda6b37a90b26137f03e98eb3c",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "dialogue-replay",
+          "frames": 60,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 60,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-210a0a8556554e1099abd3889d60b2ea",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/07-save-progress/tests/dialogue-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "aeeb6377c699dd52a98429572b2087f21c8c717771141f955a3ef99f5c5599b6",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "save-replay",
+          "frames": 40,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 40,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-b8dce17652ec4e60a53bf3996f9e1c8f",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/07-save-progress/tests/save-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "ee1fc6fd1fb4d38e189b531a89bf3a8bbfeccb374ee7756a0e6ee0efedcbf7ca",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "two-process persistence",
+          "provenance": {
+            "compiler": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "identity": "tua-arena-save-test-020b6a83655c4b58b07aa846924db5a3",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "test_sha256": "a796d9eefaf4fb0eb89d4166a04b9cd03e5a5da76513fe6974c42824fdee95a7",
+            "timing": "functional persistence checks, not performance measurements",
+            "runtime": {
+              "love": "11.5.0",
+              "lua": "LuaJIT 2.1.1700008891",
+              "jit_enabled": false
+            },
+            "status": "passed"
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "chapter": "08-profile-the-game",
+      "trackedSourceSha256": "d219cd2a6f180337c79a4c34f9ea03e211281d0a7b5ebc3d6c217263c0d99497",
+      "headlessSuites": [
+        "movement",
+        "session",
+        "combat",
+        "decisions",
+        "soundscape",
+        "conversation"
+      ],
+      "native": [
+        {
+          "scenario": "replay",
+          "frames": 350,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 350,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-b66128a656f04ab7b8c19ed65a45cbe7",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests/replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "3af927d89b2ee73dfc0bec46314c10df7731e09ed01984c17e2bc9b74eb65e3d",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "shader-replay",
+          "frames": 50,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 50,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-4d1ea3c9c6f8429cb2659d53d1447d8b",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests/shader-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "19759a100fa8234c85993605c855486fb63269fda6b37a90b26137f03e98eb3c",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "dialogue-replay",
+          "frames": 60,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 60,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-39e695f635b247f29a9ebc82a6ad3706",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests/dialogue-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "aeeb6377c699dd52a98429572b2087f21c8c717771141f955a3ef99f5c5599b6",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "save-replay",
+          "frames": 40,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 40,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-13c459def98e4295845b08faac06a58a",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests/save-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "ee1fc6fd1fb4d38e189b531a89bf3a8bbfeccb374ee7756a0e6ee0efedcbf7ca",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "workload-replay",
+          "frames": 45,
+          "provenance": {
+            "status": "passed",
+            "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+            "compiler_sha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec",
+            "seed": 71,
+            "frames": 45,
+            "fps": 30,
+            "dt": 0.03333333333333333,
+            "gc_policy": "project-controlled / unknown",
+            "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+            "audio_captured": false,
+            "identity": "tua-replay-b51d1edd1d78412b877bd24a2b86fe9b",
+            "scenario": "/private/var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/tua-arena-path-bqxbtmh6/examples/tutorials/arena-game/checkpoints/08-profile-the-game/tests/workload-replay.lua",
+            "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+            "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "compiler_provenance": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "revision": null,
+            "worktree_dirty": null,
+            "scenario_sha256": "a10e7ce05633509a407b2cfe03a269d6f202deaf87098f17cb0468e01e2fee3a",
+            "love_version": "11.5.0",
+            "lua_version": "LuaJIT 2.1.1700008891",
+            "jit_enabled": false
+          }
+        },
+        {
+          "scenario": "two-process persistence",
+          "provenance": {
+            "compiler": {
+              "schemaVersion": 1,
+              "version": "0.11.0",
+              "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+              "dirty": false,
+              "target": "aarch64-apple-darwin",
+              "profile": "release",
+              "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+            },
+            "identity": "tua-arena-save-test-f29b6ad4171e4533b7c8c0dda1b7bd86",
+            "love_executable": "/Applications/love.app/Contents/MacOS/love",
+            "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+            "test_sha256": "a796d9eefaf4fb0eb89d4166a04b9cd03e5a5da76513fe6974c42824fdee95a7",
+            "timing": "functional persistence checks, not performance measurements",
+            "runtime": {
+              "love": "11.5.0",
+              "lua": "LuaJIT 2.1.1700008891",
+              "jit_enabled": false
+            },
+            "status": "passed"
+          }
+        }
+      ],
+      "status": "passed"
+    }
+  ],
+  "loveSha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+  "status": "passed"
+}

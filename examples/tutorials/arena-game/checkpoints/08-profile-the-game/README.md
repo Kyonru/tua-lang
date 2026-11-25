@@ -77,4 +77,5 @@ The workload scenario verifies 128-enemy rendering and returning to the default 
 The inspector script checks native transport; it does not qualify the installed editor UI.
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/profile-the-game.md).
-Next: qualify the complete learning path.
+The playable series is complete. Use the measurements to choose your next experiment;
+keep the gameplay and lifecycle regressions when extending it.

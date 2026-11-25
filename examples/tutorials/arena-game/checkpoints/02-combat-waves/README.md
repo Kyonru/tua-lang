@@ -69,5 +69,4 @@ python3 scripts/love_replay.py \
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/combat-waves.md).
-Chapter 3 will give these enemies decisions, movement and attacks. The unchanged
-Kenney atlases, license and provenance are bundled under `src/assets`.
+Continue with [chapter 3: enemy decisions](../03-enemy-decisions/README.md).

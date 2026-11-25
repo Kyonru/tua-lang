@@ -69,4 +69,4 @@ Its intentional failure messages are expected; the final marker must report succ
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/visual-feedback.md).
-Next: between-wave dialogue and language switching in this same game.
+Continue with [chapter 6: conversation and language](../06-conversation-and-language/README.md).

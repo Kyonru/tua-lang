@@ -69,7 +69,7 @@ status does **not** establish that the integrated chapters are complete.
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal ownership | Complete; locale/visit and host-effect qualification |
 | C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Complete; two-process and native host qualification |
 | C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Complete; allocation reduction, no reliable CPU win |
-| C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Pending |
+| C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Complete; clean-copy native qualification and retained-guide audit |
 
 C2 deliberately merges weapons and waves: a pool exhaustion rule affects when a shot
 can exist; a swept collision selects a live ECS enemy; one accepted hit changes health;
@@ -90,19 +90,19 @@ combat snapshot is not an implicit requirement.
 - [x] C2: adapt the weapon prototype to live ECS enemies and the C1 player/camera.
       Keep its rate, pooling and swept-collision tests; add nearest-enemy selection,
       one-hit/one-damage, pause/reset and feedback-independent outcome regressions.
-- [ ] Fold later M requirements into the same game in chapter order above; do not
+- [x] Fold later M requirements into the same game in chapter order above; do not
       add new independent `scene-audio`, `first-shader` or `enemy-decisions` projects.
 - [x] Publish a project landing page and chapter navigation when C1 is runnable.
       Until then, keep the current guides honest about being standalone foundations.
-- [ ] Review each existing standalone guide after its replacement is qualified.
-      Move short API-only material into its owning reference page; use a concise
-      redirect/link for superseded guide URLs where supported by the docs stack.
-- [ ] Preserve existing example paths and tests until their consumers are audited.
-      `pause-input`, `love-save` and the dialogue starter are existing reference
-      examples, not automatically deletable duplicates.
-- [ ] Remove redundant tutorial-only projects only after documenting their replacement,
-      updating links and preserving any unique regression coverage. Keep migration
-      cleanup separate from gameplay/chapter changes.
+- [x] Review existing standalone guides after the integrated replacements qualify.
+      Retain these focused first-use workflows and add links to the corresponding
+      arena chapters; none is a short API-only duplicate that needs a redirect.
+- [x] Audit consumers before changing existing paths. `pause-input` and `love-save`
+      remain Makefile targets; state-machine, save and dialogue reference pages link
+      to the focused guides. Existing examples and unique regressions are preserved.
+- [x] Resolve tutorial-only cleanup after the consumer audit: no project deletion is
+      warranted. The playable-character/enemy-wave foundations remain deliberately
+      smaller entry points, and the dialogue starter serves a separate first-use goal.
 
 The original M5 prototype checked cadence at 30/60/120/144 Hz, bounded reuse, expiration,
 swept target crossing, reset and disposal against emitted Lua. It served as implementation
@@ -329,13 +329,13 @@ If an optimization does not help on a tested system, report that result honestly
 
 ## M11 — Qualify the learning path
 
-- [ ] Check every guide from a clean example directory using its exact commands.
-- [ ] Validate cumulative snippets and compare the final state with the owning example.
-- [ ] Confirm all guide links, feature anchors, prerequisites and navigation labels.
-- [ ] Review complexity: remove optional setup from the first working result.
-- [ ] Check that defaults and lifecycle responsibilities are explicit and consistent.
-- [ ] Keep the tutorial index focused on goals and next steps, not API inventories.
-- [ ] Label agent-led walkthroughs as simulated checks, not human usability studies.
+- [x] Check every guide from a clean example directory using its exact commands.
+- [x] Validate cumulative snippets and compare the final state with the owning example.
+- [x] Confirm all guide links, feature anchors, prerequisites and navigation labels.
+- [x] Review complexity: remove optional setup from the first working result.
+- [x] Check that defaults and lifecycle responsibilities are explicit and consistent.
+- [x] Keep the tutorial index focused on goals and next steps, not API inventories.
+- [x] Label agent-led walkthroughs as simulated checks, not human usability studies.
 
 ## Shared verification and delivery gate
 
@@ -374,7 +374,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
 | M9 | Complete in C6 | `06-conversation-and-language`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-06.md) |
 | M10 | Complete in C8 | `08-profile-the-game`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-08.md) |
-| M11 | Pending | |
+| M11 | Complete in C9 | [Whole-path qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-09.md) |
 
 ## Original M0 audit and implementation baseline
 
@@ -537,4 +537,21 @@ Behavior trees remain the dominant sampled cost. The initial idle-contaminated f
 was corrected before the reported measurements. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-08.md).
 
-Next: C9, qualify all chapter commands, links and the complete learning path.
+## C9 completion
+
+All eight independently copied checkpoints passed formatting, warning-free checks,
+builds, 37 headless suite runs, 18 native replay scenarios and C7/C8 two-process save
+qualification. The audit reviewed all 23 Tua guide snippets against their owning
+sources, checked rendered local links/anchors and repository targets, and verified
+bundled asset hashes. Navigation now follows the completed series; the landing page
+clarifies excerpts, optional contributor tools and the shared C7/C8 save identity.
+The C8 startup configuration's stale chapter title was corrected separately.
+
+The reusable `scripts/qualify-arena-tutorials.py` records clean-copy hashes, compiler
+identity and native provenance. This is agent-led qualification, not a human usability
+study or a fresh performance benchmark. Existing standalone guides are retained after
+consumer review. See
+[whole-path qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-09.md).
+
+The current C1–C9 tutorial plan is complete. Future feature series require a separate
+learning goal; no additional chapter is implied by this completion.

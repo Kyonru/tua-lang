@@ -70,4 +70,4 @@ Use a fresh output directory. These are functional checks, not performance bench
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/enemy-decisions.md).
-The next chapter adds sound to this same game. All artwork remains bundled Kenney CC0.
+Continue with [chapter 4: sound](../04-sound/README.md).

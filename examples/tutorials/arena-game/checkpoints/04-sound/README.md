@@ -70,4 +70,4 @@ The fake-backend suite separately tests policy deterministically.
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/sound.md).
-Next: a scoped hit shader and shader loading/failure ownership in the same game.
+Continue with [chapter 5: visual feedback](../05-visual-feedback/README.md).

@@ -62,4 +62,4 @@ python3 scripts/love_replay.py \
 ## Next steps
 
 [Read the chapter](../../../../../docs/tutorials/arena-game/playable-loop.md).
-The next planned checkpoint adds weapons and enemy waves to this same game.
+Continue with [chapter 2: combat waves](../02-combat-waves/README.md).

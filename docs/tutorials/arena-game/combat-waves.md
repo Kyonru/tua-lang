@@ -118,7 +118,7 @@ The pool's reset callback clears **every field**, including velocity and hit sta
 This is an explicit capacity policy layered over `objectPool`; the pool itself
 is not told a maximum. Pooling demonstrates ownership and bounded reuse, not a
 measured performance improvement. An aim point at the exact muzzle does not define
-a direction, so that attempt produces no projectile and still consumes its slot.
+a direction, so that attempt produces no projectile and still starts the normal firing cooldown.
 
 ## 4. Find the first hit, not just an overlapping endpoint
 
