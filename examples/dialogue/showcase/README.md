@@ -1,6 +1,6 @@
 # Beacon Harbor — The last light
 
-A dialogue-focused LÖVE showcase: a quiet stage, four interchangeable presentations,
+A dialogue-focused LÖVE showcase: a quiet stage, seven interchangeable presentations,
 three Lorelei character portraits, and a branching conversation about a ferry that
 returns six years too late. Start with the story; press **H** when you want the controls.
 
@@ -11,7 +11,7 @@ tua build
 love build
 ```
 
-## Four presentations, one conversation
+## Seven presentations, one conversation
 
 | Key | Presentation | What changes |
 | --- | --- | --- |
@@ -19,6 +19,18 @@ love build
 | **2** | Storybook | Compact pale speech card, literary type, speech tail and warmer text. |
 | **3** | Transmission | Right-aligned receiver panel, channel identity and a cooler palette. |
 | **4** | Subtitles | Unframed dialogue and quiet speaker identification. |
+| **5** | Mythic frame | Additional Hades-like pale panel, double gold border, cut corners and angled dark nameplate. |
+| **6** | Tactics box | Additional Wargroove-like stepped box, burgundy speaker tab, pixel type and diamond cue. |
+| **7** | Field terminal | Additional receiver-style frame, signal rail and monospace dialogue. |
+
+Keys **1–4 retain the original layouts**. The reference-based styles are additions,
+not replacements. All seven share the same dialogue player and portrait options.
+The new frames reproduce layout treatments from the supplied references using host
+primitives; they do not redistribute those games’ interface art.
+
+| Mythic frame | Tactics box | Field terminal |
+| --- | --- | --- |
+| ![Mythic frame](screenshots/mythic.png) | ![Tactics box](screenshots/tactics.png) | ![Field terminal](screenshots/terminal.png) |
 
 **O** cycles portrait placement: left → right → above → hidden. Switch style or
 portrait placement mid-sentence without restarting text, replaying audio or changing
@@ -57,7 +69,7 @@ restoring a checkpoint also restores which story entry it belongs to.
 
 | Key | Action |
 | --- | --- |
-| 1 / 2 / 3 / 4 | Cinematic / storybook / transmission / subtitles |
+| 1–4 / 5–7 | Original presentations / additional reference-based styles |
 | O | Portrait left / right / above / hidden |
 | Space / Enter | Finish revealing, continue, or confirm a reply |
 | Up / Down | Focus a reply; disabled replies explain their requirement |
@@ -87,7 +99,7 @@ restoring a checkpoint also restores which story entry it belongs to.
 | Typed host actions and dialogue locals | `remember` updates owned story memory; `collect` in the short demo grants one token. |
 | Timed events | The opening emits shown/revealed signals; H exposes their counts. |
 | Waits | The radio reply follows an explicit 0.8-second listening interval. |
-| Independent non-blocking messages | N in styles 2–4. Style 1 suspends radio until the modal conversation releases priority. |
+| Independent non-blocking messages | N in styles 2–4 or 7. Styles 1, 5 and 6 suspend radio until the modal conversation releases priority. |
 | Bounded queues | Q: two waiting conversations. N: four waiting messages. Overflow is counted in H. Active entries are additional. |
 | Checkpoint boundaries and restore | F5 saves line/choice/wait boundaries and gives feedback elsewhere. F9 creates a fresh player without replaying settled effects. |
 | Transcript | Tab shows the last eight entries within a 2 KiB string budget; Page Up/Down scrolls. Locale changes preserve the language originally recorded. |
@@ -107,7 +119,7 @@ screen-reader bridge, bidirectional text layout, or full script shaping in this 
 | `story.tua`, `actions.tua`, `events.tua` | Typed facts, locals, actions and notification payloads |
 | `controller.tua` | Host channel priority, queues, checkpoints and story-local memory |
 | `characters.tua`, `translations.tua` | Shared character metadata and French templates |
-| `presenter.tua`, `theme.tua`, `portraits.tua` | Layout, palettes, fonts, expression art and reveal rendering |
+| `presenter.tua`, `frames.tua`, `styles.tua`, `theme.tua`, `portraits.tua` | Layout, palettes, fonts, expression art and reveal rendering |
 | `audio.tua`, `backend.tua` | Cue policy and owned native Sources |
 | `main.tua` | Minimal stage, keyboard routing, overlays and lifecycle callbacks |
 
@@ -124,11 +136,12 @@ python3 verify.py --tua ../../../target/release/tua --love /path/to/love --outpu
 python3 verify.py --tua ../../../target/release/tua --love /path/to/love --scenario styles --output /tmp/dialogue-styles --video
 ```
 
-Each output directory must be new. Headless checks run emitted Lua and cover all
+Each output directory must be new. Headless checks validate portrait hashes, distinct expression images and image disposal,
+then run emitted Lua and cover all
 endings, relationship variants, gated replies, localization coverage, checkpoint
 memory, queues and the five showcase lifecycle regressions. Native lifecycle replay
-covers actual input/render/audio callbacks. The style replay captures **32 combinations**:
-four styles × four portrait placements × two window sizes, plus narrow choices,
+covers actual input/render/audio callbacks. The style replay captures **56 combinations**:
+seven styles × four portrait placements × two window sizes, plus narrow choices,
 French text with concurrent radio, help and transcript. Captures are functional visual
 checks, not FPS benchmarks; MP4s are silent. `screenshots/provenance.json` identifies
 the source replay and frame selected for each checked-in screenshot.

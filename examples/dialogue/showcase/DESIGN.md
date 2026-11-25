@@ -7,7 +7,7 @@ reading an actual conversation. The words, speaker and next decision lead. The s
 is flat and quiet; there is no decorative harbor simulation. H hides technical controls
 and diagnostics until requested. The three characters are the visual anchor.
 
-## Visual grammar
+## Original visual grammar (keys 1–4)
 
 - Cinematic: dark slate, fine brass framing, an overlapping bust on roomy windows.
 - Storybook: a smaller asymmetrical pale speech card with a tail and Lora body text.
@@ -28,6 +28,25 @@ so lines and choices do not shift as glyphs arrive. Stable line height, wrapped 
 auto-scrolled choice focus, and explicit manual scrolling protect long/localized content.
 The footer belongs to input hints, not diagnostics. Do not revive the always-visible
 four-line developer HUD or place a decorative animation behind the text.
+
+## Additional reference styles (keys 5–7)
+
+The original four styles remain available. Additions use their own palettes and
+frame module so the new treatments do not replace the original ones.
+
+- **Mythic frame:** the supplied Hades screenshot's pale reading panel, gold double
+  edge, cut corners and dark angled nameplate. The portrait can break the frame.
+- **Tactics box:** the Wargroove screenshot's stepped rectangular frame, pale inset,
+  burgundy speaker tab and small diamond cue. Pixelify Sans adds the pixel type treatment.
+- **Field terminal:** the supplied communication-window screenshot's physical green
+  surround, dark screen, signal-status rail and channel identity. Space Mono gives
+  it a separate typographic rhythm. Status-rail marks are decorative indicators,
+  not interactive buttons.
+
+Mara, Ivo and Beacon now use bundled DiceBear Lorelei avatars. Fixed seeds and
+explicit component options keep identity stable across expression variants. The
+slate square and sage circular portrait backgrounds are unchanged, including when
+the portrait overlaps a frame. No request is made to DiceBear during play.
 
 ## References and interpretation
 
@@ -54,8 +73,8 @@ choices, and uses a small relationship variant after reconvergence. See
 
 ## Keep checking
 
-Capture all four styles, all four portrait positions, both sizes, and French text.
+Capture all seven styles, all four portrait positions, both sizes, and French text.
 Inspect the last choice after keyboard scrolling, the disabled explanation, concurrent
 radio, and completed states. The old crash/empty-panel/locale/priority/focus tests remain.
-Procedural portraits are deliberately replaceable: use `node.portrait` as the lookup ID
+Bundled Lorelei portraits are deliberately replaceable: use `node.portrait` as the lookup ID
 for your own licensed illustration or animation adapter.

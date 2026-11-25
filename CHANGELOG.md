@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add bundled Lorelei portrait variants and three additional reference-based dialogue
+  frames to Beacon Harbor; retain the four original styles and portrait backgrounds.
+
 - Expand Beacon Harbor with a branching bilingual story, remembered choices, four
   dialogue-focused UI styles, independent portrait placement, and scrollable history.
   Add native visual coverage across styles, portrait layouts and window sizes.

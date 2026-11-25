@@ -27,7 +27,9 @@ Start with [your first conversation](#your-first-conversation), then add
 ## Try the LÖVE showcase
 
 [Beacon Harbor](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/showcase)
-uses the same player for cinematic, storybook, transmission and unframed subtitle presentations.
+uses the same player for seven presentations: the original cinematic, storybook,
+transmission and subtitle styles, plus mythic, tactics and terminal frames. Lorelei
+character portraits retain their separate slate-and-sage backgrounds.
 The longer story includes a question hub, three outcomes, and a relationship-dependent
 ending variant. Portraits can sit left, right, above the panel, or be hidden.
 It includes a second independent announcement player, English/French templates,
@@ -43,7 +45,8 @@ tua build
 love build
 ```
 
-Press **1/2/3/4** to change presentation and **O** to cycle portrait placement.
+Press **1–4** for the original styles, **5–7** for the additional reference-based
+styles, and **O** to cycle portrait placement.
 **H** opens controls/diagnostics, **Tab** opens the scrollable recent transcript, and
 **F2** switches between the longer story and the short feature demonstration. **Space** finishes reveal, then advances;
 **Up/Down** and **Enter** select replies. **F** changes reveal speed, **M** reduces
@@ -51,7 +54,7 @@ motion, **S** toggles subtitles and **V** mutes recorded voice. **L** switches
 language, **P** pauses, **R** resets, **Q/N** queue conversations/announcements,
 and **F5/F9** capture/restore an in-memory checkpoint. Page Up/Down scroll content.
 
-Cinematic mode gives the conversation modal priority and suspends radio; the other
+Cinematic, mythic and tactics modes give the conversation modal priority and suspends radio; the other
 styles permit concurrent announcements. The background stays quiet so dialogue is
 the focus. These are example host policies. The engine does not decide
 whether your game pauses or which channel owns input. Two conversation and four
