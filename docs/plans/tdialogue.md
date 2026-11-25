@@ -586,6 +586,10 @@ context objects. Core export/import works without a filesystem or LÖVE.
   member-only replacement spans, Unicode-safe edits and incomplete paths. Exclude
   branch tags and quoted/default/payload text. Verify forwarded context refresh,
   deletion, hover and definition; installed-editor qualification remains pending.
+- [x] Character-expression authoring refinement: reuse parser metadata attachment
+  rules instead of backward text scanning; preserve full dotted/hyphenated name edits.
+  Reject duplicates and invalid ownership; verify forwarded imports and unsaved
+  character refresh. Installed-editor qualification remains pending.
 - [ ] Extend completion and navigation to labels, choice targets, context fields,
   placeholders, actions, expressions and voice references using their shared facts.
 - [x] Text-identity refactor slice: explicit rename/reference queries connect

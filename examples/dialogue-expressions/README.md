@@ -13,3 +13,8 @@ Generated output is not committed.
 The additional `media.tdialogue` script demonstrates shared typed speech profiles,
 per-line overrides/silence, voice cue locale/fallback policy and pronunciation hints.
 These are owned descriptions only; this headless example does not load or play audio.
+
+Try completing an `@expression` name after a character utterance. Suggestions use
+that character's declared expressions and replace the whole name, including dots
+or hyphens. Choices and duplicate expression metadata end that editing context.
+See [expression authoring](../../docs/dialogue.md#complete-character-expressions).

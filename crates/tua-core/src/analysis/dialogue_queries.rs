@@ -101,69 +101,33 @@ impl AnalysisSnapshot {
         diagnostics
     }
 
-    // Lexical recovery allows completion while an expression name is unfinished.
     fn expression_target(
         &self,
         path: &Path,
         position: SourcePosition,
         prefix: bool,
     ) -> Option<(PathBuf, String, String, SourceSpan)> {
-        let file = self.file(path)?;
-        let lines: Vec<_> = file.source.lines().collect();
-        let line = *lines.get(position.line.checked_sub(1)?)?;
-        let rest = line.trim_start().strip_prefix("@expression ")?.trim_start();
-        let start = line.chars().count() - rest.chars().count() + 1;
-        let name = rest.trim_end();
-        let end = start + name.chars().count();
-        if position.column < start || position.column > end {
-            return None;
-        }
+        let target = crate::dialogue_asset::expressions::target_at(
+            path,
+            &self.file(path)?.source,
+            position,
+        )?;
         let token = if prefix {
-            name.chars().take(position.column - start).collect()
+            target
+                .name
+                .value
+                .chars()
+                .take(position.column - target.name.span.start.column)
+                .collect()
         } else {
-            name.to_owned()
+            target.name.value
         };
-        for previous in lines[..position.line - 1].iter().rev() {
-            let previous = previous.trim_start();
-            if previous.is_empty() || previous.starts_with("//") {
-                continue;
-            }
-            if previous.starts_with('[')
-                || previous.starts_with("->")
-                || previous.starts_with("@action ")
-                || previous.starts_with("@branch ")
-            {
-                return None;
-            }
-            if previous.starts_with('@') {
-                continue;
-            }
-            let (speaker, _) = previous.split_once(':')?;
-            let (alias, character) = speaker.split_once('.')?;
-            let import = file
-                .parsed
-                .as_ref()
-                .ok()?
-                .dialogue_imports
-                .iter()
-                .find(|import| import.alias.value == alias)?;
-            return Some((
-                self.dialogue_module(path, import)?,
-                character.to_owned(),
-                token,
-                SourceSpan {
-                    start: SourcePosition {
-                        line: position.line,
-                        column: start,
-                    },
-                    end: SourcePosition {
-                        line: position.line,
-                        column: end,
-                    },
-                },
-            ));
-        }
-        None
+        Some((
+            self.dialogue_module(path, &target.import)?,
+            target.character,
+            token,
+            target.name.span,
+        ))
     }
 
     pub(super) fn dialogue_flow_references(

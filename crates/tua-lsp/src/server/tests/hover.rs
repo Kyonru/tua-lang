@@ -1311,3 +1311,53 @@ fn dialogue_context_path_completion_preserves_parent_and_suffix_with_unicode() {
     server.send(completion_request(3, &uri, source, "context.player.n"));
     assert_completion_labels(server.output(), 3, ["name", "newName"]);
 }
+
+#[test]
+fn dialogue_expression_completion_replaces_dotted_names_and_rejects_bad_attachment() {
+    let project = TempProject::new("dialogue-expression-authoring");
+    project.write("tua.toml", "source = 'src'\n");
+    let cast = "return { Guide = { name = 'Guide', expressions = { ['face.happy-id'] = { portrait = 'happy.png' }, ['face.half'] = { portrait = 'half.png' } } } }";
+    project.write("src/cast.tua", cast);
+    project.write("src/forward.tua", "return require('cast')");
+    let source = "@dialogue 1\n@characters Cast \"forward\"\n[start]\n// @id hello\nCast.Guide: é🦆 Hello (end)\n@expression face.happy-id\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, project.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    server.send(completion_request(2, &uri, source, "@expression face.ha"));
+    assert_completion_labels(server.output(), 2, ["face.half", "face.happy-id"]);
+    let item = &response_with_id(server.output(), 2)["result"][0];
+    assert_eq!(item["textEdit"]["newText"], "face.half");
+    assert_eq!(
+        item["textEdit"]["range"]["start"],
+        lsp_position_with_offset(source, "face.happy-id", 0)
+    );
+    assert_eq!(
+        item["textEdit"]["range"]["end"],
+        lsp_position_with_offset(source, "face.happy-id", 13)
+    );
+    let cast_uri = project.uri_for("src/cast.tua");
+    server.send(did_open(&cast_uri, cast));
+    server.send(did_change(
+        &cast_uri,
+        &cast.replace("face.half", "face.halo"),
+        2,
+    ));
+    server.send(completion_request(3, &uri, source, "@expression face.ha"));
+    assert_completion_labels(server.output(), 3, ["face.halo", "face.happy-id"]);
+    let invalid = source.replace(
+        "@expression face.happy-id",
+        "@expression face.happy-id\n@expression face.ha",
+    );
+    server.send(did_change(&uri, &invalid, 2));
+    server.send(completion_request(
+        4,
+        &uri,
+        &invalid,
+        "face.happy-id\n@expression face.ha",
+    ));
+    assert_completion_labels(server.output(), 4, []);
+}

@@ -9,6 +9,9 @@ language or editor behavior, and migration notes call out those changes.
 - Refresh direct `return require(...)` facade exports from current editor overlays
   instead of retaining stale types inferred from disk.
 
+- Use parser attachment rules for dialogue expression authoring, with full-name
+  completion edits and checks for invalid ownership and duplicate metadata.
+
 - Refine dialogue context-path authoring with shared member replacement ranges,
   imported-type refresh coverage and isolation from branch targets and literals.
 

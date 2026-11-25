@@ -285,6 +285,10 @@ including choice/wait/branch/action/fallback targets. Rename accepts full dotted
 hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
 reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
 saved checkpoints stay unchanged; migrate external entry references separately.
+Expression authoring follows parser metadata attachment rules and imported
+character definitions. Completion replaces the whole dotted/hyphenated name using
+the cursor prefix; duplicate expressions, choices and invalid owners suppress
+queries. Valid intervening metadata/comments and unfinished later text are supported.
 Context-field queries in @bind/@branch/@visible/@enabled share path recovery;
 completion replaces only the member at the cursor, preserving parent and trailing
 paths. Incomplete paths and unsaved forwarded context definitions are supported.

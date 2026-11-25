@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod actions;
 pub mod contracts;
+pub mod expressions;
 pub mod flow;
 mod media;
 pub mod paths;

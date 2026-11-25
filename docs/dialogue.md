@@ -60,6 +60,23 @@ host entry-point strings and saved checkpoints are not migrated by this file-loc
 rename. Update those external references separately before using the renamed flow.
 Graph preview remains planned.
 
+## Complete character expressions
+
+After an imported character's utterance, type `@expression ` to see its declared
+expressions. Hover shows the expression record, and Go to Definition follows the
+character declaration. Forwarded imports and unsaved character edits participate
+in these queries.
+
+Completion uses the prefix before the cursor but replaces the whole expression
+name, including dots and hyphens. For example, choosing `face.half` at
+`@expression face.ha|ppy-id` produces `@expression face.half`.
+
+Expression suggestions follow the same attachment rules as the parser. They are
+unavailable after choices, duplicate expressions, invalid preceding directives,
+or an utterance without an imported character. Valid timing/events and comments
+between the utterance and expression preserve ownership. Unfinished later text
+does not prevent queries on the current expression.
+
 ## Complete context fields
 
 Use completion after `context.` or `locals.` in `@bind`, `@branch`, `@visible`,
