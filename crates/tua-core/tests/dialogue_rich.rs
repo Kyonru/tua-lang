@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 #[test]
 fn dialogue_rich_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let example = root.join("examples/dialogue-rich/src");
+    let example = root.join("examples/dialogue/rich/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     let scene = tua_core::emit::emit_tua_source(
         "scene.tua",

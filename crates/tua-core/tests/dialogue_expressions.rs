@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 #[test]
 fn dialogue_expressions_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let example = root.join("examples/dialogue-expressions/src");
+    let example = root.join("examples/dialogue/expressions/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     for name in ["characters", "forward", "scene", "media"] {
         let code = if matches!(name, "scene" | "media") {
@@ -70,7 +70,7 @@ fn dialogue_expressions_execute_emitted_sources() {
 fn dialogue_expressions_reject_invalid_placement() {
     let local_speaker = "@dialogue 1\n@character Cast.Guide \"Local\"\n[start]\n// @id hello\nCast.Guide: Hello (end)\n@expression happy\n";
     assert!(tua_core::emit::emit_dialogue_source("local.tdialogue", local_speaker).is_err());
-    let source = include_str!("../../../examples/dialogue-expressions/src/scene.tdialogue");
+    let source = include_str!("../../../examples/dialogue/expressions/src/scene.tdialogue");
     for invalid in [
         source.replace(
             "@expression happy",

@@ -83,3 +83,6 @@ Backups.backupdb
 MobileBackups.trash
 tmbootpicker.efi
 /temp
+
+# Independently runnable dialogue scenarios are nested one level deeper.
+/examples/dialogue/*/build/

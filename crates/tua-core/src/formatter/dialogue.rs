@@ -131,18 +131,7 @@ mod tests {
         }
         let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
         let mut files = Vec::new();
-        for entry in std::fs::read_dir(examples).unwrap() {
-            let path = entry.unwrap().path();
-            if path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("dialogue")
-                && path.join("src").is_dir()
-            {
-                scripts(&path.join("src"), &mut files);
-            }
-        }
+        scripts(&examples.join("dialogue"), &mut files);
         assert!(files.len() >= 10);
         fn without_coordinates(code: &str) -> String {
             let mut result = String::new();

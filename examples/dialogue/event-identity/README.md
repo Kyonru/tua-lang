@@ -7,8 +7,8 @@ It uses no graphics, audio, handlers or save storage.
 From this directory, run:
 
 ```sh
-../../target/debug/tua check
-../../target/debug/tua build
+../../../target/debug/tua check
+../../../target/debug/tua build
 cd build
 lua main.lua
 ```

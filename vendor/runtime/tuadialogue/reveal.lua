@@ -1,6 +1,6 @@
 -- Optional presentation controller. No game flow, rendering, clocks, or audio IO.
-local Graphemes = require("tuadialogue_graphemes")
-local Timing = require("tuadialogue_timing")
+local Graphemes = require("tuadialogue.graphemes")
+local Timing = require("tuadialogue.timing")
 local Reveal = {}
 local Player = {}
 Player.__index = Player

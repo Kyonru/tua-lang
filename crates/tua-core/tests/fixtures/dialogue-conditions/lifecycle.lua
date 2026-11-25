@@ -1,5 +1,5 @@
 local Dialogue = require("tuadialogue")
-local Conditions = require("tuadialogue_conditions")
+local Conditions = require("tuadialogue.conditions")
 local context = require("context")
 local scene = require("scene")
 local function fails(fn, expected)
@@ -99,7 +99,7 @@ local localized = context.new(scene, { coins = 0, unlocked = true }, {
   resolve = function(key, source, args, locale)
     if reject then error("deliberate translation failure") end
     if key == "shop.buy.reason" and locale == "fr" then return "Il faut 20 pièces." end
-    return require("tuadialogue_text").format(source, args)
+    return require("tuadialogue.text").format(source, args)
   end,
 })
 localized:start()

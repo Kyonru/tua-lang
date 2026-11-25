@@ -29,7 +29,7 @@ work landed as `d5f61db4` and is preserved separately.
 
 Maintained fixtures:
 
-- `examples/dialogue-event-identity`: typed host, two occurrences of the same name,
+- `examples/dialogue/event-identity`: typed host, two occurrences of the same name,
   both clocks, source coordinates and a new delivery after restart.
 - `crates/tua-core/tests/fixtures/dialogue_event_identity.lua`: metadata ownership,
   locale refresh, cancellation, advance, disposal, repeated names/reordered
@@ -81,8 +81,8 @@ RUST_MIN_STACK=16777216 cargo test -p tua-core --test dialogue_asset
 RUST_MIN_STACK=16777216 cargo test -p tua-core dialogue
 make verify
 make docs-build
-(cd examples/dialogue-event-identity && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
-(cd examples/dialogue-event-identity/build && lua main.lua)
+(cd examples/dialogue/event-identity && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
+(cd examples/dialogue/event-identity/build && lua main.lua)
 ```
 
 Hold the compiler binary stable while the build-cache verification suite runs.

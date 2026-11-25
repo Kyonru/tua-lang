@@ -7638,7 +7638,8 @@ fn dialogue_contract_checks_types_and_emits_executable_runtime() {
     let temp = TempDir::new("dialogue-contract");
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
     fs::create_dir_all(temp.path().join("src")).unwrap();
-    let source = r#"local Dialogue = require("tuadialogue")
+    let source = r#"package.path = "./?.lua"
+local Dialogue = require("tuadialogue")
 local player = Dialogue.new({ entry = "hello", nodes = {
   hello = { kind = "line", text = "Hello", next = "done" },
   done = { kind = "end" },
@@ -7669,6 +7670,8 @@ dofile("oracle.lua")
         .unwrap();
     assert!(result.status.success(), "{result:?}");
     assert!(temp.path().join("build/tuadialogue.lua").exists());
+    assert!(temp.path().join("build/tuadialogue/reveal.lua").exists());
+    assert!(!temp.path().join("build/tuadialogue_reveal.lua").exists());
     if let Some(lua) = working_lua_runtime() {
         let result = Command::new(lua)
             .arg("main.lua")

@@ -1,4 +1,4 @@
--- Run from examples/dialogue-localization/build against emitted modules.
+-- Run from examples/dialogue/localization/build against emitted modules.
 local Dialogue = require("tuadialogue")
 local I18n = require("tuai18n")
 local scene = require("scene")

@@ -46,7 +46,7 @@ remain pending in M4. No automatic gameplay action, signal bus or save slot is a
 
 Maintained sources:
 
-- `examples/dialogue-events`: two contracts, repeated names, both clocks, a legacy
+- `examples/dialogue/events`: two contracts, repeated names, both clocks, a legacy
   notification, registry re-export and context composition.
 - `crates/tua-core/tests/dialogue_events.rs`: compiler emission and Lua execution,
   malformed JSON, duplicates, bounds and required declarations/identity.
@@ -110,8 +110,8 @@ cargo build -p tua-cli
 RUST_MIN_STACK=16777216 cargo test -p tua-core dialogue
 make verify
 make docs-build
-(cd examples/dialogue-events && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
-(cd examples/dialogue-events/build && lua main.lua)
+(cd examples/dialogue/events && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
+(cd examples/dialogue/events/build && lua main.lua)
 ```
 
 For native checks, copy the emitted example to an isolated LÖVE directory, rename

@@ -1,6 +1,6 @@
 # M7 optional dialogue audio adapter
 
-Implemented as typed host code in `examples/dialogue-audio`, on the feature branch.
+Implemented as typed host code in `examples/dialogue/audio`, on the feature branch.
 The compiler and core dialogue runtime are unchanged in this slice. No merge or
 publication is included.
 
@@ -50,7 +50,7 @@ or LuaJIT executable was available; LÖVE supplies LuaJIT compatibility coverage
 
 ## Reproduction and provenance
 
-Run `python3 examples/dialogue-audio/verify.py --love /Applications/love.app/Contents/MacOS/love --render`
+Run `python3 examples/dialogue/audio/verify.py --love /Applications/love.app/Contents/MacOS/love --render`
 from the repository root. The script uses an isolated copy for its test entrypoint;
 it does not patch generated production files. Source tests and original sample
 generation are tracked beside the example.

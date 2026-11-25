@@ -29,7 +29,7 @@ unconsumed/synchronously executing actions, failure outcomes, default exclusion,
 and restore without dispatch or transcript replay. Imported typing tests cover
 valid/invalid policies and marker values plus hover and completion.
 
-`examples/dialogue-actions/verify-checkpoints.py` checks/formats/builds the typed
+`examples/dialogue/actions/verify-checkpoints.py` checks/formats/builds the typed
 example, executes emitted Lua and optionally runs all v1/v2/v3 fixture families
 under native LÖVE. Separate native write/read processes persist a v3 checkpoint
 and reward counter together, then verify that restore does not call the handler.

@@ -1,5 +1,5 @@
 local Dialogue = require("tuadialogue")
-local Rich = require("tuadialogue_rich")
+local Rich = require("tuadialogue.rich")
 local function fails(callback)
   assert(not pcall(callback), "expected rejection")
 end

@@ -30,7 +30,7 @@ are live-session identities, not durable reward or network idempotency keys.
 recipe for the typed-context scene. Storage calls remain explicit; the example
 never autosaves or substitutes defaults after a load error. Optional player history
 is separate and excluded from checkpoints. For consequential actions, see the
-[durable action recipe](../dialogue-durable/README.md); persisted fired flags alone
+[durable action recipe](../durable/README.md); persisted fired flags alone
 do not make external effects exactly-once.
 
 

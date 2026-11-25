@@ -10,7 +10,7 @@ fn action_handle_constructor() -> Type {
         .get_or_init(|| {
             let parsed = crate::parse_tua_source(
                 "tuadialogue.contract.tua",
-                include_str!("../../../vendor/runtime/tuadialogue.contract.tua"),
+                include_str!("../../../vendor/runtime/tuadialogue/contract.tua"),
             )
             .expect("bundled dialogue contract parses");
             let environment =
@@ -37,7 +37,7 @@ pub(crate) fn module_type() -> Type {
         .get_or_init(|| {
             let parsed = crate::parse_tua_source(
                 "tuadialogue.contract.tua",
-                include_str!("../../../vendor/runtime/tuadialogue.contract.tua"),
+                include_str!("../../../vendor/runtime/tuadialogue/contract.tua"),
             )
             .expect("bundled dialogue contract parses");
             let environment =

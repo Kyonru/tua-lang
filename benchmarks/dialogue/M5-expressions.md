@@ -61,8 +61,8 @@ cargo build -p tua-cli
 RUST_MIN_STACK=16777216 cargo test -p tua-core dialogue
 make verify
 make docs-build
-(cd examples/dialogue-expressions && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
-(cd examples/dialogue-expressions/build && lua main.lua)
+(cd examples/dialogue/expressions && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
+(cd examples/dialogue/expressions/build && lua main.lua)
 ```
 
 The maintained oracle is `crates/tua-core/tests/fixtures/dialogue_expressions.lua`.

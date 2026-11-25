@@ -1,6 +1,6 @@
 -- Bounded template compilation and renderer-neutral resolved presentations.
-local Graphemes = require("tuadialogue_graphemes")
-local Text = require("tuadialogue_text")
+local Graphemes = require("tuadialogue.graphemes")
+local Text = require("tuadialogue.text")
 local Rich = {}
 
 local function identifier(value)

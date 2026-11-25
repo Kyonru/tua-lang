@@ -22,11 +22,11 @@ fn run_conditions(identified: bool) {
     );
     let context = tua_core::emit::emit_tua_source(
         "context.tua",
-        include_str!("../../../examples/dialogue-conditions/src/context.tua"),
+        include_str!("../../../examples/dialogue/conditions/src/context.tua"),
     )
     .unwrap();
     let mut scene_source =
-        include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue").to_owned();
+        include_str!("../../../examples/dialogue/conditions/src/scene.tdialogue").to_owned();
     if identified {
         scene_source = scene_source.replace("greet ", "greet [id:shop.greet] ");
     }
@@ -35,7 +35,7 @@ fn run_conditions(identified: bool) {
         .code;
     let main = tua_core::emit::emit_tua_source(
         "main.tua",
-        include_str!("../../../examples/dialogue-conditions/src/main.tua"),
+        include_str!("../../../examples/dialogue/conditions/src/main.tua"),
     )
     .unwrap();
     let emitted = format!("package.preload.context = function()\n{context}\nend\npackage.preload.scene = function()\n{scene}\nend\n{main}");
@@ -101,7 +101,7 @@ fn dialogue_conditions_reject_invalid_syntax_and_targets() {
     let missing = format!("{prefix}@branch true [target:absent] [else:gate]\n");
     let errors = tua_core::emit::emit_dialogue_source("bad.tdialogue", &missing).unwrap_err();
     assert!(errors.iter().any(|d| d.message.contains("unknown target")));
-    let source = include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue");
+    let source = include_str!("../../../examples/dialogue/conditions/src/scene.tdialogue");
     assert!(tua_core::emit::emit_dialogue_source(
         "bad.tdialogue",
         &source.replace("@fallback locked", "")

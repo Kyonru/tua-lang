@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 #[test]
 fn dialogue_actions_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let example = root.join("examples/dialogue-actions/src");
+    let example = root.join("examples/dialogue/actions/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     for name in [
         "actions",
@@ -84,7 +84,7 @@ fn dialogue_actions_execute_emitted_sources() {
 
 #[test]
 fn dialogue_actions_reject_invalid_authored_contracts() {
-    let source = include_str!("../../../examples/dialogue-actions/src/scene.tdialogue");
+    let source = include_str!("../../../examples/dialogue/actions/src/scene.tdialogue");
     for invalid in [
         source.replace("@document shop\n", ""),
         source.replace("@actions \"forward\"\n", ""),

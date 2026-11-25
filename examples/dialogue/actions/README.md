@@ -5,7 +5,7 @@ The example purchases an item through explicit synchronous host dispatch, then
 shows actions composed with context, branches, and timed typed notifications.
 It also returns a typed action handle, settles it later, and explicitly consumes
 the result without invoking dialogue transitions from a callback.
-See [the dialogue guide](../../docs/dialogue.md#run-a-registered-host-action).
+See [the dialogue guide](../../../docs/dialogue.md#run-a-registered-host-action).
 The `wait.tdialogue` script also demonstrates a duration wait and suspension.
 Generated `build/` output is not committed.
 
@@ -17,7 +17,7 @@ user-facing cancellation; omitting cleanup refuses skipping while pending.
 action or manufactures success. Settled results must be consumed first. Direct
 player lifecycle operations still invalidate handles; non-cancellable external
 work remains the host's responsibility. See `skip-demo.tua` and the
-[policy table](../../docs/dialogue.md#choose-an-advance-and-skip-policy).
+[policy table](../../../docs/dialogue.md#choose-an-advance-and-skip-policy).
 
 ## Save after an action has settled
 
@@ -35,7 +35,7 @@ an action or emits notifications; future explicit updates may emit unfired event
 Current handlers and context are rebound, while typed locals and event timers are
 restored. Bump `checkpointVersion` when payload schema or host semantics change.
 
-For consequential effects, use the [durable recipe](../dialogue-durable/README.md)
+For consequential effects, use the [durable recipe](../durable/README.md)
 to reconcile the crash window between the effect and saving the new position.
 Saving a position alone does not prevent replay from an older checkpoint.
 
@@ -51,4 +51,4 @@ The queries also work while editing an unfinished target; they never execute
 In the editor, complete an `@action` name or a top-level JSON payload key.
 Suggestions use the text before the cursor and replace the full existing token;
 hover and definition use the declared contract. Payload values and nested keys
-are not completion sites. See the [authoring guide](../../docs/dialogue.md#complete-typed-actions-and-events).
+are not completion sites. See the [authoring guide](../../../docs/dialogue.md#complete-typed-actions-and-events).

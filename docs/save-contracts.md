@@ -211,14 +211,14 @@ lets the game decide when to try synchronously again.
 
 ### Save a consequential dialogue result
 
-The [durable dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-durable)
+The [durable dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/durable)
 keeps local gameplay counters and an operation receipt in one Save record. It
 persists intent before dispatch, reopens uncertain writes, and returns a committed
 result on recovery without applying the purchase again. This single-writer recipe
 also stops on damaged-slot issues; it never automatically accepts a potentially
 older receipt. External side effects require an idempotent authority of their own.
 
-For dialogue position persistence, the [checkpoint recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+For dialogue position persistence, the [checkpoint recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/checkpoint)
 uses an explicit typed envelope and fresh contracts. Save validates its shape;
 dialogue restore validates content compatibility and rebinds current game facts.
 See [persist checkpoints](dialogue.md#persist-checkpoints-with-save) for ownership

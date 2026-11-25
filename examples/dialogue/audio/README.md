@@ -69,7 +69,7 @@ non-cancellable actions remains separate; it never bypasses the player's state.
 ## Verification and assets
 
 ```sh
-python3 verify.py --tua ../../target/debug/tua
+python3 verify.py --tua ../../../target/debug/tua
 python3 verify.py --love /Applications/love.app/Contents/MacOS/love --render
 ```
 

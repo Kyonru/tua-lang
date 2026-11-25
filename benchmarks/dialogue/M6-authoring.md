@@ -38,7 +38,7 @@ structural authoring assistance are not claimed by this slice.
   UTF-16 adaptation and unsaved opt-in removal.
 - CLI integration checks/builds the example, extracts rich translation entries
   and executes actual emitted Lua when an interpreter is available.
-- `examples/dialogue-rich` now runs an authored script and a typed document.
+- `examples/dialogue/rich` now runs an authored script and a typed document.
   The existing Rust/Lua parity corpus and runtime lifecycle oracle retain M6's
   Unicode, placeholder isolation, localization, skip and timing coverage.
 
@@ -63,7 +63,7 @@ dependencies, release artifacts or generated Lua are committed by this slice.
   The final rebuilt CLI's rich authoring/extraction/emitted-Lua test passed.
   Clippy and the later gate stages included these refinements.
 - Final `tua fmt`, `tua fmt --check`, `tua check` and `tua build` passed for
-  `examples/dialogue-rich`. No authored Lua assets changed in this slice.
+  `examples/dialogue/rich`. No authored Lua assets changed in this slice.
 - `make docs-build llms-drift-check diff-check` passed.
 - Final emitted example passed under Lua 5.4.8. LÖVE 11.5 with LuaJIT
   2.1.1700008891 passed with JIT explicitly on and off: authored/typed example,

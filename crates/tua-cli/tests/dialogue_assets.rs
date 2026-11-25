@@ -203,16 +203,16 @@ fn conditional_dialogue_builds_and_extracts_disabled_reasons() {
     let project = Project::new();
     project.write(
         "src/context.tua",
-        include_str!("../../../examples/dialogue-conditions/src/context.tua"),
+        include_str!("../../../examples/dialogue/conditions/src/context.tua"),
     );
     project.write(
         "src/scenes/intro.tdialogue",
-        include_str!("../../../examples/dialogue-conditions/src/scene.tdialogue"),
+        include_str!("../../../examples/dialogue/conditions/src/scene.tdialogue"),
     );
     project.write("src/main.tua", "local context = require('context')\nlocal scene = require('scenes.intro')\nlocal player = context.new(scene, {coins = 0, unlocked = true})\nplayer:start()\n");
     project.success(&["check"]);
     project.success(&["build"]);
-    assert!(project.0.join("build/tuadialogue_conditions.lua").is_file());
+    assert!(project.0.join("build/tuadialogue/conditions.lua").is_file());
     let extraction = project.success(&["dialogue-extract"]);
     assert!(extraction.contains("shop.buy.reason"), "{extraction}");
     assert!(extraction.contains("Requires 20 coins"), "{extraction}");

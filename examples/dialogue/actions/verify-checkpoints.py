@@ -8,7 +8,7 @@ import tempfile
 import uuid
 
 root = Path(__file__).resolve().parent
-repo = root.parents[1]
+repo = root.parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument("--tua", default=str(repo / "target/debug/tua"))
 parser.add_argument("--love")

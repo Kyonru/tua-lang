@@ -16,7 +16,7 @@ The private segmenter implements Unicode 15.1 extended grapheme clusters from
 UAX #29 revision 43, including Indic conjunct, pictographic ZWJ and RI pairing rules.
 All 1,187 official GraphemeBreakTest cases pass. Tables are generated from pinned,
 SHA-256-verified official data; `scripts/unicode-15.1-manifest.json` records origins.
-`tuadialogue_unicode.LICENSE` ships with the runtime data. This is a pinned version,
+`tuadialogue/unicode.LICENSE` ships with the runtime data. This is a pinned version,
 not a claim of conformance to future Unicode releases.
 
 A cluster exposes inclusive one-based UTF-8 byte ranges, its text/index, and whether
@@ -47,8 +47,8 @@ cargo build -p tua-cli
 RUST_MIN_STACK=16777216 cargo test -p tua-core dialogue_reveal
 make verify
 make docs-build
-(cd examples/dialogue-reveal && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
-(cd examples/dialogue-reveal/build && lua main.lua)
+(cd examples/dialogue/reveal && ../../target/debug/tua fmt --check && ../../target/debug/tua check && ../../target/debug/tua build)
+(cd examples/dialogue/reveal/build && lua main.lua)
 ```
 
 For Unicode regeneration, fetch the files named in `scripts/unicode-15.1-manifest.json`
@@ -60,7 +60,7 @@ python3 scripts/generate-dialogue-unicode.py /path/to/unicode-data --check
 
 Omit `--check` to regenerate the table. The license URL is a snapshot rather than a
 versioned URL; the pinned license bytes are also available in
-`vendor/runtime/tuadialogue_unicode.LICENSE`. Copy those bytes as `LICENSE.txt` when
+`vendor/runtime/tuadialogue/unicode.LICENSE`. Copy those bytes as `LICENSE.txt` when
 reproducing against the manifest if the upstream license has since changed.
 Generated table output uses UTF-8/LF bytes independently of host newline settings.
 The checked-in corpus is `crates/tua-core/tests/fixtures/unicode/GraphemeBreakTest-15.1.0.txt`.

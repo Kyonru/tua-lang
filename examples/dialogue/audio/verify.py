@@ -8,7 +8,7 @@ import tempfile
 
 root = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
-parser.add_argument("--tua", default=str(root.parents[1] / "target/debug/tua"))
+parser.add_argument("--tua", default=str(root.parents[2] / "target/debug/tua"))
 parser.add_argument("--love")
 parser.add_argument("--render", action="store_true")
 args = parser.parse_args()

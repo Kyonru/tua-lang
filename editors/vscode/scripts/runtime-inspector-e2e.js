@@ -22,9 +22,8 @@ async function main() {
   fs.mkdirSync(output);
   for (const name of ["tuaecs", "tuastatemachine", "tuasignal", "tuaobjectpool", "tuastore", "baton", "tuabehavior", "tuaaudio"]) fs.copyFileSync(path.resolve(__dirname, "../../../vendor/runtime", name + ".lua"), path.join(output, name + ".lua"));
   const runtime = path.resolve(__dirname, "../../../vendor/runtime");
-  for (const name of fs.readdirSync(runtime).filter(name => name.startsWith("tuadialogue") && name.endsWith(".lua"))) {
-    fs.copyFileSync(path.join(runtime, name), path.join(output, name));
-  }
+  fs.copyFileSync(path.join(runtime, "tuadialogue.lua"), path.join(output, "tuadialogue.lua"));
+  fs.cpSync(path.join(runtime, "tuadialogue"), path.join(output, "tuadialogue"), { recursive: true });
   fs.writeFileSync(path.join(output, "conf.lua"), `io.stdout:setvbuf("no")
 function love.conf(t)
   t.window.visible = false; t.window.width = 64; t.window.height = 64
@@ -135,7 +134,7 @@ function love.update(dt)
   assert(looping and translated and world and machine.current == "walking" and pool:owns(bullet) and causal)
 end
 `);
-  const originals = new Map(fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name))]));
+  const originals = new Map(fs.readdirSync(output, { recursive: true }).filter(name => fs.statSync(path.join(output, name)).isFile()).map(name => [name, fs.readFileSync(path.join(output, name))]));
   const players = [];
   for (const title of ["Host", "Client"]) {
     const session = activity.begin({ title, kind: "run", cwd: root });
@@ -226,7 +225,11 @@ end
   assert(!fs.readdirSync(output).some(name => /inspect|shim/.test(name)));
   // Packaging the same files after inspection must contain no shim or token.
   fs.mkdirSync(path.join(root, "src"));
-  for (const [name, content] of originals) fs.writeFileSync(path.join(root, "src", name), content);
+  for (const [name, content] of originals) {
+    const target = path.join(root, "src", name);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  }
   fs.writeFileSync(path.join(root, "tua.toml"), 'source = "src"\nout = "release"\n');
   const packaged = spawnSync(process.env.TUA_BIN || path.resolve(__dirname, "../bin/tua"), ["package", "--target", "love"], { cwd: root, encoding: "utf8", timeout: 30000 });
   assert.equal(packaged.status, 0, packaged.stdout + packaged.stderr);

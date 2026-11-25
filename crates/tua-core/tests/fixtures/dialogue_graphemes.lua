@@ -1,6 +1,6 @@
 -- Official Unicode 15.1 GraphemeBreakTest data is passed by the host harness.
 return function(corpus)
-  local Graphemes = require("tuadialogue_graphemes")
+  local Graphemes = require("tuadialogue.graphemes")
   local function utf8(code)
     if code < 128 then return string.char(code) end
     if code < 2048 then return string.char(192 + math.floor(code / 64), 128 + code % 64) end

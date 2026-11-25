@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 #[test]
 fn dialogue_typed_events_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let example = root.join("examples/dialogue-events/src");
+    let example = root.join("examples/dialogue/events/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     for name in ["events", "forward", "context", "scene", "bound"] {
         let code = if matches!(name, "scene" | "bound") {

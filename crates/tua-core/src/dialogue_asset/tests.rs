@@ -310,7 +310,7 @@ fn duration_waits_are_bounded_explicit_flow_and_emit_schema_nine() {
 
 #[test]
 fn media_metadata_is_bounded_and_requires_explicit_opt_in() {
-    let source = include_str!("../../../../examples/dialogue-expressions/src/media.tdialogue");
+    let source = include_str!("../../../../examples/dialogue/expressions/src/media.tdialogue");
     let output = crate::emit::emit_dialogue_source("media.tdialogue", source).unwrap();
     assert!(output.code.contains("schemaVersion = 10"));
     assert!(output.code.contains("speech = \"off\""));

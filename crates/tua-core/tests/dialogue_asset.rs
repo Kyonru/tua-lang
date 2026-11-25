@@ -2,7 +2,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use tua_core::emit::{emit_dialogue_source, LoweringKind};
 
-const SCENE: &str = include_str!("../../../examples/dialogue/src/intro.tdialogue");
+const SCENE: &str = include_str!("../../../examples/dialogue/basics/src/intro.tdialogue");
 
 #[test]
 fn emitted_asset_is_lua51_data_with_complete_source_provenance() {

@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 #[test]
 fn dialogue_reveal_execute_emitted_sources() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let example = root.join("examples/dialogue-reveal/src");
+    let example = root.join("examples/dialogue/reveal/src");
     let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\n".to_owned();
     for name in ["scene", "controller", "context", "bound"] {
         let code = if matches!(name, "scene" | "bound") {

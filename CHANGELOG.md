@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Group dialogue runtime internals under `tuadialogue/` and independently runnable
+  examples under `examples/dialogue/`; preserve the public runtime entry and replacements.
+
 - Keep unsaved workspace Lua catalogs/imports synchronized for dialogue diagnostics
   and refactor conflicts; navigate forwarded character definitions to their source.
 - Diagnose unreachable dialogue sections conservatively and support `@entry label`
@@ -165,7 +168,7 @@ language or editor behavior, and migration notes call out those changes.
   schema-1 assets; the runtime still accepts legacy structured input.
 - Add read-only `tua dialogue-extract` manifests and dialogue source coverage,
   navigation, placeholder validation and drift warnings in Localization Explorer.
-  See the runnable `examples/dialogue-localization` English/French host.
+  See the runnable `examples/dialogue/localization` English/French host.
 
 - Dialogue scripts can import shared typed character modules with `@characters`.
   The updated extension adds `.tdialogue` highlighting, character completion,

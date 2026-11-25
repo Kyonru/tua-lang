@@ -317,7 +317,7 @@ lua main.lua
 ```
 
 The output shows `Ready?`, the two choice IDs and labels, then `Goodbye.`.
-The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
+The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/basics)
 also demonstrates loops, shared characters and both event clocks.
 
 ## Reveal text by grapheme cluster
@@ -328,7 +328,7 @@ snapshots after localization and placeholder expansion, reveals complete Unicode
 extended grapheme clusters, and optionally returns speech-blip cues. It never
 advances the dialogue or plays audio.
 
-The runnable [reveal example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-reveal)
+The runnable [reveal example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/reveal)
 uses combining accents, emoji sequences, flags, Indic text, and CJK text, plus a
 literal placeholder value that resembles a directive.
 
@@ -467,7 +467,7 @@ Translations contain raw markup templates; placeholder values remain literal tex
 `tua dialogue-extract` adds `format: "rich"` and `plainTemplate` to rich entries,
 while `text` retains the authored template for translation.
 
-The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-rich)
+The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/rich)
 uses an authored script and a typed document. Typed schema-8 documents are also
 supported directly:
 
@@ -707,7 +707,7 @@ schemas remain supported. Programmatic schema-4 documents use `id` on event
 records and require `documentId`; `source` is optional and, when supplied, must
 contain only positive integer `line` and `column` fields. Duplicate IDs are rejected
 before playback. See the runnable
-[event identity example](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue-event-identity).
+[event identity example](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/event-identity).
 
 ### Declare typed notification payloads
 
@@ -812,7 +812,7 @@ Earlier schemas still work. Programmatic events in such documents use
 `{kind = "reward", name = "reward", id = "victory.reward", anchor = "shown", delay = 0,
 payload = {coins = 10, item = {id = "shell"}}}` and set the document's `events` to the
 registry. Unknown events and invalid payloads fail during player construction.
-See the complete [typed events example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-events)
+See the complete [typed events example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/events)
 for multiple event types, legacy notifications, re-exports and context composition.
 
 ### Choose the right timing anchor
@@ -1188,7 +1188,7 @@ registry. Existing sprite-sheet calls retain their own animation-name checking.
 Scripts selecting expressions emit schema **7**, requiring
 `Dialogue.schemaVersion >= 7`. Portrait-only scripts keep their previous schema,
 and the new runtime accepts older schemas. See the runnable
-[expression example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
+[expression example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/expressions)
 for two speakers, two players, and reset behavior.
 
 ### Optional static-image adapter
@@ -1258,7 +1258,7 @@ only cache the sheet/image resources. This keeps simultaneous conversations inde
 
 ## Localize lines, choices and character names
 
-The runnable [localized dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-localization)
+The runnable [localized dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/localization)
 contains English and French catalogs, two simultaneous players and an intentionally
 missing French farewell. It checks the same API used by graphical hosts.
 
@@ -1460,7 +1460,7 @@ not bundle the player. These schema fields do not constitute save/resume support
 
 Use a shared context definition when scripts need player facts or their own counters.
 The host supplies facts explicitly; reading a binding never calls a gameplay method.
-[Run the complete example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-context).
+[Run the complete example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/context).
 
 ### 1. Declare serializable data in Tua
 
@@ -1578,7 +1578,7 @@ renderers, localization, character portraits and event clocks remain supported.
 
 Conditions read the latest **accepted** context and locals. Mutating the original
 host table has no effect until `updateContext` or `setLocals` accepts a replacement.
-The [conditional shop example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-conditions)
+The [conditional shop example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/conditions)
 builds and runs without graphics or audio.
 
 ### Route through a branch label
@@ -1752,7 +1752,7 @@ unsupported syntax prevent output. Generated internal node IDs use an `@` prefix
 that authored identifiers cannot use. The shared parser serves project checking and build/watch emission; it does not
 execute dialogue text.
 
-See the [dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue)
+See the [dialogue example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/basics)
 for the structured host and frontend development harness. The format is Tua-owned;
 compatibility with Love-Dialogue `.ld` files is not implied.
 
@@ -1760,7 +1760,7 @@ compatibility with Love-Dialogue `.ld` files is not implied.
 
 Use an action when host code must return an outcome before dialogue continues.
 Timed events remain notifications; `update()` never invokes an action handler.
-The runnable [dialogue-actions example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-actions)
+The runnable [dialogue-actions example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/actions)
 includes standalone actions and composition with context and typed events.
 
 Declare `actions.tua`:
@@ -2100,19 +2100,19 @@ Adapters must map cadence (including language-appropriate word segmentation), ap
 profile intervals/gain/pitch variation, and use private deterministic RNG rather
 than gameplay RNG. They also own volume/mute, bounded polyphony, missing-asset
 fallback, audio suspension, skip policy and lifecycle cleanup. The optional
-[dialogue audio example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-audio)
+[dialogue audio example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/audio)
 implements these responsibilities with typed host code and ordinary LÖVE Sources.
 It includes two character voices, fixed source pools, a private pitch RNG, recording
 locale fallback, mute, pause/resume, silent finish and lifecycle cleanup. Replace
 its original synthetic recording fixture with your licensed voice acting.
 
-Run `tua build` then `love build` inside `examples/dialogue-audio`. Space finishes
+Run `tua build` then `love build` inside `examples/dialogue/audio`. Space finishes
 text while keeping the recording, then advances and stops it. P pauses/resumes,
 M mutes chatter, V mutes recordings, and R restarts. This is a copyable host policy,
 not a new required audio engine. Its ASCII word-boundary callback is replaceable
 for other languages; pronunciation metadata is not synthesized speech. For pending actions, use the explicit [host skip policy](#choose-an-advance-and-skip-policy) instead of bypassing their state.
 
-The [character presentation example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-expressions)
+The [character presentation example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/expressions)
 includes shared profiles, voice locale metadata, overrides, silence and plain-line reset.
 
 
@@ -2123,7 +2123,7 @@ separate commands. The core does not assume that unfinished external work can be
 stopped, rolled back, or treated as successful.
 
 The copyable typed host policy in
-[`examples/dialogue-actions`](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-actions)
+[`examples/dialogue/actions`](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/actions)
 uses existing player and handle APIs. It introduces no new runtime method or
 `.tdialogue` syntax. Its behavior is:
 
@@ -2186,7 +2186,7 @@ local restored = Dialogue.new(scene, options)
 restored:restore(saved)
 ```
 
-The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/checkpoint)
 round-trips line, choice and suspended-wait positions. `checkpoint()` returns an
 owned plain record. `restore()` accepts only a fresh idle player; invalid data,
 incompatible content or a throwing resolver leaves that player idle. No automatic
@@ -2264,7 +2264,7 @@ assert(resumed:getLocals().visits == 3)
 assert(resumed:getContext().coins == 20)
 ```
 
-The [typed checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue-checkpoint/src/context_demo.tua)
+The [typed checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue/checkpoint/src/context_demo.tua)
 includes the shared context and authored script. Shared context definitions retain
 checkpoint-local inference through imports and forwarding modules. Constructed
 players can also be exported directly, returned by a factory, or exposed as named
@@ -2330,7 +2330,7 @@ player:dispose()
 resumed:dispose()
 ```
 
-The runnable [settled checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue-actions/src/checkpoint-demo.tua)
+The runnable [settled checkpoint example](https://github.com/Kyonru/tua-lang/blob/main/examples/dialogue/actions/src/checkpoint-demo.tua)
 counts handler calls and verifies that restore leaves the count unchanged.
 The same option works on event-registry and context factories, including contexts
 that combine actions and events.
@@ -2370,7 +2370,7 @@ the checkpoint version. The v2 Save example is deliberately scoped to its own sc
 
 ## Persist checkpoints with Save
 
-The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-checkpoint)
+The [checkpoint example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/checkpoint)
 includes a typed `Save.contract` recipe for a context-backed conversation:
 
 ```tua
@@ -2402,7 +2402,7 @@ by this recipe. Storage timing remains a host decision.
 
 ## Recover consequential host actions
 
-The [durable dialogue recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-durable)
+The [durable dialogue recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/durable)
 shows how to recover one local purchase using existing `Dialogue.actions` and
 `Save.contract` APIs. It persists an operation ID before dispatch, then saves the
 coins/inventory change and its boolean receipt together. Recovery loads that record

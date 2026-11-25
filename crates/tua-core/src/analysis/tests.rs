@@ -14791,7 +14791,7 @@ fn dialogue_voice_completion_escapes_insertions_as_json_content() {
 fn dialogue_preview_preserves_authored_routes_text_and_overlay_lifecycle() {
     use crate::dialogue_asset::preview::DialogueRouteKind;
     let path = "scene.tdialogue";
-    let source = include_str!("../../../../examples/dialogue-conditions/src/scene.tdialogue");
+    let source = include_str!("../../../../examples/dialogue/conditions/src/scene.tdialogue");
     let mut host = AnalysisHost::new();
     host.set_file(path, source);
     let original = host.snapshot();
@@ -14846,7 +14846,7 @@ fn dialogue_preview_preserves_authored_routes_text_and_overlay_lifecycle() {
 #[test]
 fn dialogue_preview_actions_waits_and_terminal_sections_do_not_execute_or_fall_through() {
     use crate::dialogue_asset::preview::DialogueRouteKind;
-    let source = include_str!("../../../../examples/dialogue-actions/src/scene.tdialogue");
+    let source = include_str!("../../../../examples/dialogue/actions/src/scene.tdialogue");
     let mut host = AnalysisHost::new();
     // The actions module is deliberately unavailable: structure needs no handler.
     host.set_file("scene.tdialogue", source);

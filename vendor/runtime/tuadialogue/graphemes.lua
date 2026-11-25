@@ -1,6 +1,6 @@
 -- Unicode 15.1 extended grapheme clusters (UAX #29 revision 43).
 -- Byte offsets are one-based and inclusive; these are not shaped glyphs.
-local data = require("tuadialogue_unicode_data")
+local data = require("tuadialogue.unicode_data")
 local Graphemes = { version = data.version }
 
 local function property(rows, code)

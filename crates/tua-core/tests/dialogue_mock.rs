@@ -12,7 +12,7 @@ fn dialogue_mock_matches_emitted_runtime_conditions() {
     let facts = json!({"context": {"flag": false, "coins": 20, "bad": 3, "name": "é", "record": {}}, "locals": {"ready": true}});
     let mock = DialogueMockContext::parse(&facts.to_string()).unwrap();
     let mut script = String::from(
-        "package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal Conditions = require('tuadialogue_conditions')\npackage.preload.context = function() return {} end\n",
+        "package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal Conditions = require('tuadialogue.conditions')\npackage.preload.context = function() return {} end\n",
     );
     script.push_str(&format!("local facts = {}\n", lua_value(&facts)));
     let cases = [

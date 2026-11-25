@@ -100,7 +100,7 @@ localized = definition.new(document, { name = 'A' }, {
     if localized then
       fails(function() localized:setLocals({ visits = 9, flag = false }) end)
     end
-    return require('tuadialogue_text').format(source, args)
+    return require('tuadialogue.text').format(source, args)
   end,
 })
 -- Hand-authored test documents have no textId until explicitly added.
@@ -119,7 +119,7 @@ localized = definition.new(localizedDocument, { name = 'A' }, {
   resolve = function(_, source, args)
     if reject then error('resolver failure') end
     if localized then fails(function() localized:cancel() end) end
-    return require('tuadialogue_text').format(source, args)
+    return require('tuadialogue.text').format(source, args)
   end,
 })
 localized:start()

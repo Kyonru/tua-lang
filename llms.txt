@@ -552,7 +552,7 @@ retained. redactHistory(id) removes one record; clearHistory() resets entries/co
 without recycling IDs. Cancel/restart retain history; dispose releases it.
 Checkpoints exclude history; restore does not append a record. No history import.
 
-The dialogue-durable example is a host recipe, not a new runtime helper. It persists
+The examples/dialogue/durable example is a host recipe, not a new runtime helper. It persists
 one operation ID/intent before dispatch, commits local gameplay counters plus a
 boolean receipt in one Save record, and acknowledges after consuming the outcome.
 Fresh Save contracts reconcile uncertain writes; load issues never auto-accept
@@ -563,7 +563,7 @@ The guarantee covers single-writer local state only. External authorities need
 idempotency and outcome lookup. Core registry checkpoints remain excluded by
 default; explicit v3 settled-boundary checkpoints are described below.
 
-Optional checkpoint persistence: examples/dialogue-checkpoint supplies typed host
+Optional checkpoint persistence: examples/dialogue/checkpoint supplies typed host
 modules persistence/saved_session using Save.contract. Host save/load calls are
 explicit; a fresh idle player restores saved locals/locale with current facts.
 Save validates the envelope shape and dialogue validates graph/timers/choices.

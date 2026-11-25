@@ -54,7 +54,7 @@ fn mock_text_uses_emitted_plain_templates_and_never_reinterprets_values() {
         r#"{"args":{"name":"é %{flag} [em]literal[/em]","flag":false}}"#,
     )
     .unwrap();
-    let mut script = String::from("package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal Text = require('tuadialogue_text')\n");
+    let mut script = String::from("package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal Text = require('tuadialogue.text')\n");
     for (source, expected) in cases {
         let document = parse_dialogue_source("scene.tdialogue", &source).unwrap();
         let args = DialogueMockTextArguments::resolve(&document, &facts).unwrap();

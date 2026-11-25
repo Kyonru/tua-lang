@@ -50,7 +50,7 @@ rejection; cancellation is not rollback or an exactly-once guarantee.
 - Runtime oracles cover restart/cancel/dispose, stale returned handles, reentrant
   cleanup, transition failures, shared/reused handles, independent interleaved
   players, owned snapshots and GC cycles.
-- The runnable `examples/dialogue-actions` demonstrates both synchronous and
+- The runnable `examples/dialogue/actions` demonstrates both synchronous and
   asynchronous dispatch alongside context/typed-event composition.
 
 ## Remaining M7 work

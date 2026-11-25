@@ -37,7 +37,7 @@ function I18n.t(key, args, locale)
   return result
 end
 
-local dialogueText = require("tuadialogue_text")
+local dialogueText = require("tuadialogue.text")
 
 local function dialogueTemplate(key, source, args, locale)
   assert(type(source) == "string" and type(args) == "table", "invalid dialogue translation")

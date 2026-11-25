@@ -38,7 +38,7 @@ ordinary `update(..., true)` anchors events without changing that flag.
 
 ## Verification scope
 
-The typed example is `examples/dialogue-rich`. Its actual emitted runtimes exercise
+The typed example is `examples/dialogue/rich`. Its actual emitted runtimes exercise
 styles, origins, literal markup-looking values, localized callbacks, timing,
 reduced motion and typed notifications. The maintained Lua oracle additionally
 covers event IDs/expressions, choices, context refresh rollback, invalid UTF-8,

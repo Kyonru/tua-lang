@@ -93,7 +93,7 @@ specific to one known action and is not a general action-graph checkpoint format
 This is a **single-writer local-state transaction recipe**. Its no-duplicate result
 applies to counters and receipts stored together in that record. Save's verified
 two-slot writes do not add `fsync`, multi-process locking, cloud conflict handling,
-anti-cheat guarantees or rollback protection. See [Save recovery](../../docs/save-contracts.md#recovery-and-errors).
+anti-cheat guarantees or rollback protection. See [Save recovery](../../../docs/save-contracts.md#recovery-and-errors).
 
 For remote purchases, achievements or inventory services, send the same operation
 key and immutable payload to an authority that supports idempotent requests and

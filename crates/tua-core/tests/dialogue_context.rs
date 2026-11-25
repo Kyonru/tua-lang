@@ -7,18 +7,18 @@ fn dialogue_context_runtime_lifecycle() {
     let source = include_str!("fixtures/dialogue-context/lifecycle.lua");
     let context = tua_core::emit::emit_tua_source(
         "context.tua",
-        include_str!("../../../examples/dialogue-context/src/context.tua"),
+        include_str!("../../../examples/dialogue/context/src/context.tua"),
     )
     .unwrap();
     let scene = tua_core::emit::emit_dialogue_source(
         "scene.tdialogue",
-        include_str!("../../../examples/dialogue-context/src/scene.tdialogue"),
+        include_str!("../../../examples/dialogue/context/src/scene.tdialogue"),
     )
     .unwrap()
     .code;
     let main = tua_core::emit::emit_tua_source(
         "main.tua",
-        include_str!("../../../examples/dialogue-context/src/main.tua"),
+        include_str!("../../../examples/dialogue/context/src/main.tua"),
     )
     .unwrap();
     let emitted = format!("package.preload.story = function()\n{context}\nend\npackage.preload.scene = function()\n{scene}\nend\n{main}");

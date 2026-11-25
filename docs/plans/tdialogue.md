@@ -191,7 +191,7 @@ clearly incomplete translation to demonstrate coverage diagnostics.
 
 Implemented in `e773bec4`, with measured allocation cleanup in `370d0725`.
 The [dialogue guide](../dialogue.md#localize-lines-choices-and-character-names)
-and [English/French example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-localization)
+and [English/French example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/localization)
 cover source fallback, scalar/plural placeholders, shared character names,
 independent locales, no-replay presentation refresh and schema compatibility.
 
@@ -237,7 +237,7 @@ retains inspection state, and disposal clears retained data and validators.
 Context-bound assets emit schema two; existing documents remain compatible.
 Shared editor analysis supplies diagnostics, completion, hover and declaration
 navigation. See the [context guide](../dialogue.md#typed-context-and-conversation-locals),
-[runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-context),
+[runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/context),
 and [M2 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M2.md).
 The record preserves a narrower nested-shape generic inference/formatter follow-up;
 M2 uses concrete derived signatures and does not claim to repair arbitrary wrappers.
@@ -275,7 +275,7 @@ stop with an inspectable fault and require explicit recovery.
 Conditional assets use schema three; legacy/schema-one/schema-two playback remains
 supported. Limits and optional-value semantics are documented in the
 [condition guide](../dialogue.md#conditions-branches-and-available-choices). The
-[example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue-conditions)
+[example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/conditions)
 and [M3 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M3.md)
 cover emitted Lua, imported typing, stale UI, failure atomicity and native LÖVE with
 JIT off/on. Installed-editor UI and rendered showcase qualification remain M10 work.
@@ -481,14 +481,14 @@ A native voice example verifies ownership and cleanup, missing audio fallback,
 muting, skipping and pause/resume. No required threads, coroutines, wall clock or
 LÖVE dependency enters the core player.
 
-**Host audio example implemented:** `examples/dialogue-audio` supplies typed controller
+**Host audio example implemented:** `examples/dialogue/audio` supplies typed controller
 and LÖVE backend code, original synthetic samples, five owned Sources per player,
 private RNG, coalesced cues, independent mute, recording locale fallback and explicit
 pause/finish/navigation cleanup. Emitted Lua and native rendered JIT-on/off regressions
 cover ownership and source reuse. Word cadence uses a replaceable ASCII boundary
 callback, not a universal language segmenter. The recording fixture is synthetic;
 real voice acting uses the same cue mapping. The bound host skip policy in
-`examples/dialogue-actions` refuses pending
+`examples/dialogue/actions` refuses pending
 non-cancellable work and discarding settled results; accepted skip cancels the
 conversation through existing lifecycle APIs. See the
 [skip policy qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M7-skip-policy.md)
@@ -725,7 +725,7 @@ synthetic protocol timing is not presented as perceived UI latency.
 
 ## M10 — LÖVE showcase, documentation and consuming-game qualification
 
-- [ ] Organize dialogue-related files in a dedicated cleanup change. Group internal
+- [x] Organize dialogue-related files in a dedicated cleanup change. Group internal
   runtime helpers under a dialogue directory (for example, `vendor/runtime/dialogue/`)
   and consolidate the dialogue examples under `examples/dialogue/`, with a shared
   README/index and focused, independently runnable scenarios plus the LÖVE showcase.
@@ -971,7 +971,7 @@ deletions clean up generated output and maps. Text IDs are unique per project.
 Watch conservatively revalidates all dialogue assets after a dialogue change to
 handle cross-file ID conflicts. Importing data alone does not bundle the player.
 
-`examples/dialogue/src/intro.tdialogue` now runs through ordinary project builds.
+`examples/dialogue/basics/src/intro.tdialogue` now runs through ordinary project builds.
 The language server indexes disk assets and preserves their kind in module graphs;
 Tua imports support hover/completion. Dedicated script grammar, unsaved dialogue
 editing, localization and richer execution remain pending. Contract field locations

@@ -112,7 +112,7 @@ print(wrong)
 fn dialogue_localization_uses_emitted_runtime_and_non_destructive_extraction() {
     let temp = TempDir::new("dialogue-m1");
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    copy_dir_all(&root.join("examples/dialogue-localization"), temp.path()).unwrap();
+    copy_dir_all(&root.join("examples/dialogue/localization"), temp.path()).unwrap();
     run(temp.path(), "check");
     run(temp.path(), "build");
     let catalog = temp.path().join("src/locales/fr.lua");
@@ -185,7 +185,7 @@ fn dialogue_localization_uses_emitted_runtime_and_non_destructive_extraction() {
 fn rich_authored_dialogue_builds_runs_and_extracts_templates() {
     let temp = TempDir::new("dialogue-rich-authoring");
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    copy_dir_all(&root.join("examples/dialogue-rich"), temp.path()).unwrap();
+    copy_dir_all(&root.join("examples/dialogue/rich"), temp.path()).unwrap();
     run(temp.path(), "check");
     run(temp.path(), "build");
     let output = tua()
@@ -224,7 +224,7 @@ fn rich_authored_dialogue_builds_runs_and_extracts_templates() {
 fn durable_dialogue_recipe_checks_builds_and_recovers_crash_windows() {
     let temp = TempDir::new("dialogue-durable");
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    copy_dir_all(&root.join("examples/dialogue-durable"), temp.path()).unwrap();
+    copy_dir_all(&root.join("examples/dialogue/durable"), temp.path()).unwrap();
     run(temp.path(), "check");
     run(temp.path(), "build");
     if let Some(lua) = support::lua_executable() {
@@ -271,7 +271,7 @@ if intent then intent.committed = "wrong" end
 fn saved_dialogue_checkpoints_validate_and_rebind_context() {
     let temp = TempDir::new("dialogue-checkpoint-save");
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    copy_dir_all(&root.join("examples/dialogue-checkpoint"), temp.path()).unwrap();
+    copy_dir_all(&root.join("examples/dialogue/checkpoint"), temp.path()).unwrap();
     run(temp.path(), "check");
     run(temp.path(), "build");
     if let Some(lua) = support::lua_executable() {

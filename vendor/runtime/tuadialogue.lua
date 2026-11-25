@@ -2,18 +2,18 @@
 local Dialogue = { schemaVersion = 10 }
 local Rich
 local function rich()
-  if not Rich then Rich = require("tuadialogue_rich") end
+  if not Rich then Rich = require("tuadialogue.rich") end
   return Rich
 end
 local Conditions
 local function conditions()
-  if not Conditions then Conditions = require("tuadialogue_conditions") end
+  if not Conditions then Conditions = require("tuadialogue.conditions") end
   return Conditions
 end
 local eventDefinitions = setmetatable({}, { __mode = "k" })
 local Actions
 local function actions()
-  if not Actions then Actions = require("tuadialogue_actions") end
+  if not Actions then Actions = require("tuadialogue.actions") end
   return Actions
 end
 function Dialogue.actionHandle(options)
@@ -21,14 +21,14 @@ function Dialogue.actionHandle(options)
 end
 
 function Dialogue.speechProfile(profile)
-  return require("tuadialogue_media").speech(profile)
+  return require("tuadialogue.media").speech(profile)
 end
 
 function Dialogue.reveal(options)
-  return require("tuadialogue_reveal").new(options)
+  return require("tuadialogue.reveal").new(options)
 end
 
-local function history() return require("tuadialogue_history") end
+local function history() return require("tuadialogue.history") end
 
 local Player = {}
 Player.__index = Player
@@ -258,7 +258,7 @@ local function document(value)
       assert(type(node.text) == "string", "line needs text")
       if node.voice ~= nil or node.speech ~= nil then
         assert(value.schemaVersion == 10, "voice and speech metadata require schema version 10")
-        local Media = require("tuadialogue_media")
+        local Media = require("tuadialogue.media")
         if node.voice ~= nil then owned.voice = Media.voice(node.voice) end
         if node.speech ~= nil then
           if node.speech == "off" then owned.speech = "off"
@@ -613,7 +613,7 @@ local function presentation(self, id, locale, facts, locals)
       assert(type(value) == "string", "dialogue resolver must return text")
       return value
     end
-    if self.bindings then return require("tuadialogue_text").format(text, args) end
+    if self.bindings then return require("tuadialogue.text").format(text, args) end
     return text
   end
   node.text, node.presentation = resolveField(node._rich, node.text, node.textId)
@@ -855,13 +855,13 @@ end
 function Player:checkpoint()
   assert(not self.resolving and not self.executingAction and not self.pendingAction
     and self.state ~= "disposed", "cannot checkpoint this player")
-  return require("tuadialogue_checkpoint").export(self)
+  return require("tuadialogue.checkpoint").export(self)
 end
 
 function Player:restore(value)
   assert(not self.resolving and not self.executingAction and self.state == "idle",
     "restore needs a fresh idle player")
-  local fired, locals = require("tuadialogue_checkpoint").validate(self, value)
+  local fired, locals = require("tuadialogue.checkpoint").validate(self, value)
   value = copy(value)
   if locals then boundArguments(self, self.facts, locals) end
   if value.state == "awaiting_choice" then

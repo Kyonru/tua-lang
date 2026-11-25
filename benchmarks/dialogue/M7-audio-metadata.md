@@ -42,7 +42,7 @@ legacy inline `Dialogue.new` CLI regression passes unchanged.
   hover, invalid profile values and unsaved profile changes.
 - Runtime tests cover validation, ownership, concurrent players, locale refresh
   during suspension, explicit silence and no metadata leakage between lines.
-- `examples/dialogue-expressions` passes format/check/build without warnings and
+- `examples/dialogue/expressions` passes format/check/build without warnings and
   its emitted Lua executes successfully.
 - A headless native harness runs that emitted example plus expression and media
   oracles under LÖVE 11.5 / LuaJIT 2.1.1700008891, with JIT explicitly on and off.

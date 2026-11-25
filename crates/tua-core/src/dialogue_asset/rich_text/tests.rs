@@ -307,7 +307,7 @@ fn lua_template_parser_matches_shared_rust_contract() {
         cases.push(source);
     }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal rich = require('tuadialogue_rich')\n".to_owned();
+    let mut script = "package.path = 'vendor/runtime/?.lua;' .. package.path\nlocal rich = require('tuadialogue.rich')\n".to_owned();
     for field in [FieldKind::Line, FieldKind::Choice, FieldKind::Reason] {
         for (index, source) in cases.iter().enumerate() {
             script.push_str(&format!(
