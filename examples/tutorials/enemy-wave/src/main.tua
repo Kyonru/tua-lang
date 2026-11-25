@@ -1,0 +1,88 @@
+local Wave = require("wave")
+local Effects = require("effects")
+local wave = Wave.new()
+local effects = Effects.new()
+local options = { effects = false }
+local Zombies = spriteSheet({
+  image = "assets/zombie.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = {
+    walk = { frames = { { column = 0, row = 1 }, { column = 6, row = 1 } }, fps = 6 },
+  },
+})
+-- All identical enemies share a presentation clock in this small example.
+local sprite = Zombies:player("walk")
+local heading = love.graphics.newFont(28)
+local body = love.graphics.newFont(17)
+function love.load()
+  love.window.setMode(900, 520)
+  love.window.setTitle("Tua: a wave of enemies")
+end
+function love.update(dt: number)
+  wave.update(dt)
+  sprite:update(dt)
+  effects.update(dt)
+end
+function love.mousepressed(x: number, y: number, button: number)
+  if button ~= 1 then return end
+  local impact = wave.shoot(x, y)
+  if impact and options.effects then effects.spawn(impact.x, impact.y) end
+end
+function love.keypressed(key: string)
+  if key == "space" then wave.spawnWave()
+  elseif key == "r" then
+    effects.clear()
+    wave.reset()
+  elseif key == "e" then
+    options.effects = not options.effects
+    if not options.effects then effects.clear() end
+  elseif key == "escape" then love.event.quit() end
+end
+function love.draw()
+  love.graphics.clear(0.08, 0.12, 0.14)
+  love.graphics.setColor(0.94, 0.92, 0.85)
+  love.graphics.setFont(heading)
+  love.graphics.print("A wave of enemies", 32, 28)
+  love.graphics.setFont(body)
+  love.graphics.print("Wave " .. wave.state.wave .. "     Remaining " .. wave.enemies:count()
+    .. "     Defeated " .. wave.state.defeated, 32, 76)
+  wave.enemies:each(function(_, position, health, velocity)
+    love.graphics.setColor(1, 1, 1)
+    sprite:draw(position.x, position.y, 0, velocity.x < 0 and -0.6 or 0.6, 0.6)
+    love.graphics.setColor(0.25, 0.33, 0.34)
+    love.graphics.rectangle("fill", position.x - 20, position.y - 76, 40, 4)
+    love.graphics.setColor(0.69, 0.80, 0.63)
+    love.graphics.rectangle(
+      "fill",
+      position.x - 20,
+      position.y - 76,
+      40 * health.current / health.maximum,
+      4
+    )
+  end)
+  for _, ring in ipairs(effects.items) do
+    love.graphics.setColor(0.94, 0.92, 0.85, 1 - ring.age / 0.4)
+    love.graphics.circle("line", ring.x, ring.y, 12 + ring.age * 50)
+  end
+  love.graphics.setColor(0.69, 0.80, 0.79)
+  love.graphics.print(
+    wave.enemies:count() == 0 and "Wave cleared. Space starts the next one." or "Click an enemy to damage it.",
+    32,
+    430
+  )
+  love.graphics.print(
+    "Space  Next wave     R  Reset     E  Defeat rings: " .. (options.effects and "on" or "off")
+    .. "     Esc  Quit",
+    32,
+    470
+  )
+end
+function love.quit()
+  wave.dispose()
+  effects.dispose()
+  Zombies.image:release()
+  heading:release()
+  body:release()
+end
+return { wave = wave, effects = effects, options = options }

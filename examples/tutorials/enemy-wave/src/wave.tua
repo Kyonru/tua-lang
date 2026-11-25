@@ -1,0 +1,104 @@
+local Components = require("components")
+local function new()
+  local world = ECS.world()
+  local enemies = world:query({ Components.Position, Components.Health, Components.Velocity })
+  local readPosition = world:reader(Components.Position)
+  local readHealth = world:reader(Components.Health)
+  local state = { wave = 0, defeated = 0, shots = 0 }
+  local disposed = false
+  local movement = ECS.system(world, {
+    Components.Position,
+    Components.Velocity,
+  }, function(_, position, velocity, dt)
+    position.x += velocity.x * dt
+    position.y += velocity.y * dt
+    if position.x < 60 then
+      position.x = 60
+      velocity.x = math.abs(velocity.x)
+    elseif position.x > 840 then
+      position.x = 840
+      velocity.x = -math.abs(velocity.x)
+    end
+  end)
+  local function spawnWave(): boolean
+    if disposed or enemies:count() > 0 then return false end
+    state.wave += 1
+    -- Eight is this host's spawn limit. Spawn outside query iteration.
+    for index = 1, 8 do
+      local id = world:create()
+      world:add(id, Components.Position, {
+        x = 160 + ((index - 1) % 4) * 160,
+        y = 240 + math.floor((index - 1) / 4) * 140,
+      })
+      world:add(id, Components.Velocity, { x = index % 2 == 0 and -28 or 28, y = 0 })
+      local maximum = index % 2 == 0 and 3 or 2
+      world:add(id, Components.Health, { current = maximum, maximum = maximum })
+    end
+    return true
+  end
+  local function damage(id: number): boolean
+    if disposed then return false end
+    local health = readHealth(id)
+    local position = readPosition(id)
+    if not health or not position or health.current <= 0 then return false end
+    health.current -= 1
+    if health.current > 0 then return false end
+    world:destroy(id)
+    state.defeated += 1
+    return true
+  end
+  local function shoot(x: number, y: number): { x: number, y: number } | nil
+    if disposed then return nil end
+    state.shots += 1
+    local selected = 0
+    local nearest = 30 * 30
+    enemies:each(function(id, position, health)
+      local dx = x - position.x
+      local dy = y - (position.y - 28)
+      local distance = dx * dx + dy * dy
+      if health.current > 0 and distance <= nearest then
+        if distance < nearest or selected == 0 or id < selected then
+          selected = id
+          nearest = distance
+        end
+      end
+    end)
+    -- Query selection has finished. Resolve live data, then mutate membership.
+    local position = readPosition(selected)
+    if position and damage(selected) then
+      return { x = position.x, y = position.y - 28 }
+    end
+    return nil
+  end
+  local function update(dt: number)
+    if not disposed then movement:update(dt) end
+  end
+  local function reset()
+    if disposed then return end
+    world:clear()
+    state.wave = 0
+    state.defeated = 0
+    state.shots = 0
+    spawnWave()
+  end
+  local function dispose()
+    if disposed then return end
+    world:clear()
+    disposed = true
+  end
+  reset()
+  return {
+    world = world,
+    enemies = enemies,
+    state = state,
+    readPosition = readPosition,
+    readHealth = readHealth,
+    spawnWave = spawnWave,
+    damage = damage,
+    shoot = shoot,
+    update = update,
+    reset = reset,
+    dispose = dispose,
+  }
+end
+return { new = new }

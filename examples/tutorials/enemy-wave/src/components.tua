@@ -1,0 +1,5 @@
+-- Define these handles once; every module uses the same component identity.
+local Position = ECS.component("Position", { x = "number", y = "number" })
+local Velocity = ECS.component("Velocity", { x = "number", y = "number" })
+local Health = ECS.component("Health", { current = "number", maximum = "number" })
+return { Position = Position, Velocity = Velocity, Health = Health }
