@@ -1,78 +1,146 @@
--- Layout/resources belong to this adapter; the dialogue runtime supplies graphemes and styles.
+-- Presentation owns typography, geometry and input targets; the player owns story flow.
+local Theme = require("theme")
+local Portraits = require("portraits")
 export type Run = { firstCluster: number, lastCluster: number, emphasis: boolean, styles: string[] }
 export type Cluster = { index: number, text: string }
 export type Node = {
   text: string,
   speaker?: string,
+  portrait?: string,
   expression?: string,
   presentation?: { runs: Run[] },
   options: { text: string, enabled?: boolean, reason?: string }[],
 }
 local function new()
-  local body = love.graphics.newFont(20)
-  local emphasis = love.graphics.newFont(23)
-  local label = love.graphics.newFont(13)
+  local body = love.graphics.newFont("assets/fonts/manrope.ttf", 21)
+  local literary = love.graphics.newFont("assets/fonts/lora.ttf", 22)
+  local nameFont = love.graphics.newFont("assets/fonts/manrope.ttf", 16)
+  local label = love.graphics.newFont("assets/fonts/manrope.ttf", 12)
   local disposed = false
   local clock = 0
+  local lastFocus = -1
+  local lastContent = ""
   local function update(dt: number) clock += dt end
   local function draw(node: Node, clusters: Cluster[], visible: number, mode: string,
-    reduced: boolean, subtitles: boolean, selected: number, scroll: number): number
-    if disposed then return 0 end
+    reduced: boolean, subtitles: boolean, selected: number, scroll: number,
+    portraitPosition: string = "left", reserveAnnouncement: boolean = false): (number, number)
+    if disposed then return 0, 0 end
     local width, height = love.graphics.getDimensions()
-    local w = math.min(width - 48, (mode == "radio" or mode == "announcement") and 410 or 720)
+    local theme = Theme.palette(mode)
+    local announcement = mode == "announcement"
+    local transmission = mode == "radio" or announcement
+    local minimal = mode == "subtitles"
+    local w = math.min(width - 64, transmission and 620 or (mode == "bubble" and 720 or 940))
+    local h = math.min(mode == "bubble" and 340 or 320, height - 210)
     local x = (width - w) / 2
-    local h = math.min(230, height - 260)
-    local y = math.max(105, height - 125 - h)
-    if mode == "bubble" then
-      w = math.min(width - 64, 520)
-      x = (width - w) / 2
-      y = 115
-    elseif mode == "radio" or mode == "announcement" then
-      x = width - w - 24
-      y = 100
-      h = 145
-      if mode == "announcement" then y = math.max(245, height - 280) end
+    local y = height - h - 84
+    if mode == "radio" then x = width - w - 32 end
+    if mode == "bubble" then x = math.max(32, (width - w) / 2 - 40) end
+    if announcement then
+      w = math.min(width - 64, 440)
+      x = width - w - 32
+      y = 112
+      h = 100
     end
+    local portrait = node.portrait
+    local hasPortrait = portrait ~= nil and portraitPosition ~= "none" and not announcement
+    local side = hasPortrait and (portraitPosition == "left" or portraitPosition == "right")
+    local portraitSize = width < 800 and 88 or 128
+    local inset = side and portraitSize + 24 or 0
+    local tx = x + 28 + (side and portraitPosition == "left" and inset or 0)
+    local tw = w - 56 - inset
+    local font = mode == "bubble" and literary or body
+    if announcement then font = label end
+    local _, textLines = font:getWrap(node.text, tw)
+    if not announcement and #node.options == 0 then
+      h = math.min(h, math.max(side and portraitSize + 56 or 180, #textLines * 32 + 110))
+      y = height - h - 84
+    end
+    if reserveAnnouncement and height < 650 then
+      y = math.max(y, 226)
+      h = height - 84 - y
+    end
+    local ty = y + (announcement and 42 or 72)
+    local viewport = h - (announcement and 50 or 110)
+    local lineHeight = announcement and 19 or 32
     love.graphics.push("all")
-    love.graphics.setColor(0.035, 0.09, 0.14, 0.94)
-    love.graphics.rectangle("fill", x, y, w, h, 14, 14)
+    if not minimal then
+      love.graphics.setColor(theme.panel)
+      love.graphics.rectangle("fill", x, y, w, h, mode == "bubble" and 18 or 2)
+    end
     if mode == "bubble" then
-      love.graphics.polygon("fill", x + 54, y + h - 1, x + 74, y + h + 22, x + 86, y + h - 1)
+      love.graphics.polygon("fill", x + 48, y + h - 1, x + 62, y + h + 14, x + 83, y + h - 1)
     end
-    love.graphics.setColor(0.38, 0.82, 0.78)
-    love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", x, y, w, h, 14, 14)
-    love.graphics.setFont(label)
-    love.graphics.print(node.speaker or "Harbor", x + 54, y + 14)
-    -- A host-owned procedural portrait avoids any required image format or asset library.
-    love.graphics.circle("fill", x + 28, y + 26, 13)
-    love.graphics.setColor(0.04, 0.16, 0.22)
-    love.graphics.circle("fill", x + 24, y + 23, 2)
-    love.graphics.circle("fill", x + 32, y + 23, 2)
-    if node.expression == "happy" then
-      love.graphics.line(x + 23, y + 29, x + 28, y + 32, x + 33, y + 29)
+    love.graphics.setColor(theme.accent)
+    if mode == "panel" then
+      love.graphics.setLineWidth(1)
+      love.graphics.line(x + 12, y, x + w - 12, y)
+      love.graphics.line(x + 12, y + h, x + w - 12, y + h)
+      love.graphics.polygon("fill", x, y + 8, x + 8, y, x + 16, y + 8, x + 8, y + 16)
+    elseif minimal then
+      love.graphics.rectangle("fill", tx, y + 55, 28, 1)
+    elseif transmission then
+      love.graphics.rectangle("fill", x, y, w, 2)
+      for index = 0, 3 do
+        love.graphics.rectangle(
+          "fill",
+          x + w - 45 + index * 5,
+          y + 27 - index * 3,
+          2,
+          6 + index * 3
+        )
+      end
     end
-    love.graphics.intersectScissor(x + 14, y + 43, w - 28, math.max(1, h - 57))
-    local cx = 0
-    local cy = 0
+    if hasPortrait and portrait then
+      local px = portraitPosition == "right" and x + w - 28 - portraitSize or x + 28
+      local py = y + 28
+      if portraitPosition == "above" then
+        portraitSize = 80
+        px = x + w - 108
+        py = y - 68
+      end
+      local bust = mode == "panel" and width >= 800 and side
+      if bust then
+        local renderedSize = portraitSize + 44
+        px = portraitPosition == "right" and x + w - renderedSize - 6 or x + 6
+        py = y - 35
+        Portraits.draw(portrait, node.expression or "", px, py, renderedSize, false)
+      else
+        Portraits.draw(portrait, node.expression or "", px, py, portraitSize)
+      end
+    end
+    love.graphics.setColor(theme.accent)
+    love.graphics.setFont(announcement and label or nameFont)
+    local speaker = node.speaker or (#node.options > 0 and "YOUR REPLY" or "THE CROSSING")
+    if transmission then speaker = "CH. 07  /  " .. speaker end
+    love.graphics.print(speaker, tx, y + 25)
     local runs: Run[] = {}
     if node.presentation then runs = node.presentation.runs end
+    -- Measure complete text so reveal never changes wrapping or choice positions.
+    local cx = 0
+    local cy = 0
+    local glyphs: {
+      text: string,
+      x: number,
+      y: number,
+      wave: boolean,
+      warning: boolean,
+      accent: boolean,
+    }[] = {}
     for index, cluster in ipairs(clusters) do
-      local font = body
       local wave = false
       local warning = false
-      local radioStyle = false
+      local accent = false
       for _, run in ipairs(runs) do
         if index >= run.firstCluster and index <= run.lastCluster then
-          if run.emphasis then font = emphasis end
+          accent = accent or run.emphasis
           for _, style in ipairs(run.styles) do
-            if style == "wave" then wave = true end
-            if style == "warning" then warning = true end
-            if style == "radio" then radioStyle = true end
+            wave = wave or style == "wave"
+            warning = warning or style == "warning"
+            accent = accent or style == "radio"
           end
         end
       end
-      -- Prefer word boundaries, with grapheme fallback for a word wider than the panel.
       local previous: Cluster | nil = clusters[index - 1]
       if cluster.text ~= " " and (previous == nil or previous.text == " ") then
         local wordWidth = 0
@@ -81,74 +149,113 @@ local function new()
           if nextCluster.text == " " or nextCluster.text == "\n" then break end
           wordWidth += font:getWidth(nextCluster.text)
         end
-        if cx > 0 and cx + wordWidth > w - 36 then
+        if cx > 0 and cx + wordWidth > tw then
           cx = 0
-          cy += 29
+          cy += lineHeight
         end
       end
       local cw = font:getWidth(cluster.text)
-      if cx + cw > w - 36 or cluster.text == "\n" then
+      if cx + cw > tw or cluster.text == "\n" then
         cx = 0
-        cy += 29
+        cy += lineHeight
       end
-      if index <= visible and subtitles and cluster.text ~= "\n" then
-        local dy = wave and not reduced and math.sin(clock * 4 + index * 0.5) * 3 or 0
-        local dx = warning and not reduced and math.sin(clock * 17 + index) or 0
-        love.graphics.setFont(font)
-        love.graphics.setColor(0, 0, 0, 0.45)
-        love.graphics.print(cluster.text, x + 19 + cx + dx, y + 46 + cy + dy - scroll)
-        if warning then love.graphics.setColor(1, 0.75, 0.42)
-        elseif radioStyle then love.graphics.setColor(0.45, 0.88, 0.85)
-        else love.graphics.setColor(0.92, 0.96, 0.97) end
-        love.graphics.print(cluster.text, x + 18 + cx + dx, y + 45 + cy + dy - scroll)
+      glyphs[#glyphs + 1] = {
+        text = cluster.text,
+        x = cx,
+        y = cy,
+        wave = wave,
+        warning = warning,
+        accent = accent,
+      }
+      if cluster.text ~= "\n" and not (cx == 0 and cluster.text == " ") then cx += cw end
+    end
+    if #clusters > 0 then cy += lineHeight end
+    local rows: { y: number, height: number, text: string, reason: string }[] = {}
+    local focusTop = 0
+    local focusBottom = 0
+    for index, option in ipairs(node.options) do
+      local _, lines = body:getWrap(option.text, tw - 48)
+      local rowHeight = #lines * 29 + 20
+      local reason = ""
+      local disabledReason = option.reason
+      if index == selected and option.enabled == false and disabledReason then
+        reason = disabledReason
+        local _, reasonLines = label:getWrap(reason, tw - 48)
+        rowHeight += #reasonLines * 18 + 6
       end
-      if cluster.text ~= "\n" then cx += cw end
+      rows[#rows + 1] = { y = cy, height = rowHeight, text = option.text, reason = reason }
+      if index == selected then
+        focusTop = cy
+        focusBottom = cy + rowHeight
+      end
+      cy += rowHeight + 6
+    end
+    local maxScroll = math.max(0, cy - viewport)
+    local content = node.text .. tostring(#node.options) .. mode .. portraitPosition
+    if selected ~= lastFocus or content ~= lastContent then
+      if focusBottom > scroll + viewport then scroll = focusBottom - viewport end
+      if focusTop < scroll and #rows > 0 then scroll = focusTop end
+    end
+    scroll = math.max(0, math.min(scroll, maxScroll))
+    if not announcement then
+      lastFocus = selected
+      lastContent = content
+    end
+    love.graphics.intersectScissor(tx - 4, ty - 4, tw + 8, viewport + 4)
+    love.graphics.setFont(font)
+    for index, glyph in ipairs(glyphs) do
+      if index <= visible and subtitles and glyph.text ~= "\n" then
+        local dy = glyph.wave and not reduced and math.sin(clock * 4 + index * 0.5) * 2 or 0
+        local dx = glyph.warning and not reduced and math.sin(clock * 17 + index) or 0
+        love.graphics.setColor((glyph.accent or glyph.warning) and theme.accent or theme.text)
+        love.graphics.print(glyph.text, tx + glyph.x + dx, ty + glyph.y + dy - scroll)
+      end
     end
     if not subtitles then
-      love.graphics.setFont(body)
-      love.graphics.setColor(0.92, 0.96, 0.97)
-      love.graphics.print("Subtitles off · S to restore", x + 18, y + 45)
+      love.graphics.setColor(theme.muted)
+      love.graphics.print("Subtitles off · S to restore", tx, ty)
     end
-    cy += 29
-    love.graphics.setFont(body)
-    for index, option in ipairs(node.options) do
-      local focused = index == selected
-      if focused then
-        love.graphics.setColor(0.16, 0.36, 0.42)
-        love.graphics.rectangle("fill", x + 15, y + 42 + cy - scroll, w - 30, 29, 4, 4)
+    for index, row in ipairs(rows) do
+      local option = node.options[index]
+      local ry = ty + row.y - scroll
+      if index == selected then
+        if not minimal then
+          love.graphics.setColor(theme.focus)
+          love.graphics.rectangle("fill", tx, ry, tw, row.height, 3, 3)
+        end
+        love.graphics.setColor(theme.accent)
+        love.graphics.rectangle("fill", tx, ry, 2, row.height)
       end
-      if option.enabled ~= false then love.graphics.setColor(0.92, 0.96, 0.97)
-      else love.graphics.setColor(0.64, 0.7, 0.75) end
-      love.graphics.print((focused and "> " or "  ") .. option.text, x + 18, y + 45 + cy - scroll)
-      cy += 34
-      local reason = option.reason
-      if focused and option.enabled == false and reason then
+      love.graphics.setFont(label)
+      love.graphics.setColor(theme.muted)
+      love.graphics.print(string.format("%02d", index), tx + 12, ry + 15)
+      love.graphics.setFont(body)
+      love.graphics.setColor(option.enabled == false and theme.muted or theme.text)
+      love.graphics.printf(row.text, tx + 40, ry + 8, tw - 48)
+      if row.reason ~= "" then
+        local _, lines = body:getWrap(row.text, tw - 48)
         love.graphics.setFont(label)
-        love.graphics.printf(reason, x + 22, y + 45 + cy - scroll, w - 44)
-        cy += 30
-        love.graphics.setFont(body)
+        love.graphics.printf(row.reason, tx + 40, ry + 13 + #lines * 29, tw - 48)
       end
     end
     love.graphics.setScissor()
     love.graphics.setFont(label)
-    love.graphics.setColor(0.65, 0.82, 0.86)
-    local maxScroll = math.max(0, cy - (h - 60))
-    if maxScroll > 0 then
-      love.graphics.print(
-        "PgUp / PgDn · " .. math.floor(scroll) .. " / " .. math.ceil(maxScroll),
-        x + 18,
-        y + h - 17
-      )
+    love.graphics.setColor(theme.muted)
+    if not announcement then
+      local hint = #rows > 0 and "↑ ↓  Choose     ENTER  Confirm" or "SPACE  Continue"
+      love.graphics.print(hint, tx, y + h - 27)
+      if maxScroll > 0 then love.graphics.printf("PGUP / PGDN", tx, y + h - 27, tw, "right") end
     end
     love.graphics.pop()
-    return maxScroll
+    return maxScroll, scroll
   end
   local function dispose()
     if disposed then return end
     disposed = true
     body:release()
-    emphasis:release()
+    literary:release()
     label:release()
+    nameFont:release()
   end
   return { draw = draw, update = update, dispose = dispose }
 end

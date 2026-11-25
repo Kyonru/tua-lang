@@ -1,0 +1,85 @@
+-- Original cut-paper portraits. Asset IDs stay opaque to the dialogue runtime.
+local function draw(
+  id: string,
+  expression: string,
+  x: number,
+  y: number,
+  size: number,
+  backdrop: boolean = true
+)
+  love.graphics.push("all")
+  love.graphics.translate(x, y)
+  love.graphics.scale(size / 120, size / 120)
+  if backdrop then
+    love.graphics.setColor(0.21, 0.29, 0.32)
+    love.graphics.rectangle("fill", 0, 0, 120, 120, 3, 3)
+    love.graphics.setColor(0.67, 0.72, 0.65)
+    love.graphics.circle("fill", 64, 49, 40)
+  end
+  if string.find(id, "beacon", 1, true) then
+    love.graphics.setColor(0.18, 0.23, 0.25)
+    love.graphics.polygon("fill", 18, 120, 27, 83, 93, 83, 103, 120)
+    love.graphics.setColor(0.73, 0.57, 0.33)
+    love.graphics.rectangle("fill", 30, 26, 60, 67, 9, 9)
+    love.graphics.setColor(0.16, 0.22, 0.23)
+    love.graphics.rectangle("fill", 38, 38, 44, 25, 5, 5)
+    love.graphics.setColor(0.66, 0.89, 0.79)
+    love.graphics.circle("fill", 49, 50, 4)
+    love.graphics.circle("fill", 71, 50, 4)
+    love.graphics.setColor(0.32, 0.31, 0.26)
+    for index = 0, 3 do love.graphics.line(44, 72 + index * 4, 76, 72 + index * 4) end
+    love.graphics.line(60, 26, 60, 14)
+    love.graphics.circle("fill", 60, 12, 3)
+  else
+    local courier = string.find(id, "ivo", 1, true) ~= nil
+    -- Coat and collar frame the face; asymmetry keeps the silhouette human.
+    love.graphics.setColor(
+      courier and 0.53 or 0.18,
+      courier and 0.31 or 0.32,
+      courier and 0.24 or 0.34
+    )
+    love.graphics.polygon("fill", 12, 120, 20, 96, 47, 83, 76, 82, 103, 99, 111, 120)
+    love.graphics.setColor(0.80, 0.67, 0.46)
+    love.graphics.polygon("fill", 41, 86, 60, 99, 81, 85, 72, 109, 55, 120)
+    love.graphics.setColor(
+      courier and 0.48 or 0.76,
+      courier and 0.30 or 0.52,
+      courier and 0.23 or 0.39
+    )
+    love.graphics.rectangle("fill", 51, 68, 21, 24)
+    love.graphics.ellipse("fill", 61, 53, 25, 34)
+    love.graphics.setColor(
+      courier and 0.61 or 0.88,
+      courier and 0.40 or 0.65,
+      courier and 0.29 or 0.49
+    )
+    love.graphics.polygon("fill", 59, 27, 78, 36, 83, 58, 74, 77, 60, 82, 58, 63)
+    love.graphics.setColor(0.16, 0.19, 0.20)
+    if courier then
+      for index = 0, 5 do love.graphics.circle("fill", 36 + index * 9, 30 + (index % 2) * 4, 11) end
+      love.graphics.polygon("fill", 27, 34, 39, 48, 39, 66, 32, 58)
+    else
+      love.graphics.polygon("fill", 28, 38, 41, 19, 69, 16, 87, 33, 75, 37, 58, 31, 42, 45)
+      love.graphics.polygon("fill", 28, 38, 42, 40, 40, 72, 31, 69)
+      love.graphics.polygon("fill", 75, 32, 87, 33, 89, 71, 80, 67)
+      love.graphics.setColor(0.67, 0.70, 0.65)
+      love.graphics.polygon("fill", 39, 30, 59, 19, 73, 21, 54, 29, 39, 48)
+    end
+    love.graphics.setColor(0.19, 0.20, 0.20)
+    love.graphics.setLineWidth(1.6)
+    local worried = expression == "worried"
+    love.graphics.line(43, worried and 48 or 46, 52, 46)
+    love.graphics.line(67, 46, 76, worried and 48 or 46)
+    love.graphics.circle("fill", 49, 52, 1.6)
+    love.graphics.circle("fill", 71, 52, 1.6)
+    love.graphics.setColor(0.43, 0.27, 0.22)
+    love.graphics.line(61, 54, 58, 64, 63, 65)
+    if expression == "happy" then love.graphics.line(53, 71, 60, 74, 68, 70)
+    else love.graphics.line(54, 73, 66, 72) end
+    love.graphics.setColor(0.85, 0.69, 0.40)
+    love.graphics.circle("fill", 36, 66, 2.4)
+    love.graphics.circle("fill", 86, 66, 2.4)
+  end
+  love.graphics.pop()
+end
+return { draw = draw }

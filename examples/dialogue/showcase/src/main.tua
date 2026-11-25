@@ -1,25 +1,38 @@
 local Controller = require("controller")
 local Backend = require("backend")
 local Presenter = require("presenter")
+local Theme = require("theme")
 local host = Controller.new(Backend.new(), Backend.new())
 local presenter = Presenter.new()
-local title = love.graphics.newFont(28)
-local caption = love.graphics.newFont(14)
-local elapsed = 0
+local title = love.graphics.newFont("assets/fonts/lora.ttf", 32)
+local caption = love.graphics.newFont("assets/fonts/manrope.ttf", 13)
 local maxScroll = 0
+local maxHistoryScroll = 0
 function love.update(dt: number)
   host.update(dt)
-  if not host.settings.paused and not (host.active() and host.settings.mode == "panel") then
-    elapsed += dt
-  end
   if not host.settings.paused then presenter.update(dt) end
 end
 function love.keypressed(key: string)
   local settings = host.settings
-  if key == "space" or key == "return" then host.advance()
+  if key == "h" then settings.help = not settings.help
+  elseif key == "tab" then settings.transcript = not settings.transcript
+  elseif key == "o" then
+    if settings.portrait == "left" then settings.portrait = "right"
+    elseif settings.portrait == "right" then settings.portrait = "above"
+    elseif settings.portrait == "above" then settings.portrait = "none"
+    else settings.portrait = "left" end
+  elseif key == "f2" then
+    settings.entry = settings.entry == "start" and "quick" or "start"
+    host.reset()
+  elseif key == "g" then
+    local facts = host.player():getContext()
+    host.player():updateContext({ name = facts.name, permit = not facts.permit })
+  elseif key == "space" or key == "return" then
+    if not settings.help and not settings.transcript then host.advance() end
   elseif key == "1" then settings.mode = "panel"
   elseif key == "2" then settings.mode = "bubble"
   elseif key == "3" then settings.mode = "radio"
+  elseif key == "4" then settings.mode = "subtitles"
   elseif key == "up" or key == "down" then
     local snapshot = host.player():snapshot()
     local node = snapshot.node
@@ -27,8 +40,13 @@ function love.keypressed(key: string)
       local direction = key == "up" and -1 or 1
       settings.selected = math.max(1, math.min(#node.options, settings.selected + direction))
     end
-  elseif key == "pageup" then settings.scroll = math.max(0, settings.scroll - 58)
-  elseif key == "pagedown" then settings.scroll = math.min(maxScroll, settings.scroll + 58)
+  elseif key == "pageup" then
+    if settings.transcript then settings.historyScroll = math.max(0, settings.historyScroll - 58)
+    else settings.scroll = math.max(0, settings.scroll - 58) end
+  elseif key == "pagedown" then
+    if settings.transcript then
+      settings.historyScroll = math.min(maxHistoryScroll, settings.historyScroll + 58)
+    else settings.scroll = math.min(maxScroll, settings.scroll + 58) end
   elseif key == "f" then settings.speed = settings.speed == 1 and 3 or 1
   elseif key == "m" then settings.reducedMotion = not settings.reducedMotion
   elseif key == "s" then settings.subtitles = not settings.subtitles
@@ -40,59 +58,114 @@ function love.keypressed(key: string)
   elseif key == "f5" then host.save()
   elseif key == "f9" then host.restore()
   elseif key == "r" then host.reset()
-  elseif key == "escape" then love.event.quit() end
+  elseif key == "escape" then
+    if settings.help or settings.transcript then
+      settings.help = false
+      settings.transcript = false
+    else love.event.quit() end
+  end
   host.update(0)
 end
 function love.draw()
   local width, height = love.graphics.getDimensions()
-  local motion = host.settings.reducedMotion and 0 or elapsed
-  love.graphics.clear(0.12, 0.25, 0.34)
-  love.graphics.setColor(0.17, 0.36, 0.44)
-  love.graphics.rectangle("fill", 0, height * 0.45, width, height)
-  love.graphics.setColor(0.28, 0.51, 0.56)
-  for row = 1, 9 do
-    local x = (motion * 20 + row * 91) % (width + 120) - 120
-    love.graphics.line(x, height * 0.45 + row * 24, x + 100, height * 0.45 + row * 24)
-  end
-  love.graphics.setColor(0.78, 0.51, 0.32)
-  love.graphics.rectangle("fill", width * 0.2, height * 0.5, width * 0.6, 28)
-  love.graphics.rectangle("fill", width * 0.25, height * 0.5, 18, 100)
-  love.graphics.rectangle("fill", width * 0.7, height * 0.5, 18, 100)
-  love.graphics.setColor(0.96, 0.78, 0.5)
-  love.graphics.circle("fill", width / 2, height * 0.5 - 32, 18)
-  love.graphics.setColor(0.3, 0.66, 0.61)
-  love.graphics.rectangle("fill", width / 2 - 20, height * 0.5 - 15, 40, 30, 8, 8)
-  love.graphics.setColor(0.95, 0.97, 0.96)
-  love.graphics.setFont(title)
-  love.graphics.print("Beacon Harbor", 24, 20)
-  love.graphics.setFont(caption)
   local settings = host.settings
+  local theme = Theme.palette(settings.mode)
+  love.graphics.clear(theme.stage)
+  love.graphics.setColor(0.72, 0.77, 0.75)
+  love.graphics.setFont(caption)
+  love.graphics.print("BEACON HARBOR  /  A DIALOGUE STUDY", 32, 24)
+  love.graphics.setFont(title)
+  love.graphics.setColor(0.94, 0.92, 0.85)
   love.graphics.print(
-    "1 Conversation  /  2 Speech bubble  /  3 Radio     ·     " .. settings.mode,
-    24,
-    57
+    settings.entry == "start" and "The last light" or "A short introduction",
+    32,
+    47
   )
-  love.graphics.print(settings.notice, 24, 80)
+  love.graphics.setFont(caption)
+  local style = settings.mode == "panel" and "Cinematic" or (settings.mode == "bubble" and "Storybook" or (settings.mode == "radio" and "Transmission" or "Subtitles"))
+  love.graphics.setColor(0.72, 0.77, 0.75)
+  love.graphics.printf(style .. "  /  Portrait: " .. settings.portrait, 32, 91, width - 64, "left")
+  love.graphics.printf(
+    "1–4  Style     O  Portrait     H  Controls",
+    32,
+    height - 33,
+    width - 64,
+    "left"
+  )
+  if settings.notice ~= "" then
+    love.graphics.printf(settings.notice, 32, height - 59, width - 64, "left")
+  end
   local snapshot = host.player():snapshot()
+  local radio = host.radio:snapshot()
+  local showRadio = radio.state == "awaiting_advance" and not (host.active() and settings.mode == "panel")
   local node = snapshot.node
   if node and (snapshot.state == "awaiting_advance" or snapshot.state == "awaiting_choice") then
-    maxScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
-      settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll)
-    settings.scroll = math.min(settings.scroll, maxScroll)
+    local appliedScroll = 0
+    maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
+      settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, settings.portrait, showRadio)
+    settings.scroll = appliedScroll or math.min(settings.scroll, maxScroll)
   end
-  local radio = host.radio:snapshot()
   local radioNode = radio.node
   if radioNode
-    and radio.state == "awaiting_advance"
-    and not (host.active() and settings.mode == "panel") then
+    and showRadio then
     presenter.draw(radioNode, host.radioClusters(), host.radioView().visible, "announcement",
       settings.reducedMotion, settings.subtitles, 0, 0)
   end
-  love.graphics.setFont(caption)
-  love.graphics.setColor(0.95, 0.97, 0.96)
-  local stats = host.metrics()
-  love.graphics.printf("Space / Enter: reveal, advance or choose · Arrows: choose · PgUp / PgDn: scroll\nF: speed " .. settings.speed .. "x · M: reduced motion " .. tostring(settings.reducedMotion) .. " · S: subtitles " .. tostring(settings.subtitles) .. " · V: voice mute " .. tostring(settings.voiceMuted) .. "\nL: " .. settings.locale .. " · P: pause · R: reset · F5 / F9: checkpoint · Q: queue talk · N: radio\nTokens " .. stats.rewards .. " · Queued " .. stats.conversations .. "/2 + " .. stats.messages .. "/4 · Rejected " .. stats.rejected,
-    24, height - 92, width - 48)
+  if snapshot.state == "completed" then
+    love.graphics.setFont(title)
+    love.graphics.setColor(theme.text)
+    love.graphics.printf("The crossing ends here.", 32, height * 0.46, width - 64, "center")
+    love.graphics.setFont(caption)
+    love.graphics.setColor(theme.muted)
+    love.graphics.printf(
+      "R  Read again     TAB  Recent conversation",
+      32,
+      height * 0.46 + 49,
+      width - 64,
+      "center"
+    )
+  elseif snapshot.state == "waiting" then
+    love.graphics.setFont(caption)
+    love.graphics.setColor(theme.muted)
+    love.graphics.printf("Listening to the channel…", 32, height * 0.5, width - 64, "center")
+  end
+  if settings.help or settings.transcript then
+    love.graphics.setColor(0.075, 0.105, 0.12, 0.98)
+    love.graphics.rectangle("fill", 24, 115, width - 48, height - 170, 3, 3)
+    love.graphics.setColor(0.94, 0.92, 0.85)
+    love.graphics.setFont(caption)
+    if settings.help then
+      local stats = host.metrics()
+      local facts = host.player():getContext()
+      love.graphics.printf(
+        "CONTROLS & FEATURES  ·  H to close\n\n1 / 2 / 3 / 4   Cinematic / storybook / transmission / subtitles\nO   Portrait left / right / above / hidden\nSpace / Enter   Reveal, continue or confirm     ↑ ↓   Choose\nPgUp / PgDn   Scroll     Tab   Recent conversation\nF   Reveal speed   "
+        .. settings.speed .. "x     M   Reduced motion   " .. tostring(settings.reducedMotion) ..
+        "\nS   Subtitles   " .. tostring(settings.subtitles) .. "     V   Mute voice   "
+        .. tostring(settings.voiceMuted) ..
+        "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
+        .. tostring(facts.permit) ..
+        "\nP   Pause   " .. tostring(settings.paused)
+        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
+        .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
+        .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
+        .. " revealed · Tokens: " .. stats.rewards,
+        44, 135, width - 88)
+    else
+      local history = host.player():history()
+      love.graphics.print("RECENT CONVERSATION  ·  TAB close  ·  PGUP / PGDN scroll", 44, 135)
+      local y = 166 - settings.historyScroll
+      love.graphics.intersectScissor(44, 166, width - 88, height - 231)
+      for _, entry in ipairs(history.entries) do
+        local text = (entry.speaker or "You") .. ": " .. entry.text
+        local _, lines = caption:getWrap(text, width - 88)
+        love.graphics.printf(text, 44, y, width - 88)
+        y += #lines * caption:getHeight() + 14
+      end
+      maxHistoryScroll = math.max(0, y + settings.historyScroll - (height - 65))
+      settings.historyScroll = math.min(settings.historyScroll, maxHistoryScroll)
+      love.graphics.setScissor()
+    end
+  end
 end
 function love.quit()
   host.dispose()

@@ -11,11 +11,12 @@ parser.add_argument("--tua", default=str(repo / "target/debug/tua"))
 parser.add_argument("--love")
 parser.add_argument("--output", type=Path)
 parser.add_argument("--video", action="store_true")
+parser.add_argument("--scenario", choices=["lifecycle", "styles"], default="lifecycle")
 args = parser.parse_args()
 tua = str(Path(args.tua).resolve())
 for command in [
     [tua, "fmt", "--check"],
-    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua"],
+    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua", "tests/styles.lua"],
     [tua, "check"],
     [tua, "build"],
 ]:
@@ -28,8 +29,8 @@ if args.love:
         output = Path(tempfile.mkdtemp(prefix="tua-showcase-evidence-")) / "replay"
     command = [
         "python3", str(repo / "scripts/love_replay.py"), "--project", str(root),
-        "--tua", tua, "--love", args.love, "--scenario", str(root / "tests/replay.lua"),
-        "--frames", "180", "--fps", "30", "--seed", "71", "--output", str(output),
+        "--tua", tua, "--love", args.love, "--scenario", str(root / ("tests/styles.lua" if args.scenario == "styles" else "tests/replay.lua")),
+        "--frames", "328" if args.scenario == "styles" else "180", "--fps", "30", "--seed", "71", "--output", str(output),
     ]
     if args.video:
         command.append("--video")

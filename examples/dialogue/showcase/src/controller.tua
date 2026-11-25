@@ -27,6 +27,10 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     locale = "en",
     notice = "",
     entry = entry,
+    portrait = "left",
+    help = false,
+    transcript = false,
+    historyScroll = 0,
   }
   local function createPlayer()
     return Story.new(scene, { name = "Ada", permit = true }, {
@@ -182,6 +186,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     conversationQueue.clear()
     radioQueue.clear()
     player:clearHistory()
+    settings.historyScroll = 0
     settings.notice = ""
     settings.selected = 1
     settings.scroll = 0

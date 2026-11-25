@@ -30,7 +30,17 @@ package.loaded.presenter = {
 love = {
   event = { quit = noop },
   graphics = {
-    newFont = function() return { release = noop } end,
+    newFont = function()
+      return {
+        release = noop,
+        getWrap = function(_, text)
+          return 100, { text }
+        end,
+        getHeight = function()
+          return 14
+        end,
+      }
+    end,
     getDimensions = function() return 960, 640 end,
     clear = noop,
     setColor = noop,
@@ -38,6 +48,8 @@ love = {
     line = noop,
     circle = noop,
     setFont = noop,
+    intersectScissor = noop,
+    setScissor = noop,
     print = noop,
     printf = noop,
   },
@@ -76,5 +88,21 @@ love.keypressed("up")
 assert(host.settings.selected == 1)
 love.keypressed("return")
 assert(host.metrics().rewards == 1, "first Enter on a choice executes the focused option")
+for _, position in ipairs({ "right", "above", "none", "left" }) do
+  love.keypressed("o")
+  assert(host.settings.portrait == position)
+end
+love.keypressed("h")
+local nodeBeforeHelp = host.player():snapshot().nodeId
+love.keypressed("return")
+assert(host.player():snapshot().nodeId == nodeBeforeHelp)
+love.draw()
+love.keypressed("escape")
+assert(not host.settings.help)
+love.keypressed("tab")
+love.draw()
+love.keypressed("pagedown")
+love.keypressed("escape")
+assert(not host.settings.transcript)
 love.quit()
 print("SHOWCASE_UI_OK completed channels hidden; choice focus valid")
