@@ -4,6 +4,9 @@ Run conversations, choices, shared characters and timed events without a LÖVE
 window. This example uses the development dialogue feature intended for the
 release after 0.11.0.
 
+For a smaller interactive window, start with [first-conversation](../first-conversation/README.md).
+This headless example also covers shared characters and event clocks.
+
 ## Run it
 
 From this directory, select your rebuilt development compiler:

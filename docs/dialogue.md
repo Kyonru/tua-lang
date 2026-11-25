@@ -19,10 +19,128 @@ not enough to identify one of these development builds.
 | Timed event records | Event handlers: sounds, animations or game actions |
 | Independent player state and clocks | Whether a conversation pauses gameplay |
 
-Start with [your first conversation](#your-first-conversation), then add
-[shared characters](#share-characters-between-scripts),
-[timed events](#schedule-custom-events), or
-[temporary messages](#conversations-and-temporary-messages).
+**New to dialogue?** Start with [your first playable dialogue](dialogue-start.md):
+one question, two replies, two source files. It explains the defaults before
+introducing optional capabilities. This page is the detailed reference.
+
+| When you are ready | Read next |
+| --- | --- |
+| Reuse characters and show portraits | [Shared characters](#share-characters-between-scripts) |
+| Personalize words and replies | [Context](#typed-context-and-conversation-locals), then [conditions](#conditions-branches-and-available-choices) |
+| Add presentation | [Reveal](#reveal-text-by-grapheme-cluster), [rich text](#rich-presentations-and-timing), then optional [audio](#describe-voices-and-character-chatter) |
+| Ship localized content | [Translations](#localize-lines-choices-and-character-names) |
+| Trigger gameplay and resume later | [Actions](#run-a-registered-host-action), [checkpoints](#checkpoint-a-plain-conversation) |
+| Explore complete UI treatments | [Showcase](#try-the-love-showcase) |
+
+## Your first conversation
+
+Prefer a terminal? This walkthrough needs no LÖVE window, font or image assets.
+For a window with interactive replies, use the [playable starter](dialogue-start.md).
+
+### 1. Create the project
+
+Use this layout:
+
+```text
+tua.toml
+src/
+  main.tua
+  intro.tdialogue
+```
+
+`tua.toml`:
+
+```toml
+source = "src"
+out = "build"
+main = "main.tua"
+target = "lua51"
+```
+
+### 2. Write the conversation
+
+`src/intro.tdialogue`:
+
+```text
+@dialogue 1
+@character Guide "Guide"
+
+[start]
+// @id intro.hello
+Guide: Ready?
+// @id intro.yes
+-> Yes [target:done]
+// @id intro.again
+-> Again [target:start]
+
+[done]
+// @id intro.bye
+: Goodbye. (end)
+```
+
+| Syntax | Meaning |
+| --- | --- |
+| `@dialogue 1` | Required format version |
+| `@character Guide "Guide"` | A character ID and its display name |
+| `[start]` | A named entry point; the first label is the default entry |
+| `// @id intro.hello` | Stable text ID, unique across dialogue files in the project |
+| `Guide: Ready?` | A character's spoken line |
+| `: Goodbye.` | Narration without a speaker |
+| `-> Yes [target:done]` | A reply that leads to the `done` label |
+| `(end)` | End this path after the final line is acknowledged |
+
+Keep text IDs stable when editing wording. A choice's ID also identifies it when
+the host calls `choose()`.
+
+### 3. Play it from Tua
+
+`src/main.tua`:
+
+```tua
+local document = require("intro")
+local player = Dialogue.new(document)
+
+player:start()
+local node = player:snapshot().node
+if node then print(node.text) end
+
+-- Acknowledge "Ready?" to enter the choice node.
+assert(player:advance())
+local choices = player:snapshot().node
+if choices then
+  for _, option in ipairs(choices.options) do
+    print(option.id, option.text)
+  end
+end
+
+-- Select by stable ID, not the displayed text or array index.
+assert(player:choose("intro.yes"))
+local farewell = player:snapshot().node
+if farewell then print(farewell.text) end
+
+-- Even a line marked (end) waits for acknowledgement.
+assert(player:advance())
+assert(player:snapshot().state == "completed")
+player:dispose()
+```
+
+The player does not read the keyboard itself. This host chooses "Yes" directly;
+in a game, call the same methods from your input handlers.
+
+### 4. Build and run
+
+From the project directory, with the development compiler on your path:
+
+```sh
+tua check
+tua build
+cd build
+lua main.lua
+```
+
+The output shows `Ready?`, the two choice IDs and labels, then `Goodbye.`.
+The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/basics)
+also demonstrates loops, shared characters and both event clocks.
 
 ## Try the LÖVE showcase
 
@@ -302,115 +420,6 @@ formatting remain disabled so partial edits cannot detach metadata.
 For an unsaved buffer or tool integration, use
 `tua fmt --stdin-filepath src/scene.tdialogue`; it returns formatted text without
 writing the file. Add `--check` to test the layout without emitting text.
-
-## Your first conversation
-
-This example runs in a terminal. It needs no LÖVE window, font or image assets.
-
-### 1. Create the project
-
-Use this layout:
-
-```text
-tua.toml
-src/
-  main.tua
-  intro.tdialogue
-```
-
-`tua.toml`:
-
-```toml
-source = "src"
-out = "build"
-main = "main.tua"
-target = "lua51"
-```
-
-### 2. Write the conversation
-
-`src/intro.tdialogue`:
-
-```text
-@dialogue 1
-@character Guide "Guide"
-
-[start]
-// @id intro.hello
-Guide: Ready?
-// @id intro.yes
--> Yes [target:done]
-// @id intro.again
--> Again [target:start]
-
-[done]
-// @id intro.bye
-: Goodbye. (end)
-```
-
-| Syntax | Meaning |
-| --- | --- |
-| `@dialogue 1` | Required format version |
-| `@character Guide "Guide"` | A character ID and its display name |
-| `[start]` | A named entry point; the first label is the default entry |
-| `// @id intro.hello` | Stable text ID, unique across dialogue files in the project |
-| `Guide: Ready?` | A character's spoken line |
-| `: Goodbye.` | Narration without a speaker |
-| `-> Yes [target:done]` | A reply that leads to the `done` label |
-| `(end)` | End this path after the final line is acknowledged |
-
-Keep text IDs stable when editing wording. A choice's ID also identifies it when
-the host calls `choose()`.
-
-### 3. Play it from Tua
-
-`src/main.tua`:
-
-```tua
-local document = require("intro")
-local player = Dialogue.new(document)
-
-player:start()
-local node = player:snapshot().node
-if node then print(node.text) end
-
--- Acknowledge "Ready?" to enter the choice node.
-assert(player:advance())
-local choices = player:snapshot().node
-if choices then
-  for _, option in ipairs(choices.options) do
-    print(option.id, option.text)
-  end
-end
-
--- Select by stable ID, not the displayed text or array index.
-assert(player:choose("intro.yes"))
-local farewell = player:snapshot().node
-if farewell then print(farewell.text) end
-
--- Even a line marked (end) waits for acknowledgement.
-assert(player:advance())
-assert(player:snapshot().state == "completed")
-player:dispose()
-```
-
-The player does not read the keyboard itself. This host chooses "Yes" directly;
-in a game, call the same methods from your input handlers.
-
-### 4. Build and run
-
-From the project directory, with the development compiler on your path:
-
-```sh
-tua check
-tua build
-cd build
-lua main.lua
-```
-
-The output shows `Ready?`, the two choice IDs and labels, then `Goodbye.`.
-The [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/basics)
-also demonstrates loops, shared characters and both event clocks.
 
 ## Reveal text by grapheme cluster
 

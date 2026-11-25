@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a minimal playable dialogue starter and a guided learning path with explicit
+  defaults; put the first conversation before advanced reference material.
+
 - Refresh the dialogue showcase transcript with readable speaker-separated passages,
   a scroll indicator, clickable bracket controls and [ / ] keyboard scrolling.
 

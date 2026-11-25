@@ -11,6 +11,10 @@ tua build
 love build
 ```
 
+New to the player? Start with the [two-file conversation](../first-conversation/README.md)
+and [guided learning path](../../../docs/dialogue-start.md). This showcase demonstrates
+combinations; none of its adapters are required to start.
+
 ## Seven presentations, one conversation
 
 | Key | Presentation | What changes |

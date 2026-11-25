@@ -49,6 +49,7 @@ nav = [
     { "Bounded Queues" = "bounded-queues.md" },
     { "Audio" = "audio.md" },
     { "Localization" = "localization.md" },
+    { "First dialogue" = "dialogue-start.md" },
     { "Dialogue" = "dialogue.md" },
   ] },
   { "Tooling" = [
