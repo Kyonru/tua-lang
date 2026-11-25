@@ -13,6 +13,10 @@ local function beforeFrame(context)
     for index = 1, 6 do host.enqueue("radio") end
     assert(host.metrics().messages == 4 and host.metrics().rejected == 2)
   end
+  if frame == 10 then
+    press(context, "down")
+    assert(host.settings.selected == 1)
+  end
   if frame == 25 then press(context, "m") end
   if frame == 30 then press(context, "space") end
   if frame == 40 then press(context, "space") end
@@ -33,14 +37,28 @@ local function beforeFrame(context)
     press(context, "f5")
   end
   if frame == 70 then press(context, "space") end
+  if frame == 72 then
+    assert(host.player():snapshot().state == "completed")
+    press(context, "f5")
+    assert(host.settings.notice:find("No checkpoint", 1, true))
+  end
   if frame == 75 then
+    press(context, "l")
     press(context, "f9")
+    assert(host.settings.locale == "fr")
+    assert(host.player():snapshot().locale == "fr")
+    assert(host.radio:snapshot().locale == "fr")
     assert(host.metrics().rewards == 1)
+  end
+  if frame == 77 then
+    assert(host.enqueue("conversation"))
+    press(context, "return")
+    assert(host.active())
+    assert(host.radio:snapshot().suspended)
   end
   if frame == 80 then
     press(context, "2")
     press(context, "r")
-    press(context, "l")
     love.window.setMode(1280, 720, { vsync = 0 })
     assert(host.enqueue("radio"))
   end
@@ -68,6 +86,15 @@ local function beforeFrame(context)
     assert(host.settings.scroll > 0, "radio choices expose keyboard scrolling")
   end
   if frame >= 150 and frame < 170 then host.reset() end
+  if frame == 178 then
+    host.player():start("done")
+    host.player():advance()
+    host.radio:start()
+    host.radio:advance()
+    press(context, "f5")
+    assert(host.player():snapshot().state == "completed")
+    assert(host.radio:snapshot().state == "completed")
+  end
   if frame == 175 then
     press(context, "1")
     host.reset()

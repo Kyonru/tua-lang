@@ -20,10 +20,13 @@ function love.keypressed(key: string)
   elseif key == "1" then settings.mode = "panel"
   elseif key == "2" then settings.mode = "bubble"
   elseif key == "3" then settings.mode = "radio"
-  elseif key == "up" then settings.selected = math.max(1, settings.selected - 1)
-  elseif key == "down" then
-    local node = host.player():snapshot().node
-    if node then settings.selected = math.min(#node.options, settings.selected + 1) end
+  elseif key == "up" or key == "down" then
+    local snapshot = host.player():snapshot()
+    local node = snapshot.node
+    if snapshot.state == "awaiting_choice" and node and #node.options > 0 then
+      local direction = key == "up" and -1 or 1
+      settings.selected = math.max(1, math.min(#node.options, settings.selected + direction))
+    end
   elseif key == "pageup" then settings.scroll = math.max(0, settings.scroll - 58)
   elseif key == "pagedown" then settings.scroll = math.min(maxScroll, settings.scroll + 58)
   elseif key == "f" then settings.speed = settings.speed == 1 and 3 or 1

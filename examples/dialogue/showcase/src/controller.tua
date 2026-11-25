@@ -51,6 +51,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
   local radioView = radioAudio.update(radio:snapshot(), 0)
   local radioAge = 0
   local disposed = false
+  local focusedChoice = ""
   local function active(): boolean
     local state = player:snapshot().state
     return state == "awaiting_advance" or state == "awaiting_choice"
@@ -104,6 +105,16 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
           end
         end
       end
+    end
+    local snapshot = player:snapshot()
+    local node = snapshot.node
+    if snapshot.state == "awaiting_choice" and node then
+      local identity = snapshot.generation .. ":" .. snapshot.visit
+      if focusedChoice ~= identity then settings.selected = 1 end
+      focusedChoice = identity
+      settings.selected = math.max(1, math.min(#node.options, settings.selected))
+    else
+      focusedChoice = ""
     end
     view = audio.update(player:snapshot(), 0)
     radioView = radioAudio.update(radio:snapshot(), 0)
