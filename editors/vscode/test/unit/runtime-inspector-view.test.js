@@ -296,3 +296,17 @@ test("action handles distinguish ignored completion attempts from cancellation",
   assert(view.children.some(row => row.label === "Cancellation callback failed"));
   assert(!view.children.some(row => row.label === "Current node"));
 });
+
+test("dialogue translation provenance distinguishes fallback and unknown metadata", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const view = presentObject({ kind: "dialogues", data: { localization: {
+    requestedLocale: "fr-CA", truncated: true, fields: [
+      { field: "line", status: "locale_fallback", resolvedLocale: "fr" },
+      { field: "choice 1", status: "source_fallback" },
+      { field: "reason 1", status: "unknown" },
+    ],
+  } } }, "dialogue");
+  const localization = view.children.find(item => item.label === "Translation provenance");
+  assert.equal(localization.description, "fr-CA · truncated");
+  assert.deepEqual(localization.children.map(item => item.description), ["Locale fallback", "Authored-source fallback", "Unknown provenance"]);
+});

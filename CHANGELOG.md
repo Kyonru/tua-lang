@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Show bounded, redacted dialogue translation provenance in the Runtime Inspector,
+  including rich-text locale/source fallback and explicit unknown provenance.
+
 - Inspect dialogue action-handle status and ignored completion attempts, including
   late calls after cancellation, without retaining callbacks or exposing results.
 

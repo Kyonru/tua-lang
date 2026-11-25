@@ -693,6 +693,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   Wrappers preserve validation/returns/reentrant cancellation; weak metadata avoids
   callback-cycle retention under Lua 5.1/LuaJIT. Runtime-internal deferred handles
   and full event chronology remain outside this slice.
+- [x] Bounded current translation provenance: inspect rich line/choice/disabled-reason
+  metadata without resolving again. Report requested/resolved locales, plural variant
+  and direct built-in authored-source fallback; plain/custom missing provenance stays
+  unknown. Cap at 64 fields and omit prose/arguments. Lua runtime and native LÖVE
+  sampling regressions cover fallback, privacy and bounds. Historical fallback tracing
+  and speaker-name provenance remain outside this slice.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.

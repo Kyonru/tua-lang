@@ -123,6 +123,53 @@ return function(inspect, wrapped, options)
     end
   end
 
+  -- Presentation metadata belongs to the resolver. Never resolve again while sampling.
+  local function localization(player)
+    local shown = field(player, "presentation")
+    local locale = field(player, "locale")
+    if type(shown) ~= "table" or type(locale) ~= "string" then return nil end
+    local templateResolver = field(player, "resolveTemplate")
+    local builtin = field(field(field(package, "loaded"), "tuai18n"), "dialogueTemplate")
+    local standard = type(builtin) == "function" and templateResolver == builtin
+    local result = { requestedLocale = locale, fields = {} }
+    local function add(label, key, view)
+      if #result.fields == 64 then
+        result.truncated = true
+        return
+      end
+      local resolved = field(view, "resolvedLocale")
+      local status = "unknown"
+      if type(resolved) == "string" then
+        status = resolved == locale and "requested" or "locale_fallback"
+      elseif type(view) == "table" and standard and type(key) == "string" then
+        status = "source_fallback"
+      elseif templateResolver == nil and field(player, "resolve") == nil then
+        status = "unlocalized"
+      end
+      result.fields[#result.fields + 1] = {
+        field = label,
+        textId = scalar(key),
+        status = status,
+        resolvedLocale = scalar(resolved),
+        variant = scalar(field(view, "variant")),
+      }
+    end
+    if field(shown, "kind") == "line" then
+      add("line", field(shown, "textId"), field(shown, "presentation"))
+    end
+    local choices = field(shown, "options")
+    for index = 1, 65 do
+      local choice = field(choices, index)
+      if choice == nil then break end
+      add("choice " .. index, field(choice, "id"), field(choice, "presentation"))
+      if field(choice, "reasonId") ~= nil then
+        add("reason " .. index, field(choice, "reasonId"), field(choice, "reasonPresentation"))
+      end
+      if result.truncated then break end
+    end
+    return result
+  end
+
   local function data(player)
     local document = field(player, "document")
     local current = scalar(field(player, "current"))
@@ -155,6 +202,7 @@ return function(inspect, wrapped, options)
         handleId = handleIds[field(player, "pendingAction")],
       }
     end
+    result.localization = localization(player)
     addHistory(player, result)
     return result
   end

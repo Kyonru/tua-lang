@@ -274,8 +274,20 @@ does not say whether it has settled; the player observes that on its next action
 poll. Sampling never advances the player or invokes resolvers/handlers. Dialogue
 text, facts, locals, action/event payloads, error messages and transcript contents
 are omitted. These are bounded current-state samples, not a complete event trace:
-short-lived states may fall between samples. Missing-translation fallback and a
-complete chronological event trace are not collected yet.
+short-lived states may fall between samples. A complete chronological event trace
+is not collected yet.
+
+**Translation provenance** reads the current presentation's resolver metadata for
+lines, visible choices and disabled-choice reasons (at most 64 fields, with a
+truncation flag). It shows requested and resolved locales, text IDs and plural
+variants, never templates or substituted arguments. A reported locale distinguishes
+requested-locale matches from locale fallback. With the direct built-in
+`I18n.dialogueTemplate` resolver, missing locale metadata identifies authored-source
+fallback. Plain-string resolvers and custom resolvers that omit provenance show
+**Unknown provenance**; no resolver shows **No resolver**. Sampling does not resolve
+again or inspect catalogs. This is current presentation metadata, not a translation
+coverage audit or historical fallback trace. Speaker-name resolution has no rich
+provenance and is not included.
 
 Public `Dialogue.actionHandle` objects also appear under **Dialogue players and
 actions**. They show current status, a handle ID, ignored `resolve`/`reject` counts,

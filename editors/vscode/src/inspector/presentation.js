@@ -189,6 +189,16 @@ function presentObject(object, prefix, previous) {
       for (const [key, label] of [["nodeId", "Current node"], ["documentId", "Document"], ["issueCode", "Issue code"]]) {
         if (data[key] !== undefined) children.push(row(prefix, key, label, data[key]));
       }
+      if (data.localization) {
+        const localization = data.localization;
+        const labels = { requested: "Requested locale", locale_fallback: "Locale fallback", source_fallback: "Authored-source fallback", unlocalized: "No resolver", unknown: "Unknown provenance" };
+        const fields = Object.values(localization.fields || {}).slice(0, 64);
+        children.push({ id: prefix + "/localization", label: "Translation provenance",
+          description: `${localization.requestedLocale || "Unknown locale"}${localization.truncated ? " · truncated" : ""}`,
+          children: fields.map((field, index) => ({ id: `${prefix}/localization/${index}`, label: String(field.field || "Field"),
+            description: labels[field.status] || "Unknown provenance",
+            children: valueNodes(field, `${prefix}/localization/${index}`) })) });
+      }
       if (data.history) {
         const history = Object.values(data.history).filter(item => item && typeof item === "object").slice(0, 20);
         children.push({ id: prefix + "/history", label: "Sampled changes", description: `${history.length} retained · may miss intermediate states`,

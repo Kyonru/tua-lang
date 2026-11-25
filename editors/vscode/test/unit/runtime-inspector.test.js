@@ -609,3 +609,13 @@ io.write(inspect.snapshot(), "\\n")
   assert.equal(frames[1].objects.length, 3);
   assert.equal(frames[2].objects.length, 0);
 });
+
+test("dialogue translation inspection reads bounded runtime provenance without resolving again", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const result = spawnSync(lua, [path.resolve(__dirname, "../fixtures/dialogue-inspector-localization.lua"),
+    path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /dialogue localization inspection passed/);
+});

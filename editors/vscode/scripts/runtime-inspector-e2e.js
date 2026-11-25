@@ -69,6 +69,27 @@ local dialogue = Dialogue.new({ schemaVersion = 9, documentId = "native", entry 
   done = { kind = "end" }
 } })
 dialogue:start()
+local translated = Dialogue.new({
+  schemaVersion = 8,
+  documentId = "translated",
+  entry = "s",
+  nodes = {
+    s = {
+      kind = "line",
+      textId = "greeting",
+      text = "PRIVATE translation",
+      richText = "[em]PRIVATE translation[/em]",
+      next = "e",
+    },
+    e = { kind = "end" },
+  },
+}, {
+  locale = "fr-CA",
+  resolveTemplate = function(_, source)
+    return { template = source, locale = "fr" }
+  end,
+})
+translated:start()
 local completedAction = Dialogue.actionHandle()
 assert(completedAction:cancel())
 assert(not completedAction:resolve(true))
@@ -96,7 +117,7 @@ function love.update(dt)
   store:get().player = player
   bus:emit("frame")
   -- Keep runtime objects reachable, as a real game does.
-  assert(world and machine.current == "walking" and pool:owns(bullet) and causal)
+  assert(translated and world and machine.current == "walking" and pool:owns(bullet) and causal)
 end
 `);
   const originals = new Map(fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name))]));
@@ -147,6 +168,10 @@ end
     assert.equal(action.ignoredResolve, 1);
     assert.equal(action.ignoredReject, 1);
     assert(!JSON.stringify(player.entry.snapshot).includes("PRIVATE action error"));
+    const translated = player.entry.snapshot.objects.find(object => object.data.documentId === "translated")?.data;
+    assert.equal(translated.localization.fields["1"].status, "locale_fallback");
+    assert.equal(translated.localization.fields["1"].resolvedLocale, "fr");
+    assert(!JSON.stringify(player.entry.snapshot).includes("PRIVATE translation"));
     assert.equal(dialogue.state, "waiting");
     assert.equal(dialogue.documentId, "native");
     assert.equal(dialogue.sampledChanges, 1, "wait ticks do not fill sampled history");
