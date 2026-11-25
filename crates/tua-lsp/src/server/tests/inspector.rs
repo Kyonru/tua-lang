@@ -314,3 +314,58 @@ fn dialogue_preview_mock_is_opt_in_and_invalid_input_clears_results() {
     server.send(request(8, None));
     assert!(response_with_id(server.output(), 8)["result"]["preview"]["mock"].is_null());
 }
+
+#[test]
+fn dialogue_preview_mock_text_refreshes_and_preserves_authored_source() {
+    let temp = TempProject::new("dialogue-preview-mock-text");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Hello %{name} (end)\n";
+    temp.write("src/scene.tdialogue", source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id, input| json!({"jsonrpc":"2.0", "id":id, "method":"tua/dialoguePreview", "params":{"textDocument":{"uri":uri},"mockContext":input}});
+    server.send(request(2, r#"{"args":{"name":"Ada"}}"#));
+    let result = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(
+        result["preview"]["mock"]["text"]["texts"][0]["value"],
+        "Hello Ada"
+    );
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Hello %{name}"
+    );
+    server.send(did_change(&uri, &source.replace("Hello", "Welcome"), 2));
+    server.send(request(3, r#"{"args":{"name":"<script>"}}"#));
+    let result = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(result["documentVersion"], 2);
+    assert_eq!(
+        result["preview"]["mock"]["text"]["texts"][0]["value"],
+        "Welcome <script>"
+    );
+    server.send(request(4, "{}"));
+    let result = &response_with_id(server.output(), 4)["result"];
+    assert!(result["preview"]["mock"]["text"]["texts"][0]["value"].is_null());
+    assert_eq!(
+        result["preview"]["mock"]["text"]["texts"][0]["error"],
+        "missing or invalid dialogue argument"
+    );
+    let bound = source.replace(
+        "[start]",
+        "@context \"context\"\n@bind name context.name\n[start]",
+    );
+    server.send(did_change(&uri, &bound, 3));
+    server.send(request(5, "{}"));
+    let result = &response_with_id(server.output(), 5)["result"];
+    assert_eq!(
+        result["preview"]["mock"]["text"]["bindingError"]["message"],
+        "missing dialogue binding"
+    );
+    assert_eq!(
+        result["preview"]["mock"]["text"]["bindingError"]["range"]["start"]["line"],
+        2
+    );
+}

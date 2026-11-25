@@ -144,3 +144,109 @@ impl DialoguePreview {
         preview
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct DialogueMockTextPreview {
+    pub texts: Vec<DialogueMockText>,
+    pub binding_error: Option<super::mock::DialogueMockIssue>,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct DialogueMockText {
+    pub section: usize,
+    pub line: usize,
+    pub choice: Option<usize>,
+    pub kind: DialogueMockTextKind,
+    pub span: crate::SourceSpan,
+    pub result: Result<String, super::mock::DialogueMockIssue>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DialogueMockTextKind {
+    Line,
+    Choice,
+    Reason,
+}
+
+impl DialoguePreview {
+    /// Format at most 4,096 fields and 1 MiB of combined output. Each field also
+    /// retains the formatter's 64 KiB limit. No locales or rich styles resolve.
+    pub fn format_texts(
+        &self,
+        facts: &super::mock::DialogueMockContext,
+    ) -> DialogueMockTextPreview {
+        let mut preview = DialogueMockTextPreview {
+            texts: Vec::new(),
+            binding_error: None,
+            truncated: false,
+        };
+        let args = match super::mock_text::DialogueMockTextArguments::resolve(&self.document, facts)
+        {
+            Ok(args) => args,
+            Err(error) => {
+                preview.binding_error = Some(error);
+                return preview;
+            }
+        };
+        let mut bytes = 0;
+        let mut push = |section, line, choice, kind, text: &super::DialogueText| {
+            if preview.texts.len() == 4096 {
+                preview.truncated = true;
+                return false;
+            }
+            let result = args.format(text);
+            let length = result.as_ref().map_or(0, String::len);
+            if length > (1024 * 1024usize).saturating_sub(bytes) {
+                preview.truncated = true;
+                return false;
+            }
+            bytes += length;
+            preview.texts.push(DialogueMockText {
+                section,
+                line,
+                choice,
+                kind,
+                span: text.span,
+                result,
+            });
+            true
+        };
+        'sections: for (section, node) in self.document.sections.iter().enumerate() {
+            for (line, utterance) in node.lines.iter().enumerate() {
+                if !push(
+                    section,
+                    line,
+                    None,
+                    DialogueMockTextKind::Line,
+                    &utterance.text,
+                ) {
+                    break 'sections;
+                }
+                for (choice, option) in utterance.choices.iter().enumerate() {
+                    if !push(
+                        section,
+                        line,
+                        Some(choice),
+                        DialogueMockTextKind::Choice,
+                        &option.text,
+                    ) {
+                        break 'sections;
+                    }
+                    if let Some(reason) = &option.reason {
+                        if !push(
+                            section,
+                            line,
+                            Some(choice),
+                            DialogueMockTextKind::Reason,
+                            reason,
+                        ) {
+                            break 'sections;
+                        }
+                    }
+                }
+            }
+        }
+        preview
+    }
+}

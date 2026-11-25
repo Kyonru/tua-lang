@@ -645,7 +645,7 @@ context objects. Core export/import works without a filesystem or LÖVE.
   Transport/UI controls are implemented below; text presentation and
   route-state presentation remain pending.
 - [x] Explicit mock input in the editor: drafts stay in memory and only apply on
-  Evaluate conditions. Core probes branch/visibility/availability conditions
+  Apply mock context. Core probes branch/visibility/availability conditions
   independently (up to 4,096), preserving all routes and source-located errors.
   JSON validation errors clear mock results without discarding the static outline.
   Clear, refresh, document switching and in-flight response ordering are covered.
@@ -658,8 +658,16 @@ context objects. Core export/import works without a filesystem or LÖVE.
   shared mark-free template. Missing/invalid bindings or arguments report source
   locations. Retained argument text and each output are capped at 64 KiB, including
   numeric expansion. Numeric previews use deterministic decimal formatting; Lua
-  `tostring` spelling can differ by runtime. The editor still displays authored text;
-  text transport/presentation and locale resolution are not implemented by this slice.
+  `tostring` spelling can differ by runtime. Editor integration is covered below;
+  locale resolution remains pending.
+- [x] Mock-text presentation: the core formats lines, choices and disabled reasons
+  once per explicit apply/refresh with 4,096-field and 1 MiB aggregate limits.
+  LSP preserves authored fields and carries results/errors separately. The editor
+  escapes substitutions, retains authored disclosures, links errors to source,
+  distinguishes binding errors from per-field failures, and labels truncated fields.
+  Apply mock context now evaluates conditions and text together; authored reset and
+  stale-response protections apply to both. Rich styles and locale resolution remain
+  outside this plain-text preview.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

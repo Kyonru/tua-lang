@@ -1968,3 +1968,27 @@ pub(super) fn lsp_dialogue_mock_from_core(
         }).collect::<Vec<_>>()
     })
 }
+
+pub(super) fn lsp_dialogue_mock_text_from_core(
+    preview: tua_core::dialogue_asset::preview::DialogueMockTextPreview,
+    source: &str,
+) -> Value {
+    use tua_core::dialogue_asset::preview::DialogueMockTextKind;
+    json!({
+        "truncated": preview.truncated,
+        "bindingError": preview.binding_error.map(|error| json!({"message": error.message, "range": lsp_range_for_source(source, error.span)})),
+        "texts": preview.texts.into_iter().map(|text| {
+            let kind = match text.kind {
+                DialogueMockTextKind::Line => "line",
+                DialogueMockTextKind::Choice => "choice",
+                DialogueMockTextKind::Reason => "reason",
+            };
+            let (value, error, span) = match text.result {
+                Ok(value) => (Some(value), None, text.span),
+                Err(error) => (None, Some(error.message), error.span),
+            };
+            json!({"section": text.section, "line": text.line, "choice": text.choice,
+                "kind": kind, "value": value, "error": error, "range": lsp_range_for_source(source, span)})
+        }).collect::<Vec<_>>()
+    })
+}

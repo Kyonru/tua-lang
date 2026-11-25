@@ -243,18 +243,25 @@ async function run() {
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await screenshot("behavior-tree");
     const dialogueRange = { start: { line: 2, character: 0 }, end: { line: 2, character: 8 } };
-    const dialogue = { sections: [{ label: "arrival", range: dialogueRange, lines: [{ text: "Welcome, %{name}.", speaker: "Guide", range: dialogueRange, choices: [] }] }], routes: [{ section: 0, kind: "branchTrue", target: "arrival", range: dialogueRange }] };
+    const dialogue = { sections: [{ label: "arrival", range: dialogueRange, lines: [{ text: "Welcome, %{name}.", speaker: "Guide", range: dialogueRange, choices: [{ text: "Continue", visibleCondition: true }] }] }], routes: [{ section: 0, line: 0, choice: 0, kind: "choice", target: "arrival", range: dialogueRange }, { section: 0, line: 0, choice: null, kind: "fallback", target: "arrival", range: dialogueRange }] };
     await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", dialogue), "Dialogue Preview");
     assert.equal(await evaluate("document.querySelector('.speech').textContent.includes('%{name}')"), true);
     await evaluate("document.querySelector('[data-source]').focus()");
     assert.equal(await evaluate("document.activeElement.classList.contains('source')"), true);
     await evaluate("document.activeElement.click()");
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///arrival.tdialogue"), "dialogue source navigation");
-    await evaluate(`document.getElementById("mock-context").value = '{"context":{"ready":true}}'; document.getElementById("mock-context").dispatchEvent(new Event("input")); document.getElementById("apply-mock").click()`);
-    await waitFor(() => messages.some(message => message.command === "applyMock" && message.text === '{"context":{"ready":true}}'), "explicit mock application");
-    const mockDialogue = { ...dialogue, mock: { conditions: [{ section: 0, line: null, choice: null, kind: "branch", value: true, range: dialogueRange }] } };
-    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", mockDialogue, undefined, { draft: '{"context":{"ready":true}}' }), "Dialogue Preview");
-    assert.equal(await evaluate("document.body.textContent.includes('Mock branch: true')"), true);
+    await evaluate(`document.getElementById("mock-context").value = '{"context":{"ready":true},"args":{"name":"Ada"}}'; document.getElementById("mock-context").dispatchEvent(new Event("input")); document.getElementById("apply-mock").click()`);
+    await waitFor(() => messages.some(message => message.command === "applyMock" && message.text === '{"context":{"ready":true},"args":{"name":"Ada"}}'), "explicit mock application");
+    const mockDialogue = { ...dialogue, mock: {
+      conditions: [{ section: 0, line: 0, choice: 0, kind: "visibility", value: true, range: dialogueRange }],
+      text: { texts: [{ section: 0, line: 0, choice: null, kind: "line", value: "Welcome, Ada.", range: dialogueRange }] },
+    } };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", mockDialogue, undefined, { draft: '{"context":{"ready":true},"args":{"name":"Ada"}}' }), "Dialogue Preview");
+    assert.equal(await evaluate("document.body.textContent.includes('Mock visibility: true')"), true);
+    assert.equal(await evaluate("document.querySelector('.mock-value').textContent"), "Welcome, Ada.");
+    await evaluate("document.querySelector('.speech summary').focus(); document.activeElement.click()");
+    assert.equal(await evaluate("document.querySelector('.speech details').open"), true);
+    assert.equal(await evaluate("document.querySelector('.authored').textContent"), "Welcome, %{name}.");
     assert.equal(await evaluate("document.getElementById('mock-context').value.includes('ready')"), true);
     await evaluate("document.getElementById('clear-mock').click()");
     await waitFor(() => messages.some(message => message.command === "clearMock"), "clear mock controls");
@@ -263,6 +270,22 @@ async function run() {
     assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "dialogue fits narrow pane");
     await screenshot("dialogue-preview-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
+
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", null, "Reading dialogue…"), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('[role=status]').textContent"), "Reading dialogue…");
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", { sections: [], routes: [] }), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('main').textContent.includes('No dialogue sections')"), true);
+    const brokenText = { ...dialogue, mock: { conditions: [], text: { texts: [], bindingError: { message: "missing dialogue binding", range: dialogueRange } } } };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", brokenText), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('.error').textContent.includes('missing dialogue binding')"), true);
+    assert.equal(await evaluate("document.querySelector('.speech').textContent.includes('%{name}')"), true);
+    await screenshot("dialogue-preview-binding-error");
+    const limitedText = { ...dialogue, mock: { conditions: [], text: { texts: [], truncated: true } } };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", limitedText), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('main').textContent.includes('Authored text (preview limit)')"), true);
+    const largeDialogue = { sections: Array(201).fill(dialogue.sections[0]), routes: [] };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", largeDialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelectorAll('section').length"), 200);
 
     await load(localizationHtml(panel.webview, "localization-test-nonce"), "Tua Localization");
     await waitFor(() => messages.some(message => message.type === "ready"), "localization webview ready");

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Preview substituted dialogue lines, choices and reasons from explicit mock args
+  and bindings, with authored-text disclosures, source-linked errors and output limits.
+
 - Add explicit in-memory mock JSON to the dialogue preview, with bounded,
   independent condition probes, source-linked errors and an authored-view reset.
 

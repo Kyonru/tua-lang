@@ -180,3 +180,70 @@ fn mock_text_handles_literal_escape_and_exact_output_boundary() {
         "mock argument text exceeds 64 KiB"
     );
 }
+
+#[test]
+fn mock_text_preview_maps_lines_choices_reasons_and_errors() {
+    use tua_core::analysis::AnalysisHost;
+    use tua_core::dialogue_asset::preview::DialogueMockTextKind;
+    let source = "@dialogue 1\n@context \"context\"\n@bind name context.name\n[start]\n// @id hello\n: Hello %{name}\n// @id buy\n-> Buy %{item} [target:done]\n@enabled false\n// @id reason\n@reason Need %{coins}\n@fallback done\n[done]\n// @id bye\n: Bye (end)\n";
+    let mut host = AnalysisHost::new();
+    host.set_file("scene.tdialogue", source);
+    let preview = host.snapshot().dialogue_preview("scene.tdialogue").unwrap();
+    let facts = DialogueMockContext::parse(
+        r#"{"context":{"name":"Ada"},"args":{"item":"shell","coins":20}}"#,
+    )
+    .unwrap();
+    let result = preview.format_texts(&facts);
+    assert!(result.binding_error.is_none());
+    assert!(!result.truncated);
+    assert_eq!(result.texts.len(), 4);
+    assert_eq!(result.texts[0].result.as_ref().unwrap(), "Hello Ada");
+    assert_eq!(result.texts[1].kind, DialogueMockTextKind::Choice);
+    assert_eq!(result.texts[1].choice, Some(0));
+    assert_eq!(result.texts[1].result.as_ref().unwrap(), "Buy shell");
+    assert_eq!(result.texts[2].kind, DialogueMockTextKind::Reason);
+    assert_eq!(result.texts[2].result.as_ref().unwrap(), "Need 20");
+    let missing = DialogueMockContext::parse(r#"{"context":{"name":"Ada"}}"#).unwrap();
+    let result = preview.format_texts(&missing);
+    assert!(result.texts[0].result.is_ok());
+    assert!(result.texts[1].result.is_err());
+    assert_eq!(result.texts[1].span.start.line, 8);
+    let result = preview.format_texts(&DialogueMockContext::parse("{}").unwrap());
+    assert_eq!(result.binding_error.unwrap().span.start.line, 3);
+    assert!(result.texts.is_empty());
+}
+
+#[test]
+fn mock_text_preview_caps_combined_bytes_and_field_count() {
+    use std::sync::Arc;
+    use tua_core::dialogue_asset::preview::DialoguePreview;
+    let mut document = parse_dialogue_source("scene.tdialogue", &plain_source("x")).unwrap();
+    document.sections = vec![document.sections[0].clone(); 4097];
+    let preview = DialoguePreview {
+        document: Arc::new(document.clone()),
+        routes: Vec::new(),
+    };
+    let facts = DialogueMockContext::parse("{}").unwrap();
+    let result = preview.format_texts(&facts);
+    assert_eq!(result.texts.len(), 4096);
+    assert!(result.truncated);
+    document.sections.truncate(17);
+    for section in &mut document.sections {
+        section.lines[0].text.value = "x".repeat(65_536);
+    }
+    let preview = DialoguePreview {
+        document: Arc::new(document),
+        routes: Vec::new(),
+    };
+    let result = preview.format_texts(&facts);
+    assert_eq!(result.texts.len(), 16);
+    assert_eq!(
+        result
+            .texts
+            .iter()
+            .map(|text| text.result.as_ref().unwrap().len())
+            .sum::<usize>(),
+        1024 * 1024
+    );
+    assert!(result.truncated);
+}

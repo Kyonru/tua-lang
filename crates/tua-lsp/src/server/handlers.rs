@@ -2188,9 +2188,12 @@ impl LspServer {
             "mockError": mock_error,
             "preview": snapshot.dialogue_preview(&request.path).map(|preview| {
                 let evaluated = facts.map(|facts| preview.evaluate_conditions(facts));
+                let text = facts.map(|facts| preview.format_texts(facts));
                 let mut output = super::protocol::lsp_dialogue_preview_from_core(preview, request.source);
                 output["mock"] = evaluated.map(|mock| {
-                    super::protocol::lsp_dialogue_mock_from_core(mock, request.source)
+                    let mut result = super::protocol::lsp_dialogue_mock_from_core(mock, request.source);
+                    result["text"] = text.map(|text| super::protocol::lsp_dialogue_mock_text_from_core(text, request.source)).unwrap_or(Value::Null);
+                    result
                 }).unwrap_or(Value::Null);
                 output
             })

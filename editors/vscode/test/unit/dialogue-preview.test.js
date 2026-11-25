@@ -136,9 +136,12 @@ test("clearing mock input discards an older in-flight result", async () => {
   const uri = f.document.uri.toString();
   const pending = f.panel().receive({ command: "applyMock", uri, text: "{}" });
   await f.panel().receive({ command: "clearMock", uri });
-  finish({ documentVersion: 1, preview: { ...preview, mock: { conditions: [{ section: 0, line: null, choice: null, kind: "branch", value: true, range }] } } });
+  finish({ documentVersion: 1, preview: { ...preview, mock: {
+    conditions: [{ section: 0, line: null, choice: null, kind: "branch", value: true, range }],
+    text: { texts: [{ section: 0, line: 0, choice: null, kind: "line", value: "stale replacement", range }] },
+  } } });
   await pending;
-  assert.doesNotMatch(f.panel().webview.html, /Mock branch: true/);
+  assert.doesNotMatch(f.panel().webview.html, /Mock branch: true|stale replacement/);
   f.panel().dispose();
 });
 
@@ -151,4 +154,33 @@ test("mock errors and results are source-linked and HTML-safe", () => {
   assert.match(html, /invalid &lt;JSON&gt;/);
   assert.doesNotMatch(html, /<script>bad/);
   assert.match(html, /4,096 conditions/);
+});
+
+test("mock text is escaped, keeps authored disclosures, and renders choice/reason fields", () => {
+  const f = fixture();
+  const model = { sections: [{ label: "start", range, lines: [{ text: "Hello %{name}", range, choices: [{ text: "Buy %{item}", reason: "Need %{coins}" }] }] }], routes: [{ section: 0, line: 0, choice: 0, kind: "choice", target: "start", range }], mock: { conditions: [], text: { texts: [
+    { section: 0, line: 0, choice: null, kind: "line", value: "Hello <script>bad()</script>", range },
+    { section: 0, line: 0, choice: 0, kind: "choice", value: "Buy shell", range },
+    { section: 0, line: 0, choice: 0, kind: "reason", value: "Need 20", range },
+  ] } } };
+  const html = f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), model);
+  assert.match(html, /Hello &lt;script&gt;bad\(\)&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>bad/);
+  assert.match(html, /<summary>Authored text<\/summary>/);
+  assert.match(html, /Hello %\{name\}/);
+  assert.match(html, /Buy shell/);
+  assert.match(html, /Need 20/);
+});
+
+test("text errors and limits preserve authored text", () => {
+  const f = fixture();
+  const model = { ...preview, mock: { conditions: [], text: { texts: [{ section: 0, line: 0, choice: null, kind: "line", error: "missing argument", range }], truncated: true } } };
+  const html = f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), model);
+  assert.match(html, /Hello %\{name\}/);
+  assert.match(html, /Mock text: missing argument/);
+  assert.match(html, /Open source/);
+  assert.match(html, /Authored text \(preview limit\)/);
+  assert.match(html, /1 MiB combined output/);
+  model.mock.text = { texts: [], bindingError: { message: "missing binding", range } };
+  assert.match(f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), model), /Mock text unavailable: missing binding/);
 });

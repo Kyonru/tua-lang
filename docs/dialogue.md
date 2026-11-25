@@ -976,14 +976,23 @@ routes. Click a section, **Open text**, or a route target to navigate to its sou
 A route target opens the authored target token so you can edit that connection.
 
 By default this is an authored view. To test conditions, enter explicit JSON in
-**Mock context**, then choose **Evaluate conditions**:
+**Mock context**, then choose **Apply mock context**:
 
 ```json
 {
   "context": { "coins": 20, "unlocked": true },
-  "locals": { "visits": 1 }
+  "locals": { "visits": 1 },
+  "args": { "name": "Ada" }
 }
 ```
+
+Lines, choices and disabled-choice reasons show substituted plain text. When the
+result differs, expand **Authored text** to inspect the original template. Arguments
+come from optional scalar `args` and typed `@bind` declarations; bindings override
+explicit args, defaults apply only to nil, and false is preserved. Replacement values
+stay literal, even if they contain placeholders or rich-text marks. Missing arguments
+keep the authored field visible with a source-linked error. A binding-resolution
+error keeps all text authored while independent condition probes remain available.
 
 Each branch, visibility and availability condition is tested independently. The
 preview shows `true`, `false`, or a source-linked error. All routes remain visible:
@@ -991,19 +1000,22 @@ this does not simulate traversal, action results, waits, or mutations between
 sections. For example, an availability condition is tested even when its choice's
 visibility condition is false. Missing fields and JSON `null` behave as nil.
 
-Editing the JSON changes only the draft; press **Evaluate conditions** to apply it.
+Editing the JSON changes only the draft; press **Apply mock context** to apply it.
 Source refreshes reuse the last applied JSON. **Use authored view** stops evaluation
 and keeps the draft available. Closing the preview or switching to another dialogue
 clears both draft and applied input; they are not saved to project files or settings.
 
-Input accepts `context` and `locals` record roots, with no arrays. An optional
-`args` record of strings, booleans and numbers is also accepted for the shared
-text formatter; the current editor still displays authored text. Limits are
+Input accepts `context` and `locals` record roots and optional scalar `args`, with
+no arrays. Limits are
 64 KiB of JSON, 4,096 values, 32 nesting levels and finite numbers within ±2⁵³.
 At most 4,096 conditions are tested per request, with a notice if truncated.
+Text output is capped at 4,096 fields and 1 MiB combined, with 64 KiB per field
+and 64 KiB of retained argument text. Remaining fields stay authored with a notice.
+Numbers use deterministic decimal formatting; Lua's `tostring` may spell them
+differently. Supply a preformatted string when exact display spelling matters.
 Imported context schemas are not validated against this input. Portraits, audio,
-placeholders and rich-text marks are not resolved or rendered, and game handlers
-never run. Graphical layout and text substitution remain planned. See the
+localization and rich styles are not resolved; rich source uses its parsed plain
+template. Game handlers never run. Graphical layout remains planned. See the
 [editor reference](lsp.md) for refresh behavior and display limits.
 
 ## Authoring rules and common mistakes

@@ -8,7 +8,7 @@ const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
 const { createVisiblePreviewRefresh } = require("../shared/visible-preview-refresh");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
-const DEFAULT_MOCK = '{\n  "context": {},\n  "locals": {}\n}';
+const DEFAULT_MOCK = '{\n  "context": {},\n  "locals": {},\n  "args": {}\n}';
 
 const STYLES = `
   body{color:var(--vscode-foreground);background:var(--vscode-editor-background);font:var(--vscode-font-size) var(--vscode-font-family);margin:0;padding:20px}
@@ -17,7 +17,7 @@ const STYLES = `
   p{line-height:1.5;max-width:75ch}header p{margin:6px 0}
   button{font:inherit;cursor:pointer;color:var(--vscode-button-foreground);background:var(--vscode-button-background);border:1px solid var(--vscode-contrastBorder,transparent);padding:6px 10px}
   button:hover{background:var(--vscode-button-hoverBackground)}
-  textarea:focus-visible,button:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}
+  summary:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}
   .source{max-width:100%;overflow-wrap:anywhere;background:none;color:var(--vscode-textLink-foreground);text-align:left;padding:2px 0;border:0;text-decoration:underline;text-underline-offset:3px}
   .source:hover{background:none;color:var(--vscode-textLink-activeForeground)}
   section{border-top:1px solid var(--vscode-panel-border);padding:20px 0}
@@ -28,6 +28,9 @@ const STYLES = `
   textarea{display:block;box-sizing:border-box;width:100%;max-width:75ch;min-height:110px;margin:8px 0;color:var(--vscode-input-foreground);background:var(--vscode-input-background);border:1px solid var(--vscode-input-border,var(--vscode-contrastBorder,transparent));padding:8px;font:var(--vscode-editor-font-size) var(--vscode-editor-font-family);resize:vertical}
   .mock-controls{margin:20px 0}.mock-actions{display:flex;gap:8px;flex-wrap:wrap}
   .error{color:var(--vscode-errorForeground)}
+  details{margin:6px 0;white-space:normal}summary{cursor:pointer;color:var(--vscode-descriptionForeground)}
+  .authored,.mock-value{white-space:pre-wrap;overflow-wrap:anywhere}
+  .reason{font-size:0.9em;margin-top:4px}
   @media(max-width:400px){body{padding:12px}header{flex-wrap:wrap}}
 `;
 
@@ -47,6 +50,24 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
     const results = conditionResults.get(`${section}:${line}:${choice}`) || [];
     return results.map(result => `<small class="${result.error ? "error" : "meta"}">Mock ${escapeHtml(result.kind)}: ${result.error ? escapeHtml(result.error) : String(result.value)} · ${link("Open condition", result.range)}</small>`).join("");
   };
+  const mockTexts = new Map();
+  for (const text of preview?.mock?.text?.texts || []) {
+    mockTexts.set(`${text.section}:${text.line}:${text.choice ?? ""}:${text.kind}`, text);
+  }
+  const textHtml = (authored, section, line, choice, kind) => {
+    const text = mockTexts.get(`${section}:${line}:${choice ?? ""}:${kind}`);
+    if (text?.error) {
+      return `${escapeHtml(authored)}<small class="error">Mock text: ${escapeHtml(text.error)} · ${link("Open source", text.range)}</small>`;
+    }
+    if (typeof text?.value === "string") {
+      const original = text.value !== authored
+        ? `<details><summary>Authored text</summary><div class="authored">${escapeHtml(authored)}</div></details>`
+        : "";
+      return `<span class="mock-value">${escapeHtml(text.value)}</span>${original}`;
+    }
+    return escapeHtml(authored) + (preview?.mock?.text?.truncated
+      ? '<small class="meta">Authored text (preview limit)</small>' : "");
+  };
   const sections = preview?.sections || [];
   const routes = new Map();
   for (const route of preview?.routes || []) {
@@ -55,13 +76,13 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
   }
   const labels = { fallback: "No available choices", wait: "After wait", branchTrue: "Condition true", branchFalse: "Condition false", actionSuccess: "Action succeeds", actionFailure: "Action fails" };
   const content = sections.slice(0, 200).map((section, index) => {
-    const lines = section.lines.slice(0, 100).map((line) => `<div class="speech">${line.speaker ? `<strong>${escapeHtml(line.speaker)}</strong><br>` : ""}${escapeHtml(line.text)}<small>${link("Open text", line.range)}${line.end ? " · Ends conversation" : ""}</small></div>`).join("");
+    const lines = section.lines.slice(0, 100).map((line, lineIndex) => `<div class="speech">${line.speaker ? `<strong>${escapeHtml(line.speaker)}</strong><br>` : ""}${textHtml(line.text, index, lineIndex, null, "line")}<small>${link("Open text", line.range)}${line.end ? " · Ends conversation" : ""}</small></div>`).join("");
     const outgoing = routes.get(index) || [];
     const routeHtml = outgoing.slice(0, 200).map((route) => {
       const choice = section.lines[route.line]?.choices?.[route.choice];
-      const label = choice ? choice.text : labels[route.kind] || route.kind;
+      const label = choice ? textHtml(choice.text, index, route.line, route.choice, "choice") : escapeHtml(labels[route.kind] || route.kind);
       const conditions = choice ? [choice.visibleCondition && "Visibility condition", choice.enabledCondition && "Availability condition"].filter(Boolean).join(" · ") : "";
-      return `<li>${escapeHtml(label)} → ${link(route.target, route.range)}${conditions && !conditionResults.has(`${index}:${route.line}:${route.choice}`) ? `<small class="meta">${conditions} (not evaluated)</small>` : ""}${choice ? resultsHtml(index, route.line, route.choice) : ""}${choice?.reason ? `<small>${escapeHtml(choice.reason)}</small>` : ""}</li>`;
+      return `<li>${label} → ${link(route.target, route.range)}${conditions && !conditionResults.has(`${index}:${route.line}:${route.choice}`) ? `<small class="meta">${conditions} (not evaluated)</small>` : ""}${choice ? resultsHtml(index, route.line, route.choice) : ""}${choice?.reason ? `<div class="reason">${textHtml(choice.reason, index, route.line, route.choice, "reason")}</div>` : ""}</li>`;
     }).join("");
     const limited = section.lines.length > 100 || outgoing.length > 200;
     return `<section><h2>${link(section.label, section.range)}${index === 0 ? " · Default entry" : ""}</h2>${resultsHtml(index)}${section.action ? `<p>Action: <code>${escapeHtml(section.action)}</code></p>` : ""}${section.wait != null ? `<p>Wait: ${escapeHtml(section.wait)} seconds</p>` : ""}${lines}${routeHtml ? `<ol aria-label="Outgoing routes">${routeHtml}</ol>` : ""}${limited ? '<p class="meta">Large section: showing the first 100 lines and 200 routes. Open source for the full section.</p>' : ""}</section>`;
@@ -70,12 +91,13 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
     title: "Dialogue Preview",
     styles: STYLES,
     body: `<header><div><h1>Dialogue preview</h1><p>${escapeHtml(displayUriPath(uri))}</p></div><button type="button" id="reload">Reload</button></header>
-      <p class="meta">${preview?.mock ? "Each condition is tested independently against the last applied JSON. All routes remain visible; no conversation is simulated." : "Authored structure. Conditions are not evaluated until you apply mock JSON."} Placeholders and rich-text marks stay authored. No handlers or audio run.</p>
+      <p class="meta">${preview?.mock ? "Each condition is tested independently against the last applied JSON. All routes remain visible; no conversation is simulated." : "Authored structure. Apply mock JSON to test conditions and substitute text."} Text previews are plain, without localization or rich styling. Numeric spelling may differ from Lua. No handlers or audio run.</p>
       <div class="mock-controls"><label for="mock-context">Mock context (JSON)</label><textarea id="mock-context" maxlength="65536" spellcheck="false" aria-describedby="mock-help">${escapeHtml(mock.draft ?? DEFAULT_MOCK)}</textarea>
-      <p id="mock-help" class="meta">Use context and locals objects. Missing fields and null mean nil. Changes apply only when you choose Evaluate conditions. Input stays in memory and clears when this preview closes.</p>
-      <div class="mock-actions"><button id="apply-mock" type="button">Evaluate conditions</button><button id="clear-mock" type="button">Use authored view</button></div>
+      <p id="mock-help" class="meta">Use context and locals objects, plus optional scalar args. Missing fields and null mean nil. Changes apply only when you choose Apply mock context. Input stays in memory and clears when this preview closes.</p>
+      <div class="mock-actions"><button id="apply-mock" type="button">Apply mock context</button><button id="clear-mock" type="button">Use authored view</button></div>
       ${mock.error ? `<p class="error" role="alert">${escapeHtml(mock.error)}</p>` : ""}</div>
-      <main>${message ? `<p role="status">${escapeHtml(message)}</p>` : content || '<p>No dialogue sections found.</p>'}${preview?.mock?.truncated ? '<p>Only the first 4,096 conditions were tested.</p>' : ""}${sections.length > 200 ? '<p>Showing the first 200 sections. Open source for the full conversation.</p>' : ""}</main>`,
+      ${preview?.mock?.text?.bindingError ? `<p class="error">Mock text unavailable: ${escapeHtml(preview.mock.text.bindingError.message)}. Authored text is shown. ${link("Open source", preview.mock.text.bindingError.range)}</p>` : ""}
+      <main>${message ? `<p role="status">${escapeHtml(message)}</p>` : content || '<p>No dialogue sections found.</p>'}${preview?.mock?.text?.truncated ? '<p>Text preview limit reached (4,096 fields or 1 MiB combined output). Remaining text stays authored.</p>' : ""}${preview?.mock?.truncated ? '<p>Only the first 4,096 conditions were tested.</p>' : ""}${sections.length > 200 ? '<p>Showing the first 200 sections. Open source for the full conversation.</p>' : ""}</main>`,
     script: `const ranges = ${jsonForHtml(ranges)};
       const uri = ${jsonForHtml(uri)};
       const input = document.getElementById("mock-context");
@@ -122,9 +144,10 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
       if (!response?.preview) return showMessage("No valid dialogue preview. Check Problems for syntax errors, then reload.");
       renderedVersion = response.documentVersion;
       const unsupportedMock = params.mockContext !== undefined && !("mock" in response.preview);
+      const unsupportedText = response.preview.mock && !("text" in response.preview.mock);
       const mockError = response.mockError || (unsupportedMock
         ? "This compiler does not support mock evaluation. Update Tua, then reload."
-        : undefined);
+        : unsupportedText ? "This compiler supports condition probes only. Update Tua for text previews." : undefined);
       panel.webview.html = dialoguePreviewHtml(panel.webview, document.uri.toString(), response.preview, undefined, { draft: mockDraft, error: mockError });
     } catch (error) {
       if (current !== sequence || client !== getClient()) return;
