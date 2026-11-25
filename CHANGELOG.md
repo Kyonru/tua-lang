@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add an arena shader chapter with split GLSL, candidate initialization, preload/retry,
+  last-good fallback and native GPU pixel/scope/failure verification.
+
 - Add enemy ground shadows and an arena audio chapter with typed cues/buses, music
   scenes, independent gains, mute and native transport/cleanup verification.
 

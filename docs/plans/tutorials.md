@@ -65,7 +65,7 @@ status does **not** establish that the integrated chapters are complete.
 | C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Complete; cumulative checkpoint and qualification |
 | C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Complete; C3 qualification records selected-compiler typing limits |
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Complete; fake-backend and native Source qualification |
-| C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Pending |
+| C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Complete; native GPU failure/scope qualification |
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal/nonmodal ownership | Pending |
 | C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Pending |
 | C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Pending |
@@ -270,11 +270,11 @@ fake backend and playback in native LÖVE; do not call silent video an audio che
 
 Reference: [shaders](../shaders.md).
 
-- [ ] Start with a hit flash on one object and split shader source into supported files.
-- [ ] Show typed loading, uniforms and the boundary of the effect's draw scope.
-- [ ] Initialize a candidate using the existing `on_compiled` hook.
-- [ ] Add optional `preload` progress while `update` processes queued entries.
-- [ ] Explain missing/failed shader handling and first-draw warming separately.
+- [x] Start with a hit flash on one object and split shader source into supported files.
+- [x] Show typed loading, uniforms and the boundary of the effect's draw scope.
+- [x] Initialize a candidate using the existing `on_compiled` hook.
+- [x] Add optional `preload` progress while `update` processes queued entries.
+- [x] Explain missing/failed shader handling and first-draw warming separately.
 
 Acceptance: the effect does not leak onto subsequent draws; initialization and
 failure paths match the loader contract; preload feedback settles correctly.
@@ -370,7 +370,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M4 | Complete | `examples/tutorials/enemy-wave`; `936b615a`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/enemy-wave.md) |
 | M5 | Complete in C2 | `02-combat-waves`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md) |
 | M6 | Complete in C4 | `04-sound`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-04.md) |
-| M7 | Pending | |
+| M7 | Complete in C5 | `05-visual-feedback`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-05.md) |
 | M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
 | M9 | Pending | |
 | M10 | Pending | |
@@ -497,4 +497,12 @@ fixtures are bundled with provenance; the replay MP4 remains silent. Enemy shado
 were added separately to the existing combat examples and carried into C4. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-04.md).
 
-Next: C5, scoped hit shaders, initialization and loading/failure states.
+## C5 completion
+
+Integrated split-source hit shading with initialized candidates, queued/synchronous
+loading, visible availability/progress, retry and last-good fallback. Native Canvas
+pixel assertions verify scope; compile/include/setup failures and disposal are covered.
+Inherited gameplay/audio tests pass with the shader integrated. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-05.md).
+
+Next: C6, between-wave dialogue, UI catalogs and runtime language switching.

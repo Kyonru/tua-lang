@@ -148,5 +148,5 @@ The native regression checks actual LÖVE playback and the Source clock. Its vid
 is silent because the replay runner does not record audio; the fake-backend test
 alone is not evidence of native playback or audio quality.
 
-See [Audio Systems](../../audio.md) for the complete API. Next, add a scoped hit
-shader while preserving these gameplay and presentation boundaries.
+See [Audio Systems](../../audio.md) for the complete API. Continue with [scoped shader feedback](visual-feedback.md) while preserving these
+gameplay and presentation boundaries.
