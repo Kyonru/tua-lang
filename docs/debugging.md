@@ -269,7 +269,10 @@ already released object; a call that raises an error is not counted.
 
 Dialogue players show sampled state, current node/document IDs, generation/visit,
 suspension, wait duration/elapsed/remaining time, action ID/name and whether a
-completion handle is attached, plus the current issue code. A handle being attached
+completion handle is attached, plus the current issue code. **Runtime issue**
+shows its node/action identity and, for automatic-transition exhaustion, the configured
+transition budget. Inspect the named branch/fallback loop before increasing the limit;
+no private issue message is transmitted. A handle being attached
 does not say whether it has settled; the player observes that on its next action
 poll. Sampling never advances the player or invokes resolvers/handlers. Dialogue
 text, facts, locals, action/event payloads, error messages and transcript contents

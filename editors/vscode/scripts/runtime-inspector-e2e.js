@@ -90,6 +90,21 @@ local translated = Dialogue.new({
   end,
 })
 translated:start()
+local looping = Dialogue.new({
+  schemaVersion = 3,
+  documentId = "budget",
+  entry = "loop",
+  nodes = {
+    loop = {
+      kind = "branch",
+      condition = { { op = "value", value = true } },
+      yes = "loop",
+      no = "done",
+    },
+    done = { kind = "end" },
+  },
+}, { transitionBudget = 2 })
+looping:start()
 local completedAction = Dialogue.actionHandle()
 assert(completedAction:cancel())
 assert(not completedAction:resolve(true))
@@ -117,7 +132,7 @@ function love.update(dt)
   store:get().player = player
   bus:emit("frame")
   -- Keep runtime objects reachable, as a real game does.
-  assert(translated and world and machine.current == "walking" and pool:owns(bullet) and causal)
+  assert(looping and translated and world and machine.current == "walking" and pool:owns(bullet) and causal)
 end
 `);
   const originals = new Map(fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name))]));
@@ -172,6 +187,11 @@ end
     assert.equal(translated.localization.fields["1"].status, "locale_fallback");
     assert.equal(translated.localization.fields["1"].resolvedLocale, "fr");
     assert(!JSON.stringify(player.entry.snapshot).includes("PRIVATE translation"));
+    const budget = player.entry.snapshot.objects.find(object => object.data.documentId === "budget")?.data;
+    assert.equal(budget.issue.code, "transition_budget_exceeded");
+    assert.equal(budget.issue.nodeId, "loop");
+    assert.equal(budget.issue.transitionBudget, 2);
+    assert.equal(budget.issue.message, undefined);
     assert.equal(dialogue.state, "waiting");
     assert.equal(dialogue.documentId, "native");
     assert.equal(dialogue.sampledChanges, 1, "wait ticks do not fill sampled history");

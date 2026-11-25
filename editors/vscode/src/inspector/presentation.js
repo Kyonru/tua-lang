@@ -189,6 +189,7 @@ function presentObject(object, prefix, previous) {
       for (const [key, label] of [["nodeId", "Current node"], ["documentId", "Document"], ["issueCode", "Issue code"]]) {
         if (data[key] !== undefined) children.push(row(prefix, key, label, data[key]));
       }
+      if (data.issue) children.push({ id: prefix + "/issue", label: "Runtime issue", children: valueNodes(data.issue, prefix + "/issue") });
       if (data.localization) {
         const localization = data.localization;
         const labels = { requested: "Requested locale", locale_fallback: "Locale fallback", source_fallback: "Authored-source fallback", unlocalized: "No resolver", unknown: "Unknown provenance" };

@@ -202,6 +202,18 @@ return function(inspect, wrapped, options)
         handleId = handleIds[field(player, "pendingAction")],
       }
     end
+    local issue = field(player, "issue")
+    if type(issue) == "table" then
+      result.issue = {
+        code = scalar(field(issue, "code")),
+        nodeId = scalar(field(issue, "nodeId")),
+        actionId = scalar(field(issue, "actionId")),
+        actionName = scalar(field(issue, "name")),
+      }
+      if field(issue, "code") == "transition_budget_exceeded" then
+        result.issue.transitionBudget = scalar(field(player, "transitionBudget"))
+      end
+    end
     result.localization = localization(player)
     addHistory(player, result)
     return result

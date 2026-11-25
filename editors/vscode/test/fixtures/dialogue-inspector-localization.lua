@@ -115,3 +115,22 @@ assert(#sample(exact).fields == 0)
 custom:dispose()
 assert(sample(custom) == nil)
 print('dialogue localization inspection passed')
+
+local looping = Dialogue.new({
+  schemaVersion = 3,
+  entry = 'loop',
+  nodes = {
+    loop = {
+      kind = 'branch',
+      condition = { { op = 'value', value = true } },
+      yes = 'loop',
+      no = 'done',
+    },
+    done = { kind = 'end' },
+  },
+}, { transitionBudget = 2 })
+looping:start()
+local fault = readers[looping](looping)
+assert(fault.issue.code == 'transition_budget_exceeded')
+assert(fault.issue.nodeId == 'loop' and fault.issue.transitionBudget == 2)
+assert(fault.issue.message == nil)
