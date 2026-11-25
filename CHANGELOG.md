@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Extend the cumulative arena tutorial with fixed-step aimed projectiles, live ECS
+  enemy waves, bounded pooling and feedback-independent hit outcomes.
+
 - Start the cumulative arena-game tutorial with a runnable character, camera and
   title/pause/restart checkpoint, plus lifecycle and native replay verification.
 

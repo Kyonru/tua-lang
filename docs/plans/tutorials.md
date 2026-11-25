@@ -62,7 +62,7 @@ status does **not** establish that the integrated chapters are complete.
 | Chapter / checkpoint | Playable outcome | APIs and requirements carried forward | Status |
 | --- | --- | --- | --- |
 | C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Complete; see C1 qualification |
-| C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Pending; weapon model prototype verified, not an integrated checkpoint |
+| C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Complete; cumulative checkpoint and qualification |
 | C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Pending |
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Pending |
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Pending |
@@ -87,7 +87,7 @@ combat snapshot is not an implicit requirement.
 
 - [x] C1: create the first combined checkpoint from the qualified M1/M2 foundations,
       with native movement/pause/restart verification and a cumulative walkthrough.
-- [ ] C2: adapt the weapon prototype to live ECS enemies and the C1 player/camera.
+- [x] C2: adapt the weapon prototype to live ECS enemies and the C1 player/camera.
       Keep its rate, pooling and swept-collision tests; add nearest-enemy selection,
       one-hit/one-damage, pause/reset and feedback-independent outcome regressions.
 - [ ] Fold later M requirements into the same game in chapter order above; do not
@@ -104,10 +104,9 @@ combat snapshot is not an implicit requirement.
       updating links and preserving any unique regression coverage. Keep migration
       cleanup separate from gameplay/chapter changes.
 
-The current M5 prototype checks cadence at 30/60/120/144 Hz, bounded reuse, expiration,
-swept target crossing, reset and disposal against emitted Lua. It has not received
-native rendering qualification or been integrated with enemies. It is implementation
-input for C2, not a completed chapter or a new published tutorial.
+The original M5 prototype checked cadence at 30/60/120/144 Hz, bounded reuse, expiration,
+swept target crossing, reset and disposal against emitted Lua. It served as implementation
+input for C2. The integrated checkpoint is now separately qualified below.
 
 ## Organization and boundaries
 
@@ -242,11 +241,11 @@ pooling is not presented as a second enemy registry or an automatic speedup.
 References: [pooling](../object-pooling.md), [tweening](../tweening.md),
 [camera](../camera.md).
 
-- [ ] Fire a projectile with explicit cadence, movement, lifetime and simple hit handling.
-- [ ] Add bounded projectile reuse and a clear exhaustion policy.
-- [ ] Add visual recoil, an impact effect and restrained camera feedback separately.
-- [ ] Explain which effects are cosmetic and which affect simulation.
-- [ ] Include reduced-motion/feedback controls and a clear reset path.
+- [x] Fire a projectile with explicit cadence, movement, lifetime and simple hit handling.
+- [x] Add bounded projectile reuse and a clear exhaustion policy.
+- [x] Add visual recoil, an impact effect and restrained camera feedback separately.
+- [x] Explain which effects are cosmetic and which affect simulation.
+- [x] Include reduced-motion/feedback controls and a clear reset path.
 
 Acceptance: cadence is stable across update rates, expired projectiles are reclaimed,
 reused projectiles contain no stale hit data, and one hit produces one damage result.
@@ -369,7 +368,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M2 | Complete | `examples/pause-input`; `257701a2`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/game-flow.md) |
 | M3 | Complete | `examples/love-save`; `46a9df23`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/save-and-resume.md) |
 | M4 | Complete | `examples/tutorials/enemy-wave`; `936b615a`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/enemy-wave.md) |
-| M5 | Integration pending | Weapon model prototype; deliver with M4 in C2, not as an isolated tutorial |
+| M5 | Complete in C2 | `02-combat-waves`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md) |
 | M6 | Pending | |
 | M7 | Pending | |
 | M8 | Pending | |
@@ -471,5 +470,12 @@ animation/camera freeze, transition input, reset and screen-space HUD. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-01.md).
 Existing standalone examples remain available; their migration audit is pending.
 
-Next: C2, integrate weapons and ECS enemy waves into the C1 game. The M5 prototype
-is groundwork, not a completed combat chapter.
+## C2 completion
+
+Integrated aimed projectiles and live ECS health with the C1 session. Player movement
+and bullets share fixed ticks; feedback observes counters and never changes damage.
+Rate, lifecycle and swept-collision tests passed; native replay verified feedback
+parity, aimed hits, pause/focus, reset, wave clear and next-wave behavior. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md).
+
+Next: C3, enemy decisions, movement, attacks and game over.

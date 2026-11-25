@@ -68,6 +68,7 @@ nav = [
     { "Build An Arena Game" = [
       { "The Project" = "tutorials/arena-game/index.md" },
       { "1. The Playable Loop" = "tutorials/arena-game/playable-loop.md" },
+      { "2. Combat And Waves" = "tutorials/arena-game/combat-waves.md" },
     ] },
     { "Your First Playable Character" = "tutorials/playable-character.md" },
     { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },

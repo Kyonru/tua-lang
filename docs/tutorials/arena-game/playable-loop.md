@@ -160,6 +160,5 @@ or resource per restart, so repeated restarts do not accumulate subscriptions or
   rate or menu behavior. Keep all world updates behind the same session boundary.
 
 See [input](../../input.md), [sprites](../../sprites.md), [camera](../../camera.md)
-and [state machines](../../state-machines.md) for complete APIs. The next chapter
-will extend this checkpoint with weapons and enemy waves, rather than start another
-unrelated example.
+and [state machines](../../state-machines.md) for complete APIs. Continue with [combat and waves](combat-waves.md), extending this checkpoint
+with weapons and enemies rather than starting an unrelated example.
