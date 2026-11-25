@@ -129,6 +129,8 @@ local function drawWorld()
     player.x + math.cos(angle) * (26 - feedback.values.recoil),
     player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil))
   combat.enemies:each(function(id, position, health)
+    love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
+    love.graphics.ellipse("fill", position.x, position.y + 25, 23, 7)
     love.graphics.setColor(1, 1, 1)
     local brain = combat.readBrain(id)
     local sprite = brain and brain.context.mode ~= "attack" and zombieWalk or zombie

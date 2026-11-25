@@ -123,6 +123,8 @@ local function drawWorld()
     player.x + math.cos(angle) * (26 - feedback.values.recoil),
     player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil))
   combat.enemies:each(function(_, position, health)
+    love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
+    love.graphics.ellipse("fill", position.x, position.y + 25, 23, 7)
     love.graphics.setColor(1, 1, 1)
     zombie:draw(position.x, position.y + 28, 0, 0.6, 0.6)
     love.graphics.setColor(0.25, 0.33, 0.34)
