@@ -971,13 +971,16 @@ reveal flags are errors.
 ## Inspect a running dialogue
 
 Enable the [Runtime Inspector](debugging.md#live-runtime-inspector) and restart the
-game. The **Dialogue players** group shows sampled state, node/action IDs, waits
-and issue codes for `Dialogue.new` and typed context/action/event constructors.
+game. The **Dialogue players and actions** group shows sampled state, node/action
+IDs, waits and issue codes for `Dialogue.new` and typed context/action/event constructors.
 It omits dialogue text, context values, payloads and error messages. Inspection
 never runs handlers or advances the conversation. Sampling can miss brief states;
 this is not event tracing or a missing-translation report. Optional **Dialogue
 sampled history** retains the latest 20 observed changes per player, with generation
 and visit IDs; enable it in **Configure Runtime Inspection** and restart the game.
+Public action handles also show ignored completion counters, including attempts
+after cancellation. Handle IDs link attached handles to player samples without
+recording result values or rejection messages.
 
 ## Preview the authored conversation
 

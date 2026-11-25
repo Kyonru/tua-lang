@@ -308,6 +308,7 @@ local store = require('tuastore')
 local pool = require('tuaobjectpool')
 local machine = require('tuastatemachine').create
 local dialogue = require('tuadialogue').new
+local actionHandle = require('tuadialogue').actionHandle
 local original = loadfile
 loadfile = function(file)
  if file:match('transport.lua$') then return function() return function(_, _, _, interval) assert(interval == 1000); return function() end end end end
@@ -317,6 +318,7 @@ local inspect = assert(loadfile(assets .. '/shim.lua'))(assets, 1, 'test', { cat
 assert(require('tuaobjectpool') == pool)
 assert(require('tuastatemachine').create == machine)
 assert(require('tuadialogue').new == dialogue)
+assert(require('tuadialogue').actionHandle == actionHandle)
 assert(require('tuastore') ~= store)
 local keep = require('tuastore')({ health = 100 })
 keep:update(function(value) value.health = 80 end)
@@ -374,7 +376,7 @@ loadfile = function(filename)
   end
   return originalLoadfile(filename)
 end
-local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token", { categories = { dialogues = true } })
+local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token", { categories = { dialogues = true }, dialogueHistory = true })
 local Dialogue = require("tuadialogue")
 local create = Dialogue.new
 assert(require("tuadialogue").new == create)
@@ -459,10 +461,14 @@ assert(eventPlayer and contextPlayer)
   assert.equal(frames[2].objects[0].data.state, "cancelled");
   assert.equal(frames[3].objects[0].data.state, "disposed");
   assert.equal(frames[4].objects.length, 0);
-  assert.equal(frames[5].objects.length, 3);
+  assert.equal(frames[5].objects.length, 4);
   const action = frames[5].objects.find(object => object.data.action)?.data.action;
   assert.deepEqual(action, { id: "reward.id", name: "reward", handleAttached: false });
   assert.equal(frames[6].objects.find(object => object.data.action)?.data.action.handleAttached, true);
+  assert.equal(frames[6].objects.find(object => object.data.action)?.data.action.handleId,
+    frames[6].objects.find(object => object.data.actionHandle)?.data.handleId);
+  assert.equal(frames[6].objects.find(object => object.data.action)?.data.history["1"].handleId,
+    frames[6].objects.find(object => object.data.actionHandle)?.data.handleId);
   assert.equal(frames[7].objects.find(object => object.data.state === "faulted").data.issueCode, "action_cancelled");
 });
 
@@ -530,4 +536,76 @@ io.write(inspect.snapshot(), "\\n")
     }
     assert.equal(frames[3].objects.length, 0, "history must not retain the player");
   }
+});
+
+test("action diagnostics count ignored settlements, preserve validation and do not retain callback cycles", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. "/?.lua;" .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. "/transport.lua" then
+    return function() return function() return function() end end end
+  end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token", { categories = { dialogues = true } })
+local Dialogue = require("tuadialogue")
+local factory = Dialogue.actionHandle
+assert(require("tuadialogue").actionHandle == factory)
+local cancellations = 0
+local cancelled
+cancelled = Dialogue.actionHandle({
+  cancel = function()
+    cancellations = cancellations + 1
+    assert(not cancelled:resolve(true))
+    error("SECRET cancellation message")
+  end,
+})
+assert(cancelled:cancel())
+assert(not cancelled:cancel())
+assert(cancellations == 1)
+assert(not cancelled:reject("SECRET rejected value"))
+assert(not pcall(function() cancelled:resolve("invalid") end))
+cancelled.snapshot = function() error("must not invoke a replaced snapshot") end
+local resolved = Dialogue.actionHandle()
+assert(resolved:resolve(false))
+assert(not resolved:resolve(true))
+assert(not resolved:reject("SECRET duplicate"))
+local rejected = Dialogue.actionHandle()
+assert(rejected:reject("SECRET failure"))
+assert(not rejected:resolve(true))
+io.write(inspect.snapshot(), "\\n")
+local function cycle()
+  local handle
+  handle = Dialogue.actionHandle({ cancel = function() assert(handle) end })
+  return setmetatable({ handle }, { __mode = "v" })
+end
+local weak = cycle()
+collectgarbage("collect")
+collectgarbage("collect")
+assert(weak[1] == nil)
+io.write(inspect.snapshot(), "\\n")
+cancelled, resolved, rejected = nil, nil, nil
+collectgarbage("collect")
+collectgarbage("collect")
+io.write(inspect.snapshot(), "\\n")
+`;
+  const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime")], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /SECRET|payload|cancellationError/);
+  const frames = result.stdout.trim().split("\n").map(JSON.parse);
+  const status = value => frames[0].objects.find(object => object.data.status === value).data;
+  assert.equal(status("cancelled").ignoredResolve, 1, "invalid arguments still raise instead of counting as ignored");
+  assert.equal(status("cancelled").ignoredReject, 1);
+  assert.equal(status("cancelled").ignoredAfterCancel, 2);
+  assert.equal(status("cancelled").cancellationFailed, true);
+  assert.equal(status("resolved").ignoredAfterCancel, 0);
+  assert.equal(status("resolved").ignoredResolve, 1);
+  assert.equal(status("resolved").ignoredReject, 1);
+  assert.equal(status("rejected").ignoredResolve, 1);
+  assert.equal(frames[1].objects.length, 3);
+  assert.equal(frames[2].objects.length, 0);
 });

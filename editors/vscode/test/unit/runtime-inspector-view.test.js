@@ -284,3 +284,15 @@ test("dialogue history is explicitly sampled and absent when disabled", () => {
   const current = presentObject({ kind: "dialogues", data: { state: "idle" } }, "dialogue");
   assert(!current.children.some(row => row.label === "Sampled changes"));
 });
+
+test("action handles distinguish ignored completion attempts from cancellation", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const view = presentObject({ kind: "dialogues", data: {
+    actionHandle: true, handleId: 7, status: "cancelled", ignoredResolve: 2,
+    ignoredReject: 1, ignoredAfterCancel: 3, cancellationFailed: true,
+  } }, "handle");
+  assert.equal(view.summary, "cancelled · 3 ignored completions");
+  assert(view.children.some(row => row.label === "Ignored after cancellation"));
+  assert(view.children.some(row => row.label === "Cancellation callback failed"));
+  assert(!view.children.some(row => row.label === "Current node"));
+});

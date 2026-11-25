@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Inspect dialogue action-handle status and ignored completion attempts, including
+  late calls after cancellation, without retaining callbacks or exposing results.
+
 - Add optional bounded dialogue sampled history to the Runtime Inspector,
   retaining recent lifecycle/issue changes without text, context or payloads.
 

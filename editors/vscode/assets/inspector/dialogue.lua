@@ -1,6 +1,56 @@
--- Development-only sampling. Never call snapshot(), resolvers or host handlers:
--- snapshots copy presentation and action data that this inspector must omit.
+-- Development-only diagnostics. Never call player snapshots or host handlers.
+-- Only the captured built-in action-handle snapshot is read; it returns metadata.
 return function(inspect, wrapped, options)
+  local handleIds = setmetatable({}, { __mode = "k" })
+  local nextHandleId = 0
+
+  local function actionConstructor(original)
+    if type(original) ~= "function" or wrapped[original] then return original end
+    local wrapper = function(...)
+      local handle = original(...)
+      local snapshot = handle.snapshot
+      nextHandleId = nextHandleId + 1
+      local id = nextHandleId
+      handleIds[handle] = id
+      local counts = { ignoredResolve = 0, ignoredReject = 0, ignoredAfterCancel = 0 }
+      -- Lua 5.1 weak keys are not ephemerons. A snapshot closure can reach the
+      -- handle through a pending cancellation callback, so keep it weak here.
+      local weakSnapshot = setmetatable({ snapshot }, { __mode = "v" })
+      local function read(object)
+        local readSnapshot = weakSnapshot[1]
+        if not readSnapshot then return { unavailable = "Action metadata unavailable" } end
+        local current = readSnapshot(object)
+        return {
+          actionHandle = true,
+          handleId = id,
+          status = current.status,
+          cancellationFailed = current.cancellationError ~= nil,
+          ignoredResolve = counts.ignoredResolve,
+          ignoredReject = counts.ignoredReject,
+          ignoredAfterCancel = counts.ignoredAfterCancel,
+        }
+      end
+      for _, method in ipairs({ "resolve", "reject" }) do
+        local settle = handle[method]
+        local counter = method == "resolve" and "ignoredResolve" or "ignoredReject"
+        handle[method] = function(self, ...)
+          local changed = settle(self, ...)
+          if changed == false then
+            counts[counter] = math.min(9007199254740991, counts[counter] + 1)
+            if snapshot(self).status == "cancelled" then
+              counts.ignoredAfterCancel = math.min(9007199254740991, counts.ignoredAfterCancel + 1)
+            end
+          end
+          return changed
+        end
+      end
+      inspect.register("dialogues", handle, read, "Dialogue action #" .. id)
+      return handle
+    end
+    wrapped[wrapper] = true
+    return wrapper
+  end
+
   local function field(value, key)
     if type(value) == "table" then return rawget(value, key) end
   end
@@ -25,6 +75,7 @@ return function(inspect, wrapped, options)
     "actionId",
     "actionName",
     "handleAttached",
+    "handleId",
   }
 
   local function addHistory(player, result)
@@ -44,6 +95,7 @@ return function(inspect, wrapped, options)
       actionId = result.action and result.action.id,
       actionName = result.action and result.action.name,
       handleAttached = result.action and result.action.handleAttached,
+      handleId = result.action and result.action.handleId,
     }
     local previous = entry.records[entry.head]
     local changed = previous == nil
@@ -100,6 +152,7 @@ return function(inspect, wrapped, options)
         id = scalar(field(node, "id")),
         name = scalar(field(node, "name")),
         handleAttached = field(player, "pendingAction") ~= nil,
+        handleId = handleIds[field(player, "pendingAction")],
       }
     end
     addHistory(player, result)
@@ -119,6 +172,7 @@ return function(inspect, wrapped, options)
 
   return function(module)
     module.new = playerConstructor(module.new)
+    module.actionHandle = actionConstructor(module.actionHandle)
     for _, name in ipairs({ "context", "actions", "events" }) do
       local original = module[name]
       if type(original) == "function" and not wrapped[original] then

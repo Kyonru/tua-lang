@@ -69,6 +69,20 @@ local dialogue = Dialogue.new({ schemaVersion = 9, documentId = "native", entry 
   done = { kind = "end" }
 } })
 dialogue:start()
+local completedAction = Dialogue.actionHandle()
+assert(completedAction:cancel())
+assert(not completedAction:resolve(true))
+assert(not completedAction:reject("PRIVATE action error"))
+local function actionCycle()
+  local handle
+  handle = Dialogue.actionHandle({ cancel = function() assert(handle) end })
+  return setmetatable({ handle }, { __mode = "v" })
+end
+local weakAction = actionCycle()
+collectgarbage("collect")
+collectgarbage("collect")
+assert(weakAction[1] == nil)
+
 local player = "unknown"
 function love.load(args) player = args[1] or "unknown" end
 function love.update(dt)
@@ -126,7 +140,13 @@ end
     assert.equal(Object.values(behavior.history)[0].status, "running");
     assert.equal(kind(player.entry, "audio", "audio").buses.sfx.gain, 0.5);
     assert.equal(kind(player.entry, "audio", "audio").activeVoices, 0);
-    const dialogue = kind(player.entry, "dialogues");
+    const dialogue = player.entry.snapshot.objects.find(object => object.kind === "dialogues" && object.data.documentId === "native")?.data;
+    const action = player.entry.snapshot.objects.find(object => object.kind === "dialogues" && object.data.actionHandle)?.data;
+    assert.equal(action.status, "cancelled");
+    assert.equal(action.ignoredAfterCancel, 2);
+    assert.equal(action.ignoredResolve, 1);
+    assert.equal(action.ignoredReject, 1);
+    assert(!JSON.stringify(player.entry.snapshot).includes("PRIVATE action error"));
     assert.equal(dialogue.state, "waiting");
     assert.equal(dialogue.documentId, "native");
     assert.equal(dialogue.sampledChanges, 1, "wait ticks do not fill sampled history");

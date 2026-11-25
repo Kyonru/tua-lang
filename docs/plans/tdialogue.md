@@ -687,6 +687,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   preserves weak ownership, and omits payloads. UI/settings distinguish sampled
   history from event tracing; brief transitions, settlements and fallback provenance
   still need explicit event instrumentation below.
+- [x] Public action-handle diagnostics: show status, handle identity, ignored
+  resolve/reject counters, attempts after cancellation and a redacted cancellation
+  failure flag. Attached player data and sampled history carry the handle ID.
+  Wrappers preserve validation/returns/reentrant cancellation; weak metadata avoids
+  callback-cycle retention under Lua 5.1/LuaJIT. Runtime-internal deferred handles
+  and full event chronology remain outside this slice.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.

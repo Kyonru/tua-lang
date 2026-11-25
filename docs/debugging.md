@@ -250,7 +250,7 @@ not runtime progress.
 | State machines | Current state and pending transition | Async phase |
 | Entities and components | Entity IDs and component values | Counts represent sampled entities |
 | Signals | Listeners and recent events, newest first | Latest 20 event names; no payloads |
-| Dialogue players | Current state, node, wait and action | Issue code, suspension, generation and visit; no text or payloads |
+| Dialogue players and actions | Current player state and action-handle status | Waits, issue codes and ignored completion counters; no text or payloads |
 | Object pools | Active, available, and capacity counts | Peak simultaneous active count and rejected releases since creation; creation site and runtime ID |
 
 Store changes compare consecutive snapshots. Update counters count successful
@@ -274,8 +274,22 @@ does not say whether it has settled; the player observes that on its next action
 poll. Sampling never advances the player or invokes resolvers/handlers. Dialogue
 text, facts, locals, action/event payloads, error messages and transcript contents
 are omitted. These are bounded current-state samples, not a complete event trace:
-short-lived states may fall between samples. Missing-translation fallback and
-stale-completion history are not collected yet.
+short-lived states may fall between samples. Missing-translation fallback and a
+complete chronological event trace are not collected yet.
+
+Public `Dialogue.actionHandle` objects also appear under **Dialogue players and
+actions**. They show current status, a handle ID, ignored `resolve`/`reject` counts,
+how many were ignored after cancellation, and whether the cancellation callback
+failed (without its error message). Counters accumulate even between snapshots;
+invalid arguments still raise normally and do not count as ignored completions.
+An ignored attempt can be a duplicate, not necessarily a stale callback. The
+inspector preserves the original method result and never settles a handle itself.
+
+An attached public handle's ID also appears in the player's action data and optional
+sampled history, so you can correlate the records. Runtime-internal deferred handles
+are not wrapped and may have no inspector handle ID. Sampling reads the captured
+built-in handle metadata method, never a replacement supplied by the game. Counters
+remain until the handle is collected; they retain neither the player nor callbacks.
 
 Enable **Dialogue sampled history** in **Configure Runtime Inspection**, or set
 `tua.runtimeInspector.dialogueHistory` to `true`, then restart the game. It is off

@@ -173,6 +173,17 @@ function presentObject(object, prefix, previous) {
       break;
     }
     case "dialogues": {
+      if (data.actionHandle === true) {
+        summary = `${data.status || "Unknown status"} · ${(data.ignoredResolve || 0) + (data.ignoredReject || 0)} ignored completions`;
+        children = [
+          row(prefix, "handleId", "Handle ID", data.handleId),
+          row(prefix, "ignoredResolve", "Ignored resolves", data.ignoredResolve ?? 0),
+          row(prefix, "ignoredReject", "Ignored rejections", data.ignoredReject ?? 0),
+          row(prefix, "ignoredAfterCancel", "Ignored after cancellation", data.ignoredAfterCancel ?? 0),
+          row(prefix, "cancellationFailed", "Cancellation callback failed", data.cancellationFailed === true),
+        ];
+        break;
+      }
       summary = `${data.state || "Unknown state"}${data.nodeId ? ` · ${data.nodeId}` : ""}${data.suspended ? " · suspended" : ""}`;
       children = [];
       for (const [key, label] of [["nodeId", "Current node"], ["documentId", "Document"], ["issueCode", "Issue code"]]) {
