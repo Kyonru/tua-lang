@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add the arena profiling chapter with bounded waves, existing inspector/profiler workflows,
+  differential checks and paired timing/allocation probes; document the limited CPU result.
+
 - Add the cumulative arena save chapter: cleared-wave checkpoints, persistent preferences,
   historical validation, explicit recovery/reset and two-process LÖVE qualification.
 

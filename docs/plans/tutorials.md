@@ -68,7 +68,7 @@ status does **not** establish that the integrated chapters are complete.
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Complete; native GPU failure/scope qualification |
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal ownership | Complete; locale/visit and host-effect qualification |
 | C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Complete; two-process and native host qualification |
-| C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Pending |
+| C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Complete; allocation reduction, no reliable CPU win |
 | C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Pending |
 
 C2 deliberately merges weapons and waves: a pool exhaustion rule affects when a shot
@@ -314,11 +314,11 @@ scripts/fonts and fallback behavior; keep speech localization optional.
 
 Reference: [debugging and profiling](../debugging.md).
 
-- [ ] Build a bounded, adjustable workload with fixed seed and reproducible input.
-- [ ] Demonstrate the inspector for state and profiler for measured hot paths.
-- [ ] Confirm one bottleneck, apply one relevant change, and compare matching outcomes.
-- [ ] Separate profiled diagnosis from uninstrumented CPU timing and allocation probes.
-- [ ] Record compiler/runtime revisions, JIT status, hardware, workload, warm-up,
+- [x] Build a bounded, adjustable workload with fixed seed and reproducible input.
+- [x] Demonstrate the inspector for state and profiler for measured hot paths.
+- [x] Confirm one bottleneck, apply one relevant change, and compare matching outcomes.
+- [x] Separate profiled diagnosis from uninstrumented CPU timing and allocation probes.
+- [x] Record compiler/runtime revisions, JIT status, hardware, workload, warm-up,
       repetitions, GC policy, median/p95 and variation.
 
 Acceptance: the diagnosed cause is supported by measurements and the optimization
@@ -373,7 +373,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M7 | Complete in C5 | `05-visual-feedback`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-05.md) |
 | M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
 | M9 | Complete in C6 | `06-conversation-and-language`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-06.md) |
-| M10 | Pending | |
+| M10 | Complete in C8 | `08-profile-the-game`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-08.md) |
 | M11 | Pending | |
 
 ## Original M0 audit and implementation baseline
@@ -525,4 +525,16 @@ rewriting them. The isolated two-process suite and four native scenarios pass; F
 title/reset screens were inspected at 640×480. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-07.md).
 
-Next: C8, profile and tune this same game using reproducible workloads.
+## C8 completion
+
+The cumulative `08-profile-the-game` checkpoint adds bounded 8/32/128-enemy waves,
+uses the existing native inspector/profiler, and compares a frozen typed reference
+against a reused attack-intent list. The phase change retains projectile-before-attack
+ordering and exact parity across 3,600 mixed updates. Two valid batches of alternating
+trials and separate allocation probes are retained. Allocation fell by 4.69 KiB per
+120 simulation ticks; CPU/p95 results varied and do not establish a reliable speedup.
+Behavior trees remain the dominant sampled cost. The initial idle-contaminated fixture
+was corrected before the reported measurements. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-08.md).
+
+Next: C9, qualify all chapter commands, links and the complete learning path.

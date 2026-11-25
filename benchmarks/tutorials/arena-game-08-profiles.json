@@ -1,0 +1,75 @@
+{
+  "baseline": {
+    "durationMs": 3291.109917,
+    "frameCount": 51,
+    "sampleCount": 295,
+    "metadata": {
+      "mode": "profiled",
+      "loveVersion": "11.5.0",
+      "luaVersion": "Lua 5.1",
+      "luaJitVersion": "LuaJIT 2.1.1700008891",
+      "jitEnabledStart": false,
+      "jitEnabledEnd": false,
+      "target": "unknown",
+      "buildIdentity": "manifest-sha256:942626f314168dbd732a495ecad6b313af10d08984423a9fe2d765e2b26a885d",
+      "revision": "c7785a7864f9b5b10e8963525383ea6ab89bfae7",
+      "gcPolicy": "running",
+      "benchmark": {
+        "workload": "arena-128-one-second-episodes-v2",
+        "revision": "c7785a7864f9b5b10e8963525383ea6ab89bfae7",
+        "warmupUpdates": 120.0,
+        "repetitions": 1.0
+      }
+    },
+    "vmStates": {
+      "C": 10,
+      "I": 284,
+      "G": 1
+    },
+    "leafSamplesByFile": {
+      "tuabehavior.lua": 218,
+      "[love \"callbacks.lua\"]": 10,
+      "tuaecs.lua": 16,
+      "collision.lua": 4,
+      "combat.lua": 41,
+      "brain.lua": 5,
+      "benchmark harness": 1
+    }
+  },
+  "candidate": {
+    "durationMs": 3140.927208,
+    "frameCount": 51,
+    "sampleCount": 269,
+    "metadata": {
+      "mode": "profiled",
+      "loveVersion": "11.5.0",
+      "luaVersion": "Lua 5.1",
+      "luaJitVersion": "LuaJIT 2.1.1700008891",
+      "jitEnabledStart": false,
+      "jitEnabledEnd": false,
+      "target": "unknown",
+      "buildIdentity": "manifest-sha256:caca0f53c4c69be8cf61776a1c09a0e607f6fa6c531d84ce8ae305144d9481c7",
+      "revision": "c7785a7864f9b5b10e8963525383ea6ab89bfae7",
+      "gcPolicy": "running",
+      "benchmark": {
+        "workload": "arena-128-one-second-episodes-v2",
+        "revision": "c7785a7864f9b5b10e8963525383ea6ab89bfae7",
+        "warmupUpdates": 120.0,
+        "repetitions": 1.0
+      }
+    },
+    "vmStates": {
+      "I": 262,
+      "C": 7
+    },
+    "leafSamplesByFile": {
+      "tuabehavior.lua": 214,
+      "combat.lua": 25,
+      "[love \"callbacks.lua\"]": 6,
+      "tuaecs.lua": 12,
+      "brain.lua": 7,
+      "collision.lua": 3,
+      "benchmark harness": 2
+    }
+  }
+}

@@ -172,4 +172,4 @@ See [Typed Save Contracts](../../save-contracts.md) for the full contract and li
 - Start a fresh run, leave before clearing it, and resume the previous boundary.
 - Request a reset and cancel. Confirm that the same checkpoint is still available.
 
-Next: measure update, draw and allocation behavior in this same game.
+Next: [profile and measure this same game](profile-the-game.md).
