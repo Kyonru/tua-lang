@@ -1,4 +1,5 @@
 local Story = require("story")
+local Styles = require("styles")
 local Audio = require("audio")
 local Translations = require("translations")
 local scene = require("scene")
@@ -68,6 +69,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     return state == "awaiting_advance" or state == "awaiting_choice"
       or state == "awaiting_action" or state == "waiting"
   end
+  local function modal(): boolean return active() and Styles.modal(settings.mode) end
   local function enqueue(channel: string): boolean
     local accepted = false
     if channel == "conversation" then accepted = conversationQueue.push(settings.entry)
@@ -106,7 +108,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
       local nextEntry = conversationQueue.pop()
       if nextEntry then player:start(nextEntry) end
     end
-    local blocked = active() and settings.mode == "panel"
+    local blocked = modal()
     if blocked or settings.paused then radio:suspend() else radio:resume() end
     radioView = radioAudio.update(radio:snapshot(), dt * settings.speed)
     if settings.reducedMotion and not settings.paused and not blocked then
@@ -222,6 +224,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     locale = locale,
     enqueue = enqueue,
     active = active,
+    modal = modal,
     dispose = dispose,
     clusters = audio.clusters,
     radioClusters = radioAudio.clusters,

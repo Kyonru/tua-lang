@@ -1,0 +1,15 @@
+-- Existing keys stay stable; additional reference-based styles are opt-in.
+local names: { [string]: string } = {
+  panel = "Cinematic",
+  bubble = "Storybook",
+  radio = "Transmission",
+  subtitles = "Subtitles",
+  mythic = "Mythic frame",
+  tactics = "Tactics box",
+  terminal = "Field terminal",
+}
+local function name(mode: string): string return names[mode] or mode end
+local function modal(mode: string): boolean
+  return mode == "panel" or mode == "mythic" or mode == "tactics"
+end
+return { name = name, modal = modal }

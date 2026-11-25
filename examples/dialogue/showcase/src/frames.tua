@@ -1,0 +1,85 @@
+-- Additional reference layouts. The four original frame treatments stay in presenter.tua.
+local function draw(mode: string, x: number, y: number, w: number, h: number,
+  tx: number, tw: number, speaker: string, font: Font): boolean
+  love.graphics.setFont(font)
+  if mode == "mythic" then
+    -- Cut corners, double gold edging and a dark raised nameplate (Hades reference).
+    love.graphics.setColor(0.66, 0.53, 0.29)
+    love.graphics.polygon("fill", x - 6, y + 12, x + 12, y - 6, x + w - 12, y - 6,
+      x + w + 6, y + 12, x + w + 6, y + h - 12, x + w - 12, y + h + 6,
+      x + 12, y + h + 6, x - 6, y + h - 12)
+    love.graphics.setColor(0.14, 0.18, 0.18)
+    love.graphics.rectangle("fill", x, y, w, h)
+    love.graphics.setColor(0.92, 0.91, 0.83)
+    love.graphics.rectangle("fill", x + 5, y + 5, w - 10, h - 10)
+    love.graphics.setColor(0.67, 0.55, 0.30)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", x + 9, y + 9, w - 18, h - 18)
+    local tabWidth = math.min(tw, math.max(150, font:getWidth(speaker) + 38))
+    love.graphics.setColor(0.67, 0.55, 0.30)
+    love.graphics.polygon("fill", tx - 9, y - 18, tx + tabWidth + 7, y - 18,
+      tx + tabWidth, y + 22, tx - 14, y + 22)
+    love.graphics.setColor(0.15, 0.20, 0.20)
+    love.graphics.polygon("fill", tx - 5, y - 14, tx + tabWidth + 2, y - 14,
+      tx + tabWidth - 4, y + 18, tx - 10, y + 18)
+    love.graphics.setColor(0.94, 0.88, 0.65)
+    love.graphics.print(speaker, tx + 7, y - 8)
+    return true
+  elseif mode == "tactics" then
+    -- Stepped pale box, inset outline, burgundy name tab and diamond advance cue.
+    love.graphics.setColor(0.31, 0.29, 0.28)
+    love.graphics.rectangle("fill", x - 4, y + 4, w + 8, h - 8)
+    love.graphics.rectangle("fill", x + 4, y - 4, w - 8, h + 8)
+    love.graphics.setColor(0.88, 0.84, 0.70)
+    love.graphics.rectangle("fill", x, y, w, h)
+    love.graphics.setColor(0.97, 0.95, 0.86)
+    love.graphics.rectangle("fill", x + 4, y + 4, w - 8, h - 8)
+    love.graphics.setColor(0.60, 0.54, 0.40)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", x + 8, y + 8, w - 16, h - 16)
+    local tabWidth = math.min(tw, math.max(120, font:getWidth(speaker) + 28))
+    love.graphics.setColor(0.27, 0.15, 0.21)
+    love.graphics.rectangle("fill", tx - 7, y - 23, tabWidth + 4, 34)
+    love.graphics.setColor(0.62, 0.19, 0.31)
+    love.graphics.rectangle("fill", tx - 5, y - 21, tabWidth, 30)
+    love.graphics.setColor(1, 0.94, 0.84)
+    love.graphics.print(speaker, tx + 7, y - 15)
+    love.graphics.setColor(0.55, 0.45, 0.35)
+    local cx = x + w - 24
+    local cy = y + h - 23
+    love.graphics.polygon("fill", cx, cy - 5, cx + 5, cy, cx, cy + 5, cx - 5, cy)
+    return true
+  elseif mode == "terminal" then
+    -- A physical receiver surround with a status rail, rather than a speech bubble.
+    love.graphics.setColor(0.35, 0.42, 0.30)
+    love.graphics.rectangle("fill", x - 6, y - 6, w + 12, h + 12, 3, 3)
+    love.graphics.setColor(0.075, 0.16, 0.17)
+    love.graphics.rectangle("fill", x, y, w, h, 2, 2)
+    love.graphics.setColor(0.45, 0.57, 0.38)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", x + 4, y + 4, w - 8, h - 8)
+    love.graphics.setColor(0.19, 0.28, 0.24)
+    love.graphics.rectangle("fill", x + 9, y + 10, 28, h - 20)
+    for row = 0, 3 do
+      love.graphics.setColor(row == 0 and 0.66 or 0.32, row == 0 and 0.78 or 0.43, 0.38)
+      love.graphics.rectangle("fill", x + 14, y + 19 + row * 29, 18, 18)
+      love.graphics.setColor(0.14, 0.24, 0.22)
+      for bar = 0, 2 do
+        love.graphics.rectangle(
+          "fill",
+          x + 18 + bar * 4,
+          y + 31 + row * 29 - bar * 3,
+          2,
+          3 + bar * 3
+        )
+      end
+    end
+    love.graphics.setColor(0.76, 0.85, 0.48)
+    love.graphics.print(speaker, tx, y + 21)
+    love.graphics.setColor(0.34, 0.45, 0.36)
+    love.graphics.line(tx, y + 49, tx + tw, y + 49)
+    return true
+  end
+  return false
+end
+return { draw = draw }

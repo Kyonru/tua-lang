@@ -44,7 +44,7 @@ if args.love:
     command = [
         "python3", str(repo / "scripts/love_replay.py"), "--project", str(root),
         "--tua", tua, "--love", args.love, "--scenario", str(root / ("tests/styles.lua" if args.scenario == "styles" else "tests/replay.lua")),
-        "--frames", "328" if args.scenario == "styles" else "180", "--fps", "30", "--seed", "71", "--output", str(output),
+        "--frames", "520" if args.scenario == "styles" else "180", "--fps", "30", "--seed", "71", "--output", str(output),
     ]
     if args.video:
         command.append("--video")

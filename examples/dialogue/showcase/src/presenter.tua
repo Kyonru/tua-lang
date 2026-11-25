@@ -1,5 +1,6 @@
 -- Presentation owns typography, geometry and input targets; the player owns story flow.
 local Theme = require("theme")
+local Frames = require("frames")
 local Portraits = require("portraits")
 export type Run = { firstCluster: number, lastCluster: number, emphasis: boolean, styles: string[] }
 export type Cluster = { index: number, text: string }
@@ -13,6 +14,8 @@ export type Node = {
 }
 local function new()
   local portraits = Portraits.new()
+  local pixel = love.graphics.newFont("assets/fonts/pixelifysans.ttf", 24)
+  local mono = love.graphics.newFont("assets/fonts/spacemono.ttf", 18)
   local body = love.graphics.newFont("assets/fonts/manrope.ttf", 21)
   local literary = love.graphics.newFont("assets/fonts/lora.ttf", 22)
   local nameFont = love.graphics.newFont("assets/fonts/manrope.ttf", 16)
@@ -29,13 +32,14 @@ local function new()
     local width, height = love.graphics.getDimensions()
     local theme = Theme.palette(mode)
     local announcement = mode == "announcement"
-    local transmission = mode == "radio" or announcement
+    local transmission = mode == "radio" or mode == "terminal" or announcement
     local minimal = mode == "subtitles"
     local w = math.min(width - 64, transmission and 620 or (mode == "bubble" and 720 or 940))
+    if mode == "tactics" then w = math.min(width - 64, 680) end
     local h = math.min(mode == "bubble" and 340 or 320, height - 210)
     local x = (width - w) / 2
     local y = height - h - 84
-    if mode == "radio" then x = width - w - 32 end
+    if mode == "radio" or mode == "terminal" then x = width - w - 32 end
     if mode == "bubble" then x = math.max(32, (width - w) / 2 - 40) end
     if announcement then
       w = math.min(width - 64, 440)
@@ -50,7 +54,13 @@ local function new()
     local inset = side and portraitSize + 24 or 0
     local tx = x + 28 + (side and portraitPosition == "left" and inset or 0)
     local tw = w - 56 - inset
+    if mode == "terminal" then
+      tx += 28
+      tw -= 28
+    end
     local font = mode == "bubble" and literary or body
+    if mode == "tactics" then font = pixel end
+    if mode == "terminal" then font = mono end
     if announcement then font = label end
     local _, textLines = font:getWrap(node.text, tw)
     if not announcement and #node.options == 0 then
@@ -61,9 +71,16 @@ local function new()
       y = math.max(y, 226)
       h = height - 84 - y
     end
-    local ty = y + (announcement and 42 or 72)
-    local viewport = h - (announcement and 50 or 110)
+    local framed = mode == "mythic" or mode == "tactics"
+    if framed and y < 146 then
+      y = 146
+      h = height - 84 - y
+    end
+    local ty = y + (announcement and 42 or (framed and 48 or 72))
+    local viewport = h - (announcement and 50 or (framed and 86 or 110))
     local lineHeight = announcement and 19 or 32
+    local speaker = node.speaker or (#node.options > 0 and "YOUR REPLY" or "THE CROSSING")
+    if transmission then speaker = "CH. 07  /  " .. speaker end
     love.graphics.push("all")
     if not minimal then
       love.graphics.setColor(theme.panel)
@@ -80,7 +97,7 @@ local function new()
       love.graphics.polygon("fill", x, y + 8, x + 8, y, x + 16, y + 8, x + 8, y + 16)
     elseif minimal then
       love.graphics.rectangle("fill", tx, y + 55, 28, 1)
-    elseif transmission then
+    elseif mode == "radio" or announcement then
       love.graphics.rectangle("fill", x, y, w, 2)
       for index = 0, 3 do
         love.graphics.rectangle(
@@ -92,17 +109,19 @@ local function new()
         )
       end
     end
+    local namedFrame = Frames.draw(mode, x, y, w, h, tx, tw, speaker, nameFont)
     if hasPortrait and portrait then
       local px = portraitPosition == "right" and x + w - 28 - portraitSize or x + 28
+      if mode == "terminal" and portraitPosition == "left" then px += 28 end
       local py = y + 28
       if portraitPosition == "above" then
         portraitSize = 80
         px = x + w - 108
         py = y - 68
       end
-      local bust = mode == "panel" and width >= 800 and side
+      local bust = (mode == "panel" or mode == "mythic") and width >= 800 and side
       if bust then
-        local renderedSize = portraitSize + 44
+        local renderedSize = portraitSize + 28
         px = portraitPosition == "right" and x + w - renderedSize - 6 or x + 6
         py = y - 35
         portraits.draw(portrait, node.expression or "", px, py, renderedSize)
@@ -112,9 +131,7 @@ local function new()
     end
     love.graphics.setColor(theme.accent)
     love.graphics.setFont(announcement and label or nameFont)
-    local speaker = node.speaker or (#node.options > 0 and "YOUR REPLY" or "THE CROSSING")
-    if transmission then speaker = "CH. 07  /  " .. speaker end
-    love.graphics.print(speaker, tx, y + 25)
+    if not namedFrame then love.graphics.print(speaker, tx, y + 25) end
     local runs: Run[] = {}
     if node.presentation then runs = node.presentation.runs end
     -- Measure complete text so reveal never changes wrapping or choice positions.
@@ -171,11 +188,12 @@ local function new()
       if cluster.text ~= "\n" and not (cx == 0 and cluster.text == " ") then cx += cw end
     end
     if #clusters > 0 then cy += lineHeight end
+    local choiceFont = (mode == "tactics" or mode == "terminal") and font or body
     local rows: { y: number, height: number, text: string, reason: string }[] = {}
     local focusTop = 0
     local focusBottom = 0
     for index, option in ipairs(node.options) do
-      local _, lines = body:getWrap(option.text, tw - 48)
+      local _, lines = choiceFont:getWrap(option.text, tw - 48)
       local rowHeight = #lines * 29 + 20
       local reason = ""
       local disabledReason = option.reason
@@ -230,11 +248,11 @@ local function new()
       love.graphics.setFont(label)
       love.graphics.setColor(theme.muted)
       love.graphics.print(string.format("%02d", index), tx + 12, ry + 15)
-      love.graphics.setFont(body)
+      love.graphics.setFont(choiceFont)
       love.graphics.setColor(option.enabled == false and theme.muted or theme.text)
       love.graphics.printf(row.text, tx + 40, ry + 8, tw - 48)
       if row.reason ~= "" then
-        local _, lines = body:getWrap(row.text, tw - 48)
+        local _, lines = choiceFont:getWrap(row.text, tw - 48)
         love.graphics.setFont(label)
         love.graphics.printf(row.reason, tx + 40, ry + 13 + #lines * 29, tw - 48)
       end
@@ -245,7 +263,15 @@ local function new()
     if not announcement then
       local hint = #rows > 0 and "↑ ↓  Choose     ENTER  Confirm" or "SPACE  Continue"
       love.graphics.print(hint, tx, y + h - 27)
-      if maxScroll > 0 then love.graphics.printf("PGUP / PGDN", tx, y + h - 27, tw, "right") end
+      if maxScroll > 0 then
+        love.graphics.printf(
+          "PGUP / PGDN",
+          tx,
+          y + h - 27,
+          mode == "tactics" and tw - 20 or tw,
+          "right"
+        )
+      end
     end
     love.graphics.pop()
     return maxScroll, scroll
@@ -254,6 +280,8 @@ local function new()
     if disposed then return end
     disposed = true
     portraits.dispose()
+    pixel:release()
+    mono:release()
     body:release()
     literary:release()
     label:release()

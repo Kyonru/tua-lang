@@ -130,6 +130,18 @@ assert(priority.radio:snapshot().suspended, "queued modal retains radio priority
 priority.update(10)
 assert(priority.radioView().visible == visibleBeforeHandoff, "radio reveal clock stays suspended")
 assert(priority.radio:snapshot().state == "awaiting_advance")
+for _, style in ipairs({ "panel", "mythic", "tactics" }) do
+  priority.settings.mode = style
+  priority.update(0)
+  assert(priority.modal())
+  assert(priority.radio:snapshot().suspended)
+end
+for _, style in ipairs({ "bubble", "radio", "subtitles", "terminal" }) do
+  priority.settings.mode = style
+  priority.update(0)
+  assert(not priority.modal())
+  assert(not priority.radio:snapshot().suspended)
+end
 priority.dispose()
 assert(sources == disposed, "each owned backend is disposed once")
 print("SHOWCASE_HEADLESS_OK rewards=1 queues=bounded restore=quiet")

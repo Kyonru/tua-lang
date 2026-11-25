@@ -104,5 +104,17 @@ love.draw()
 love.keypressed("pagedown")
 love.keypressed("escape")
 assert(not host.settings.transcript)
+for key, mode in ipairs({
+  "panel",
+  "bubble",
+  "radio",
+  "subtitles",
+  "mythic",
+  "tactics",
+  "terminal",
+}) do
+  love.keypressed(tostring(key))
+  assert(host.settings.mode == mode)
+end
 love.quit()
 print("SHOWCASE_UI_OK completed channels hidden; choice focus valid")
