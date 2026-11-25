@@ -35,7 +35,9 @@ love = {
       return {
         release = noop,
         getWrap = function(_, text)
-          return 100, { text }
+          local lines = {}
+          for index = 1, math.max(1, math.ceil(#text / 36)) do lines[index] = "wrapped" end
+          return 100, lines
         end,
         getHeight = function()
           return 14
@@ -100,9 +102,21 @@ assert(host.player():snapshot().nodeId == nodeBeforeHelp)
 love.draw()
 love.keypressed("escape")
 assert(not host.settings.help)
+love.keypressed("f3")
+for index = 1, 8 do host.advance() end
 love.keypressed("tab")
 love.draw()
+love.keypressed("]")
+local bracketScroll = host.settings.historyScroll
+assert(bracketScroll > 0, "closing bracket scrolls the transcript")
+love.keypressed("[")
+assert(host.settings.historyScroll == 0)
+love.mousepressed(850, 550, 1)
+assert(host.settings.historyScroll == bracketScroll, "Newer button matches bracket scrolling")
+love.mousepressed(70, 550, 1)
+assert(host.settings.historyScroll == 0)
 love.keypressed("pagedown")
+assert(host.settings.historyScroll == bracketScroll, "Page Down remains an alias")
 love.keypressed("escape")
 assert(not host.settings.transcript)
 for key, mode in ipairs({

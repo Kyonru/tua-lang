@@ -3,6 +3,8 @@ local Backend = require("backend")
 local Presenter = require("presenter")
 local Theme = require("theme")
 local Styles = require("styles")
+local Transcript = require("transcript")
+local transcript = Transcript.new()
 local Staging = require("staging_layout")
 local host = Controller.new(Backend.new(), Backend.new())
 local presenter = Presenter.new()
@@ -52,10 +54,10 @@ function love.keypressed(key: string)
       local direction = key == "up" and -1 or 1
       settings.selected = math.max(1, math.min(#node.options, settings.selected + direction))
     end
-  elseif key == "pageup" then
+  elseif key == "[" or key == "pageup" then
     if settings.transcript then settings.historyScroll = math.max(0, settings.historyScroll - 58)
     else settings.scroll = math.max(0, settings.scroll - 58) end
-  elseif key == "pagedown" then
+  elseif key == "]" or key == "pagedown" then
     if settings.transcript then
       settings.historyScroll = math.min(maxHistoryScroll, settings.historyScroll + 58)
     else settings.scroll = math.min(maxScroll, settings.scroll + 58) end
@@ -181,47 +183,44 @@ function love.draw()
     love.graphics.setColor(theme.muted)
     love.graphics.printf("Listening to the channel…", 32, height * 0.5, width - 64, "center")
   end
-  if settings.help or settings.transcript then
+  if settings.help then
     love.graphics.setColor(0.075, 0.105, 0.12, 0.98)
     love.graphics.rectangle("fill", 24, 115, width - 48, height - 170, 3, 3)
     love.graphics.setColor(0.94, 0.92, 0.85)
     love.graphics.setFont(caption)
-    if settings.help then
-      local stats = host.metrics()
-      local facts = host.player():getContext()
-      love.graphics.printf(
-        "CONTROLS & FEATURES  ·  H to close\n\n1–4   Original styles     5 Mythic / 6 Tactics / 7 Terminal\nO   Portrait left / right / above / hidden\nSpace / Enter   Reveal, continue or confirm     ↑ ↓   Choose\nPgUp / PgDn   Scroll     Tab   Recent conversation\nF   Reveal speed   "
-        .. settings.speed .. "x     M   Reduced motion   " .. tostring(settings.reducedMotion) ..
-        "\nS   Subtitles   " .. tostring(settings.subtitles) .. "     V   Mute voice   "
-        .. tostring(settings.voiceMuted) ..
-        "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
-        .. tostring(facts.permit) ..
-        "\nP   Pause   " .. tostring(settings.paused)
-        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text   F4   Staging\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
-        .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
-        .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
-        .. " revealed · Tokens: " .. stats.rewards,
-        44, 135, width - 88)
-    else
-      local history = host.player():history()
-      love.graphics.print("RECENT CONVERSATION  ·  TAB close  ·  PGUP / PGDN scroll", 44, 135)
-      local y = 166 - settings.historyScroll
-      love.graphics.intersectScissor(44, 166, width - 88, height - 231)
-      for _, entry in ipairs(history.entries) do
-        local text = (entry.speaker or "You") .. ": " .. entry.text
-        local _, lines = caption:getWrap(text, width - 88)
-        love.graphics.printf(text, 44, y, width - 88)
-        y += #lines * caption:getHeight() + 14
-      end
-      maxHistoryScroll = math.max(0, y + settings.historyScroll - (height - 65))
-      settings.historyScroll = math.min(settings.historyScroll, maxHistoryScroll)
-      love.graphics.setScissor()
-    end
+    local stats = host.metrics()
+    local facts = host.player():getContext()
+    love.graphics.printf(
+      "CONTROLS & FEATURES  ·  H to close\n\n1–4   Original styles     5 Mythic / 6 Tactics / 7 Terminal\nO   Portrait left / right / above / hidden\nSpace / Enter   Reveal, continue or confirm     ↑ ↓   Choose\n[ / ]   Scroll     Tab   Recent conversation\nF   Reveal speed   "
+      .. settings.speed .. "x     M   Reduced motion   " .. tostring(settings.reducedMotion) ..
+      "\nS   Subtitles   " .. tostring(settings.subtitles) .. "     V   Mute voice   "
+      .. tostring(settings.voiceMuted) ..
+      "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
+      .. tostring(facts.permit) ..
+      "\nP   Pause   " .. tostring(settings.paused)
+      .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text   F4   Staging\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
+      .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
+      .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
+      .. " revealed · Tokens: " .. stats.rewards,
+      44, 135, width - 88)
   end
+  if settings.transcript and not settings.help then
+    maxHistoryScroll, settings.historyScroll = transcript.draw(
+      host.player():history().entries,
+      settings.historyScroll
+    )
+  end
+end
+function love.mousepressed(x: number, y: number, button: number)
+  if button ~= 1 or not host.settings.transcript or host.settings.help then return end
+  local direction = transcript.click(x, y)
+  host.settings.historyScroll = math.max(0, math.min(maxHistoryScroll,
+    host.settings.historyScroll + direction * 58))
 end
 function love.quit()
   host.dispose()
   presenter.dispose()
+  transcript.dispose()
   title:release()
   caption:release()
 end
