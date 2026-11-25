@@ -774,7 +774,11 @@ choice, fallback, wait, branch and action routes come from the compiler. Select 
 section, text link or route target to open its authored source location. Conditions
 can be tested with explicit mock JSON; named placeholders produce plain preview
 text, while rich styles remain unrendered. No game handler or asset loads.
-Edits refresh the visible view, while hidden views catch up on reveal. Invalid
+Edits and workspace `.tdialogue` file changes refresh the visible view, while hidden
+views catch up on reveal. Deletion clears clean-source previews and invalidates
+navigation; recreation refreshes them. Dirty buffers remain authoritative until
+closed or saved. Closed documents reopen before requesting analysis; obsolete
+requests cannot restore cleared content. Invalid
 syntax clears the previous outline and points to Problems. Large views show at most
 200 sections, 100 lines per section and 200 routes per section with an explicit notice.
 Use **Apply mock context** to test each condition independently with explicit

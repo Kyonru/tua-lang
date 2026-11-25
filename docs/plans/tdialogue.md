@@ -679,6 +679,11 @@ context objects. Core export/import works without a filesystem or LÖVE.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.
+- [x] Dialogue-preview file lifecycle: workspace disk changes, deletion/recreation
+  and closed buffers invalidate source links and pending responses. Dirty overlays
+  stay authoritative; hidden views refresh on reveal. Watchers are panel-scoped and
+  disposed with the view. Provider regressions cover these transitions and pending
+  reopen disposal. Native end-to-end watcher/LSP synchronization remains to qualify.
 - [ ] Preserve fresh results under incomplete edits, unsaved imports, catalog
   changes, branch edits, watch rebuilds and deleted/recreated modules.
 

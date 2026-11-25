@@ -13,6 +13,12 @@ function fixture(sendRequest) {
   let command;
   let panel;
   let onChange;
+  let onClose;
+  let diskChange;
+  let diskCreate;
+  let diskDelete;
+  let watcherDisposed = false;
+  let reopen = async () => document;
   const opened = [];
   const document = { languageId: "tdialogue", version: 1, uri: { toString: () => "file:///scene.tdialogue" } };
   const vscode = {
@@ -27,6 +33,14 @@ function fixture(sendRequest) {
     },
     workspace: {
       getConfiguration: () => ({ get: () => true }),
+      openTextDocument: () => reopen(),
+      onDidCloseTextDocument(handler) { onClose = handler; return { dispose() {} }; },
+      createFileSystemWatcher: () => ({
+        onDidChange(handler) { diskChange = handler; },
+        onDidCreate(handler) { diskCreate = handler; },
+        onDidDelete(handler) { diskDelete = handler; },
+        dispose() { watcherDisposed = true; },
+      }),
       onDidChangeTextDocument(handler) { onChange = handler; return { dispose() {} }; },
     },
     window: {
@@ -42,7 +56,12 @@ function fixture(sendRequest) {
   const api = context.module.exports;
   const client = { sendRequest: (...args) => sendRequest(document, ...args) };
   api.registerDialoguePreview({ configurationTarget: () => undefined, getClient: () => client });
-  return { ...api, document, opened, show: () => command(), panel: () => panel, change: () => onChange({ document }) };
+  return { ...api, document, opened,
+    disk: (kind, uri = document.uri) => ({ change: diskChange, create: diskCreate, delete: diskDelete })[kind](uri),
+    setReopen: handler => { reopen = handler; },
+    watcherDisposed: () => watcherDisposed,
+    close: () => onClose(document),
+    show: () => command(), panel: () => panel, change: () => onChange({ document }) };
 }
 
 test("dialogue outline escapes content, preserves authored text and limits large views", () => {
@@ -183,4 +202,104 @@ test("text errors and limits preserve authored text", () => {
   assert.match(html, /1 MiB combined output/);
   model.mock.text = { texts: [], bindingError: { message: "missing binding", range } };
   assert.match(f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), model), /Mock text unavailable: missing binding/);
+});
+
+
+test("disk deletion clears source links and recreation refreshes on reveal", async () => {
+  let calls = 0;
+  const f = fixture(async document => {
+    calls++;
+    return { documentVersion: document.version, preview };
+  });
+  await f.show();
+  f.disk("delete");
+  assert.match(f.panel().webview.html, /file was deleted/);
+  await f.panel().receive({ command: "openLocation", uri: f.document.uri.toString(), range });
+  assert.equal(f.opened.length, 0);
+  await f.panel().receive({ command: "reload" });
+  assert.equal(calls, 1);
+  f.panel().visible = false;
+  f.document.isClosed = true;
+  const reopened = { ...f.document, version: 1, isClosed: false };
+  f.setReopen(async () => reopened);
+  f.disk("create");
+  await new Promise(resolve => setTimeout(resolve, 220));
+  assert.equal(calls, 1);
+  f.panel().visible = true;
+  await f.panel().reveal();
+  assert.equal(calls, 2);
+  assert.match(f.panel().webview.html, /Hello %/);
+  f.panel().dispose();
+  assert.equal(f.watcherDisposed(), true);
+});
+
+test("disk events ignore unrelated files and preserve dirty buffer authority", async () => {
+  let calls = 0;
+  const f = fixture(async document => {
+    calls++;
+    return { documentVersion: document.version, preview };
+  });
+  await f.show();
+  f.disk("change", { toString: () => "file:///other.tdialogue" });
+  f.document.isDirty = true;
+  f.disk("delete");
+  f.disk("create");
+  f.disk("change");
+  await new Promise(resolve => setTimeout(resolve, 220));
+  assert.equal(calls, 1);
+  assert.match(f.panel().webview.html, /Hello %/);
+  f.document.isDirty = false;
+  f.disk("change");
+  assert.doesNotMatch(f.panel().webview.html, /Hello %/);
+  await new Promise(resolve => setTimeout(resolve, 220));
+  assert.equal(calls, 2);
+  f.panel().dispose();
+});
+
+test("a disk invalidation rejects a response already in flight", async () => {
+  let finish;
+  const f = fixture(() => new Promise(resolve => { finish = resolve; }));
+  const showing = f.show();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  f.disk("delete");
+  finish({ documentVersion: 1, preview });
+  await showing;
+  assert.match(f.panel().webview.html, /file was deleted/);
+  assert.doesNotMatch(f.panel().webview.html, /Hello %/);
+  f.panel().dispose();
+});
+
+
+test("discarding a dirty buffer after disk deletion clears the preview", async () => {
+  let calls = 0;
+  const f = fixture(async document => {
+    calls++;
+    return { documentVersion: document.version, preview };
+  });
+  await f.show();
+  f.document.isDirty = true;
+  f.disk("delete");
+  assert.match(f.panel().webview.html, /Hello %/);
+  f.document.isDirty = false;
+  f.document.isClosed = true;
+  f.close();
+  await new Promise(resolve => setTimeout(resolve, 220));
+  assert.equal(calls, 1);
+  assert.match(f.panel().webview.html, /file was deleted/);
+  f.panel().dispose();
+});
+
+test("a closed buffer is reopened and disposal rejects its pending load", async () => {
+  const f = fixture(async document => ({ documentVersion: document.version, preview }));
+  await f.show();
+  f.document.isClosed = true;
+  let reopen;
+  f.setReopen(() => new Promise(resolve => { reopen = resolve; }));
+  const panel = f.panel();
+  const loading = panel.receive({ command: "reload" });
+  panel.dispose();
+  const html = panel.webview.html;
+  reopen({ ...f.document, isClosed: false });
+  await loading;
+  assert.equal(panel.webview.html, html);
 });

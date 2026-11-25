@@ -120,6 +120,8 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
   let document;
   let sequence = 0;
   let renderedVersion;
+  let watcher;
+  let sourceDeleted = false;
   let mockDraft = DEFAULT_MOCK;
   let appliedMock;
   const showMessage = (message) => {
@@ -130,10 +132,17 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
     const client = getClient();
     if (!panel || !document) return;
     const current = ++sequence;
-    const requestedDocument = document;
+    let requestedDocument = document;
     showMessage("Reading dialogue…");
     if (!client) return showMessage("The Tua language server is not running. Start it, then reload.");
+    if (sourceDeleted && !document.isDirty) return showMessage("Dialogue file was deleted. Recreate it or open another dialogue.");
     try {
+      if (document.isClosed) {
+        const reopened = await vscode.workspace.openTextDocument(document.uri);
+        if (current !== sequence || client !== getClient()) return;
+        document = reopened;
+        requestedDocument = reopened;
+      }
       const params = { textDocument: { uri: document.uri.toString() } };
       if (appliedMock !== undefined) params.mockContext = appliedMock;
       let response = await client.sendRequest("tua/dialoguePreview", params);
@@ -169,11 +178,27 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
     if (document?.uri.toString() !== active.uri.toString()) {
       mockDraft = DEFAULT_MOCK;
       appliedMock = undefined;
+      sourceDeleted = false;
     }
     document = active;
     refresh.cancel();
     if (!panel) {
       panel = vscode.window.createWebviewPanel("tuaDialoguePreview", "Tua Dialogue Preview", vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
+      watcher = vscode.workspace.createFileSystemWatcher("**/*.tdialogue");
+      const onDiskChange = (uri, deleted) => {
+        if (uri.toString() !== document?.uri.toString()) return;
+        sourceDeleted = deleted;
+        if (document.isDirty) return;
+        sequence += 1;
+        renderedVersion = undefined;
+        if (panel?.visible) showMessage(deleted
+          ? "Dialogue file was deleted. Recreate it or open another dialogue."
+          : "Dialogue file changed. Updating preview…");
+        refresh.schedule();
+      };
+      watcher.onDidChange(uri => onDiskChange(uri, false));
+      watcher.onDidCreate(uri => onDiskChange(uri, false));
+      watcher.onDidDelete(uri => onDiskChange(uri, true));
       panel.webview.onDidReceiveMessage(message => {
         if (message?.command === "reload") return render();
         if (message?.uri !== document?.uri.toString()) return;
@@ -202,6 +227,9 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
       panel.onDidDispose(() => {
         sequence += 1;
         panel = undefined;
+        watcher?.dispose();
+        watcher = undefined;
+        sourceDeleted = false;
         document = undefined;
         mockDraft = DEFAULT_MOCK;
         appliedMock = undefined;
@@ -221,7 +249,14 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
     if (panel?.visible) showMessage("Source changed. Updating preview…");
     refresh.schedule();
   });
-  return vscode.Disposable.from(command, changes, { dispose() { sequence += 1; refresh.cancel(); panel?.dispose(); } });
+  const closes = vscode.workspace.onDidCloseTextDocument(closed => {
+    if (closed.uri.toString() !== document?.uri.toString()) return;
+    sequence += 1;
+    renderedVersion = undefined;
+    if (panel?.visible) showMessage("Dialogue buffer closed. Updating preview…");
+    refresh.schedule();
+  });
+  return vscode.Disposable.from(command, changes, closes, { dispose() { sequence += 1; refresh.cancel(); panel?.dispose(); } });
 }
 
 module.exports = { dialoguePreviewHtml, registerDialoguePreview };

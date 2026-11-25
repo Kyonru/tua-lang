@@ -1011,7 +1011,10 @@ sections. For example, an availability condition is tested even when its choice'
 visibility condition is false. Missing fields and JSON `null` behave as nil.
 
 Editing the JSON changes only the draft; press **Apply mock context** to apply it.
-Source refreshes reuse the last applied JSON. **Use authored view** stops evaluation
+Source refreshes reuse the last applied JSON. Workspace file changes also refresh
+the preview; deletion clears a clean buffer's preview until the file is recreated.
+Unsaved text stays authoritative. Closing a buffer refreshes from the reopened
+source, while hidden previews defer work until revealed. **Use authored view** stops evaluation
 and keeps the draft available. Closing the preview or switching to another dialogue
 clears both draft and applied input; they are not saved to project files or settings.
 

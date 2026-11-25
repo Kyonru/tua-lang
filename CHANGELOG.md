@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Refresh dialogue previews after workspace file changes and deletion/recreation,
+  preserving unsaved buffers and rejecting obsolete responses and source links.
+
 - Add a bounded conversation map to dialogue previews, with loops, numbered
   source-linked routes, shared pan/zoom and keyboard navigation.
 
