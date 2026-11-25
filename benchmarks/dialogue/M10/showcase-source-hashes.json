@@ -1,0 +1,23 @@
+{
+  "examples/dialogue/showcase/README.md": "e4bc73a1703281229a9b7d982fa352dd854f5dadd083f981b7b350f8c2aaf03d",
+  "examples/dialogue/showcase/src/actions.tua": "f7d86df56e39030efba199e7a4fa763c34739788900a6816140684e0fca5f491",
+  "examples/dialogue/showcase/src/assets/guide.wav": "b9baed1c5c7f1c59241597fc9b950720c8527497d513a181bdd048e683fd5092",
+  "examples/dialogue/showcase/src/assets/recording.wav": "1d5c0a98542b4c3bc1cece8a88144a1b0e44c7d6dc4073ee6a81bcba1027fa3b",
+  "examples/dialogue/showcase/src/assets/robot.wav": "72b317a543a89cf5768a8fc9575890ca622284938a6c89bd82d382efab802c13",
+  "examples/dialogue/showcase/src/audio.tua": "420c73b04032fd18856acf64bbd831fe8efa71187f54e282bd8d65ec379e2743",
+  "examples/dialogue/showcase/src/backend.tua": "cd08e08b7e108cef48cc573b9c2df9a2a3578a19d886df641e000d71d5d63766",
+  "examples/dialogue/showcase/src/characters.tua": "c69c36c50fb40d2fac435bfaaa5ea31f7189158783913970be8a4e51530896e7",
+  "examples/dialogue/showcase/src/conf.lua": "a22ff21774e42287501d6ceeaff084e07f210004b82e380cfee54df59ecddb4b",
+  "examples/dialogue/showcase/src/controller.tua": "3bc07b0a8f844a2a6428a957985f67e3e912a3917ce6976ecfa18d9205046615",
+  "examples/dialogue/showcase/src/events.tua": "d7a8808796bbbfd4e2617cebc55dc02fde56671ff85454d5ae192e4eafabb558",
+  "examples/dialogue/showcase/src/main.tua": "4a01c7abaa9a9c58cfe4f803054ad2ceef109eaee0dfd8e37af67a51a725d7be",
+  "examples/dialogue/showcase/src/presenter.tua": "b7d057a93d5797b2be3ebf856d1b7e7df5de7755d2facb2ab61e590dac6c3da8",
+  "examples/dialogue/showcase/src/radio.tdialogue": "c7a2b43ede6bc6ac42273302cc6c2224836edc695d7e5120451529647ad76593",
+  "examples/dialogue/showcase/src/scene.tdialogue": "04ba0da22456c475880e1d192ccf581c91c3fcfe1e834f0471828b912d77ca55",
+  "examples/dialogue/showcase/src/story.tua": "5b144f8df3146fac5bde6749fbfab729d78c5e84858507b300ff9835350ce88c",
+  "examples/dialogue/showcase/src/translations.tua": "2cc9cfc52b2a7db2bc7ad3051d1d96750868ed456a150fb139ce73283d0aaeb4",
+  "examples/dialogue/showcase/tests/controller.lua": "42dad2d86543720f4953a070e2bae08472c908c2a4210c2358a3d5d7ff0f51e1",
+  "examples/dialogue/showcase/tests/replay.lua": "aba5b35721ca80fa47a0fe66d48553931b2067a47a82b64ad9067827ae490b9e",
+  "examples/dialogue/showcase/tua.toml": "507d2ac6be39583a96bc524c5e94a2c985a0c02ebdf5f71612d1800c1e804051",
+  "examples/dialogue/showcase/verify.py": "c36cdbe8226ab7bf86985bd69eef5e2bc2091a4fddfbd5bb1293726993725745"
+}

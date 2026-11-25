@@ -1,0 +1,6 @@
+2026-11-24 22:56:43.793 love[25174:102363331] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/jl/dhcpl8gs3rv04nzljphszpmc0000gn/T/org.love2d.love.savedState
+TUA_REPLAY_SAVE	/Users/kyonru/Library/Application Support/LOVE/tua-replay-bce0a40fca3e4fe3a88cbd248dbf65d0
+TUA_REPLAY_SAVE	/Users/kyonru/Library/Application Support/LOVE/tua-replay-bce0a40fca3e4fe3a88cbd248dbf65d0
+TUA_REPLAY_RUNTIME	11.5.0	LuaJIT 2.1.1700008891	false
+SHOWCASE_NATIVE_OK rewards=1 queues=bounded restore=quiet
+TUA_REPLAY_OK	180

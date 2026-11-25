@@ -18,6 +18,11 @@ local function beforeFrame(context)
   if frame == 40 then press(context, "space") end
   if frame == 45 then
     assert(host.player():snapshot().state == "awaiting_choice")
+    host.player():updateContext({ name = "Ada", permit = false })
+    press(context, "return")
+    assert(host.player():snapshot().state == "awaiting_choice")
+    assert(host.metrics().rewards == 0)
+    host.player():updateContext({ name = "Ada", permit = true })
     press(context, "down")
     press(context, "up")
     press(context, "return")
@@ -50,6 +55,18 @@ local function beforeFrame(context)
   end
   if frame == 135 then press(context, "s") end
   if frame == 140 then press(context, "s") end
+  if frame == 145 then
+    host.settings.reducedMotion = true
+    host.reset()
+    host.advance()
+    host.advance()
+    assert(host.player():snapshot().state == "awaiting_choice")
+    press(context, "down")
+  end
+  if frame == 146 then press(context, "pagedown") end
+  if frame == 147 then
+    assert(host.settings.scroll > 0, "radio choices expose keyboard scrolling")
+  end
   if frame >= 150 and frame < 170 then host.reset() end
   if frame == 175 then
     press(context, "1")

@@ -66,7 +66,13 @@ for index = 1, 20 do
   host.reset()
   host.update(0)
 end
-assert(#host.player():history().entries <= 8)
+for index = 1, 20 do
+  host.player():start()
+  host.update(0)
+  host.advance()
+end
+assert(#host.player():history().entries == 8)
+assert(host.player():history().dropped > 0, "transcript evicts old entries at its bound")
 host.dispose()
 host.dispose()
 assert(sources == disposed, "each owned backend is disposed once")

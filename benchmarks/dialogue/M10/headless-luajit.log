@@ -1,0 +1,4 @@
+SHOWCASE_HEADLESS_OK rewards=1 queues=bounded restore=quiet
+SHOWCASE_RUNTIME	Lua 5.1	LuaJIT 2.1.1700008891	true	fold	cse	dce	fwd	dse	narrow	loop	abc	sink	fuse
+SHOWCASE_HEADLESS_OK rewards=1 queues=bounded restore=quiet
+SHOWCASE_RUNTIME	Lua 5.1	LuaJIT 2.1.1700008891	false	fold	cse	dce	fwd	dse	narrow	loop	abc	sink	fuse

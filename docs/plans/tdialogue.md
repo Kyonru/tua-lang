@@ -1,9 +1,9 @@
 # Tua dialogue: implementation plan
 
-Status: M0–M3 complete; M4–M10 planned. Baseline: `46a70a89` (portraits and timed events)
-and `2e179341` (dialogue documentation). This plan combines the remaining initial
-workstream with the expanded dialogue improvements. It does not claim those
-improvements are implemented or assign them a released version.
+Status: M0–M10 complete. See the [M10 qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M10.md)
+for runnable examples, verification, videos, consuming-game integration and measured
+limits. The original design baseline was `46a70a89` / `2e179341`; those historical
+versions do not identify the current development compiler or an assigned release.
 
 The [dialogue guide](../dialogue.md) documents current behavior. Historical
 implementation and verification checkpoints are preserved at the end of this
@@ -725,6 +725,12 @@ synthetic protocol timing is not presented as perceived UI latency.
 
 ## M10 — LÖVE showcase, documentation and consuming-game qualification
 
+**Complete.** See the [M10 qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M10.md)
+for separate commits, headless/native outcomes, screenshots/video, provenance and
+matching game update/allocation/retained-memory measurements. Inline images were
+evaluated and deliberately left out of core syntax; accessibility and persistence
+limits are documented rather than claimed as implemented.
+
 - [x] Organize dialogue-related files in a dedicated cleanup change. Group internal
   runtime helpers under a dialogue directory (for example, `vendor/runtime/dialogue/`)
   and consolidate the dialogue examples under `examples/dialogue/`, with a shared
@@ -759,13 +765,13 @@ synthetic protocol timing is not presented as perceived UI latency.
 - [x] Update `docs/dialogue.md`, the example README and relevant existing feature
   pages. Update `docs/llms.txt` and regenerate the embedded contract when APIs change;
   add changelog entries and accurate feature-example/navigation links.
-- [ ] After upstream APIs pass, integrate the relevant adapters in the zombie game
+- [x] After upstream APIs pass, integrate the relevant adapters in the zombie game
   in separate changes. Read its instructions, preserve unrelated work, use the
   rebuilt compiler/runtime, and keep game-specific assets and gameplay out of Tua.
-- [ ] Run native replay coverage at small and large window sizes, multiple players,
+- [x] Run native replay coverage at small and large window sizes, multiple players,
   sustained gameplay announcements, menus, repeated resets and mode changes.
   Verify input ownership, pause policy, asset cleanup and no duplicate rewards.
-- [ ] Record compiler/revision identity, interpreter/LÖVE versions, JIT status,
+- [x] Record compiler/revision identity, interpreter/LÖVE versions, JIT status,
   fixtures/seeds and screenshots/video. Compare update cost, allocation and retained
   memory on matching workloads; do not label simulation timing as rendered FPS.
 
@@ -802,12 +808,11 @@ No milestone is complete with only a parser, a runtime-only API, or editor-only
 behavior. Its typed contract, emitted execution, applicable authoring support,
 compatibility checks, documentation and runnable example must agree.
 
-## First implementation slice
+## Current delivery
 
-M0–M7 are complete; continue with **M8 — Save/resume and bounded conversation history**.
-Reuse declared schemas, typed context/path facts, stable execution identities and
-bounded transition behavior. Keep gameplay mutations in explicit host actions;
-never execute arbitrary script expressions or replace the host renderer/audio stack.
+All planned milestones are qualified. The showcase remains optional and modular;
+games retain their renderer, input, queue policy and persistent effect handling.
+No release bump, push, publication or further branch merge is implied.
 
 ## Historical delivery checkpoints
 

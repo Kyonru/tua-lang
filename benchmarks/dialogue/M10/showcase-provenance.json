@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "compiler": "/Users/kyonru/Documents/projects/Experiments/tlua/target/release/tua",
+  "compiler_sha256": "7dd6fbd75c0f0ebe9405a7a40e3bd3ce1486f4d7ea4f19e179cc5afba665e6d8",
+  "seed": 71,
+  "frames": 180,
+  "fps": 30,
+  "dt": 0.03333333333333333,
+  "gc_policy": "project-controlled / unknown",
+  "timing": "fixed-step functional replay; not a CPU, FPS or latency benchmark",
+  "audio_captured": false,
+  "identity": "tua-replay-bce0a40fca3e4fe3a88cbd248dbf65d0",
+  "scenario": "/Users/kyonru/Documents/projects/Experiments/tlua/examples/dialogue/showcase/tests/replay.lua",
+  "runner_sha256": "f781cf0dd0fad11a60e779dc50771c7b22f0fda3913dab4e16b43693780eb9bb",
+  "runtime_wrapper_sha256": "d5716b475587b7bfb1f39ab982130dc1d4201df73f8276810d78615826273646",
+  "love_executable": "/Applications/love.app/Contents/MacOS/love",
+  "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+  "compiler_provenance": {
+    "schemaVersion": 1,
+    "version": "0.11.0",
+    "revision": "d8009c6f2b3bfd4fa856db7b07fb8eacc338b10e",
+    "dirty": true,
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "executableSha256": "7dd6fbd75c0f0ebe9405a7a40e3bd3ce1486f4d7ea4f19e179cc5afba665e6d8"
+  },
+  "revision": "a91970a042acfc0e00933fdfbcf324781b8158d6",
+  "worktree_dirty": true,
+  "scenario_sha256": "aba5b35721ca80fa47a0fe66d48553931b2067a47a82b64ad9067827ae490b9e",
+  "love_version": "11.5.0",
+  "lua_version": "LuaJIT 2.1.1700008891",
+  "jit_enabled": false
+}
