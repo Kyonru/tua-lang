@@ -7,7 +7,7 @@ the previous one; there is no shared hidden framework or separate `latest` copy.
 | Chapter | Outcome | Status |
 | --- | --- | --- |
 | [01: the playable loop](checkpoints/01-playable-loop/README.md) | Move, animate, follow, pause and restart | Runnable |
-| 02: combat and waves | Fire projectiles at live enemies; manage hits, waves and feedback | Planned |
+| [02: combat and waves](checkpoints/02-combat-waves/README.md) | Fire projectiles at live enemies; manage hits, waves and feedback | Runnable |
 
 Start in `checkpoints/01-playable-loop`, then run `tua build` and `love build`.
 Read the [series guide](../../../docs/tutorials/arena-game/index.md).

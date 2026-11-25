@@ -1,0 +1,72 @@
+local Combat = require("combat")
+export type Command = "none" | "confirm" | "pause" | "restart" | "leave"
+local function new()
+  local player = { x = 800, y = 600 }
+  local combat = Combat.new(player)
+  local trigger = { held = false, x = 1030, y = 572 }
+  local state = { time = 0, generation = 0, focused = true }
+  local flow = stateMachine({
+    initial = "title",
+    events = {
+      { name = "start", from = "title", to = "playing" },
+      { name = "pause", from = "playing", to = "paused" },
+      { name = "resume", from = "paused", to = "playing" },
+      { name = "restart", from = { "playing", "paused" }, to = "playing" },
+      { name = "leave", from = { "playing", "paused" }, to = "title" },
+    },
+  })
+  local function reset()
+    player.x = 800
+    player.y = 600
+    trigger.held = false
+    combat.reset()
+    state.time = 0
+    state.generation += 1
+  end
+  local function focus(value: boolean)
+    state.focused = value
+    trigger.held = false
+    if not value and flow:is("playing") then flow:pause() end
+  end
+  -- Return true only when simulation advanced, never on a transition frame.
+  local function update(dt: number, x: number, y: number, command: Command): boolean
+    if not state.focused then return false end
+    if command == "leave" and not flow:is("title") then
+      flow:leave()
+      return false
+    end
+    if command == "restart" and not flow:is("title") then
+      reset()
+      flow:restart()
+      return false
+    end
+    if flow:is("title") then
+      if command == "confirm" then
+        reset()
+        flow:start()
+      end
+      return false
+    end
+    if command == "pause" then
+      if flow:is("playing") then flow:pause() else flow:resume() end
+      return false
+    end
+    if flow:is("paused") then
+      if command == "confirm" then flow:resume() end
+      return false
+    end
+    combat.update(dt, x, y, trigger.held, trigger.x, trigger.y)
+    state.time = combat.state.ticks / 120
+    return true
+  end
+  return {
+    combat = combat,
+    trigger = trigger,
+    player = player,
+    state = state,
+    flow = flow,
+    update = update,
+    focus = focus,
+  }
+end
+return { new = new }

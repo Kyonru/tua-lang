@@ -1,0 +1,3 @@
+local Position = ECS.component("Position", { x = "number", y = "number" })
+local Health = ECS.component("Health", { current = "number", maximum = "number" })
+return { Position = Position, Health = Health }

@@ -1,0 +1,30 @@
+local function new()
+  local group = Tween.group()
+  local values = { recoil = 0, impact = 0, x = 0, y = 0, clock = 0 }
+  local options = { enabled = true, reducedMotion = false }
+  local function clear()
+    group = Tween.group()
+    values.recoil = 0
+    values.impact = 0
+    values.x = 0
+    values.y = 0
+    values.clock = 0
+  end
+  local function update(dt: number, fired: boolean, hit: boolean, x: number, y: number)
+    group:update(dt)
+    values.clock += dt
+    if not options.enabled then return end
+    if fired and not options.reducedMotion then
+      values.recoil = 6
+      group:to(values, 0.1, { recoil = 0 }):ease("quadout")
+    end
+    if hit then
+      values.x = x
+      values.y = y
+      values.impact = 1
+      group:to(values, 0.18, { impact = 0 }):ease("quadout")
+    end
+  end
+  return { values = values, options = options, clear = clear, update = update }
+end
+return { new = new }

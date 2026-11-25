@@ -1,0 +1,162 @@
+local Components = require("components")
+local Collision = require("collision")
+local Movement = require("movement")
+export type Bullet = { x: number, y: number, vx: number, vy: number, age: number, hit: boolean }
+local STEP = 1 / 120
+local function new(player: Movement.Position)
+  local world = ECS.world()
+  local enemies = world:query({ Components.Position, Components.Health })
+  local readPosition = world:reader(Components.Position)
+  local readHealth = world:reader(Components.Health)
+  local pool = objectPool({
+    create = function(): Bullet return { x = 0, y = 0, vx = 0, vy = 0, age = 0, hit = false } end,
+    reset = function(bullet: Bullet)
+      bullet.x = 0
+      bullet.y = 0
+      bullet.vx = 0
+      bullet.vy = 0
+      bullet.age = 0
+      bullet.hit = false
+    end,
+  })
+  local bullets: Bullet[] = {}
+  local state = {
+    wave = 0,
+    defeated = 0,
+    shots = 0,
+    hits = 0,
+    skipped = 0,
+    ticks = 0,
+    hitX = 0,
+    hitY = 0,
+  }
+  local cooldown = 0
+  local accumulator = 0
+  local disposed = false
+  local function nextWave(): boolean
+    if disposed or enemies:count() > 0 or #bullets > 0 then return false end
+    state.wave += 1
+    for index = 1, 8 do
+      local angle = (index - 1) * math.pi / 4
+      local id = world:create()
+      world:add(
+        id,
+        Components.Position,
+        { x = 800 + math.cos(angle) * 230, y = 572 + math.sin(angle) * 230 }
+      )
+      world:add(id, Components.Health, { current = 3, maximum = 3 })
+    end
+    return true
+  end
+  local function fire(aimX: number, aimY: number)
+    local dx, dy = aimX - player.x, aimY - (player.y - 28)
+    local length = math.sqrt(dx * dx + dy * dy)
+    if length < 0.001 then return end
+    if #bullets >= 8 then
+      state.skipped += 1
+      return
+    end
+    local bullet = pool:acquire()
+    bullet.x = player.x
+    bullet.y = player.y - 28
+    bullet.vx = dx / length * 1800
+    bullet.vy = dy / length * 1800
+    bullets[#bullets + 1] = bullet
+    state.shots += 1
+  end
+  local function tick(x: number, y: number, held: boolean, aimX: number, aimY: number)
+    Movement.move(player, x, y, 180, STEP)
+    if cooldown > 0 then cooldown -= 1 end
+    if held and cooldown == 0 then
+      fire(aimX, aimY)
+      cooldown = 15
+    end
+    for index = #bullets, 1, -1 do
+      local bullet = bullets[index]
+      local nx, ny = bullet.x + bullet.vx * STEP, bullet.y + bullet.vy * STEP
+      local selected = 0
+      local nearest = 2
+      enemies:each(function(id, position, health)
+        if health.current <= 0 then return end
+        local t = Collision.contact(bullet.x, bullet.y, nx, ny, position.x, position.y, 25)
+        if t and (t < nearest or (t == nearest and id < selected)) then
+          selected = id
+          nearest = t
+        end
+      end)
+      -- Query has ended. Resolve live payloads before accepting this hit.
+      local health = readHealth(selected)
+      local position = readPosition(selected)
+      if health and position and health.current > 0 then
+        bullet.hit = true
+        health.current -= 1
+        state.hits += 1
+        state.hitX = bullet.x + (nx - bullet.x) * nearest
+        state.hitY = bullet.y + (ny - bullet.y) * nearest
+        if health.current == 0 then
+          world:destroy(selected)
+          state.defeated += 1
+        end
+      end
+      bullet.x = nx
+      bullet.y = ny
+      bullet.age += STEP
+      if bullet.hit or bullet.age + 0.000000001 >= 1.2 then
+        table.remove(bullets, index)
+        pool:release(bullet)
+      end
+    end
+    state.ticks += 1
+  end
+  local function update(dt: number, x: number, y: number, held: boolean, aimX: number, aimY: number)
+    if disposed or dt <= 0 then return end
+    -- Host stall policy: discard time beyond 250 ms, at most 30 simulation ticks.
+    accumulator += math.min(dt, 0.25)
+    while accumulator + 0.000000001 >= STEP do
+      accumulator = math.max(0, accumulator - STEP)
+      tick(x, y, held, aimX, aimY)
+    end
+  end
+  local function reset()
+    if disposed then return end
+    for index = #bullets, 1, -1 do
+      local bullet = bullets[index]
+      table.remove(bullets, index)
+      pool:release(bullet)
+    end
+    world:clear()
+    cooldown = 0
+    accumulator = 0
+    state.wave = 0
+    state.defeated = 0
+    state.shots = 0
+    state.hits = 0
+    state.skipped = 0
+    state.ticks = 0
+    state.hitX = 0
+    state.hitY = 0
+    nextWave()
+  end
+  local function dispose()
+    if disposed then return end
+    reset()
+    world:clear()
+    pool:clear()
+    disposed = true
+  end
+  reset()
+  return {
+    world = world,
+    enemies = enemies,
+    readPosition = readPosition,
+    readHealth = readHealth,
+    bullets = bullets,
+    state = state,
+    update = update,
+    reset = reset,
+    nextWave = nextWave,
+    dispose = dispose,
+    capacity = function() return pool:capacity() end,
+  }
+end
+return { new = new }

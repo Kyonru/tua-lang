@@ -1,0 +1,225 @@
+local Session = require("session")
+local session = Session.new()
+local Feedback = require("feedback")
+local feedback = Feedback.new()
+local combat = session.combat
+local controls = input({
+  controls = {
+    fire = { "mouse:1", "key:space" },
+    nextWave = { "key:n" },
+    feedback = { "key:f" },
+    motion = { "key:m" },
+    confirm = { "key:return" },
+    pause = { "key:escape" },
+    restart = { "key:r" },
+    leave = { "key:backspace" },
+    left = { "key:a", "key:left" },
+    right = { "key:d", "key:right" },
+    up = { "key:w", "key:up" },
+    down = { "key:s", "key:down" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+local Courier = spriteSheet({
+  image = "assets/adventurer.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = {
+    idle = { column = 0, row = 0, fps = 1 },
+    walk = { frames = { { column = 0, row = 1 }, { column = 6, row = 1 } }, fps = 8 },
+  },
+})
+Courier.image:setFilter("linear", "linear")
+local hero = Courier:player("idle")
+local Zombies = spriteSheet({
+  image = "assets/zombie.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = { idle = { column = 0, row = 0, fps = 1 } },
+})
+local zombie = Zombies:player("idle")
+local player = session.player
+local camera = Camera.new({ x = player.x, y = player.y, smoothing = 6 })
+local heading = love.graphics.newFont(24)
+local label = love.graphics.newFont(14)
+local facing = 1
+local generation = 0
+
+local function resetPresentation()
+  camera.x = player.x
+  camera.y = player.y
+  camera:follow(player.x, player.y)
+  hero:play("idle", true)
+  facing = 1
+  feedback.clear()
+end
+function love.load()
+  love.window.setMode(960, 640)
+  love.window.setTitle("Arena game — 02: combat and waves")
+end
+function love.update(dt: number)
+  -- Poll even when paused/unfocused so old press edges cannot leak into play.
+  controls:update()
+  local command: Session.Command = "none"
+  if controls:pressed("leave") then command = "leave"
+  elseif controls:pressed("restart") then command = "restart"
+  elseif controls:pressed("pause") then command = "pause"
+  elseif controls:pressed("confirm") then command = "confirm" end
+  local x, y = controls:get("move")
+  local mx, my = love.mouse.getPosition()
+  -- Aim uses the unshaken camera; cosmetic feedback cannot alter trajectories.
+  session.trigger.x, session.trigger.y = camera:toWorld(mx, my)
+  session.trigger.held = controls:down("fire")
+  if controls:pressed("feedback") then
+    feedback.options.enabled = not feedback.options.enabled
+    feedback.clear()
+  end
+  if controls:pressed("motion") then
+    feedback.options.reducedMotion = not feedback.options.reducedMotion
+    feedback.clear()
+  end
+  local shots, hits = combat.state.shots, combat.state.hits
+  local advanced = session.update(dt, x, y, command)
+  if generation ~= session.state.generation then
+    generation = session.state.generation
+    resetPresentation()
+  end
+  if not advanced then return end
+  if controls:pressed("nextWave") then combat.nextWave() end
+  feedback.update(
+    dt,
+    combat.state.shots > shots,
+    combat.state.hits > hits,
+    combat.state.hitX,
+    combat.state.hitY
+  )
+  if x ~= 0 then facing = x < 0 and -1 or 1 end
+  hero:play((x ~= 0 or y ~= 0) and "walk" or "idle")
+  hero:update(dt)
+  camera:follow(player.x, player.y)
+  camera:update(dt)
+end
+
+local function drawWorld()
+  if feedback.options.enabled and not feedback.options.reducedMotion then
+    love.graphics.translate(math.sin(feedback.values.clock * 80) * feedback.values.impact * 2, 0)
+  end
+  love.graphics.setColor(0.13, 0.23, 0.26)
+  love.graphics.rectangle("fill", 0, 0, 1600, 1200)
+  love.graphics.setColor(0.74, 0.64, 0.40)
+  love.graphics.rectangle("fill", 784, 112, 32, 8)
+  love.graphics.rectangle("fill", 1496, 616, 8, 32)
+  love.graphics.circle("line", 800, 600, 42)
+  love.graphics.setFont(label)
+  love.graphics.print("NORTH GATE", 760, 70)
+  love.graphics.print("EAST DOCK", 1450, 580)
+  love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
+  love.graphics.ellipse("fill", player.x, player.y - 3, 23, 7)
+  love.graphics.setColor(1, 1, 1)
+  hero:draw(player.x, player.y, 0, facing * 0.6, 0.6)
+  local angle = math.atan2(session.trigger.y - (player.y - 28), session.trigger.x - player.x)
+  love.graphics.setColor(0.95, 0.78, 0.45)
+  love.graphics.line(player.x, player.y - 28,
+    player.x + math.cos(angle) * (26 - feedback.values.recoil),
+    player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil))
+  combat.enemies:each(function(_, position, health)
+    love.graphics.setColor(1, 1, 1)
+    zombie:draw(position.x, position.y + 28, 0, 0.6, 0.6)
+    love.graphics.setColor(0.25, 0.33, 0.34)
+    love.graphics.rectangle("fill", position.x - 20, position.y - 48, 40, 4)
+    love.graphics.setColor(0.69, 0.80, 0.63)
+    love.graphics.rectangle(
+      "fill",
+      position.x - 20,
+      position.y - 48,
+      40 * health.current / health.maximum,
+      4
+    )
+  end)
+  love.graphics.setColor(0.98, 0.83, 0.55)
+  for _, bullet in ipairs(combat.bullets) do love.graphics.circle("fill", bullet.x, bullet.y, 3) end
+  if feedback.values.impact > 0 then
+    love.graphics.setColor(0.98, 0.83, 0.55, feedback.values.impact)
+    love.graphics.circle(
+      "line",
+      feedback.values.x,
+      feedback.values.y,
+      8 + (1 - feedback.values.impact) * 14
+    )
+  end
+end
+
+function love.draw()
+  local width = love.graphics.getWidth()
+  local height = love.graphics.getHeight()
+  love.graphics.clear(0.07, 0.12, 0.15)
+  camera:draw(drawWorld)
+  -- Screen-space strips keep moving sprites from obscuring the HUD.
+  love.graphics.setColor(0.07, 0.12, 0.15)
+  love.graphics.rectangle("fill", 0, 0, width, 145)
+  love.graphics.rectangle("fill", 0, height - 80, width, 80)
+  -- Everything below is screen-space UI; the world remains visible under menus.
+  if not session.flow:is("playing") then
+    love.graphics.setColor(0.025, 0.06, 0.075, 0.8)
+    love.graphics.rectangle("fill", 0, 0, width, height)
+  end
+  love.graphics.setFont(label)
+  love.graphics.setColor(0.69, 0.80, 0.79)
+  love.graphics.print("ARENA GAME / CHAPTER 02", 32, 28)
+  love.graphics.setFont(heading)
+  love.graphics.setColor(0.95, 0.90, 0.78)
+  if session.flow:is("playing") then
+    love.graphics.print("Clear the harbor", 32, 56)
+    love.graphics.setFont(label)
+    love.graphics.print("Wave " .. combat.state.wave .. "   Enemies " .. combat.enemies:count()
+      .. "   Hits " .. combat.state.hits .. "   Shots " .. #combat.bullets .. "/8", 32, 92)
+    if combat.enemies:count() == 0 then
+      love.graphics.print(
+        #combat.bullets == 0 and "N   Start the next wave" or "Waiting for shots to expire…",
+        32,
+        120
+      )
+    end
+  else
+    love.graphics.print(session.flow:is("title") and "A place to begin" or "Take a breath", 32, 112)
+    love.graphics.setFont(label)
+    love.graphics.print(
+      session.flow:is("title") and "Enter   Start a run" or "Enter / Esc   Resume",
+      32,
+      172
+    )
+    if session.flow:is("paused") then
+      love.graphics.print("R   Restart from the harbor", 32, 208)
+      love.graphics.print("Backspace   Return to title", 32, 244)
+    else
+      love.graphics.print("Aim with the mouse. Hold left click or Space to fire.", 32, 212)
+      love.graphics.print("Clear eight enemies, then press N for the next wave.", 32, 240)
+    end
+  end
+  love.graphics.setFont(label)
+  love.graphics.setColor(0.69, 0.80, 0.79)
+  love.graphics.print("F   Feedback: " .. (feedback.options.enabled and "on" or "off")
+    .. "     M   Reduced motion: " .. (feedback.options.reducedMotion and "on" or "off"), 32, height - 62)
+  love.graphics.print(session.state.focused and "WASD / Arrows   Move     Esc   Pause     R   Restart"
+    or "Window unfocused — return, then press Enter to resume", 32, height - 36)
+end
+function love.focus(hasFocus: boolean)
+  session.focus(hasFocus)
+end
+function love.quit()
+  combat.dispose()
+  feedback.clear()
+  Zombies.image:release()
+  Courier.image:release()
+  heading:release()
+  label:release()
+end
+return {
+  combat = combat,
+  feedback = feedback,
+  session = session,
+  player = player,
+  hero = hero,
+  camera = camera,
+  update = love.update,
+}
