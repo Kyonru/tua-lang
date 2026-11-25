@@ -975,6 +975,16 @@ previews when prompted. The outline shows sections, dialogue text and outgoing
 routes. Click a section, **Open text**, or a route target to navigate to its source.
 A route target opens the authored target token so you can edit that connection.
 
+Expand **Conversation map** to see sections in source order and arrows between
+sections, including loops and disconnected sections. Select a numbered connection
+to focus its source link below the map; that link opens the authored route token.
+Section names open their declarations. Use the zoom buttons, **Fit**, or drag empty
+space to pan. With the map focused, `+`/`-` zoom and `0` resets zoom; Control/Command
+plus wheel also zooms. Map expansion and zoom survive refresh for the same file.
+The map draws up to 40 sections and 80 routes. Missing, ambiguous or undisplayed
+destinations are omitted with a notice; consult the outline and Problems for those
+routes. The map does not infer reachability or select routes from mock conditions.
+
 By default this is an authored view. To test conditions, enter explicit JSON in
 **Mock context**, then choose **Apply mock context**:
 
@@ -1015,7 +1025,7 @@ Numbers use deterministic decimal formatting; Lua's `tostring` may spell them
 differently. Supply a preformatted string when exact display spelling matters.
 Imported context schemas are not validated against this input. Portraits, audio,
 localization and rich styles are not resolved; rich source uses its parsed plain
-template. Game handlers never run. Graphical layout remains planned. See the
+template. Game handlers never run. See the
 [editor reference](lsp.md) for refresh behavior and display limits.
 
 ## Authoring rules and common mistakes

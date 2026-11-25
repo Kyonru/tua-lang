@@ -301,7 +301,11 @@ bounded to 4,096 fields, 64 KiB per field and 1 MiB combined. Numeric preview
 spelling may differ from Lua tostring. No imported schema validation, handlers,
 portraits, audio, localization, traversal simulation or rich-style rendering occurs.
 At most 4,096 conditions are tested; large views also explicitly limit displayed
-sections/lines/routes. Graphical layout remains planned.
+sections/lines/routes. A collapsible conversation map draws up to 40 sections and
+80 authored routes in source order, including loops and disconnected sections.
+Numbered connections and nodes link to source; shared pan/zoom supports keyboard
+navigation. Missing, ambiguous and undisplayed targets are omitted with a notice.
+Map expansion and zoom survive same-file refresh; no reachability is inferred.
 Within @voice cue strings, completion reuses decoded cue IDs from valid dialogue
 scripts in the same project; hover and Find References describe authored uses,
 including different locales. JSON-aware edits preserve quotes/escapes and support

@@ -779,7 +779,12 @@ syntax clears the previous outline and points to Problems. Large views show at m
 200 sections, 100 lines per section and 200 routes per section with an explicit notice.
 Use **Apply mock context** to test each condition independently with explicit
 `context` and `locals` JSON records. **Use authored view** clears evaluation. These
-probes do not simulate conversation traversal; graphical layout remains planned.
+probes do not simulate conversation traversal. The collapsible conversation map
+lays out these same facts in source order, with source-linked nodes, numbered routes,
+keyboard zoom and pan controls. It draws up to 40 sections and 80 routes; missing,
+ambiguous and undisplayed destinations are omitted with a notice. Expansion and
+zoom survive same-file refresh. No additional parsing or reachability analysis runs
+in the extension.
 
 `tua/dialoguePreview` accepts `{ "textDocument": { "uri": "file:///..." } }` and
 returns `analysisRevision`, `documentVersion`, and `preview` (null when unavailable

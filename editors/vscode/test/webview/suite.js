@@ -244,9 +244,44 @@ async function run() {
     await screenshot("behavior-tree");
     const dialogueRange = { start: { line: 2, character: 0 }, end: { line: 2, character: 8 } };
     const dialogue = { sections: [{ label: "arrival", range: dialogueRange, lines: [{ text: "Welcome, %{name}.", speaker: "Guide", range: dialogueRange, choices: [{ text: "Continue", visibleCondition: true }] }] }], routes: [{ section: 0, line: 0, choice: 0, kind: "choice", target: "arrival", range: dialogueRange }, { section: 0, line: 0, choice: null, kind: "fallback", target: "arrival", range: dialogueRange }] };
+    const mapDialogue = {
+      sections: ["arrival", "decision", "farewell", "aside"].map(label => ({ label, range: dialogueRange, lines: [] })),
+      routes: [
+        { section: 0, target: "decision", kind: "wait", range: dialogueRange },
+        { section: 1, target: "farewell", kind: "branchTrue", range: dialogueRange },
+        { section: 1, target: "arrival", kind: "branchFalse", range: dialogueRange },
+        { section: 2, target: "farewell", kind: "choice", range: dialogueRange },
+      ],
+    };
+    await load(dialoguePreviewHtml(panel.webview, "file:///map.tdialogue", mapDialogue), "Dialogue Preview");
+    await evaluate("document.querySelector('.dialogue-map').open = true; document.querySelector('.dialogue-map').scrollIntoView()");
+    assert.equal(await evaluate("document.querySelectorAll('.dialogue-node').length"), 4);
+    assert.equal(await evaluate("document.querySelectorAll('#dialogue-graph svg>path').length"), 4);
+    await evaluate("document.getElementById('dialogue-zoom-in').click()");
+    assert.equal(await evaluate("document.getElementById('dialogue-zoom-level').textContent"), "120%");
+    await evaluate("document.getElementById('dialogue-graph-scroll').dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true }))");
+    assert.equal(await evaluate("document.getElementById('dialogue-zoom-level').textContent"), "100%");
+    await evaluate("document.querySelector('.dialogue-edge').focus(); document.activeElement.click()");
+    assert.equal(await evaluate("document.activeElement.closest('li').id"), "dialogue-route-1");
+    assert.equal(await evaluate("document.getElementById('dialogue-path-1').classList.contains('selected')"), true);
+    await evaluate("document.activeElement.click()");
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///map.tdialogue"), "map route navigation");
+    await evaluate("document.querySelector('.dialogue-map').scrollIntoView()");
+    await evaluate("document.getElementById('dialogue-zoom-in').click()");
+    await load(dialoguePreviewHtml(panel.webview, "file:///map.tdialogue", mapDialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('.dialogue-map').open"), true, "map stays expanded after refresh");
+    assert.equal(await evaluate("document.getElementById('dialogue-zoom-level').textContent"), "120%", "map zoom survives refresh");
+    await evaluate("document.getElementById('dialogue-zoom-reset').click(); document.querySelector('.dialogue-map').scrollIntoView()");
+    await screenshot("dialogue-conversation-map");
+    await workbench.send("Emulation.setDeviceMetricsOverride", { width: 900, height: 740, deviceScaleFactor: 1, mobile: false });
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "map stays within narrow pane");
+    await evaluate("document.getElementById('dialogue-zoom-fit').click(); document.querySelector('.dialogue-map').scrollIntoView()");
+    await screenshot("dialogue-conversation-map-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
     await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", dialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('.dialogue-map').open"), false, "another dialogue starts collapsed");
     assert.equal(await evaluate("document.querySelector('.speech').textContent.includes('%{name}')"), true);
-    await evaluate("document.querySelector('[data-source]').focus()");
+    await evaluate("document.querySelector('main [data-source]').focus()");
     assert.equal(await evaluate("document.activeElement.classList.contains('source')"), true);
     await evaluate("document.activeElement.click()");
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///arrival.tdialogue"), "dialogue source navigation");

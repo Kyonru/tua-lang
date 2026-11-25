@@ -1,6 +1,7 @@
 "use strict";
 
 const vscode = require("vscode");
+const { dialogueGraph } = require("./graph");
 const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { displayUriPath, openLocationMessage } = require("../shared/locations");
@@ -87,9 +88,10 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
     const limited = section.lines.length > 100 || outgoing.length > 200;
     return `<section><h2>${link(section.label, section.range)}${index === 0 ? " · Default entry" : ""}</h2>${resultsHtml(index)}${section.action ? `<p>Action: <code>${escapeHtml(section.action)}</code></p>` : ""}${section.wait != null ? `<p>Wait: ${escapeHtml(section.wait)} seconds</p>` : ""}${lines}${routeHtml ? `<ol aria-label="Outgoing routes">${routeHtml}</ol>` : ""}${limited ? '<p class="meta">Large section: showing the first 100 lines and 200 routes. Open source for the full section.</p>' : ""}</section>`;
   }).join("");
+  const graph = message ? { html: "", styles: "", script: "" } : dialogueGraph(preview, link, uri);
   return webviewDocument(webview, {
     title: "Dialogue Preview",
-    styles: STYLES,
+    styles: STYLES + graph.styles,
     body: `<header><div><h1>Dialogue preview</h1><p>${escapeHtml(displayUriPath(uri))}</p></div><button type="button" id="reload">Reload</button></header>
       <p class="meta">${preview?.mock ? "Each condition is tested independently against the last applied JSON. All routes remain visible; no conversation is simulated." : "Authored structure. Apply mock JSON to test conditions and substitute text."} Text previews are plain, without localization or rich styling. Numeric spelling may differ from Lua. No handlers or audio run.</p>
       <div class="mock-controls"><label for="mock-context">Mock context (JSON)</label><textarea id="mock-context" maxlength="65536" spellcheck="false" aria-describedby="mock-help">${escapeHtml(mock.draft ?? DEFAULT_MOCK)}</textarea>
@@ -97,8 +99,10 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
       <div class="mock-actions"><button id="apply-mock" type="button">Apply mock context</button><button id="clear-mock" type="button">Use authored view</button></div>
       ${mock.error ? `<p class="error" role="alert">${escapeHtml(mock.error)}</p>` : ""}</div>
       ${preview?.mock?.text?.bindingError ? `<p class="error">Mock text unavailable: ${escapeHtml(preview.mock.text.bindingError.message)}. Authored text is shown. ${link("Open source", preview.mock.text.bindingError.range)}</p>` : ""}
+      ${graph.html}
       <main>${message ? `<p role="status">${escapeHtml(message)}</p>` : content || '<p>No dialogue sections found.</p>'}${preview?.mock?.text?.truncated ? '<p>Text preview limit reached (4,096 fields or 1 MiB combined output). Remaining text stays authored.</p>' : ""}${preview?.mock?.truncated ? '<p>Only the first 4,096 conditions were tested.</p>' : ""}${sections.length > 200 ? '<p>Showing the first 200 sections. Open source for the full conversation.</p>' : ""}</main>`,
-    script: `const ranges = ${jsonForHtml(ranges)};
+    script: `${graph.script}
+      const ranges = ${jsonForHtml(ranges)};
       const uri = ${jsonForHtml(uri)};
       const input = document.getElementById("mock-context");
       input.addEventListener("input", () => vscode.postMessage({command:"mockDraft", uri, text:input.value}));

@@ -634,7 +634,7 @@ context objects. Core export/import works without a filesystem or LÖVE.
   route facts with UTF-16 ranges and document versions. Preview Dialogue uses
   shared source navigation and hidden-view refresh, rejects stale navigation and
   responses, clears invalid source and bounds large views. No host handlers or
-  assets execute. Mock evaluation is described below; graphical layout remains pending.
+  assets execute. Mock evaluation and graphical layout are described below.
 - [x] Mock-condition evaluation foundation: core parses explicit JSON `context`
   and `locals` records without imports or handlers. Strict boolean/nil rules,
   short-circuiting, scalar equality, ordered numeric comparisons and path errors
@@ -642,8 +642,8 @@ context objects. Core export/import works without a filesystem or LÖVE.
   expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
   levels and finite numbers within ±2^53 for interpreter portability. Arrays are
   rejected. This does not validate imported context schemas or execute a dialogue.
-  Transport/UI controls are implemented below; text presentation and
-  route-state presentation remain pending.
+  Transport/UI controls and text presentation are implemented below;
+  route-state presentation remains pending.
 - [x] Explicit mock input in the editor: drafts stay in memory and only apply on
   Apply mock context. Core probes branch/visibility/availability conditions
   independently (up to 4,096), preserving all routes and source-located errors.
@@ -668,9 +668,14 @@ context objects. Core export/import works without a filesystem or LÖVE.
   Apply mock context now evaluates conditions and text together; authored reset and
   stale-response protections apply to both. Rich styles and locale resolution remain
   outside this plain-text preview.
-- [ ] Add a static conversation graph/text preview with source navigation and
-  explicit mock-context input. Analysis must not execute project handlers or
-  asset loaders. Keep any opt-in runtime trace clearly separate from static views.
+- [x] Static conversation graph/text preview with source navigation and explicit
+  mock-context input. The bounded source-order map includes loops and disconnected
+  sections, numbered source-linked routes, shared pan/zoom, keyboard navigation,
+  and same-file expansion/zoom retention. Limits (40 sections/80 routes) and omitted
+  missing/ambiguous/undisplayed targets are explicit. Native development-host tests
+  cover navigation, focus, zoom, narrow panes and refresh state. No handlers or
+  loaders execute; runtime tracing remains separate. Installed-extension qualification
+  and richer localized/styled text remain pending.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.

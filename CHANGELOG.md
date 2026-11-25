@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a bounded conversation map to dialogue previews, with loops, numbered
+  source-linked routes, shared pan/zoom and keyboard navigation.
+
 - Preview substituted dialogue lines, choices and reasons from explicit mock args
   and bindings, with authored-text disclosures, source-linked errors and output limits.
 
