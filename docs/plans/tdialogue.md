@@ -636,6 +636,15 @@ context objects. Core export/import works without a filesystem or LÖVE.
   responses, clears invalid source and bounds large views. No host handlers or
   assets execute; condition flags are explicitly unevaluated. Mock-context input
   and graphical layout remain pending.
+- [x] Mock-condition evaluation foundation: core parses explicit JSON `context`
+  and `locals` records without imports or handlers. Strict boolean/nil rules,
+  short-circuiting, scalar equality, ordered numeric comparisons and path errors
+  match the emitted condition runtime. Missing fields/null mean nil; errors retain
+  expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
+  levels and finite numbers within ±2^53 for interpreter portability. Arrays are
+  rejected. This does not validate imported context schemas or execute a dialogue.
+  Transport/UI controls, placeholder substitution and route-state presentation
+  remain pending; the current editor outline still shows authored data only.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

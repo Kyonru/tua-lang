@@ -8,6 +8,7 @@ pub mod contracts;
 pub mod expressions;
 pub mod flow;
 mod media;
+pub mod mock;
 pub mod paths;
 pub mod placeholders;
 pub mod preview;
