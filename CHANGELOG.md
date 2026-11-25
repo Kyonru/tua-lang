@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Run clean-copy arena tutorial qualification on Linux CI with explicit LuaJIT selection
+  and retained diagnostic artifacts; expose the same headless gate through Make.
+
 - Qualify all eight arena tutorial checkpoints from clean source copies; add a repeatable
   path check, finish chapter navigation and clarify shared save ownership and prerequisites.
 

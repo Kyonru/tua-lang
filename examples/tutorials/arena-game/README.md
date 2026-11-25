@@ -18,3 +18,20 @@ the previous one; there is no shared hidden framework or separate `latest` copy.
 Start in `checkpoints/01-playable-loop`, then run `tua build` and `love build`.
 Read the [series guide](../../../docs/tutorials/arena-game/index.md).
 Existing standalone examples remain supported while this series is assembled.
+
+## Continuous qualification
+
+From the repository root, run `make arena-tutorials-check` to build the current
+compiler and check every chapter from a fresh source copy. It runs formatting,
+warning-free type checking, emission and the headless Lua suites. Use
+`LUA=luajit` to match the Linux CI gate. Each invocation keeps its report and logs
+under a fresh `target/arena-tutorials/run.*/report` directory.
+
+CI uploads these logs on success or failure. This headless gate does not run native
+LÖVE, GPU, audio, save-process, inspector or performance checks. For full native
+qualification, run from repository root:
+
+```sh
+python3 scripts/qualify-arena-tutorials.py --tua /path/to/tua \
+  --lua luajit --love /path/to/love --output /new/report/path
+```

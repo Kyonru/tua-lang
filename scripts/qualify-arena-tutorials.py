@@ -15,8 +15,13 @@ repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("--tua", type=Path, required=True)
 parser.add_argument("--love", type=Path)
+parser.add_argument("--lua", default="lua", help="Lua interpreter executable or path")
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
+lua = shutil.which(args.lua)
+if lua is None:
+    parser.error(f"Lua interpreter not found: {args.lua}")
+lua = str(Path(lua).resolve())
 tua = args.tua.resolve()
 love = args.love.resolve() if args.love else None
 output = args.output.resolve()
@@ -28,6 +33,8 @@ result = {
     "worktreeDirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=repo)),
     "scope": "agent-led clean-copy functional qualification; not a human walkthrough or benchmark",
     "native": "requested" if love else "not requested",
+    "lua": {"executable": lua, "version": subprocess.check_output(
+        [lua, "-v"], text=True, stderr=subprocess.STDOUT).strip()},
     "chapters": [],
 }
 if love:
@@ -74,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix="tua-arena-path-") as directory:
         suites = []
         for suite in ("movement", "session", "combat", "decisions", "soundscape", "conversation"):
             if (project / f"tests/{suite}.lua").exists():
-                run(["lua", f"../tests/{suite}.lua"], project / "build", log)
+                run([lua, f"../tests/{suite}.lua"], project / "build", log)
                 suites.append(suite)
         native = []
         if love:
@@ -102,3 +109,4 @@ with tempfile.TemporaryDirectory(prefix="tua-arena-path-") as directory:
 result["status"] = "passed"
 (output / "qualification.json").write_text(json.dumps(result, indent=2) + "\n")
 print("ARENA_PATH_OK clean copies, formatting, checks, builds and selected runtime suites")
+print("Qualification report: " + str(output / "qualification.json"))

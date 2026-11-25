@@ -119,6 +119,17 @@ jobs:
       - name: Test bundled runtimes on LuaJIT
         if: runner.os == 'Linux'
         run: make runtime-test LUA=luajit
+      - name: Qualify arena tutorial checkpoints
+        if: runner.os == 'Linux'
+        run: make arena-tutorials-check LUA=luajit
+      - name: Upload arena qualification logs
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: arena-tutorials-${{ github.run_id }}
+          path: target/arena-tutorials/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Exercise native LÖVE save backend
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum env TUA_LOVE_BIN=/usr/bin/love python3 scripts/test-save-love.py
