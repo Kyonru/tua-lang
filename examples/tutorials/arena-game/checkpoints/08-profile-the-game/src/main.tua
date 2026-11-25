@@ -1,0 +1,476 @@
+local Progress = require("progress")
+local progress = Progress.new()
+local Conversation = require("conversation")
+local HitShader = require("hit-shader")
+local hitShader = HitShader.new(true)
+local AudioBackend = require("audio-backend")
+local Soundscape = require("soundscape")
+local audioBackend = AudioBackend.new()
+local soundscape = Soundscape.new(audioBackend)
+local Session = require("session")
+local session = Session.new()
+local Feedback = require("feedback")
+local feedback = Feedback.new()
+local combat = session.combat
+local conversation = Conversation.new(function() return combat.nextWave() end)
+local controls = input({
+  controls = {
+    workload = { "key:f6" },
+    save = { "key:f5" },
+    restore = { "key:f9" },
+    recovery = { "key:f8" },
+    resetSave = { "key:delete" },
+    locale = { "key:tab" },
+    dialogUp = { "key:up" },
+    dialogDown = { "key:down" },
+    shader = { "key:g" },
+    retryShader = { "key:l" },
+    musicDown = { "key:1" },
+    musicUp = { "key:2" },
+    effectsDown = { "key:3" },
+    effectsUp = { "key:4" },
+    mute = { "key:0" },
+    fire = { "mouse:1", "key:space" },
+    nextWave = { "key:n" },
+    feedback = { "key:f" },
+    motion = { "key:m" },
+    confirm = { "key:return" },
+    pause = { "key:escape" },
+    restart = { "key:r" },
+    leave = { "key:backspace" },
+    left = { "key:a", "key:left" },
+    right = { "key:d", "key:right" },
+    up = { "key:w", "key:up" },
+    down = { "key:s", "key:down" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+local Courier = spriteSheet({
+  image = "assets/adventurer.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = {
+    idle = { column = 0, row = 0, fps = 1 },
+    walk = { frames = { { column = 0, row = 1 }, { column = 6, row = 1 } }, fps = 8 },
+  },
+})
+Courier.image:setFilter("linear", "linear")
+local hero = Courier:player("idle")
+local Zombies = spriteSheet({
+  image = "assets/zombie.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = {
+    idle = { column = 0, row = 0, fps = 1 },
+    walk = { frames = { { column = 0, row = 1 }, { column = 6, row = 1 } }, fps = 6 },
+  },
+})
+local zombie = Zombies:player("idle")
+local zombieWalk = Zombies:player("walk")
+local player = session.player
+local camera = Camera.new({ x = player.x, y = player.y, smoothing = 6 })
+local heading = love.graphics.newFont(24)
+local label = love.graphics.newFont(14)
+local facing = 1
+local generation = 0
+local checkpointGeneration = -1
+local checkpointWave = -1
+local function applyPreferences()
+  if progress.blocked() then return end
+  local saved = progress.snapshot()
+  I18n.setLocale(saved.locale)
+  conversation.locale()
+  soundscape.options.music = saved.music
+  soundscape.options.effects = saved.effects
+  soundscape.options.muted = saved.muted
+  soundscape.applyVolumes()
+  feedback.options.enabled = saved.feedback
+  feedback.options.reducedMotion = saved.reducedMotion
+  hitShader.state.enabled = saved.shader
+end
+applyPreferences()
+local function capturePreferences()
+  progress.preferences({
+    locale = I18n.getLocale() == "fr" and "fr" or "en",
+    music = soundscape.options.music,
+    effects = soundscape.options.effects,
+    muted = soundscape.options.muted,
+    feedback = feedback.options.enabled,
+    reducedMotion = feedback.options.reducedMotion,
+    shader = hitShader.state.enabled,
+  })
+end
+local function checkpointBoundary()
+  if not session.flow:is("playing") or combat.state.health <= 0
+    or combat.enemies:count() > 0 or #combat.bullets > 0 then return end
+  if checkpointGeneration == session.state.generation and checkpointWave == combat.state.wave then
+    return
+  end
+  if progress.blocked() then return end
+  -- A failed write remains dirty; let the binding back off instead of retrying every frame.
+  progress.checkpoint(combat.state.wave, combat.state.health)
+  checkpointGeneration = session.state.generation
+  checkpointWave = combat.state.wave
+end
+
+local function resetPresentation()
+  camera.x = player.x
+  camera.y = player.y
+  camera:follow(player.x, player.y)
+  hero:play("idle", true)
+  facing = 1
+  conversation.close()
+  feedback.clear()
+  zombieWalk:play("walk", true)
+end
+function love.load()
+  love.window.setMode(960, 640)
+  love.window.setTitle("Arena game — 08: profile the game")
+end
+function love.update(dt: number)
+  -- Poll even when paused/unfocused so old press edges cannot leak into play.
+  controls:update()
+  if session.state.focused and session.flow:is("title") and not progress.ui.confirmReset
+    and controls:pressed("workload") then
+    local count = combat.options.enemyCount
+    combat.options.enemyCount = count == 8 and 32 or (count == 32 and 128 or 8)
+  end
+  if progress.ui.confirmReset then
+    if not session.state.focused then return end
+    if controls:pressed("confirm") then
+      if progress.confirmReset() then applyPreferences() end
+    elseif controls:pressed("pause") then progress.cancelReset() end
+    soundscape.update(dt, "paused", session.state.focused, session.state.generation,
+      combat.state.shots, combat.state.hits, combat.state.attacks)
+    return
+  end
+  if session.state.focused and session.flow:is("title") and controls:pressed("resetSave") then
+    progress.requestReset()
+    return
+  end
+  if session.state.focused and session.flow:is("title") and controls:pressed("recovery") then
+    if progress.recover() then applyPreferences() end
+    return
+  end
+  if session.state.focused and session.flow:is("title") and controls:pressed("restore") then
+    local saved = progress.snapshot()
+    if not progress.blocked() and saved.clearedWave > 0
+      and session.resumeCheckpoint(saved.clearedWave, saved.health) then
+      generation = session.state.generation
+      checkpointGeneration = generation
+      checkpointWave = saved.clearedWave
+      resetPresentation()
+    end
+    return
+  end
+  if controls:pressed("locale") then
+    I18n.setLocale(I18n.getLocale() == "en" and "fr" or "en")
+    conversation.locale()
+  end
+  if controls:pressed("shader") then hitShader.state.enabled = not hitShader.state.enabled end
+  if controls:pressed("retryShader") then hitShader.retry() end
+  -- Loading/hot reload belongs to the host, not the paused gameplay clock.
+  hitShader.update(dt)
+  if controls:pressed("musicDown") then soundscape.adjust(true, -0.1) end
+  if controls:pressed("musicUp") then soundscape.adjust(true, 0.1) end
+  if controls:pressed("effectsDown") then soundscape.adjust(false, -0.1) end
+  if controls:pressed("effectsUp") then soundscape.adjust(false, 0.1) end
+  if controls:pressed("mute") then soundscape.mute() end
+  local command: Session.Command = "none"
+  if controls:pressed("leave") then command = "leave"
+  elseif controls:pressed("restart") then command = "restart"
+  elseif controls:pressed("pause") then command = "pause"
+  elseif controls:pressed("confirm") then command = "confirm" end
+  local x, y = controls:get("move")
+  local mx, my = love.mouse.getPosition()
+  -- Aim uses the unshaken camera; cosmetic feedback cannot alter trajectories.
+  session.trigger.x, session.trigger.y = camera:toWorld(mx, my)
+  session.trigger.held = controls:down("fire")
+  if controls:pressed("feedback") then
+    feedback.options.enabled = not feedback.options.enabled
+    feedback.clear()
+  end
+  if controls:pressed("motion") then
+    feedback.options.reducedMotion = not feedback.options.reducedMotion
+    feedback.clear()
+  end
+  capturePreferences()
+  progress.update(dt)
+  if controls:pressed("save") then progress.save() end
+  checkpointBoundary()
+  if conversation.state.active then
+    if command == "restart" or command == "leave" then
+      conversation.close()
+    else
+      if session.state.focused then
+        if session.flow:is("paused") then
+          session.update(0, 0, 0, command)
+        elseif command == "pause" then conversation.close()
+        else
+          local direction = controls:pressed("dialogDown") and 1 or (controls:pressed("dialogUp") and -1 or 0)
+          conversation.update(dt, command == "confirm", direction)
+        end
+      end
+      soundscape.update(dt, "paused", session.state.focused, session.state.generation,
+        combat.state.shots, combat.state.hits, combat.state.attacks)
+      return
+    end
+  end
+  if session.state.focused and session.flow:is("playing") and command == "none"
+    and controls:pressed("nextWave") and combat.enemies:count() == 0 and #combat.bullets == 0 then
+    conversation.start()
+    soundscape.update(dt, "paused", true, session.state.generation,
+      combat.state.shots, combat.state.hits, combat.state.attacks)
+    return
+  end
+  local shots, hits = combat.state.shots, combat.state.hits
+  local advanced = session.update(dt, x, y, command)
+  if generation ~= session.state.generation then
+    generation = session.state.generation
+    resetPresentation()
+  end
+  soundscape.update(dt, session.flow.current, session.state.focused, session.state.generation,
+    combat.state.shots, combat.state.hits, combat.state.attacks)
+  checkpointBoundary()
+  if not advanced then return end
+  feedback.update(
+    dt,
+    combat.state.shots > shots,
+    combat.state.hits > hits,
+    combat.state.hitX,
+    combat.state.hitY
+  )
+  if x ~= 0 then facing = x < 0 and -1 or 1 end
+  hero:play((x ~= 0 or y ~= 0) and "walk" or "idle")
+  hero:update(dt)
+  zombieWalk:update(dt)
+  camera:follow(player.x, player.y)
+  camera:update(dt)
+end
+
+local function drawWorld()
+  if feedback.options.enabled and not feedback.options.reducedMotion then
+    love.graphics.translate(math.sin(feedback.values.clock * 80) * feedback.values.impact * 2, 0)
+  end
+  love.graphics.setColor(0.13, 0.23, 0.26)
+  love.graphics.rectangle("fill", 0, 0, 1600, 1200)
+  love.graphics.setColor(0.74, 0.64, 0.40)
+  love.graphics.rectangle("fill", 784, 112, 32, 8)
+  love.graphics.rectangle("fill", 1496, 616, 8, 32)
+  love.graphics.circle("line", 800, 600, 42)
+  love.graphics.setFont(label)
+  love.graphics.print(I18n.t("ui.north"), 760, 70)
+  love.graphics.print(I18n.t("ui.east"), 1450, 580)
+  love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
+  love.graphics.ellipse("fill", player.x, player.y - 3, 23, 7)
+  love.graphics.setColor(1, 1, 1)
+  hero:draw(player.x, player.y, 0, facing * 0.6, 0.6)
+  local angle = math.atan2(session.trigger.y - (player.y - 28), session.trigger.x - player.x)
+  love.graphics.setColor(0.95, 0.78, 0.45)
+  love.graphics.line(player.x, player.y - 28,
+    player.x + math.cos(angle) * (26 - feedback.values.recoil),
+    player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil))
+  combat.enemies:each(function(id, position, health)
+    love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
+    love.graphics.ellipse("fill", position.x, position.y + 25, 23, 7)
+    love.graphics.setColor(1, 1, 1)
+    local brain = combat.readBrain(id)
+    local sprite = brain and brain.context.mode ~= "attack" and zombieWalk or zombie
+    local flash = feedback.options.enabled and combat.state.hitEntity == id and feedback.values.impact or 0
+    hitShader.draw(flash, function()
+      sprite:draw(position.x, position.y + 28, 0, 0.6, 0.6)
+    end)
+    love.graphics.setColor(0.25, 0.33, 0.34)
+    love.graphics.rectangle("fill", position.x - 20, position.y - 48, 40, 4)
+    love.graphics.setColor(0.69, 0.80, 0.63)
+    love.graphics.rectangle(
+      "fill",
+      position.x - 20,
+      position.y - 48,
+      40 * health.current / health.maximum,
+      4
+    )
+  end)
+  love.graphics.setColor(0.98, 0.83, 0.55)
+  for _, bullet in ipairs(combat.bullets) do love.graphics.circle("fill", bullet.x, bullet.y, 3) end
+  if feedback.values.impact > 0 then
+    love.graphics.setColor(0.98, 0.83, 0.55, feedback.values.impact)
+    love.graphics.circle(
+      "line",
+      feedback.values.x,
+      feedback.values.y,
+      8 + (1 - feedback.values.impact) * 14
+    )
+  end
+end
+
+local function saveStatusText(): string
+  local status = progress.ui.status
+  if status == "new" then return I18n.t("ui.saveNew") end
+  if status == "loaded" then return I18n.t("ui.saveLoaded") end
+  if status == "saved" then return I18n.t("ui.saveDone") end
+  if status == "pending" then return I18n.t("ui.savePending") end
+  if status == "blocked" then return I18n.t("ui.saveBlockedShort") end
+  return I18n.t("ui.saveFailed")
+end
+
+function love.draw()
+  local width = love.graphics.getWidth()
+  local height = love.graphics.getHeight()
+  love.graphics.clear(0.07, 0.12, 0.15)
+  camera:draw(drawWorld)
+  -- Screen-space strips keep moving sprites from obscuring the HUD.
+  love.graphics.setColor(0.07, 0.12, 0.15)
+  love.graphics.rectangle("fill", 0, 0, width, 145)
+  love.graphics.rectangle("fill", 0, height - 132, width, 132)
+  -- Everything below is screen-space UI; the world remains visible under menus.
+  if not session.flow:is("playing") then
+    love.graphics.setColor(0.025, 0.06, 0.075, 0.8)
+    love.graphics.rectangle("fill", 0, 0, width, height)
+  end
+  love.graphics.setFont(label)
+  love.graphics.setColor(0.69, 0.80, 0.79)
+  love.graphics.print(I18n.t("ui.chapter"), 32, 28)
+  love.graphics.setFont(heading)
+  love.graphics.setColor(0.95, 0.90, 0.78)
+  if session.flow:is("playing") then
+    love.graphics.print(I18n.t("ui.clear"), 32, 56)
+    love.graphics.setFont(label)
+    love.graphics.printf(I18n.t("ui.stats", {
+      health = combat.state.health,
+      wave = combat.state.wave,
+      enemies = combat.enemies:count(),
+      hits = combat.state.hits,
+      shots = #combat.bullets,
+    }), 32, 92, width - 64)
+    if combat.enemies:count() == 0 then
+      love.graphics.print(
+        #combat.bullets == 0 and I18n.t("ui.next") or I18n.t("ui.waiting"),
+        32,
+        120
+      )
+    end
+  else
+    love.graphics.print(session.flow:is("title") and I18n.t("ui.title")
+      or (session.flow:is("gameover") and I18n.t("ui.over") or I18n.t("ui.pause")), 32, 112)
+    love.graphics.setFont(label)
+    love.graphics.print(
+      session.flow:is("title") and I18n.t("ui.start")
+      or (session.flow:is("gameover") and I18n.t("ui.retry") or I18n.t("ui.resume")),
+      32,
+      172
+    )
+    if session.flow:is("paused") or session.flow:is("gameover") then
+      love.graphics.print(session.flow:is("gameover")
+        and I18n.t("ui.result", { count = combat.state.defeated, wave = combat.state.wave })
+        or I18n.t("ui.restart"), 32, 208)
+      love.graphics.print(I18n.t("ui.leave"), 32, 244)
+    else
+      love.graphics.print(I18n.t("ui.aim"), 32, 212)
+      love.graphics.print(I18n.t("ui.survive"), 32, 240)
+    end
+  end
+  love.graphics.setFont(label)
+  love.graphics.setColor(0.69, 0.80, 0.79)
+  if not session.flow:is("title") then
+    local shaderStatus = hitShader.state.loading and I18n.t(
+      "ui.loading",
+      { count = hitShader.state.completed, total = hitShader.state.total }
+    )
+      or (hitShader.state.ready and (hitShader.state.enabled and I18n.t("ui.ready") or I18n.t("ui.off")) or I18n.t("ui.unavailable"))
+    if hitShader.state.error ~= "" then shaderStatus = shaderStatus .. I18n.t("ui.error") end
+    love.graphics.print(progress.blocked() and I18n.t("ui.saveProblem")
+      or (progress.ui.status == "failed" and I18n.t("ui.saveRetry")
+        or I18n.t("ui.shader", { status = shaderStatus })), 32, height - 112)
+    love.graphics.print(I18n.t("ui.audio", {
+      music = math.floor(soundscape.options.music * 100 + 0.5),
+      effects = math.floor(soundscape.options.effects * 100 + 0.5),
+      mute = soundscape.options.muted and I18n.t("ui.unmute") or I18n.t("ui.mute"),
+    }), 32, height - 88)
+    love.graphics.print(I18n.t("ui.motion", {
+      feedback = feedback.options.enabled and I18n.t("ui.on") or I18n.t("ui.off"),
+      motion = feedback.options.reducedMotion and I18n.t("ui.on") or I18n.t("ui.off"),
+    }), 32, height - 62)
+    love.graphics.print(session.state.focused and (session.flow:is("gameover")
+      and I18n.t("ui.deadControls") or I18n.t("ui.controls")) or I18n.t("ui.focus"), 32, height - 36)
+  end
+  love.graphics.print(I18n.t("ui.language"), width - 210, 28)
+  if session.flow:is("title") then
+    love.graphics.printf(
+      I18n.t("ui.workload", { count = combat.options.enemyCount }),
+      32,
+      262,
+      width - 64
+    )
+    love.graphics.printf(I18n.t("ui.saveHelp"), 32, 282, width - 64)
+    love.graphics.printf(I18n.t("ui.saveStatus", {
+      wave = progress.snapshot().clearedWave,
+      status = saveStatusText(),
+    }), 32, 336, width - 64)
+    if progress.blocked() then
+      love.graphics.printf(I18n.t("ui.saveBlocked"), 32, 380, width - 64)
+    end
+  end
+  if progress.ui.confirmReset then
+    love.graphics.setColor(0.025, 0.06, 0.075)
+    love.graphics.rectangle("fill", 16, 145, width - 32, height - 153)
+    love.graphics.setColor(0.95, 0.90, 0.78)
+    love.graphics.printf(I18n.t("ui.resetSave"), 32, 180, width - 64)
+    if progress.ui.resetFailed then
+      love.graphics.printf(I18n.t("ui.resetFailed"), 32, 300, width - 64)
+    end
+  end
+  if conversation.state.active then
+    love.graphics.setColor(0.025, 0.06, 0.075, 1)
+    love.graphics.rectangle("fill", 16, 145, width - 32, height - 153)
+    local snapshot = conversation.player:snapshot()
+    local node = snapshot.node
+    if node then
+      love.graphics.setColor(0.95, 0.90, 0.78)
+      love.graphics.setFont(heading)
+      love.graphics.printf(node.speaker or I18n.t("ui.speaker"), 32, 164, width - 64)
+      love.graphics.setFont(label)
+      love.graphics.printf(node.text, 32, 202, width - 64)
+      for index, option in ipairs(node.options) do
+        love.graphics.setColor(index == conversation.state.selected and 0.95 or 0.65, 0.85, 0.70)
+        love.graphics.printf((index == conversation.state.selected and "> " or "  ") .. option.text,
+          32, 264 + (index - 1) * 50, width - 64)
+      end
+    end
+    love.graphics.setColor(0.69, 0.80, 0.79)
+    love.graphics.printf(session.state.focused and (session.flow:is("paused") and I18n.t("ui.resume") or I18n.t("ui.dialogueHelp"))
+      or I18n.t("ui.focus"), 32, height - 60, width - 64)
+  end
+end
+function love.focus(hasFocus: boolean)
+  session.focus(hasFocus)
+end
+function love.quit()
+  capturePreferences()
+  if not progress.dispose() then
+    print("Arena save blocked or failed; existing files were not reset.")
+  end
+  conversation.dispose()
+  hitShader.dispose()
+  soundscape.dispose()
+  combat.dispose()
+  feedback.clear()
+  Zombies.image:release()
+  Courier.image:release()
+  heading:release()
+  label:release()
+end
+return {
+  progress = progress,
+  conversation = conversation,
+  hitShader = hitShader,
+  soundscape = soundscape,
+  audioBackend = audioBackend,
+  combat = combat,
+  feedback = feedback,
+  session = session,
+  player = player,
+  hero = hero,
+  camera = camera,
+  update = love.update,
+}

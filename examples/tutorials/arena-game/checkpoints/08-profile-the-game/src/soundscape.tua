@@ -1,0 +1,80 @@
+export type Backend = {
+  update: (dt: number) -> nil,
+  scene: (active: boolean) -> nil,
+  pauseMusic: (paused: boolean) -> nil,
+  stopEffects: () -> nil,
+  shot: () -> nil,
+  hit: () -> nil,
+  hurt: () -> nil,
+  defeat: () -> nil,
+  volumes: (musicGain: number, effectsGain: number, muted: boolean) -> nil,
+  dispose: () -> nil,
+}
+local function new(backend: Backend)
+  local options = { music = 0.35, effects = 0.6, muted = false }
+  local previous = { mode = "", generation = -1, shots = 0, hits = 0, attacks = 0, paused = false }
+  local disposed = false
+  local function applyVolumes()
+    backend.volumes(options.music, options.effects, options.muted)
+  end
+  local function adjust(music: boolean, delta: number)
+    if disposed then return end
+    if music then options.music = math.max(0, math.min(1, options.music + delta))
+    else options.effects = math.max(0, math.min(1, options.effects + delta)) end
+    applyVolumes()
+  end
+  local function mute()
+    if disposed then return end
+    options.muted = not options.muted
+    applyVolumes()
+  end
+  local function update(
+    dt: number,
+    mode: string,
+    focused: boolean,
+    generation: number,
+    shots: number,
+    hits: number,
+    attacks: number
+  )
+    if disposed then return end
+    local reset = previous.generation ~= generation
+    local transition = previous.mode ~= mode
+    local active = mode == "playing" or mode == "paused"
+    local wasActive = previous.mode == "playing" or previous.mode == "paused"
+    local sceneChanged = previous.mode == "" or active ~= wasActive or reset
+    if transition or reset then backend.stopEffects() end
+    if sceneChanged then backend.scene(active) end
+    local paused = mode == "paused" or not focused
+    if sceneChanged or paused ~= previous.paused then backend.pauseMusic(paused) end
+    if mode == "gameover" and transition and focused then backend.defeat() end
+    -- Summarize each category once per outer update; never replay a catch-up burst.
+    if mode == "playing" and focused and not reset and not transition then
+      if shots > previous.shots then backend.shot() end
+      if hits > previous.hits then backend.hit() end
+      if attacks > previous.attacks then backend.hurt() end
+    end
+    previous.mode = mode
+    previous.generation = generation
+    previous.shots = shots
+    previous.hits = hits
+    previous.attacks = attacks
+    previous.paused = paused
+    backend.update(dt)
+  end
+  local function dispose()
+    if disposed then return end
+    backend.dispose()
+    disposed = true
+  end
+  applyVolumes()
+  return {
+    applyVolumes = applyVolumes,
+    options = options,
+    adjust = adjust,
+    mute = mute,
+    update = update,
+    dispose = dispose,
+  }
+end
+return { new = new }

@@ -1,0 +1,45 @@
+export type Preferences = {
+  locale: "en" | "fr",
+  music: number,
+  effects: number,
+  muted: boolean,
+  feedback: boolean,
+  reducedMotion: boolean,
+  shader: boolean,
+}
+local function new()
+  return Save.contract({
+    slot = "arena",
+    version = 2,
+    schema = Save.record({
+      clearedWave = Save.number(0),
+      health = Save.number(10),
+      locale = Save.enum({ "en", "fr" }, "en"),
+      music = Save.number(0.35),
+      effects = Save.number(0.6),
+      muted = Save.boolean(false),
+      feedback = Save.boolean(true),
+      reducedMotion = Save.boolean(false),
+      shader = Save.boolean(true),
+    }),
+    migration_schemas = {
+      [1] = Save.record({ clearedWave = Save.number(0), health = Save.number(10) }),
+    },
+    migrations = {
+      [1] = function(old: { clearedWave: number, health: number })
+        return {
+          clearedWave = old.clearedWave,
+          health = old.health,
+          locale = "en",
+          music = 0.35,
+          effects = 0.6,
+          muted = false,
+          feedback = true,
+          reducedMotion = false,
+          shader = true,
+        }
+      end,
+    },
+  })
+end
+return { new = new }
