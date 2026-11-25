@@ -902,7 +902,12 @@ impl LspServer {
                     source_changes.push(change.uri);
                 }
                 FileChangeKind::Deleted => {
-                    self.analysis.remove_file(&change.uri);
+                    // A disk deletion does not close the client's text document.
+                    // Keep its overlay so subsequent incremental edits still have
+                    // a source and their document versions continue advancing.
+                    if !self.analysis.contains_document(&change.uri) {
+                        self.analysis.remove_file(&change.uri);
+                    }
                     deleted_sources.push(change.uri);
                 }
             }
@@ -958,7 +963,12 @@ impl LspServer {
         }
 
         for uri in deleted_sources {
-            push_diagnostics_publication(&mut publications, &mut published, &uri, Vec::new());
+            let diagnostics = if self.analysis.contains_document(&uri) {
+                self.diagnostics_for(&uri)
+            } else {
+                Vec::new()
+            };
+            push_diagnostics_publication(&mut publications, &mut published, &uri, diagnostics);
         }
 
         for uri in self.analysis.open_uris() {

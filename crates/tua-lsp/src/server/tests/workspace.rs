@@ -809,7 +809,7 @@ fn watched_file_changes_publish_closed_tua_file_diagnostics() {
     );
 }
 #[test]
-fn watched_file_delete_clears_diagnostics_and_removes_open_document() {
+fn watched_file_delete_preserves_open_document_and_diagnostics() {
     let uri = "file:///tmp/deleted-watched.tua";
     let source = "local hp: number = \"full\"\n";
     let output = run_messages(vec![
@@ -820,14 +820,11 @@ fn watched_file_delete_clears_diagnostics_and_removes_open_document() {
     let publications = diagnostics_publications(&output, uri);
 
     assert_eq!(publications.len(), 2);
-    assert_eq!(
-        publications[1]["params"]["diagnostics"]
-            .as_array()
-            .expect("delete diagnostics should be an array")
-            .len(),
-        0
-    );
-    assert!(response_with_id(&output, 2)["result"].is_null());
+    assert!(!publications[1]["params"]["diagnostics"]
+        .as_array()
+        .expect("open overlay diagnostics should remain available")
+        .is_empty());
+    assert!(!response_with_id(&output, 2)["result"].is_null());
 }
 #[test]
 fn watched_required_module_create_updates_intelligence_and_diagnostics() {

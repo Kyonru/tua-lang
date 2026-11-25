@@ -49,6 +49,7 @@ async function main() {
       extensionDevelopmentPath,
       extensionTestsPath,
       extensionTestsEnv: {
+        TUA_REAL_SERVER_SUITE: process.env.TUA_REAL_SERVER_SUITE || "all",
         TUA_REAL_SERVER_FIXTURES: JSON.stringify(fixtures),
         TUA_REAL_SERVER_PATH: serverPath,
         TUA_REAL_SERVER_CDP_PORT: String(cdpPort),

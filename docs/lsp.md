@@ -778,7 +778,10 @@ Edits and workspace `.tdialogue` file changes refresh the visible view, while hi
 views catch up on reveal. Deletion clears clean-source previews and invalidates
 navigation; recreation refreshes them. Dirty buffers remain authoritative until
 closed or saved. Closed documents reopen before requesting analysis; obsolete
-requests cannot restore cleared content. Invalid
+requests cannot restore cleared content. At the protocol level, a disk deletion
+keeps an open document's text, diagnostics and version tracking until `didClose`;
+further edits and recreation do not require a second `didOpen`. This also applies
+to ordinary Tua and Lua buffers. Invalid
 syntax clears the previous outline and points to Problems. Large views show at most
 200 sections, 100 lines per section and 200 routes per section with an explicit notice.
 Use **Apply mock context** to test each condition independently with explicit

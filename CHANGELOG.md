@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Preserve open LSP buffers after disk deletion so incremental edits, diagnostics
+  and dialogue previews remain synchronized through file recreation.
+
 - Refresh dialogue previews after workspace file changes and deletion/recreation,
   preserving unsaved buffers and rejecting obsolete responses and source links.
 

@@ -369,3 +369,61 @@ fn dialogue_preview_mock_text_refreshes_and_preserves_authored_source() {
         2
     );
 }
+
+#[test]
+fn dialogue_preview_keeps_overlay_versions_after_disk_deletion_and_recreation() {
+    let temp = TempProject::new("dialogue-preview-disk-lifecycle");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id greeting\n: Original (end)\n";
+    temp.write("src/scene.tdialogue", source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id| json!({"jsonrpc":"2.0", "id":id, "method":"tua/dialoguePreview", "params":{"textDocument":{"uri":uri}}});
+    temp.remove("src/scene.tdialogue");
+    server.send(watched_files_changed([(&*uri, 3)]));
+    server.send(did_change(&uri, &source.replace("Original", "Unsaved"), 2));
+    server.send(request(2));
+    let result = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(result["documentVersion"], 2);
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Unsaved"
+    );
+    temp.write(
+        "src/scene.tdialogue",
+        &source.replace("Original", "Recreated"),
+    );
+    server.send(watched_files_changed([(&*uri, 1)]));
+    server.send(did_change(
+        &uri,
+        &source.replace("Original", "Still unsaved"),
+        3,
+    ));
+    server.send(request(3));
+    let result = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(result["documentVersion"], 3);
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Still unsaved"
+    );
+    server.send(did_close(&uri));
+    server.send(request(4));
+    let result = &response_with_id(server.output(), 4)["result"];
+    assert!(result["documentVersion"].is_null());
+    assert!(result["preview"].is_null());
+    let recreated = std::fs::read_to_string(temp.path.join("src/scene.tdialogue")).unwrap();
+    let mut reopen = did_open(&uri, &recreated);
+    reopen["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(reopen);
+    server.send(request(5));
+    let result = &response_with_id(server.output(), 5)["result"];
+    assert_eq!(result["documentVersion"], 1);
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Recreated"
+    );
+}

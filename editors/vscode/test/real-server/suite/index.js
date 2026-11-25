@@ -6,6 +6,8 @@ const path = require("path");
 const vscode = require("vscode");
 const { previewContext, verifyGraphPreviews } = require("./graph-previews");
 
+const { verifyDialoguePreview } = require("./dialogue-preview");
+
 const fixtures = JSON.parse(process.env.TUA_REAL_SERVER_FIXTURES);
 
 async function run() {
@@ -14,6 +16,10 @@ async function run() {
 
   await extension.activate();
   await waitForServer();
+  const selectedSuite = process.env.TUA_REAL_SERVER_SUITE || "all";
+  assert(["all", "dialogue-preview"].includes(selectedSuite), "unsupported real-server suite");
+  await verifyDialoguePreview(fixtures.mainPath);
+  if (selectedSuite === "dialogue-preview") return;
   await testHoverActionAvailability(fixtures);
 
   const protocolStubDocument = await vscode.workspace.openTextDocument(fixtures.protocolStubsPath);

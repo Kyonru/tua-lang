@@ -683,7 +683,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   and closed buffers invalidate source links and pending responses. Dirty overlays
   stay authoritative; hidden views refresh on reveal. Watchers are panel-scoped and
   disposed with the view. Provider regressions cover these transitions and pending
-  reopen disposal. Native end-to-end watcher/LSP synchronization remains to qualify.
+  reopen disposal. Native VS Code development-host qualification with the rebuilt
+  server now covers source navigation, unsaved/invalid edits, external changes,
+  deletion/recreation, dirty discard and hidden reveal. It exposed and fixed the
+  shared LSP deletion handler dropping open overlays; incremental versions and
+  diagnostics now remain live until client close. Release-VSIX qualification remains
+  separate from this development-host evidence.
 - [ ] Preserve fresh results under incomplete edits, unsaved imports, catalog
   changes, branch edits, watch rebuilds and deleted/recreated modules.
 
