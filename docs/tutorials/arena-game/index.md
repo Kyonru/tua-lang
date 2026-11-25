@@ -6,7 +6,8 @@ icon: lucide/gamepad-2
 
 Build one game a chapter at a time. Begin with an animated character and a run you
 can pause or restart. Add combat, enemy decisions, sound, shaders and a localized
-between-wave conversation to that same scene. Saving and profiling chapters are planned.
+between-wave conversation to that same scene. Save cleared-wave progress and preferences;
+the profiling chapter is planned.
 
 Each finished chapter has a **self-contained runnable checkpoint**. Start from its
 source, experiment, then carry what you learned into the next chapter. No imports
@@ -20,6 +21,7 @@ from other examples or special tutorial framework are required.
 | [4. Give the game sound](sound.md) | Add cues, music scenes and independent volume controls |
 | [5. Scoped shader feedback](visual-feedback.md) | Load, initialize and safely scope a hit shader |
 | [6. Conversation and language](conversation-and-language.md) | Talk between waves and change the UI/dialogue locale |
+| [7. Save progress and preferences](save-progress.md) | Resume a cleared wave, remember settings and handle save recovery |
 
 You need [Tua and LÖVE](../../installation.md), basic Lua-style functions and tables,
 and a checkout of the repository for the bundled source and assets. Character art

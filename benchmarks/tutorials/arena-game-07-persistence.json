@@ -1,0 +1,22 @@
+{
+  "compiler": {
+    "schemaVersion": 1,
+    "version": "0.11.0",
+    "revision": "e0033fc65d3b78f9be8aba3e427aa9a239782354",
+    "dirty": false,
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "executableSha256": "3e49f76e0ec726d9b0fb6cb24c8497b242c92ce170ba6320a31f6a16b85e48ec"
+  },
+  "identity": "tua-arena-save-test-7ab45487bfbc4674ad901d72c9dc5aac",
+  "love_executable": "/Applications/love.app/Contents/MacOS/love",
+  "love_sha256": "0daa04d49e671e7d3649e54935a91e8dcbf0769bef8d1c3503c025842b680da2",
+  "test_sha256": "a796d9eefaf4fb0eb89d4166a04b9cd03e5a5da76513fe6974c42824fdee95a7",
+  "timing": "functional persistence checks, not performance measurements",
+  "runtime": {
+    "love": "11.5.0",
+    "lua": "LuaJIT 2.1.1700008891",
+    "jit_enabled": false
+  },
+  "status": "passed"
+}

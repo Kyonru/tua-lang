@@ -67,7 +67,7 @@ status does **not** establish that the integrated chapters are complete.
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Complete; fake-backend and native Source qualification |
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Complete; native GPU failure/scope qualification |
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal ownership | Complete; locale/visit and host-effect qualification |
-| C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Pending |
+| C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Complete; two-process and native host qualification |
 | C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Pending |
 | C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Pending |
 
@@ -515,4 +515,14 @@ Lua tests cover locale identity, selection, fallback and effect counts; an inval
 literal key probe fails checking. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-06.md).
 
-Next: C7, between-wave saved progress and preferences with explicit recovery policy.
+## C7 completion
+
+The cumulative `07-save-progress` checkpoint saves only cleared-wave number/health
+and player preferences. It retains the previous boundary during live combat, restores
+fresh runtime objects, and handles validated historical migration, damaged-copy
+acceptance and confirmed reset. Domain validation blocks unusable values without
+rewriting them. The isolated two-process suite and four native scenarios pass; French
+title/reset screens were inspected at 640×480. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-07.md).
+
+Next: C8, profile and tune this same game using reproducible workloads.

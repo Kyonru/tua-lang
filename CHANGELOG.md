@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add the cumulative arena save chapter: cleared-wave checkpoints, persistent preferences,
+  historical validation, explicit recovery/reset and two-process LÖVE qualification.
+
 - Add the arena conversation/localization chapter with shared characters, English/French
   catalogs, modal input ownership and locale refresh without repeated wave effects.
 
