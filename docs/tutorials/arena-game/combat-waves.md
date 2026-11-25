@@ -188,4 +188,5 @@ There is no collision with scenery or automatic difficulty scaling.
 
 See [ECS](../../ecs.md), [pooling](../../object-pooling.md),
 [tweening](../../tweening.md) and [camera](../../camera.md) for full contracts.
-Next we will give these enemies decisions, movement and attacks in this same game.
+Continue with [enemy decisions](enemy-decisions.md) to add movement, attacks and
+game over to this same game.

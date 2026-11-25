@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add the arena tutorial chapter on typed ECS behavior runners, patrol/chase/attack,
+  moving-target projectile sweeps, player health and restartable game over.
+
 - Extend the cumulative arena tutorial with fixed-step aimed projectiles, live ECS
   enemy waves, bounded pooling and feedback-independent hit outcomes.
 

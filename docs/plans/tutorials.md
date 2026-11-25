@@ -63,7 +63,7 @@ status does **not** establish that the integrated chapters are complete.
 | --- | --- | --- | --- |
 | C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Complete; see C1 qualification |
 | C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Complete; cumulative checkpoint and qualification |
-| C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Pending |
+| C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Complete; C3 qualification records selected-compiler typing limits |
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Pending |
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Pending |
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal/nonmodal ownership | Pending |
@@ -285,11 +285,11 @@ nonblocking. Water is a later experiment, not a second required tutorial project
 
 References: [behavior trees](../behavior-trees.md), [ECS](../ecs.md).
 
-- [ ] Implement patrol, detect, chase and attack with a small typed actor context.
-- [ ] Explain condition evaluation, running/success/failure results and cancellation.
-- [ ] Integrate the runner with entity lifecycle after the standalone behavior works.
-- [ ] Keep any confirmed dynamic typing boundary inside a small documented adapter.
-- [ ] Offer detection radius and cooldown experiments without adding pathfinding.
+- [x] Implement patrol, detect, chase and attack with a small typed actor context.
+- [x] Explain condition evaluation, running/success/failure results and cancellation.
+- [x] Integrate the runner with entity lifecycle after the standalone behavior works.
+- [x] Keep any confirmed dynamic typing boundary inside a small documented adapter.
+- [x] Offer detection radius and cooldown experiments without adding pathfinding.
 
 Acceptance: scripted target positions yield deterministic transitions, attack
 cooldowns hold, and destroyed/reset actors cannot continue attacking. Verify wrong
@@ -371,7 +371,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M5 | Complete in C2 | `02-combat-waves`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md) |
 | M6 | Pending | |
 | M7 | Pending | |
-| M8 | Pending | |
+| M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
 | M9 | Pending | |
 | M10 | Pending | |
 | M11 | Pending | |
@@ -478,4 +478,14 @@ Rate, lifecycle and swept-collision tests passed; native replay verified feedbac
 parity, aimed hits, pause/focus, reset, wave clear and next-wave behavior. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md).
 
-Next: C3, enemy decisions, movement, attacks and game over.
+## C3 completion
+
+Added typed shared behavior definitions with independent ECS runners, patrol/chase/
+attack branches, fixed-tick cooldowns and explicit cancellation. Relative sweeps
+account for moving enemies; surviving intents apply only after projectile damage.
+Player health and game over extend the existing session. Native replay verifies
+natural defeat/restart and feedback parity. The selected compiler rejects incorrect
+known-field types but accepts unknown context field assignment; see the exact probe
+in [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md).
+
+Next: C4, sound cues, music/effects controls and scene-transition ownership.
