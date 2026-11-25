@@ -72,14 +72,16 @@ function love.draw()
   love.graphics.print(settings.notice, 24, 80)
   local snapshot = host.player():snapshot()
   local node = snapshot.node
-  if node then
+  if node and (snapshot.state == "awaiting_advance" or snapshot.state == "awaiting_choice") then
     maxScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
       settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll)
     settings.scroll = math.min(settings.scroll, maxScroll)
   end
   local radio = host.radio:snapshot()
   local radioNode = radio.node
-  if radioNode and not (host.active() and settings.mode == "panel") then
+  if radioNode
+    and radio.state == "awaiting_advance"
+    and not (host.active() and settings.mode == "panel") then
     presenter.draw(radioNode, host.radioClusters(), host.radioView().visible, "announcement",
       settings.reducedMotion, settings.subtitles, 0, 0)
   end
