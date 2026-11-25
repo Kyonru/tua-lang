@@ -1,0 +1,92 @@
+local function new(usePreload: boolean)
+  local scanner = ShaderScan.new()
+  local state = {
+    completed = 0,
+    total = 1,
+    failed = 0,
+    loading = false,
+    ready = false,
+    error = "",
+    enabled = true,
+  }
+  local disposed = false
+  scanner.on_compiled = function(
+    name: string,
+    path: string,
+    candidate: Shader,
+    previous: Shader | nil
+  )
+    candidate:send("flash", 0)
+    state.error = ""
+  end
+  -- An empty job supplies the same typed cancellation interface in both modes.
+  local job = scanner:preload({})
+  local function retry()
+    if disposed then return end
+    if not job.done then job:cancel() end
+    state.error = ""
+    state.completed = 0
+    state.failed = 0
+    state.loading = true
+    if usePreload then
+      job = scanner:preload({ { name = "hit", path = "shaders/hit.glsl" } }, function(progress)
+        state.completed = progress.completed
+        state.failed = progress.failed
+        local first = progress.errors[1]
+        if first then
+          state.error = first.message
+          print("Hit shader: " .. state.error)
+        end
+      end, function()
+        state.loading = false
+      end)
+  else
+    local ok, message = pcall(function() scanner:load_shader("hit", "shaders/hit.glsl") end)
+    state.completed = 1
+    state.loading = false
+    if not ok then
+      state.failed = 1
+      state.error = tostring(message)
+      print("Hit shader: " .. state.error)
+    end
+  end
+  state.ready = scanner.s.hit ~= nil
+end
+local function update(dt: number)
+  if disposed then return end
+  scanner:update(dt)
+  state.ready = scanner.s.hit ~= nil
+end
+local function draw(amount: number, render: () -> ())
+  local previous = love.graphics.getShader()
+  local shader = scanner.s.hit
+  if not disposed and state.enabled and shader and amount > 0 then
+    shader:send("flash", amount)
+    love.graphics.setShader(shader)
+  end
+  local ok, message = pcall(render)
+  -- Restore the caller's shader even if its rendering callback throws.
+  love.graphics.setShader(previous)
+  if not ok then error(message) end
+end
+local function dispose()
+  if disposed then return end
+  job:cancel()
+  local shader = scanner.s.hit
+  if shader then shader:release() end
+  scanner.s.hit = nil
+  state.ready = false
+  state.loading = false
+  disposed = true
+end
+retry()
+return {
+  scanner = scanner,
+  state = state,
+  update = update,
+  retry = retry,
+  draw = draw,
+  dispose = dispose,
+}
+end
+return { new = new }

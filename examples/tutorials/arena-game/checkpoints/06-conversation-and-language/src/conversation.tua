@@ -1,0 +1,63 @@
+local document = require("interlude")
+local function new(startWave: () -> boolean)
+  local player = Dialogue.new(document, { locale = I18n.getLocale(), resolve = I18n.dialogue })
+  local state = { active = false, selected = 1, startRequested = false, wavesStarted = 0 }
+  local disposed = false
+  local function close()
+    state.active = false
+    state.startRequested = false
+    state.selected = 1
+  end
+  local function start()
+    if disposed or state.active then return end
+    state.startRequested = false
+    state.selected = 1
+    player:setLocale(I18n.getLocale())
+    player:start()
+    state.active = true
+  end
+  local function locale()
+    if not disposed then player:setLocale(I18n.getLocale()) end
+  end
+  local function update(dt: number, advance: boolean, direction: number)
+    if disposed or not state.active then return end
+    player:update(dt, true)
+    local snapshot = player:snapshot()
+    local node = snapshot.node
+    if snapshot.state == "awaiting_choice" and node then
+      state.selected = math.max(1, math.min(#node.options, state.selected + direction))
+      if advance then
+        local option = node.options[state.selected]
+        if option then
+          state.startRequested = option.id == "ui.go"
+          player:choose(option.id)
+          state.selected = 1
+        end
+      end
+    elseif advance and snapshot.state == "awaiting_advance" then
+      player:advance()
+      state.selected = 1
+    end
+    if player:snapshot().state == "completed" then
+      local requested = state.startRequested
+      close()
+      if requested and startWave() then state.wavesStarted += 1 end
+    end
+  end
+  local function dispose()
+    if disposed then return end
+    close()
+    player:dispose()
+    disposed = true
+  end
+  return {
+    player = player,
+    state = state,
+    start = start,
+    close = close,
+    locale = locale,
+    update = update,
+    dispose = dispose,
+  }
+end
+return { new = new }

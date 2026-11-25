@@ -1,0 +1,16 @@
+@dialogue 1
+@document arena.interlude
+@characters Cast "cast"
+[start]
+// @id ui.hello
+Cast.Keeper: You held the harbor. Shall we prepare another wave?
+// @id ui.go
+-> I am ready. Start the next wave. [target:ready]
+// @id ui.rest
+-> Not yet. Let me catch my breath. [target:rest]
+[ready]
+// @id ui.readyLine
+Cast.Keeper: Then keep your eyes on the water. (end)
+[rest]
+// @id ui.restLine
+Cast.Keeper: Take your time. The harbor can wait. (end)

@@ -1,0 +1,67 @@
+local function new()
+  -- Templates are created once. audioSystem owns the cloned playback voices.
+  local shot = sound("assets/audio/shot.wav")
+  local hit = sound("assets/audio/hit.wav")
+  local hurt = sound("assets/audio/hurt.wav")
+  local defeat = sound("assets/audio/defeat.wav")
+  local harbor = music("assets/audio/harbor.wav")
+  local combat = music("assets/audio/combat.wav")
+  local audio = audioSystem({
+    maxVoices = 10,
+    buses = {
+      master = { volume = 1 },
+      music = { parent = "master", maxVoices = 2 },
+      sfx = { parent = "master", maxVoices = 6 },
+    },
+    cues = {
+      shot = { source = shot, bus = "sfx", maxVoices = 2, overflow = "reject", priority = 10 },
+      hit = { source = hit, bus = "sfx", maxVoices = 2, overflow = "reject", priority = 20 },
+      hurt = { source = hurt, bus = "sfx", maxVoices = 1, priority = 30 },
+      defeat = { source = defeat, bus = "sfx", maxVoices = 1, priority = 40 },
+    },
+    music = {
+      harbor = { layers = { base = { source = harbor } } },
+      combat = { layers = { base = { source = combat } } },
+    },
+  })
+  local disposed = false
+  local function scene(active: boolean)
+    -- Stop first: rapid scene changes cannot stack crossfading music voices.
+    audio:stopBus("music")
+    if active then audio:setMusicState("combat", { fade = 0.2 })
+    else audio:setMusicState("harbor", { fade = 0.2 }) end
+  end
+  local function pauseMusic(value: boolean)
+    if value then audio:pauseBus("music") else audio:resumeBus("music") end
+  end
+  local function volumes(musicGain: number, effectsGain: number, muted: boolean)
+    audio:setBusVolume("music", musicGain)
+    audio:setBusVolume("sfx", effectsGain)
+    audio:setBusMuted("master", muted)
+  end
+  local function dispose()
+    if disposed then return end
+    audio:stopBus("master")
+    shot:release()
+    hit:release()
+    hurt:release()
+    defeat:release()
+    harbor:release()
+    combat:release()
+    disposed = true
+  end
+  return {
+    update = function(dt: number) audio:update(dt) end,
+    scene = scene,
+    pauseMusic = pauseMusic,
+    stopEffects = function() audio:stopBus("sfx") end,
+    shot = function() audio:play("shot") end,
+    hit = function() audio:play("hit") end,
+    hurt = function() audio:play("hurt") end,
+    defeat = function() audio:play("defeat") end,
+    volumes = volumes,
+    dispose = dispose,
+    snapshot = function() return audio:snapshot() end,
+  }
+end
+return { new = new }
