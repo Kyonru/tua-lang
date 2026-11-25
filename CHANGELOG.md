@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add an enemy-wave tutorial with live ECS health, explicit wave boundaries,
+  optional bounded defeat rings and native LÖVE lifecycle verification.
+
 - Add a save/resume tutorial with typed historical migration, UI-isolated autosave,
   confirmed reset, explicit recovery and two-process persistence verification.
 

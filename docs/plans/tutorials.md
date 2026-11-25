@@ -141,12 +141,12 @@ and never overwrite real user/game data. Keep inventory transaction recovery opt
 
 References: [ECS](../ecs.md), [object pooling](../object-pooling.md).
 
-- [ ] Define position, movement and health components and create a small wave.
-- [ ] Update through queries; remove defeated entities through ECS lifecycle APIs.
-- [ ] Explain component replacement, live identity and supported structural mutations.
-- [ ] Add pooling only for a suitable transient object, such as a defeat effect,
+- [x] Define position, movement and health components and create a small wave.
+- [x] Update through queries; remove defeated entities through ECS lifecycle APIs.
+- [x] Explain component replacement, live identity and supported structural mutations.
+- [x] Add pooling only for a suitable transient object, such as a defeat effect,
       after demonstrating correct lifecycle without it.
-- [ ] Keep wave scheduling and spawn limits explicit host policy.
+- [x] Keep wave scheduling and spawn limits explicit host policy.
 
 Acceptance: defeated enemies stop updating, repeated resets leave no stale entities,
 and the optional pooled effect resets all retained state. ECS stays authoritative;
@@ -283,7 +283,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M1 | Complete | `examples/tutorials/playable-character`; `8a11c484`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/playable-character.md) |
 | M2 | Complete | `examples/pause-input`; `257701a2`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/game-flow.md) |
 | M3 | Complete | `examples/love-save`; `46a9df23`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/save-and-resume.md) |
-| M4 | Pending | |
+| M4 | Complete | `examples/tutorials/enemy-wave`; `936b615a`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/enemy-wave.md) |
 | M5 | Pending | |
 | M6 | Pending | |
 | M7 | Pending | |
@@ -370,4 +370,8 @@ write retry and reset failures. Native UI replay and documentation checks passed
 The qualification record retains a selected-compiler missing-field diagnostic
 probe for rechecking against a rebuilt current compiler; no new runtime API was needed.
 
-Next: M4, a wave of enemies using ECS lifecycle and optional pooled defeat effects.
+M4 now includes a standalone Kenney enemy wave, live component readers, deterministic
+click targeting, reset/disposal checks and optional bounded rings. Native replay
+checks the actual callbacks and drawing; no runtime or compiler changes were needed.
+
+Next: M5, a weapon that feels responsive.

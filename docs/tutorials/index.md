@@ -13,6 +13,7 @@ chosen by the game. Choose the guide that matches what you want to build.
 | Move and animate a character with a following camera | [Your first playable character](playable-character.md) |
 | Add title, pause, resume and restart screens | [A pause menu and game flow](game-flow.md) |
 | Keep progress across launches and handle damaged saves | [Save and resume a run](save-and-resume.md) |
+| Spawn, damage and reset a small ECS wave | [A wave of enemies](enemy-wave.md) |
 | Write a conversation with replies and custom drawing | [Your first playable dialogue](first-dialogue.md) |
 
 Use [Installation](../installation.md) and [Quickstart](../quickstart.md) to set up

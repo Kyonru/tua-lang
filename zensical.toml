@@ -68,6 +68,7 @@ nav = [
     { "Your First Playable Character" = "tutorials/playable-character.md" },
     { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },
     { "Save And Resume A Run" = "tutorials/save-and-resume.md" },
+    { "A Wave Of Enemies" = "tutorials/enemy-wave.md" },
     { "Your First Playable Dialogue" = "tutorials/first-dialogue.md" },
   ] },
   { "Project" = [
