@@ -150,7 +150,8 @@ and camera updates until focus returns. No missed time is accumulated or replaye
 
 A still-held key resumes movement on focus return. A released key stays stopped.
 This is the tutorial's policy; Tua does not choose your game's pause behavior.
-The next tutorial will use explicit menu states when resuming should require input.
+[A pause menu and game flow](game-flow.md) uses explicit menu states when resuming
+should require input.
 
 Reset restores position, camera center, facing and idle animation. Shutdown releases
 the sheet's image and the two fonts. Create resources during setup rather than

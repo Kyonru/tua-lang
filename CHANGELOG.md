@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a game-flow tutorial and extend the pause/input example with typed title,
+  playing and paused states, explicit focus policy and transition-frame input ownership.
+
 - Add a playable-character tutorial combining typed input, Kenney sprite animation
   and camera following, with explicit focus/reset policy and native replay checks.
 

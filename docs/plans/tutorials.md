@@ -113,11 +113,11 @@ fixed while the camera moves. Capture a native movement replay.
 
 References: [state machines](../state-machines.md), [input](../input.md).
 
-- [ ] Build title → playing → paused → playing transitions and a restart action.
-- [ ] Make one state own each input action; distinguish UI and gameplay updates.
-- [ ] Keep the paused world visible while preventing simulation advancement.
-- [ ] Explain enter/exit cleanup and restarting a session without duplicating listeners.
-- [ ] Offer a game-over state as an extension rather than initial setup.
+- [x] Build title → playing → paused → playing transitions and a restart action.
+- [x] Make one state own each input action; distinguish UI and gameplay updates.
+- [x] Keep the paused world visible while preventing simulation advancement.
+- [x] Explain enter/exit cleanup and restarting a session without duplicating listeners.
+- [x] Offer a game-over state as an extension rather than initial setup.
 
 Acceptance: pause freezes gameplay but leaves menu input working; one press causes
 one transition; repeated pause/resume/restart does not duplicate entities or callbacks.
@@ -281,7 +281,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | Existing dialogue starter | Complete | `examples/dialogue/first-conversation`; `b1d4d112`, `edb2c04c`, `52647cee` |
 | M0 | Complete | API/source audit below; no runtime changes required |
 | M1 | Complete | `examples/tutorials/playable-character`; `8a11c484`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/playable-character.md) |
-| M2 | Pending | |
+| M2 | Complete | `examples/pause-input`; `257701a2`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/game-flow.md) |
 | M3 | Pending | |
 | M4 | Pending | |
 | M5 | Pending | |
@@ -347,5 +347,15 @@ camera following, explicit focus policy and resource cleanup. It has no grid
 background or decorative panels. See the linked qualification record for native,
 headless, formatting, emission and editor-protocol checks and their limitations.
 
-Next: M2, extend the existing pause/input example with title/gameplay/pause/restart
-flow and a tutorial. Preserve its held-input and no-catch-up regressions.
+Next milestone at the time of M1 completion was M2; see its completion below.
+
+## M2 completion
+
+Extended the existing pause/input example with typed title/playing/paused flow and
+published the game-flow tutorial. Transitions consume their frame, input stays
+polled across inactive states, gameplay/UI clocks remain separate, and focus loss
+requires explicit resume. Reset replaces tween groups and retains input edge state.
+The legacy replay and new lifecycle replay both passed, including 100 transition
+cycles. The qualification record includes exact commands and platform limitations.
+
+Next: M3, save and resume a run using the existing `examples/love-save` owner.

@@ -21,11 +21,6 @@ nav = [
     { "Examples" = "examples.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ] },
-  { "Tutorials" = [
-    { "Overview" = "tutorials/index.md" },
-    { "Your First Playable Character" = "tutorials/playable-character.md" },
-    { "Your First Playable Dialogue" = "tutorials/first-dialogue.md" },
-  ] },
   { "Language" = [
     { "Overview" = "language.md" },
     { "Typing" = "typing.md" },
@@ -67,6 +62,12 @@ nav = [
     { "Packaging Games" = "packaging.md" },
     { "Diagnostic Codes" = "luahelper-code-matrix.md" },
     { "External API And MCP" = "external-api-bridge.md" },
+  ] },
+  { "Tutorials" = [
+    { "Overview" = "tutorials/index.md" },
+    { "Your First Playable Character" = "tutorials/playable-character.md" },
+    { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },
+    { "Your First Playable Dialogue" = "tutorials/first-dialogue.md" },
   ] },
   { "Project" = [
     { "Releases" = "releases.md" },
