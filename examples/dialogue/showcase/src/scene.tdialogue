@@ -7,18 +7,19 @@
 @events "events"
 @bind name context.name
 @entry quick
+@entry rich
 [start]
 // @id crossing.open
-Cast.Guide: You came back, %{name}. I left the lamp burning. [pause=0.35]I wasn't certain you would.
+Cast.Guide: You came back, %{name}. I left the lamp burning. [pause=0.35][style=whisper]I wasn't certain you would.[/style]
 @expression worried
 @speech character
 @emit shown 0 signal [id:crossing.open.shown] {"phase":"shown"}
 @emit revealed 0.1 signal [id:crossing.open.revealed] {"phase":"revealed"}
 // @id crossing.weather
-Cast.Guide: There is a boat beyond the breakwater. No running lights. Every few minutes, someone rings a bell.
+Cast.Guide: There is a boat beyond the breakwater. No running lights. Every few minutes, someone [style=wave]rings a bell[/style].
 @speech character
 // @id crossing.arrival
-Cast.Courier: Three rings. Then two. The same as the old ferry. I know because I used to count them from my window.
+Cast.Courier: Three rings.[pause=0.3] Then two. The same as the old ferry. I know because I used to count them from my window.
 @speech character
 // @id crossing.question
 Cast.Guide: Before we do anything foolish, tell me what you need to know.
@@ -57,7 +58,7 @@ Cast.Guide: We never found the hull. That is not the same as saying the passenge
 @expression worried
 @speech character
 // @id crossing.passengers.3
-Cast.Courier: I know the difference between hope and evidence. I just don't like it very much.
+Cast.Courier: I know the difference between [style=thought]hope and evidence[/style]. I just don't like it very much.
 @speech character
 // @id crossing.passengers.choice.1
 -> Ask another question. [target:hub]
@@ -78,7 +79,7 @@ Cast.Guide: The lens is intact. The keeper isn't. My hands shake when I climb th
 @expression worried
 @speech character
 // @id crossing.lamp.2
-Cast.Guide: People think a lighthouse is a promise that the sea is safe. It isn't. It's a promise that somebody is watching.
+Cast.Guide: People think a lighthouse is a promise that the sea is safe. It isn't. It's a promise that [style=underline]somebody is watching[/style].
 @speech character
 // @id crossing.lamp.3
 Cast.Courier: Then let somebody else watch tonight.
@@ -92,7 +93,7 @@ Cast.Courier: Then let somebody else watch tonight.
 Cast.Guide: Here. The wide channel is silted up. The narrow one follows a seam of pale stone under the water.
 @speech character
 // @id crossing.chart.2
-Cast.Guide: Look for [em]three white markers[/em]. Keep the last one on your left. Everything else on this chart is a warning.
+Cast.Guide: Look for [style=highlight][em]three white markers[/em][/style]. Keep the last one on your left. Everything else on this chart is a warning.
 @speech character
 // @id crossing.chart.choice.1
 -> Memorize the safe passage. [target:remember_chart]
@@ -153,7 +154,7 @@ Cast.Courier: Not a voice. A recording. It has been calling for someone all this
 @branch locals.trusted [target:trusted_end] [else:reserved_end]
 [trusted_end]
 // @id crossing.trusted.1
-Cast.Courier: You said you believed me. I think I needed that more than I needed to be right.
+Cast.Courier: [em]You said you believed me.[/em] I think I needed that more than I needed to be right.
 @expression happy
 @speech character
 // @id crossing.trusted.2
@@ -180,7 +181,7 @@ Cast.Guide: Take my coat. It has brought back everyone who borrowed it. That is 
 : The harbor falls quiet behind you. [style=wave]One white marker. Two. Three.[/style] On the ferry's deck, a bell moves in the wind.
 @speech off
 // @id crossing.skiff.4
-Cast.Courier: Her scarf. Still tied to the rail. She said she would leave it there so I could find her boat.
+Cast.Courier: [style=highlight]Her scarf.[/style] Still tied to the rail. She said she would leave it there so I could find her boat.
 @expression worried
 @speech character
 // @id crossing.skiff.5
@@ -226,3 +227,26 @@ Cast.Guide: [style=warning]Stay curious.[/style] Your next crossing is waiting. 
 [failed]
 // @id harbor.failed
 Cast.Guide: The token could not be collected. (end)
+
+[rich]
+// @id rich.palette
+Cast.Guide: [em]Beacon Harbor[/em]. [style=success]Channel open[/style]. [style=warning]Keep clear of the rocks[/style]. [style=radio]We hear you[/style].
+@speech character
+@expression resolved
+// @id rich.clues
+Cast.Guide: The chart says [style=strike]take the wide channel[/style]. My notes say [style=highlight][em]three white markers[/em][/style]. Keep the last one [style=underline]on your left[/style].
+@speech character
+// @id rich.aside
+Cast.Courier: [style=thought]What if nobody answers?[/style] [pause=0.4][style=whisper]Don't tell Mara I said that.[/style]
+@speech character
+@expression worried
+// @id rich.motion
+Cast.Courier: [style=wave]The water won't sit still[/style], and [style=shake]neither will my hands[/style]. [em]Keep breathing.[/em]
+@speech character
+// @id rich.timing
+Cast.Guide: [speed=8]Slowly. One breath.[/speed][pause=0.6] [speed=65]Now pull the handle, before the light goes out![/speed]
+@speech character
+// @id rich.nested
+Cast.Guide: Remember, %{name}: [style=highlight][em][style=underline]somebody is watching[/style][/em][/style]. We'll get them home. (end)
+@speech character
+@expression happy

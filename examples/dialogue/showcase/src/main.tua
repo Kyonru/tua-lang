@@ -22,6 +22,9 @@ function love.keypressed(key: string)
     elseif settings.portrait == "right" then settings.portrait = "above"
     elseif settings.portrait == "above" then settings.portrait = "none"
     else settings.portrait = "left" end
+  elseif key == "f3" then
+    settings.entry = settings.entry == "rich" and "start" or "rich"
+    host.reset()
   elseif key == "f2" then
     settings.entry = settings.entry == "start" and "quick" or "start"
     host.reset()
@@ -81,7 +84,7 @@ function love.draw()
   love.graphics.setFont(title)
   love.graphics.setColor(0.94, 0.92, 0.85)
   love.graphics.print(
-    settings.entry == "start" and "The last light" or "A short introduction",
+    settings.entry == "start" and "The last light" or (settings.entry == "rich" and "Words with character" or "A short introduction"),
     32,
     47
   )
@@ -149,7 +152,7 @@ function love.draw()
         "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
         .. tostring(facts.permit) ..
         "\nP   Pause   " .. tostring(settings.paused)
-        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
+        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text tour\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
         .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
         .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
         .. " revealed · Tokens: " .. stats.rewards,

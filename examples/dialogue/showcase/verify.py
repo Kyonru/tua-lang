@@ -14,7 +14,7 @@ parser.add_argument("--tua", default=str(repo / "target/debug/tua"))
 parser.add_argument("--love")
 parser.add_argument("--output", type=Path)
 parser.add_argument("--video", action="store_true")
-parser.add_argument("--scenario", choices=["lifecycle", "styles"], default="lifecycle")
+parser.add_argument("--scenario", choices=["lifecycle", "styles", "rich"], default="lifecycle")
 args = parser.parse_args()
 tua = str(Path(args.tua).resolve())
 portrait_root = root / "src/assets/portraits"
@@ -30,21 +30,22 @@ for asset in manifest["assets"]:
 
 for command in [
     [tua, "fmt", "--check"],
-    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua", "tests/styles.lua", "tests/portraits.lua"],
+    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua", "tests/styles.lua", "tests/portraits.lua", "tests/rich.lua", "tests/rich_replay.lua"],
     [tua, "check"],
     [tua, "build"],
 ]:
     subprocess.run(command, cwd=root, check=True)
-for test in ["controller", "host_ui", "story", "portraits"]:
+for test in ["controller", "host_ui", "story", "portraits", "rich"]:
     subprocess.run(["lua", f"../tests/{test}.lua"], cwd=root / "build", check=True)
 if args.love:
     output = args.output
     if output is None:
         output = Path(tempfile.mkdtemp(prefix="tua-showcase-evidence-")) / "replay"
+    scenario = {"lifecycle": ("replay", 180), "styles": ("styles", 520), "rich": ("rich_replay", 360)}[args.scenario]
     command = [
         "python3", str(repo / "scripts/love_replay.py"), "--project", str(root),
-        "--tua", tua, "--love", args.love, "--scenario", str(root / ("tests/styles.lua" if args.scenario == "styles" else "tests/replay.lua")),
-        "--frames", "520" if args.scenario == "styles" else "180", "--fps", "30", "--seed", "71", "--output", str(output),
+        "--tua", tua, "--love", args.love, "--scenario", str(root / f"tests/{scenario[0]}.lua"),
+        "--frames", str(scenario[1]), "--fps", "30", "--seed", "71", "--output", str(output),
     ]
     if args.video:
         command.append("--video")

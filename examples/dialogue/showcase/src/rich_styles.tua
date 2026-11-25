@@ -1,0 +1,74 @@
+-- Named styles are a host vocabulary, not additional dialogue grammar.
+export type Run = { firstCluster: number, lastCluster: number, emphasis: boolean, styles: string[] }
+export type Effects = {
+  emphasis: boolean, wave: boolean, shake: boolean, highlight: boolean,
+  underline: boolean, strike: boolean, thought: boolean, whisper: boolean,
+  warning: boolean, success: boolean, radio: boolean,
+}
+import type { Palette } from "theme"
+local function resolve(runs: Run[], index: number): Effects
+  local effects = {
+    emphasis = false,
+    wave = false,
+    shake = false,
+    highlight = false,
+    underline = false,
+    strike = false,
+    thought = false,
+    whisper = false,
+    warning = false,
+    success = false,
+    radio = false,
+  }
+  for _, run in ipairs(runs) do
+    if index >= run.firstCluster and index <= run.lastCluster then
+      effects.emphasis = effects.emphasis or run.emphasis
+      for _, style in ipairs(run.styles) do
+        if style == "wave" then effects.wave = true
+        elseif style == "shake" then effects.shake = true
+        elseif style == "warning" then
+          effects.warning = true
+          effects.shake = true
+        elseif style == "highlight" then effects.highlight = true
+        elseif style == "underline" then effects.underline = true
+        elseif style == "strike" then effects.strike = true
+        elseif style == "thought" then effects.thought = true
+        elseif style == "whisper" then effects.whisper = true
+        elseif style == "success" then effects.success = true
+        elseif style == "radio" then effects.radio = true end
+      end
+    end
+  end
+  return effects
+end
+local function draw(text: string, font: Font, effects: Effects, theme: Palette,
+  x: number, y: number, index: number, clock: number, reduced: boolean)
+  local dx = effects.shake and not reduced and math.sin(clock * 17 + index) * 1.2 or 0
+  local dy = effects.wave and not reduced and math.sin(clock * 4 + index * 0.5) * 2 or 0
+  local width = font:getWidth(text)
+  local height = font:getHeight()
+  if effects.highlight then
+    love.graphics.setColor(theme.focus)
+    love.graphics.rectangle("fill", x + dx, y + dy - 1, width + 0.5, height + 2)
+  end
+  local light = theme.panel[1] + theme.panel[2] + theme.panel[3] > 1.8
+  local color = effects.emphasis and theme.accent or theme.text
+  if effects.whisper then color = theme.muted end
+  if effects.success then color = light and { 0.12, 0.36, 0.24 } or { 0.62, 0.86, 0.67 } end
+  if effects.warning then color = light and { 0.55, 0.20, 0.13 } or { 1, 0.73, 0.45 } end
+  if effects.radio then color = light and { 0.08, 0.36, 0.38 } or { 0.55, 0.85, 0.84 } end
+  love.graphics.setColor(color)
+  local skew = effects.thought and -0.14 or 0
+  love.graphics.print(text, x + dx, y + dy, 0, 1, 1, 0, 0, skew, 0)
+  if effects.emphasis then
+    love.graphics.print(text, x + dx + 0.5, y + dy, 0, 1, 1, 0, 0, skew, 0)
+  end
+  love.graphics.setLineWidth(1)
+  if effects.underline then
+    love.graphics.line(x + dx, y + dy + height, x + dx + width, y + dy + height)
+  end
+  if effects.strike then
+    love.graphics.line(x + dx, y + dy + height * 0.55, x + dx + width, y + dy + height * 0.55)
+  end
+end
+return { resolve = resolve, draw = draw }

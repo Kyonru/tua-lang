@@ -1,6 +1,8 @@
 -- Presentation owns typography, geometry and input targets; the player owns story flow.
 local Theme = require("theme")
 local Frames = require("frames")
+local RichStyles = require("rich_styles")
+import type { Effects } from "rich_styles"
 local Portraits = require("portraits")
 export type Run = { firstCluster: number, lastCluster: number, emphasis: boolean, styles: string[] }
 export type Cluster = { index: number, text: string }
@@ -141,24 +143,10 @@ local function new()
       text: string,
       x: number,
       y: number,
-      wave: boolean,
-      warning: boolean,
-      accent: boolean,
+      effects: Effects,
     }[] = {}
     for index, cluster in ipairs(clusters) do
-      local wave = false
-      local warning = false
-      local accent = false
-      for _, run in ipairs(runs) do
-        if index >= run.firstCluster and index <= run.lastCluster then
-          accent = accent or run.emphasis
-          for _, style in ipairs(run.styles) do
-            wave = wave or style == "wave"
-            warning = warning or style == "warning"
-            accent = accent or style == "radio"
-          end
-        end
-      end
+      local effects = RichStyles.resolve(runs, index)
       local previous: Cluster | nil = clusters[index - 1]
       if cluster.text ~= " " and (previous == nil or previous.text == " ") then
         local wordWidth = 0
@@ -181,9 +169,7 @@ local function new()
         text = cluster.text,
         x = cx,
         y = cy,
-        wave = wave,
-        warning = warning,
-        accent = accent,
+        effects = effects,
       }
       if cluster.text ~= "\n" and not (cx == 0 and cluster.text == " ") then cx += cw end
     end
@@ -224,10 +210,8 @@ local function new()
     love.graphics.setFont(font)
     for index, glyph in ipairs(glyphs) do
       if index <= visible and subtitles and glyph.text ~= "\n" then
-        local dy = glyph.wave and not reduced and math.sin(clock * 4 + index * 0.5) * 2 or 0
-        local dx = glyph.warning and not reduced and math.sin(clock * 17 + index) or 0
-        love.graphics.setColor((glyph.accent or glyph.warning) and theme.accent or theme.text)
-        love.graphics.print(glyph.text, tx + glyph.x + dx, ty + glyph.y + dy - scroll)
+        RichStyles.draw(glyph.text, font, glyph.effects, theme,
+          tx + glyph.x, ty + glyph.y - scroll, index, clock, reduced)
       end
     end
     if not subtitles then
