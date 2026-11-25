@@ -688,7 +688,7 @@
         "tua.preview.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable experimental sprite-animation, state-machine, and behavior-tree previews in editor integrations."
+          "description": "Enable experimental sprite-animation, state-machine, behavior-tree, and dialogue previews in editor integrations."
         },
         "tua.editor.toolbarMode": {
           "type": "string",
@@ -1049,6 +1049,12 @@
         "title": "Preview State Machine",
         "category": "Tua",
         "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "tua.previewDialogue",
+        "title": "Preview Dialogue",
+        "category": "Tua",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "tua.previewBehaviorTree",
@@ -1651,6 +1657,10 @@
         {
           "command": "tua.previewStateMachine",
           "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.previewDialogue",
+          "when": "editorLangId == tdialogue"
         },
         {
           "command": "tua.previewBehaviorTree",

@@ -34,6 +34,7 @@ const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
 const { registerSignalDevex } = require("./signals");
 const { registerStateMachineDevex } = require("./state-machines");
+const { registerDialoguePreview } = require("./dialogue/preview");
 const { registerBehaviorTreePreview } = require("./behavior-trees/preview");
 const { registerProceduralPreview } = require("./procedural/preview");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
@@ -103,6 +104,7 @@ async function activate(context) {
       isTuaDocument,
     }),
   );
+  context.subscriptions.push(registerDialoguePreview({ configurationTarget, getClient: () => client }));
   context.subscriptions.push(registerBehaviorTreePreview({
     configurationTarget,
     getClient: () => client,

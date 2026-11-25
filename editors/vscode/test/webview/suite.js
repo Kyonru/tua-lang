@@ -7,6 +7,7 @@ const vscode = require("vscode");
 const { BrowserSession, waitFor } = require("./cdp");
 const { spritePreviewHtml, spritePreviewErrorHtml } = require("../../src/love/sprite-preview/template");
 const { stateMachinePreviewHtml } = require("../../src/state-machines/template");
+const { dialoguePreviewHtml } = require("../../src/dialogue/preview");
 const { behaviorTreePreviewHtml } = require("../../src/behavior-trees/preview");
 const { audioExplorerHtml, audioExplorerErrorHtml } = require("../../src/audio");
 const { ecsExplorerHtml } = require("../../src/ecs/template");
@@ -241,6 +242,20 @@ async function run() {
     await screenshot("behavior-tree-narrow");
     await workbench.send("Emulation.clearDeviceMetricsOverride");
     await screenshot("behavior-tree");
+    const dialogueRange = { start: { line: 2, character: 0 }, end: { line: 2, character: 8 } };
+    const dialogue = { sections: [{ label: "arrival", range: dialogueRange, lines: [{ text: "Welcome, %{name}.", speaker: "Guide", range: dialogueRange, choices: [] }] }], routes: [{ section: 0, kind: "branchTrue", target: "arrival", range: dialogueRange }] };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", dialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('.speech').textContent.includes('%{name}')"), true);
+    await evaluate("document.querySelector('[data-source]').focus()");
+    assert.equal(await evaluate("document.activeElement.classList.contains('source')"), true);
+    await evaluate("document.activeElement.click()");
+    await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///arrival.tdialogue"), "dialogue source navigation");
+    await screenshot("dialogue-preview");
+    await workbench.send("Emulation.setDeviceMetricsOverride", { width: 360, height: 740, deviceScaleFactor: 1, mobile: false });
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "dialogue fits narrow pane");
+    await screenshot("dialogue-preview-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
+
     await load(localizationHtml(panel.webview, "localization-test-nonce"), "Tua Localization");
     await waitFor(() => messages.some(message => message.type === "ready"), "localization webview ready");
     await panel.webview.postMessage({ type: "page", page: { enabled: false, locales: [], total: 0, offset: 0, rows: [] } });

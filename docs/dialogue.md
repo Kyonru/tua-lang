@@ -968,6 +968,19 @@ must be strings in structured documents, including `""` when empty. The runtime
 validates and copies these fields. Negative/nonfinite update times and nonboolean
 reveal flags are errors.
 
+## Preview the authored conversation
+
+Open a `.tdialogue` file and run **Tua: Preview Dialogue**. Enable experimental
+previews when prompted. The outline shows sections, dialogue text and outgoing
+routes. Click a section, **Open text**, or a route target to navigate to its source.
+A route target opens the authored target token so you can edit that connection.
+
+This is a static authoring view: both branch outcomes remain visible, speaker IDs
+are not resolved to portraits, and placeholders, conditions and rich-text marks
+are not evaluated. It does not play audio or invoke game handlers. Mock-context
+simulation and a graphical node layout remain planned. See the [editor reference](lsp.md)
+for refresh behavior and display limits.
+
 ## Authoring rules and common mistakes
 
 - Declare characters/imports before labels. Inline characters and shared imports

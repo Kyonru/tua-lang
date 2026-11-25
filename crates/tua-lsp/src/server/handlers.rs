@@ -404,6 +404,7 @@ impl LspServer {
                 response(id, self.validate_inline_completion_response(&message))
             }
             RequestKind::Inspect => response(id, self.inspector_response(&message)),
+            RequestKind::DialoguePreview => response(id, self.dialogue_preview_response(&message)),
             RequestKind::ExplainType => response(id, self.type_explanation_response(&message)),
             RequestKind::AssetInventory => response(id, self.asset_inventory_response(&message)),
             RequestKind::LocalizationCatalog => {
@@ -2163,6 +2164,22 @@ impl LspServer {
         json!({
             "analysisRevision": snapshot.revision(),
             "graph": crate::server::protocol::lsp_audio_graph_from_core(snapshot.audio_graph(), &snapshot)
+        })
+    }
+
+    fn dialogue_preview_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!({"analysisRevision": null, "documentVersion": null, "preview": null});
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        json!({
+            "analysisRevision": snapshot.revision(),
+            "documentVersion": self.document_versions.get(request.uri).copied(),
+            "preview": snapshot.dialogue_preview(&request.path).map(|preview| {
+                super::protocol::lsp_dialogue_preview_from_core(preview, request.source)
+            })
         })
     }
 

@@ -754,6 +754,7 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | Method | Result |
 | --- | --- |
 | `tua/explainType` | Source-linked type inference explanation |
+| `tua/dialoguePreview` | Static authored dialogue sections, text and routes with UTF-16 source ranges |
 | `tua/inspect` | Structured document inspector data, including sprite sheets, static state machines, and static behavior trees |
 | `tua/assetInventory` | Project assets, metadata, references, and hints |
 | `tua/signalGraph` | Typed SignalBus project graph |
@@ -766,6 +767,23 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/health` | Server revision, queues, cache, pattern-corpus, stale-result, and latency health |
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
 | `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
+
+**Tua: Preview Dialogue** opens a source-linked outline for the active `.tdialogue`
+file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
+choice, fallback, wait, branch and action routes come from the compiler. Select a
+section, text link or route target to open its authored source location. Conditions,
+placeholders and rich-text marks remain unevaluated; no game handler or asset loads.
+Edits refresh the visible view, while hidden views catch up on reveal. Invalid
+syntax clears the previous outline and points to Problems. Large views show at most
+200 sections, 100 lines per section and 200 routes per section with an explicit notice.
+Mock-context simulation and a graphical node layout are not available yet.
+
+`tua/dialoguePreview` accepts `{ "textDocument": { "uri": "file:///..." } }` and
+returns `analysisRevision`, `documentVersion`, and `preview` (null when unavailable
+or syntactically invalid). `preview.sections` carries authored text, speaker IDs,
+action names and wait durations; `preview.routes` carries section/line/choice
+indices, route kinds, targets and their ranges. These are authored possibilities,
+not reachability or observed execution. Semantic project diagnostics remain separate.
 
 `tua/inspect` accepts an optional `kind` (`spriteSheet`, `stateMachine`, or
 `behaviorTree`). With a position and `fallbackToAll: true`, it returns all

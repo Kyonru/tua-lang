@@ -1254,7 +1254,7 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         "textDocument/hover" | "textDocument/documentHighlight" | "textDocument/inlayHint" => {
             Some(3)
         }
-        "tua/explainType" | "tua/inspect" | "tua/signalGraph" => Some(3),
+        "tua/explainType" | "tua/inspect" | "tua/dialoguePreview" | "tua/signalGraph" => Some(3),
         _ => None,
     }
 }

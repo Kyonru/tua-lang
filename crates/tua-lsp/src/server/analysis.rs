@@ -1326,6 +1326,13 @@ impl AnalysisSnapshot {
         self.core.hover(path, position)
     }
 
+    pub(super) fn dialogue_preview(
+        &self,
+        path: &Path,
+    ) -> Option<tua_core::dialogue_asset::preview::DialoguePreview> {
+        self.core.dialogue_preview(path)
+    }
+
     pub(super) fn inspect(
         &self,
         path: &Path,

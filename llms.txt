@@ -285,6 +285,12 @@ including choice/wait/branch/action/fallback targets. Rename accepts full dotted
 hyphenated labels and rejects malformed scripts, duplicate/conflicting labels and
 reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings and
 saved checkpoints stay unchanged; migrate external entry references separately.
+The experimental VS Code Preview Dialogue command shows compiler-backed authored
+sections, text and choice/fallback/wait/branch/action routes with source links.
+It refreshes unsaved edits and clears invalid source. It does not execute handlers,
+resolve portraits/audio, evaluate conditions/placeholders/rich text, or simulate
+mock context. Large views explicitly limit sections/lines/routes; graphical layout
+and mock-context controls remain planned.
 Within @voice cue strings, completion reuses decoded cue IDs from valid dialogue
 scripts in the same project; hover and Find References describe authored uses,
 including different locales. JSON-aware edits preserve quotes/escapes and support

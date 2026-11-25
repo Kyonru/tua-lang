@@ -630,6 +630,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   no imports, handlers or assets execute, and no reachability is inferred. Missing
   or malformed overlays return no preview; deletion/recreation refresh is tested.
   This is a core query only, not an editor command or runtime simulation.
+- [x] Editor outline slice: `tua/dialoguePreview` transports static section/text/
+  route facts with UTF-16 ranges and document versions. Preview Dialogue uses
+  shared source navigation and hidden-view refresh, rejects stale navigation and
+  responses, clears invalid source and bounds large views. No host handlers or
+  assets execute; condition flags are explicitly unevaluated. Mock-context input
+  and graphical layout remain pending.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

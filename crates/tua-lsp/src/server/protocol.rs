@@ -1895,3 +1895,52 @@ pub(super) fn source_position_from_lsp(position: &Value) -> Option<SourcePositio
 fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
 }
+
+/// Transport only: the core owns sections, route ownership and target validation.
+pub(super) fn lsp_dialogue_preview_from_core(
+    preview: tua_core::dialogue_asset::preview::DialoguePreview,
+    source: &str,
+) -> Value {
+    use tua_core::dialogue_asset::preview::DialogueRouteKind;
+    let sections = &preview.document.sections;
+    let routes = preview
+        .routes
+        .iter()
+        .map(|route| {
+            let (kind, line, choice) = match route.kind {
+                DialogueRouteKind::Choice { line, choice } => ("choice", Some(line), Some(choice)),
+                DialogueRouteKind::Fallback { line } => ("fallback", Some(line), None),
+                DialogueRouteKind::Wait => ("wait", None, None),
+                DialogueRouteKind::BranchTrue => ("branchTrue", None, None),
+                DialogueRouteKind::BranchFalse => ("branchFalse", None, None),
+                DialogueRouteKind::ActionSuccess => ("actionSuccess", None, None),
+                DialogueRouteKind::ActionFailure => ("actionFailure", None, None),
+            };
+            json!({"section": route.section, "kind": kind, "line": line, "choice": choice,
+            "target": route.target.value, "range": lsp_range_for_source(source, route.target.span)})
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "documentId": preview.document.document_id.as_ref().map(|id| &id.value),
+        "sections": sections.iter().map(|section| json!({
+            "label": section.label.value,
+            "range": lsp_range_for_source(source, section.label.span),
+            "wait": section.wait.as_ref().map(|wait| &wait.duration),
+            "action": section.action.as_ref().map(|action| &action.name.value),
+            "lines": section.lines.iter().map(|line| json!({
+                "id": line.text.id.value,
+                "text": line.text.value,
+                "range": lsp_range_for_source(source, line.text.span),
+                "speaker": line.speaker.as_ref().map(|speaker| &speaker.value),
+                "end": line.end,
+                "choices": line.choices.iter().map(|choice| json!({
+                    "text": choice.text.value,
+                    "visibleCondition": choice.visible.is_some(),
+                    "enabledCondition": choice.enabled.is_some(),
+                    "reason": choice.reason.as_ref().map(|reason| &reason.value),
+                })).collect::<Vec<_>>()
+            })).collect::<Vec<_>>()
+        })).collect::<Vec<_>>(),
+        "routes": routes,
+    })
+}

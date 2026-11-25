@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add an experimental source-linked dialogue outline with compiler-backed routes,
+  unsaved refresh, invalid-source clearing and bounded rendering.
+
 - Add project-scoped authored voice cue completion, hover and references, with
   JSON-safe edits and explicit separation from host audio resource resolution.
 

@@ -222,3 +222,45 @@ local unrelated = 42
     assert_eq!(focused["fallbackApplied"], false);
     assert_eq!(focused["items"][0]["name"], "flow");
 }
+
+#[test]
+fn dialogue_preview_uses_current_overlay_and_utf16_navigation() {
+    let temp = TempProject::new("dialogue-preview");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id greeting\n: Hello %{name}\n// @id proceed\n-> 😀 Go [target:done]\n[done]\n// @id bye\n: Bye (end)\n";
+    // Use plain authored text: placeholders require a declared binding.
+    let source = source.replace("%{name}", "reader");
+    temp.write("src/scene.tdialogue", &source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, &source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id| json!({"jsonrpc":"2.0", "id":id, "method":"tua/dialoguePreview", "params":{"textDocument":{"uri":uri}}});
+    server.send(request(2));
+    let result = &response_with_id(server.output(), 2)["result"];
+    assert_eq!(result["documentVersion"], 1);
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Hello reader"
+    );
+    assert_eq!(result["preview"]["routes"][0]["target"], "done");
+    assert_eq!(
+        result["preview"]["routes"][0]["range"]["start"],
+        json!({"line":5,"character":17})
+    );
+    server.send(did_change(&uri, "@dialogue 1\n[broken", 2));
+    server.send(request(3));
+    let result = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(result["documentVersion"], 2);
+    assert!(result["preview"].is_null());
+    server.send(did_change(&uri, &source.replace("Hello", "Welcome"), 3));
+    server.send(request(4));
+    let result = &response_with_id(server.output(), 4)["result"];
+    assert_eq!(result["documentVersion"], 3);
+    assert_eq!(
+        result["preview"]["sections"][0]["lines"][0]["text"],
+        "Welcome reader"
+    );
+}
