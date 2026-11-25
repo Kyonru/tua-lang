@@ -565,155 +565,158 @@ context objects. Core export/import works without a filesystem or LÖVE.
 
 ## M9 — Authoring, diagnostics and preview
 
-- [x] First authoring slice: file-local label/flow-target completion, hover and
-  definition for choice, wait, branch, action and fallback references. Shared core
-  recovery supports incomplete targets; LSP replaces whole dotted/hyphenated names
-  with Unicode-correct ranges. Duplicate labels are excluded. Tests cover unsaved
-  edits, deletion/recreation and prose/payload isolation. Installed-editor visual
-  qualification remains pending; protocol tests do not establish perceived latency.
+**Complete.** The supported authoring/refactoring contract is qualified through
+core, CLI, LSP and native VS Code checks, including an isolated installed development
+VSIX. See the [M9 qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M9-authoring.md)
+for evidence, limits and reproduction. This is not a released-extension certification
+or a perceived-latency measurement.
 
-- [x] Placeholder authoring slice: completion, typed hover and binding navigation
-  for plain/rich lines, choices and disabled reasons. Reuse the strict header parser
-  for incomplete text, preserve Unicode/name-only ranges, and refresh imported
-  context types and unsaved bindings. Ignore percent escapes, markup attributes,
-  comments and payloads; suppress ambiguous headers. Installed-editor UI checks
-  remain pending.
-- [x] Typed action/event authoring refinement: cursor-prefix filtering and shared
-  whole-token replacement spans for names and top-level payload keys, preserving
-  quotes and Unicode ranges. Exclude nested keys and escaped quoted values; verify
-  forwarded import refresh and removal. Installed-editor qualification remains open.
-- [x] Context-path authoring refinement: shared recovery for bindings and conditions,
-  member-only replacement spans, Unicode-safe edits and incomplete paths. Exclude
-  branch tags and quoted/default/payload text. Verify forwarded context refresh,
-  deletion, hover and definition; installed-editor qualification remains pending.
-- [x] Character-expression authoring refinement: reuse parser metadata attachment
-  rules instead of backward text scanning; preserve full dotted/hyphenated name edits.
-  Reject duplicates and invalid ownership; verify forwarded imports and unsaved
-  character refresh. Installed-editor qualification remains pending.
-- [x] Authored voice-cue completion, hover and project-scoped Find References use
-  decoded IDs and JSON-aware ranges, with unsaved refresh and incomplete-string
-  recovery. Exclude malformed candidate scripts, separately indexed project roots
-  and unrelated text. Scope follows loaded configs; automatic discovery of unopened
-  nested projects remains a workspace follow-up.
-  Cue assets remain host-owned; file definition/rename is not inferred.
-- [x] Source authoring queries cover labels, choice targets, context fields,
-  placeholders, actions, expressions and authored voice references using shared
-  facts. Installed-editor qualification remains pending; voice resource discovery
-  would require an explicit host catalog contract, not guessed filesystem paths.
-- [x] Text-identity refactor slice: explicit rename/reference queries connect
-  authored line/choice/reason IDs, locale entries and recognized typed localization
-  calls. Preserve namespace and unrelated prose/flow/action identities. Reject
-  duplicate IDs, destination conflicts and malformed dialogue sources; keep edits
-  within the owning project and use unsaved overlays. Dynamic host strings remain
-  outside this static reference set. Installed-editor UI qualification is pending.
+- [x] First authoring slice: file-local label/flow-target completion, hover and definition for
+  choice, wait, branch, action and fallback references. Shared core recovery supports incomplete
+  targets; LSP replaces whole dotted/hyphenated names with Unicode-correct ranges. Duplicate labels
+  are excluded. Tests cover unsaved edits, deletion/recreation and prose/payload isolation. Native
+  editor qualification is recorded below; no perceived-latency claim is made.
+
+- [x] Placeholder authoring slice: completion, typed hover and binding navigation for plain/rich
+  lines, choices and disabled reasons. Reuse the strict header parser for incomplete text, preserve
+  Unicode/name-only ranges, and refresh imported context types and unsaved bindings. Ignore percent
+  escapes, markup attributes, comments and payloads; suppress ambiguous headers. Native editor
+  checks cover placeholder and imported-context queries.
+- [x] Typed action/event authoring refinement: cursor-prefix filtering and shared whole-token
+  replacement spans for names and top-level payload keys, preserving quotes and Unicode ranges.
+  Exclude nested keys and escaped quoted values; verify forwarded import refresh and removal.
+  Protocol and native qualification are recorded below.
+- [x] Context-path authoring refinement: shared recovery for bindings and conditions, member-only
+  replacement spans, Unicode-safe edits and incomplete paths. Exclude branch tags and
+  quoted/default/payload text. Verify forwarded context refresh, deletion, hover and definition;
+  native editor qualification is recorded below.
+- [x] Character-expression authoring refinement: reuse parser metadata attachment rules instead of
+  backward text scanning; preserve full dotted/hyphenated name edits. Reject duplicates and invalid
+  ownership; verify forwarded imports and unsaved character refresh. Native editor qualification is
+  recorded below.
+- [x] Authored voice-cue completion, hover and project-scoped Find References use decoded IDs and
+  JSON-aware ranges, with unsaved refresh and incomplete-string recovery. Exclude malformed
+  candidate scripts, separately indexed project roots and unrelated text. Scope follows loaded
+  configs; automatic discovery of unopened nested projects remains a workspace follow-up. Cue assets
+  remain host-owned; file definition/rename is not inferred.
+- [x] Source authoring queries cover labels, choice targets, context fields, placeholders, actions,
+  expressions and authored voice references using shared facts. Native authoring qualification is
+  recorded below; voice resource discovery would require an explicit host catalog contract, not
+  guessed filesystem paths.
+- [x] Text-identity refactor slice: explicit rename/reference queries connect authored
+  line/choice/reason IDs, locale entries and recognized typed localization calls. Preserve namespace
+  and unrelated prose/flow/action identities. Reject duplicate IDs, destination conflicts and
+  malformed dialogue sources; keep edits within the owning project and use unsaved overlays. Dynamic
+  host strings remain outside this static reference set. Native editor checks exercise cross-file
+  references, rename and conflicts.
 - [x] File-local flow-label references and rename: strict parser facts cover
-  choice/wait/branch/action/fallback edges, with Unicode-safe source ranges and
-  unsaved-buffer refresh. Reject invalid scripts and destination conflicts; preserve
-  prose, text/action IDs and JSON. Host entry strings and saved checkpoints require
-  separate migration. Broader symbols and installed-editor UI checks remain pending.
-- [ ] Add project-wide rename/reference edits for supported symbols across `.tua`,
-  `.tdialogue` and catalogs. Reject ambiguous/dynamic references and conflicts;
-  preserve stable text/action identity unless that identity is deliberately renamed.
-- [x] Dedicated full-document dialogue formatter preserves prose whitespace,
-  escapes, IDs, payloads, metadata attachment and meaning. Shared dispatch covers
-  CLI project/explicit/stdin/check modes, LSP document formatting and read-only
-  format preview, without Lua layout. Corpus tests verify idempotence and emitted
-  semantic equivalence apart from source coordinates. Invalid scripts yield no
-  edits; range/on-type formatting and installed-editor UI qualification stay pending.
-- [ ] Diagnose dangling targets, duplicate identities, malformed conditions and
-  provably unreachable paths. Distinguish proven impossibility from dynamic
-  context; allow declared externally started entry points so they are not falsely
-  marked unreachable.
-- [x] Static preview foundation: `AnalysisSnapshot::dialogue_preview` exposes the
-  shared parsed document and source-located choice/fallback/wait/branch/action
-  routes. Text, conditions, timing and presentation metadata remain authored data;
-  no imports, handlers or assets execute, and no reachability is inferred. Missing
-  or malformed overlays return no preview; deletion/recreation refresh is tested.
-  This is a core query only, not an editor command or runtime simulation.
-- [x] Editor outline slice: `tua/dialoguePreview` transports static section/text/
-  route facts with UTF-16 ranges and document versions. Preview Dialogue uses
-  shared source navigation and hidden-view refresh, rejects stale navigation and
-  responses, clears invalid source and bounds large views. No host handlers or
-  assets execute. Mock evaluation and graphical layout are described below.
-- [x] Mock-condition evaluation foundation: core parses explicit JSON `context`
-  and `locals` records without imports or handlers. Strict boolean/nil rules,
-  short-circuiting, scalar equality, ordered numeric comparisons and path errors
-  match the emitted condition runtime. Missing fields/null mean nil; errors retain
-  expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
-  levels and finite numbers within ±2^53 for interpreter portability. Arrays are
-  rejected. This does not validate imported context schemas or execute a dialogue.
-  Transport/UI controls and text presentation are implemented below;
-  route-state presentation remains pending.
-- [x] Explicit mock input in the editor: drafts stay in memory and only apply on
-  Apply mock context. Core probes branch/visibility/availability conditions
-  independently (up to 4,096), preserving all routes and source-located errors.
-  JSON validation errors clear mock results without discarding the static outline.
-  Clear, refresh, document switching and in-flight response ordering are covered.
-  The LSP accepts optional JSON text; no host code or imported schemas execute.
-  This is not conversation traversal, fallback selection or action simulation.
-- [x] Mock-text foundation: resolve explicit scalar `args` and all `@bind` paths
-  once, with binding precedence, nil-only defaults and false preservation. Format
-  the parser's plain templates with one-pass named substitution and percent escapes;
-  replacement values never become markup or placeholders. Rich source uses the
-  shared mark-free template. Missing/invalid bindings or arguments report source
-  locations. Retained argument text and each output are capped at 64 KiB, including
-  numeric expansion. Numeric previews use deterministic decimal formatting; Lua
-  `tostring` spelling can differ by runtime. Editor integration is covered below;
-  locale resolution remains pending.
-- [x] Mock-text presentation: the core formats lines, choices and disabled reasons
-  once per explicit apply/refresh with 4,096-field and 1 MiB aggregate limits.
-  LSP preserves authored fields and carries results/errors separately. The editor
-  escapes substitutions, retains authored disclosures, links errors to source,
-  distinguishes binding errors from per-field failures, and labels truncated fields.
-  Apply mock context now evaluates conditions and text together; authored reset and
-  stale-response protections apply to both. Rich styles and locale resolution remain
-  outside this plain-text preview.
-- [x] Static conversation graph/text preview with source navigation and explicit
-  mock-context input. The bounded source-order map includes loops and disconnected
-  sections, numbered source-linked routes, shared pan/zoom, keyboard navigation,
-  and same-file expansion/zoom retention. Limits (40 sections/80 routes) and omitted
-  missing/ambiguous/undisplayed targets are explicit. Native development-host tests
-  cover navigation, focus, zoom, narrow panes and refresh state. No handlers or
-  loaders execute; runtime tracing remains separate. Installed-extension qualification
-  and richer localized/styled text remain pending.
-- [x] Runtime diagnostic sampling foundation: the opt-in inspector wraps direct
-  and typed player constructors, samples current state/node/action, wait timings,
-  suspension and issue codes, and uses existing bounded transport/weak retention.
-  It omits text, context, payloads, error messages and history, and calls no player
-  methods or handlers. Current samples do not claim complete transition tracing.
-- [x] Optional sampled diagnostic history: retain the latest 20 observed changes
-  per player, including generation/visit, node/action, suspension and issue codes.
-  It is off by default, caps strings at 240 bytes, coalesces unchanged samples,
-  preserves weak ownership, and omits payloads. UI/settings distinguish sampled
-  history from event tracing; brief transitions, settlements and fallback provenance
-  still need explicit event instrumentation below.
-- [x] Public action-handle diagnostics: show status, handle identity, ignored
-  resolve/reject counters, attempts after cancellation and a redacted cancellation
-  failure flag. Attached player data and sampled history carry the handle ID.
-  Wrappers preserve validation/returns/reentrant cancellation; weak metadata avoids
-  callback-cycle retention under Lua 5.1/LuaJIT. Runtime-internal deferred handles
-  and full event chronology remain outside this slice.
-- [x] Bounded current translation provenance: inspect rich line/choice/disabled-reason
-  metadata without resolving again. Report requested/resolved locales, plural variant
-  and direct built-in authored-source fallback; plain/custom missing provenance stays
-  unknown. Cap at 64 fields and omit prose/arguments. Lua runtime and native LÖVE
-  sampling regressions cover fallback, privacy and bounds. Historical fallback tracing
-  and speaker-name provenance remain outside this slice.
-- [ ] Show actionable runtime issue data: current node/action, wait status,
-  cancelled/stale completion, budget exhaustion and missing translation fallback.
-  Keep tracing bounded and optional; omit sensitive payloads by default.
-- [x] Dialogue-preview file lifecycle: workspace disk changes, deletion/recreation
-  and closed buffers invalidate source links and pending responses. Dirty overlays
-  stay authoritative; hidden views refresh on reveal. Watchers are panel-scoped and
-  disposed with the view. Provider regressions cover these transitions and pending
-  reopen disposal. Native VS Code development-host qualification with the rebuilt
-  server now covers source navigation, unsaved/invalid edits, external changes,
-  deletion/recreation, dirty discard and hidden reveal. It exposed and fixed the
-  shared LSP deletion handler dropping open overlays; incremental versions and
-  diagnostics now remain live until client close. Release-VSIX qualification remains
-  separate from this development-host evidence.
-- [ ] Preserve fresh results under incomplete edits, unsaved imports, catalog
-  changes, branch edits, watch rebuilds and deleted/recreated modules.
+  choice/wait/branch/action/fallback edges, with Unicode-safe source ranges and unsaved-buffer
+  refresh. Reject invalid scripts and destination conflicts; preserve prose, text/action IDs and
+  JSON. Host entry strings and saved checkpoints require separate migration. Native editor checks
+  include declared-entry rename. Dynamic host strings remain manual.
+- [x] Add project-wide rename/reference edits for supported symbols across `.tua`, `.tdialogue` and
+  catalogs. Reject ambiguous/dynamic references and conflicts; preserve stable text/action identity
+  unless that identity is deliberately renamed. Supported cross-file symbols are static text IDs:
+  authored line/choice/reason IDs, configured catalog entries and recognized typed localization
+  calls. Flow labels are file-local, including external-entry declarations. Arbitrary host keys,
+  action identity migration and registry-member refactoring are not inferred.
+- [x] Dedicated full-document dialogue formatter preserves prose whitespace, escapes, IDs, payloads,
+  metadata attachment and meaning. Shared dispatch covers CLI project/explicit/stdin/check modes,
+  LSP document formatting and read-only format preview, without Lua layout. Corpus tests verify
+  idempotence and emitted semantic equivalence apart from source coordinates. Invalid scripts yield
+  no edits; native document-formatting qualification passes. Range/on-type layout is not part of
+  this full-document contract.
+- [x] Diagnose dangling targets, duplicate identities, malformed conditions and provably unreachable
+  paths. Distinguish proven impossibility from dynamic context; allow declared externally started
+  entry points so they are not falsely marked unreachable. `@entry label` headers declare additional
+  roots; warnings prune only context-free constant conditions and never remove emitted nodes.
+  CLI/LSP parity tests cover warning severity/ranges and live declaration edits.
+- [x] Static preview foundation: `AnalysisSnapshot::dialogue_preview` exposes the shared parsed
+  document and source-located choice/fallback/wait/branch/action routes. Text, conditions, timing
+  and presentation metadata remain authored data; no imports, handlers or assets execute, and no
+  reachability is inferred. Missing or malformed overlays return no preview; deletion/recreation
+  refresh is tested. This is a core query only, not an editor command or runtime simulation.
+- [x] Editor outline slice: `tua/dialoguePreview` transports static section/text/ route facts with
+  UTF-16 ranges and document versions. Preview Dialogue uses shared source navigation and
+  hidden-view refresh, rejects stale navigation and responses, clears invalid source and bounds
+  large views. No host handlers or assets execute. Mock evaluation and graphical layout are
+  described below.
+- [x] Mock-condition evaluation foundation: core parses explicit JSON `context` and `locals` records
+  without imports or handlers. Strict boolean/nil rules, short-circuiting, scalar equality, ordered
+  numeric comparisons and path errors match the emitted condition runtime. Missing fields/null mean
+  nil; errors retain expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
+  levels and finite numbers within ±2^53 for interpreter portability. Arrays are rejected. This does
+  not validate imported context schemas or execute a dialogue. Transport/UI controls and text
+  presentation are implemented below; route execution is intentionally not simulated.
+- [x] Explicit mock input in the editor: drafts stay in memory and only apply on Apply mock context.
+  Core probes branch/visibility/availability conditions independently (up to 4,096), preserving all
+  routes and source-located errors. JSON validation errors clear mock results without discarding the
+  static outline. Clear, refresh, document switching and in-flight response ordering are covered.
+  The LSP accepts optional JSON text; no host code or imported schemas execute. This is not
+  conversation traversal, fallback selection or action simulation.
+- [x] Mock-text foundation: resolve explicit scalar `args` and all `@bind` paths once, with binding
+  precedence, nil-only defaults and false preservation. Format the parser's plain templates with
+  one-pass named substitution and percent escapes; replacement values never become markup or
+  placeholders. Rich source uses the shared mark-free template. Missing/invalid bindings or
+  arguments report source locations. Retained argument text and each output are capped at 64 KiB,
+  including numeric expansion. Numeric previews use deterministic decimal formatting; Lua `tostring`
+  spelling can differ by runtime. Editor integration is covered below; locale resolution is outside
+  this authored/plain-text preview contract.
+- [x] Mock-text presentation: the core formats lines, choices and disabled reasons once per explicit
+  apply/refresh with 4,096-field and 1 MiB aggregate limits. LSP preserves authored fields and
+  carries results/errors separately. The editor escapes substitutions, retains authored disclosures,
+  links errors to source, distinguishes binding errors from per-field failures, and labels truncated
+  fields. Apply mock context now evaluates conditions and text together; authored reset and
+  stale-response protections apply to both. Rich styles and locale resolution remain outside this
+  plain-text preview.
+- [x] Static conversation graph/text preview with source navigation and explicit mock-context input.
+  The bounded source-order map includes loops and disconnected sections, numbered source-linked
+  routes, shared pan/zoom, keyboard navigation, and same-file expansion/zoom retention. Limits (40
+  sections/80 routes) and omitted missing/ambiguous/undisplayed targets are explicit. Native
+  development-host tests cover navigation, focus, zoom, narrow panes and refresh state. No handlers
+  or loaders execute; runtime tracing remains separate. Installed development-VSIX qualification
+  passes; richer localized/styled text is an optional follow-up.
+- [x] Runtime diagnostic sampling foundation: the opt-in inspector wraps direct and typed player
+  constructors, samples current state/node/action, wait timings, suspension and issue codes, and
+  uses existing bounded transport/weak retention. It omits text, context, payloads, error messages
+  and history, and calls no player methods or handlers. Current samples do not claim complete
+  transition tracing.
+- [x] Optional sampled diagnostic history: retain the latest 20 observed changes per player,
+  including generation/visit, node/action, suspension and issue codes. It is off by default, caps
+  strings at 240 bytes, coalesces unchanged samples, preserves weak ownership, and omits payloads.
+  UI/settings distinguish sampled history from event tracing; brief transitions, settlements and
+  fallback provenance still need explicit event instrumentation below.
+- [x] Public action-handle diagnostics: show status, handle identity, ignored resolve/reject
+  counters, attempts after cancellation and a redacted cancellation failure flag. Attached player
+  data and sampled history carry the handle ID. Wrappers preserve validation/returns/reentrant
+  cancellation; weak metadata avoids callback-cycle retention under Lua 5.1/LuaJIT. Runtime-internal
+  deferred handles and full event chronology remain outside this slice.
+- [x] Bounded current translation provenance: inspect rich line/choice/disabled-reason metadata
+  without resolving again. Report requested/resolved locales, plural variant and direct built-in
+  authored-source fallback; plain/custom missing provenance stays unknown. Cap at 64 fields and omit
+  prose/arguments. Lua runtime and native LÖVE sampling regressions cover fallback, privacy and
+  bounds. Historical fallback tracing and speaker-name provenance remain outside this slice.
+- [x] Show actionable runtime issue data: current node/action, wait status, cancelled/stale
+  completion, budget exhaustion and missing translation fallback. Keep tracing bounded and optional;
+  omit sensitive payloads by default. Current issue details include node/action IDs and the
+  configured automatic-transition budget. Existing handle counters and translation provenance cover
+  the supported cancellation/fallback cases. Optional history is explicitly sampled, not complete
+  event chronology; runtime-internal handles and legacy resolver provenance stay unknown.
+- [x] Dialogue-preview file lifecycle: workspace disk changes, deletion/recreation and closed
+  buffers invalidate source links and pending responses. Dirty overlays stay authoritative; hidden
+  views refresh on reveal. Watchers are panel-scoped and disposed with the view. Provider
+  regressions cover these transitions and pending reopen disposal. Native VS Code development-host
+  qualification with the rebuilt server now covers source navigation, unsaved/invalid edits,
+  external changes, deletion/recreation, dirty discard and hidden reveal. It exposed and fixed the
+  shared LSP deletion handler dropping open overlays; incremental versions and diagnostics now
+  remain live until client close. An isolated installed development VSIX now passes these same
+  checks. Release-build packaging and showcase qualification remain in M10.
+- [x] Preserve fresh results under incomplete edits, unsaved imports, catalog changes, branch edits,
+  watch rebuilds and deleted/recreated modules. Native checks exposed and fixed missing Lua-buffer
+  synchronization: workspace Lua catalogs/imports now send overlays without taking over Lua language
+  providers. Existing CLI watch regressions cover last-valid output, duplicate IDs, catalog
+  placeholder recovery and character dependency deletion. Forwarded character definitions now
+  navigate to their originating module.
 
 **Acceptance:** CLI/LSP/editor agree on the same fixtures. Tests cover cross-file
 rename conflicts, unsaved buffers, formatter semantic stability and diagnostic

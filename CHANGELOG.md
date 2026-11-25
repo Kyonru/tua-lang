@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Keep unsaved workspace Lua catalogs/imports synchronized for dialogue diagnostics
+  and refactor conflicts; navigate forwarded character definitions to their source.
+- Diagnose unreachable dialogue sections conservatively and support `@entry label`
+  declarations for host-started sections, including flow navigation and rename.
+- Show redacted dialogue runtime issue identities and transition-budget limits;
+  qualify authoring/refactoring and dependency refresh in the native editor.
+
 - Show bounded, redacted dialogue translation provenance in the Runtime Inspector,
   including rich-text locale/source fallback and explicit unknown provenance.
 

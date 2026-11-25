@@ -6,6 +6,7 @@ const path = require("path");
 const vscode = require("vscode");
 const { previewContext, verifyGraphPreviews } = require("./graph-previews");
 
+const { verifyDialogueAuthoring } = require("./dialogue-authoring");
 const { verifyDialoguePreview } = require("./dialogue-preview");
 
 const fixtures = JSON.parse(process.env.TUA_REAL_SERVER_FIXTURES);
@@ -18,6 +19,7 @@ async function run() {
   await waitForServer();
   const selectedSuite = process.env.TUA_REAL_SERVER_SUITE || "all";
   assert(["all", "dialogue-preview"].includes(selectedSuite), "unsupported real-server suite");
+  await verifyDialogueAuthoring(fixtures.mainPath);
   await verifyDialoguePreview(fixtures.mainPath);
   if (selectedSuite === "dialogue-preview") return;
   await testHoverActionAvailability(fixtures);
@@ -939,10 +941,12 @@ async function testHoverActionAvailability(fixtures) {
 }
 
 async function waitForServer() {
+  let lastDebugInfo = "";
   await retry(
     async () => {
       await vscode.commands.executeCommand("tua.copyDebugInfo");
-      return vscode.env.clipboard.readText();
+      lastDebugInfo = await vscode.env.clipboard.readText();
+      return lastDebugInfo;
     },
     (debugInfo) =>
       debugInfo.includes("Server state: running") &&
@@ -950,7 +954,7 @@ async function waitForServer() {
       !debugInfo.includes("Last server error:"),
     "the staged real server to reach the running state",
     15000,
-  );
+  ).catch(error => { throw new Error(`${error.message}\n${lastDebugInfo}`); });
 }
 
 async function expectCompletion(document, needle, prefix, expectedLabel) {

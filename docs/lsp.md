@@ -44,6 +44,13 @@ background refreshes do not fill worker slots in one uninterrupted batch.
 Dialogue scripts also support [flow-target navigation](dialogue.md#navigate-conversation-flow):
 complete local labels, follow targets, find references and rename file-local flow
 without executing project code. Rename validates the whole script and preserves prose.
+Header `@entry label` declarations participate in these queries and suppress false
+unreachable-section warnings for host-started sections. Reachability is conservative:
+context-dependent routes stay possible. Cross-file text-ID refactors include
+configured catalogs and recognized typed localization calls, with unsaved conflict
+checks. Workspace `.lua` buffers are synchronized as dependency overlays, including
+catalogs and imported modules, without registering Tua completion/formatting providers
+for Lua. This keeps dirty dependencies authoritative until close; see [dialogue refactoring](dialogue.md#rename-a-text-identity).
 
 ## Find A Feature
 
