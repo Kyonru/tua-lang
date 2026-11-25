@@ -140,4 +140,5 @@ its disposal idempotent and rejects later retry/update work.
 - Toggle G while firing: damage and enemy decisions remain unchanged.
 
 See [Shaders](../../shaders.md) for scanner/editor contracts and optional uniforms.
-Next: add a between-wave conversation and runtime language switching to this game.
+Continue with [conversation and language](conversation-and-language.md) to add a
+between-wave conversation and runtime language switching.

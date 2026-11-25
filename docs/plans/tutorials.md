@@ -66,7 +66,7 @@ status does **not** establish that the integrated chapters are complete.
 | C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Complete; C3 qualification records selected-compiler typing limits |
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Complete; fake-backend and native Source qualification |
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Complete; native GPU failure/scope qualification |
-| C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal/nonmodal ownership | Pending |
+| C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal ownership | Complete; locale/visit and host-effect qualification |
 | C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Pending |
 | C8 — `08-profile-the-game` | Inspect and measure this game's bounded larger waves, then evaluate one justified optimization | M10: inspector/profiler, reproducible workload, unchanged outcomes | Pending |
 | C9 — Qualify the whole path | Follow the chapters from an empty project through the final playable game | M11 plus cumulative checkpoint verification and migration/link audit | Pending |
@@ -299,11 +299,11 @@ context fields are rejected where current tooling promises that support.
 
 References: [localization](../localization.md), [dialogue](../dialogue.md).
 
-- [ ] Begin with a small menu and one short conversation in the source language.
-- [ ] Add typed catalog keys, interpolation and a second locale.
-- [ ] Switch language at runtime without resetting gameplay or replaying dialogue effects.
-- [ ] Demonstrate missing-key/fallback behavior and a longer translated label.
-- [ ] Explain fonts, wrapping and shaping responsibilities without claiming full
+- [x] Begin with a small menu and one short conversation in the source language.
+- [x] Add typed catalog keys, interpolation and a second locale.
+- [x] Switch language at runtime without resetting gameplay or replaying dialogue effects.
+- [x] Demonstrate missing-key/fallback behavior and a longer translated label.
+- [x] Explain fonts, wrapping and shaping responsibilities without claiming full
       international text support from catalog lookup alone.
 
 Acceptance: invalid literal keys fail where supported, interpolation preserves data,
@@ -372,7 +372,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M6 | Complete in C4 | `04-sound`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-04.md) |
 | M7 | Complete in C5 | `05-visual-feedback`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-05.md) |
 | M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
-| M9 | Pending | |
+| M9 | Complete in C6 | `06-conversation-and-language`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-06.md) |
 | M10 | Pending | |
 | M11 | Pending | |
 
@@ -505,4 +505,14 @@ pixel assertions verify scope; compile/include/setup failures and disposal are c
 Inherited gameplay/audio tests pass with the shader integrated. See
 [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-05.md).
 
-Next: C6, between-wave dialogue, UI catalogs and runtime language switching.
+## C6 completion
+
+Added a separately authored between-wave dialogue, shared character declaration,
+complete English/French UI catalogs and locale refresh without restarting visits.
+Modal input/focus ownership blocks gameplay, and completing readiness requests one
+next wave. Rest/close/restart cancel pending requests. Native small-window and emitted
+Lua tests cover locale identity, selection, fallback and effect counts; an invalid
+literal key probe fails checking. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-06.md).
+
+Next: C7, between-wave saved progress and preferences with explicit recovery policy.

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add the arena conversation/localization chapter with shared characters, English/French
+  catalogs, modal input ownership and locale refresh without repeated wave effects.
+
 - Add an arena shader chapter with split GLSL, candidate initialization, preload/retry,
   last-good fallback and native GPU pixel/scope/failure verification.
 

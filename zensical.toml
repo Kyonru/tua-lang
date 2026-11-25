@@ -72,6 +72,7 @@ nav = [
       { "3. Enemy Decisions" = "tutorials/arena-game/enemy-decisions.md" },
       { "4. Give The Game Sound" = "tutorials/arena-game/sound.md" },
       { "5. Scoped Shader Feedback" = "tutorials/arena-game/visual-feedback.md" },
+      { "6. Conversation And Language" = "tutorials/arena-game/conversation-and-language.md" },
     ] },
     { "Your First Playable Character" = "tutorials/playable-character.md" },
     { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },
