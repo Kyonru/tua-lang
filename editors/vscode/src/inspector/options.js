@@ -3,6 +3,6 @@ const CATEGORIES = ["ecs", "states", "signals", "pools", "stores", "inputs", "be
 function normalizeOptions(value = {}) {
   const categories = Array.isArray(value.categories) ? CATEGORIES.filter(kind => value.categories.includes(kind)) : [...CATEGORIES];
   const interval = Number(value.updateInterval);
-  return { categories, updateInterval: Number.isFinite(interval) ? Math.max(100, Math.min(10000, Math.round(interval))) : 500, storeHistory: value.storeHistory === true };
+  return { categories, updateInterval: Number.isFinite(interval) ? Math.max(100, Math.min(10000, Math.round(interval))) : 500, storeHistory: value.storeHistory === true, dialogueHistory: value.dialogueHistory === true };
 }
 module.exports = { CATEGORIES, normalizeOptions };

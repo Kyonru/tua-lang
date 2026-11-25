@@ -975,7 +975,9 @@ game. The **Dialogue players** group shows sampled state, node/action IDs, waits
 and issue codes for `Dialogue.new` and typed context/action/event constructors.
 It omits dialogue text, context values, payloads and error messages. Inspection
 never runs handlers or advances the conversation. Sampling can miss brief states;
-this is not event tracing or a missing-translation report.
+this is not event tracing or a missing-translation report. Optional **Dialogue
+sampled history** retains the latest 20 observed changes per player, with generation
+and visit IDs; enable it in **Configure Runtime Inspection** and restart the game.
 
 ## Preview the authored conversation
 

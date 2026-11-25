@@ -270,3 +270,17 @@ test("dialogue players present sampled waits and issue codes without inventing t
   assert.equal(view.details.length, 2);
   assert.doesNotMatch(JSON.stringify(view), /history|trace/);
 });
+
+test("dialogue history is explicitly sampled and absent when disabled", () => {
+  const { presentObject } = require("../../src/inspector/presentation");
+  const data = { state: "completed", sampledChanges: 2, history: {
+    1: { sequence: 2, state: "completed", nodeId: "done" },
+    2: { sequence: 1, state: "faulted", issueCode: "branch_budget" },
+  } };
+  const view = presentObject({ kind: "dialogues", data }, "dialogue");
+  const history = view.children.find(row => row.label === "Sampled changes");
+  assert.match(history.description, /may miss intermediate states/);
+  assert.deepEqual(history.children.map(row => row.label), ["#2 completed", "#1 faulted"]);
+  const current = presentObject({ kind: "dialogues", data: { state: "idle" } }, "dialogue");
+  assert(!current.children.some(row => row.label === "Sampled changes"));
+});

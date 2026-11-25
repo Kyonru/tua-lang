@@ -834,6 +834,11 @@
           "type": "boolean",
           "default": false,
           "description": "In new inspected development runs, retain the latest 20 successful store updates as bounded state snapshots. Off by default; never included in build or package output."
+        },
+        "tua.runtimeInspector.dialogueHistory": {
+          "type": "boolean",
+          "default": false,
+          "description": "In new inspected runs, retain the latest 20 sampled dialogue changes. Omits text and payloads; may miss states between samples. Off by default."
         }
       }
     },

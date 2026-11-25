@@ -55,12 +55,13 @@ function fixture(t) {
 test("development launcher leaves build output untouched and follows new hot-reload files", async t => {
   const output = fixture(t);
   const before = fs.readdirSync(output).map(name => [name, fs.readFileSync(path.join(output, name), "utf8")]);
-  const launcher = createLauncher(output, "/extension/assets/inspector", { port: 1234, token: "a".repeat(64) }, { storeHistory: true });
+  const launcher = createLauncher(output, "/extension/assets/inspector", { port: 1234, token: "a".repeat(64) }, { storeHistory: true, dialogueHistory: true });
   t.after(() => launcher.dispose());
   assert.notEqual(launcher.directory, output);
   assert.equal(path.basename(launcher.directory), path.basename(output), "preserve default save identity");
   assert(fs.lstatSync(path.join(launcher.directory, "main.lua")).isFile());
   assert.match(fs.readFileSync(path.join(launcher.directory, "conf.lua"), "utf8"), /storeHistory = true/);
+  assert.match(fs.readFileSync(path.join(launcher.directory, "conf.lua"), "utf8"), /dialogueHistory = true/);
   fs.writeFileSync(path.join(output, "new.lua"), "return 42");
   await until(() => fs.existsSync(path.join(launcher.directory, "new.lua")));
   for (const [name, data] of before) assert.equal(fs.readFileSync(path.join(output, name), "utf8"), data);
@@ -329,7 +330,7 @@ io.write(inspect.snapshot())`;
 
 test("empty categories skip launchers and intervals are clamped", async t => {
   const { normalizeOptions } = require("../../src/inspector/options");
-  assert.deepEqual(normalizeOptions({ categories: ["stores", "unknown", "stores"], updateInterval: 1 }), { categories: ["stores"], updateInterval: 100, storeHistory: false });
+  assert.deepEqual(normalizeOptions({ categories: ["stores", "unknown", "stores"], updateInterval: 1 }), { categories: ["stores"], updateInterval: 100, storeHistory: false, dialogueHistory: false });
   assert.equal(normalizeOptions({ storeHistory: true }).storeHistory, true);
   assert.equal(normalizeOptions({ updateInterval: 999999 }).updateInterval, 10000);
   const activity = new ActivityStore();
@@ -463,4 +464,70 @@ assert(eventPlayer and contextPlayer)
   assert.deepEqual(action, { id: "reward.id", name: "reward", handleAttached: false });
   assert.equal(frames[6].objects.find(object => object.data.action)?.data.action.handleAttached, true);
   assert.equal(frames[7].objects.find(object => object.data.state === "faulted").data.issueCode, "action_cancelled");
+});
+
+test("dialogue sampled history is bounded, coalesces unchanged samples and releases players", t => {
+  const { spawnSync } = require("node:child_process");
+  const lua = ["lua", "luajit"].find(command => spawnSync(command, ["-v"]).status === 0);
+  if (!lua) return t.skip("Lua interpreter unavailable");
+  const script = `local assets, runtime = arg[1], arg[2]
+package.path = runtime .. "/?.lua;" .. package.path
+local originalLoadfile = loadfile
+loadfile = function(filename)
+  if filename == assets .. "/transport.lua" then
+    return function() return function() return function() end end end
+  end
+  return originalLoadfile(filename)
+end
+local inspect = assert(loadfile(assets .. "/shim.lua"))(assets, 1, "token", {
+  categories = { dialogues = true },
+  dialogueHistory = arg[3] == "on",
+})
+local Dialogue = require("tuadialogue")
+local longId = string.rep("n", 5000)
+local player = Dialogue.new({
+  schemaVersion = 9,
+  entry = longId,
+  nodes = {
+    [longId] = { kind = "wait", duration = 100, next = "done" },
+    done = { kind = "end" },
+  },
+})
+player:start()
+inspect.snapshot()
+player:update(1, false)
+io.write(inspect.snapshot(), "\\n")
+for index = 1, 24 do
+  player:start()
+  inspect.snapshot()
+end
+io.write(inspect.snapshot(), "\\n")
+player:cancel()
+io.write(inspect.snapshot(), "\\n")
+player = nil
+collectgarbage("collect")
+collectgarbage("collect")
+io.write(inspect.snapshot(), "\\n")
+`;
+  for (const setting of ["off", "on"]) {
+    const result = spawnSync(lua, ["-", path.resolve(__dirname, "../../assets/inspector"), path.resolve(__dirname, "../../../../vendor/runtime"), setting], { input: script, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const frames = result.stdout.trim().split("\n").map(JSON.parse);
+    const first = frames[0].objects[0].data;
+    const repeated = frames[1].objects[0].data;
+    if (setting === "on") {
+      assert.equal(first.sampledChanges, 1, "elapsed wait time does not add history entries");
+      assert.equal(repeated.sampledChanges, 25);
+      assert.equal(Object.keys(repeated.history).length, 20);
+      assert.equal(repeated.history["1"].sequence, 25);
+      assert.equal(repeated.history["20"].sequence, 6);
+      assert.equal(repeated.history["1"].nodeId.length, 240);
+      assert.equal(repeated.history["1"].truncated, true);
+      assert.equal(frames[2].objects[0].data.history["1"].state, "cancelled");
+    } else {
+      assert.equal(first.history, undefined);
+      assert.equal(repeated.sampledChanges, undefined);
+    }
+    assert.equal(frames[3].objects.length, 0, "history must not retain the player");
+  }
 });

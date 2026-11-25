@@ -681,6 +681,12 @@ context objects. Core export/import works without a filesystem or LÖVE.
   suspension and issue codes, and uses existing bounded transport/weak retention.
   It omits text, context, payloads, error messages and history, and calls no player
   methods or handlers. Current samples do not claim complete transition tracing.
+- [x] Optional sampled diagnostic history: retain the latest 20 observed changes
+  per player, including generation/visit, node/action, suspension and issue codes.
+  It is off by default, caps strings at 240 bytes, coalesces unchanged samples,
+  preserves weak ownership, and omits payloads. UI/settings distinguish sampled
+  history from event tracing; brief transitions, settlements and fallback provenance
+  still need explicit event instrumentation below.
 - [ ] Show actionable runtime issue data: current node/action, wait status,
   cancelled/stale completion, budget exhaustion and missing translation fallback.
   Keep tracing bounded and optional; omit sensitive payloads by default.

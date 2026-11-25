@@ -178,6 +178,13 @@ function presentObject(object, prefix, previous) {
       for (const [key, label] of [["nodeId", "Current node"], ["documentId", "Document"], ["issueCode", "Issue code"]]) {
         if (data[key] !== undefined) children.push(row(prefix, key, label, data[key]));
       }
+      if (data.history) {
+        const history = Object.values(data.history).filter(item => item && typeof item === "object").slice(0, 20);
+        children.push({ id: prefix + "/history", label: "Sampled changes", description: `${history.length} retained · may miss intermediate states`,
+          children: history.map(item => ({ id: `${prefix}/history/${item.sequence}`, label: `#${item.sequence} ${item.state || "Unknown state"}`,
+            description: `${item.nodeId || "No node"}${item.issueCode ? ` · ${item.issueCode}` : ""}`,
+            children: valueNodes(item, `${prefix}/history/${item.sequence}`) })) });
+      }
       if (data.wait) children.push({ id: prefix + "/wait", label: "Wait", children: valueNodes(data.wait, prefix + "/wait") });
       if (data.action) children.push({ id: prefix + "/action", label: "Action", children: valueNodes(data.action, prefix + "/action") });
       for (const key of ["generation", "visit"]) {

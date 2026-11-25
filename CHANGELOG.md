@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add optional bounded dialogue sampled history to the Runtime Inspector,
+  retaining recent lifecycle/issue changes without text, context or payloads.
+
 - Add opt-in dialogue player sampling to the Runtime Inspector, showing state,
   waits, action IDs and issue codes while omitting text, context and payloads.
 

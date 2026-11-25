@@ -277,6 +277,17 @@ are omitted. These are bounded current-state samples, not a complete event trace
 short-lived states may fall between samples. Missing-translation fallback and
 stale-completion history are not collected yet.
 
+Enable **Dialogue sampled history** in **Configure Runtime Inspection**, or set
+`tua.runtimeInspector.dialogueHistory` to `true`, then restart the game. It is off
+by default. Each player retains at most 20 sampled changes, newest first, including
+the initial sample. A record is added when sampled lifecycle identity, node/action,
+suspension or issue code changes; elapsed wait time alone does not add a record.
+Records include generation and visit IDs to distinguish restarts and repeat visits.
+Strings are capped at 240 bytes with a truncation flag. Text, context, payloads and
+error messages remain omitted, and collected players are not retained by history.
+Pausing inspection pauses collection too. History cannot recover intermediate
+states or action settlements that occur between samples.
+
 ### Control updates
 
 | Action | Effect |

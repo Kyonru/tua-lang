@@ -101,7 +101,7 @@ function inspectorToolbarState(entry) {
 
 function registerRuntimeInspector(context, activity) {
   const enabled = () => vscode.workspace.isTrusted && vscode.workspace.getConfiguration("tua").get("runtimeInspector.enabled", false);
-  const options = () => { const config = vscode.workspace.getConfiguration("tua"); return normalizeOptions({ categories: config.get("runtimeInspector.categories"), updateInterval: config.get("runtimeInspector.updateInterval", 500), storeHistory: config.get("runtimeInspector.storeHistory", false) }); };
+  const options = () => { const config = vscode.workspace.getConfiguration("tua"); return normalizeOptions({ categories: config.get("runtimeInspector.categories"), updateInterval: config.get("runtimeInspector.updateInterval", 500), storeHistory: config.get("runtimeInspector.storeHistory", false), dialogueHistory: config.get("runtimeInspector.dialogueHistory", false) }); };
   const origins = new RuntimeOrigins(loadSourceMapForGeneratedPath);
   const sessions = new InspectorSessions({ activity, enabled, options, describeObject: (entry, object) => origins.describe(entry, object),
     assetsDirectory: path.join(context.extensionPath, "assets", "inspector"),
@@ -133,7 +133,7 @@ function registerRuntimeInspector(context, activity) {
     refresh();
   };
   const disposables = [tree, view, sessions, sessions.subscribe(refresh),
-    vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.runtimeInspector.updateInterval")) sessions.updateInterval(options().updateInterval); if (event.affectsConfiguration("tua.runtimeInspector.categories") || event.affectsConfiguration("tua.runtimeInspector.storeHistory")) refresh(); if (event.affectsConfiguration("tua.runtimeInspector.enabled")) { if (!enabled()) sessions.disconnectAll(); refresh(); } }),
+    vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration("tua.runtimeInspector.updateInterval")) sessions.updateInterval(options().updateInterval); if (event.affectsConfiguration("tua.runtimeInspector.categories") || event.affectsConfiguration("tua.runtimeInspector.storeHistory") || event.affectsConfiguration("tua.runtimeInspector.dialogueHistory")) refresh(); if (event.affectsConfiguration("tua.runtimeInspector.enabled")) { if (!enabled()) sessions.disconnectAll(); refresh(); } }),
     vscode.commands.registerCommand("tua.inspector.configure", async () => {
       const current = options();
       const labels = Object.fromEntries(GROUPS.map(([key, label]) => [key, label]));
@@ -148,12 +148,18 @@ function registerRuntimeInspector(context, activity) {
         { label: "On", description: "Keep the latest 20 successful store updates", value: true },
       ], { title: "Store change history", placeHolder: `Currently ${current.storeHistory ? "on" : "off"}; applies to new runs` });
       if (!history) return;
+      const dialogueHistory = await vscode.window.showQuickPick([
+        { label: "Off", description: "Current dialogue state only", value: false },
+        { label: "On", description: "Keep the latest 20 sampled dialogue changes; not a full trace", value: true },
+      ], { title: "Dialogue sampled history", placeHolder: `Currently ${current.dialogueHistory ? "on" : "off"}; applies to new runs` });
+      if (!dialogueHistory) return;
       const scope = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
       const config = vscode.workspace.getConfiguration("tua");
       await config.update("runtimeInspector.categories", picked.map(item => item.kind), scope);
       await config.update("runtimeInspector.updateInterval", rate.value, scope);
       await config.update("runtimeInspector.storeHistory", history.value, scope);
-      await vscode.window.showInformationMessage("Inspection settings saved. Restart running games to apply categories and store history; update frequency applies immediately.");
+      await config.update("runtimeInspector.dialogueHistory", dialogueHistory.value, scope);
+      await vscode.window.showInformationMessage("Inspection settings saved. Restart running games to apply categories and histories; update frequency applies immediately.");
     }),
     vscode.commands.registerCommand("tua.inspector.enable", () => setEnabled(true)),
     vscode.commands.registerCommand("tua.inspector.disable", () => setEnabled(false)),

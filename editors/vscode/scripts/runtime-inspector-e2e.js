@@ -13,7 +13,7 @@ const origins = new RuntimeOrigins();
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "tua-inspector-native-"));
 const output = path.join(root, "build");
 const activity = new ActivityStore();
-const inspector = new InspectorSessions({ describeObject: (entry, object) => origins.describe(entry, object), activity, enabled: () => true, assetsDirectory: path.resolve(__dirname, "../assets/inspector"), reportError: message => { throw new Error(message); } });
+const inspector = new InspectorSessions({ describeObject: (entry, object) => origins.describe(entry, object), activity, enabled: () => true, options: () => ({ dialogueHistory: true }), assetsDirectory: path.resolve(__dirname, "../assets/inspector"), reportError: message => { throw new Error(message); } });
 const children = []; let logs = "";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await sleep(50); } throw new Error("Native inspector timed out\n" + logs); }
@@ -129,6 +129,8 @@ end
     const dialogue = kind(player.entry, "dialogues");
     assert.equal(dialogue.state, "waiting");
     assert.equal(dialogue.documentId, "native");
+    assert.equal(dialogue.sampledChanges, 1, "wait ticks do not fill sampled history");
+    assert.equal(dialogue.history["1"].state, "waiting");
     assert(dialogue.wait.elapsed > 0 && dialogue.wait.remaining < 100);
     const component = Object.values(kind(player.entry, "ecs", "world").entities["1"])[0];
     assert.equal(component.player, player.session.title); assert.equal(component.self, "<cycle>");

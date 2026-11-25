@@ -267,7 +267,7 @@ local function instrument(name, module)
     end
     wrapped[module.new] = true
   elseif categories.dialogues and name == "tuadialogue" and type(module) == "table" then
-    local instrumentDialogue = assert(loadfile(directory .. "/dialogue.lua"))()(inspect, wrapped)
+    local instrumentDialogue = assert(loadfile(directory .. "/dialogue.lua"))()(inspect, wrapped, options)
     module = instrumentDialogue(module)
   elseif categories.audio and name == "tuaaudio" and type(module) == "function" then
     module = constructor(module, "audio", audioData)
