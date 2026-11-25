@@ -87,3 +87,12 @@ is limited to small offsets; M disables it. Colors adapt to dark and pale panels
 Emphasis, underline and highlight may combine, while story prose uses effects only
 on meaningful phrases. F3 is the deliberately denser sampler. Preserve plain history,
 literal placeholders and localized templates when adding treatments.
+
+## Character staging
+
+F4 keeps two portrait slots on a quiet stage. Active-speaker contrast carries turn
+changes; bubble positions follow stable cast keys, with one explicit text-ID override.
+Keep portrait slots and bubble anchors independent. Screen-anchored speech has no tail.
+At compact sizes reduce typography and reserve the same header/footer boundaries;
+scroll long content rather than covering character portraits. The staging tour owns
+modal priority, regardless of frame style, so radio cannot obscure its upper bubble.

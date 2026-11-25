@@ -51,13 +51,18 @@ styles, and **O** to cycle portrait placement.
 **F2** switches between the longer story and the short feature demonstration.
 **F3** opens a rich-text tour with nested emphasis, highlights, underline/strike,
 thought/whisper text, colors, motion, scoped reveal speed and pauses. These are
-showcase renderer treatments built on the existing rich-text marks. **Space** finishes reveal, then advances;
+showcase renderer treatments built on the existing rich-text marks.
+**F4** opens a separate character-staging conversation: opposite portrait slots,
+speaker-specific bubble anchors, portrait-free speech and a per-line position override.
+The typed host layout uses stable speaker/text IDs and survives language changes.
+**Space** finishes reveal, then advances;
 **Up/Down** and **Enter** select replies. **F** changes reveal speed, **M** reduces
 motion, **S** toggles subtitles and **V** mutes recorded voice. **L** switches
 language, **P** pauses, **R** resets, **Q/N** queue conversations/announcements,
 and **F5/F9** capture/restore an in-memory checkpoint. Page Up/Down scroll content.
 
-Cinematic, mythic and tactics modes give the conversation modal priority and suspends radio; the other
+The F4 staging tour always reserves modal priority. Elsewhere, cinematic, mythic
+and tactics modes give the conversation modal priority and suspend radio; the other
 styles permit concurrent announcements. The background stays quiet so dialogue is
 the focus. These are example host policies. The engine does not decide
 whether your game pauses or which channel owns input. Two conversation and four

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add an F4 dialogue staging tour with opposite character portraits, speaker-specific
+  bubbles, per-line position overrides, bilingual content and document-aware checkpoints.
+
 - Expand Beacon Harbor rich-text presentation with an F3 bilingual tour, nested
   decorations, thought/whisper treatments, palette-aware colors and timed reveal.
 

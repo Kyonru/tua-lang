@@ -44,6 +44,49 @@ scroll; keyboard focus brings the newly selected reply into view.
 | Transmission | Subtitles |
 | ![Transmission receiver](screenshots/transmission.png) | ![Unframed subtitles without a portrait](screenshots/subtitles.png) |
 
+## Character staging tour
+
+Press **F4** for *Across the water*, a separate English/French conversation in
+[`staging.tdialogue`](src/staging.tdialogue). F4 again returns to the main story.
+
+- Mara stays on the left and Ivo on the right. The active speaker brightens;
+  expression variants still select the corresponding Lorelei portrait.
+- Each speaker has a bubble position. Beacon uses a screen-anchored bubble without
+  a portrait or speech tail; the two visible portraits remain inactive.
+- Choose **Bring the chart between us** to move Mara's bubble to the upper center
+  for one line. Her portrait stays left, and her next bubble returns to its default.
+- Narration and choices use neutral placement. **L** switches language; **1–7** still
+  switch styles. This tour uses character slots instead of the global **O** setting.
+
+![Ivo speaking from the right](screenshots/staging-right.png)
+
+The typed renderer configuration lives in [`staging_layout.tua`](src/staging_layout.tua).
+It resolves **defaults → character → scene → line**, using `node.speakerKey` (the
+character's `nameKey`) and `node.textId`, never translated names or portrait filenames.
+For example, the line override changes the bubble while retaining Mara's portrait slot:
+
+```lua
+["staging.mara.center"] = { anchor = "screen", x = 0.5, y = 0 }
+```
+
+Coordinates are normalized over the bubble's available travel inside the safe area:
+0 is the left/top edge, 1 the right/bottom edge. Geometry reserves room for portraits,
+controls and headings. Long content scrolls with Page Up/Down; choices scroll to focus.
+An `actor` anchor points toward a portrait slot in this example. A world-space game
+would project its actor position before passing geometry to the presenter.
+
+This is host presentation data, not new dialogue syntax or a built-in engine layout.
+The separate document shares the cast, context and translations with the story.
+Checkpoints remember which document to restore and preserve the host's language.
+While active, this tour suspends radio announcements in every style to protect its
+staging area; the other tours retain their existing style-dependent priority.
+
+```sh
+python3 verify.py --tua ../../../target/release/tua \
+  --love /Applications/love.app/Contents/MacOS/love \
+  --scenario staging --output /tmp/beacon-staging --video
+```
+
 ## Rich text tour
 
 Press **F3** for *Words with character*, a six-line English/French tour. Switch among
