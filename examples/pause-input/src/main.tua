@@ -1,26 +1,50 @@
 local model = require("state")
+local title = love.graphics.newFont(30)
+local body = love.graphics.newFont(18)
 function love.load()
-  love.window.setMode(640, 360)
-  love.window.setTitle("Tua: pause and input routing")
-  model.reset(false)
+  love.window.setMode(800, 480)
+  love.window.setTitle("Tua: a pause menu and game flow")
 end
 function love.update(dt: number)
   model.update(dt)
 end
 function love.focus(focused: boolean)
-  if not focused then model.pause(true) end
+  model.focus(focused)
+end
+function love.keypressed(key: string)
+  if key == "escape" and model.flow:is("title") then love.event.quit() end
 end
 function love.draw()
-  local state = model.state
-  love.graphics.clear(0.06, 0.08, 0.13)
-  love.graphics.setColor(0.9, 0.94, 1)
-  love.graphics.print("ESC: pause | SPACE: fire / menu confirm", 24, 24)
-  love.graphics.print("Gameplay time: " .. string.format("%.2f", state.gameplayTime), 24, 60)
-  love.graphics.print("UI time: " .. string.format("%.2f", state.uiTime), 24, 84)
-  love.graphics.print("Shots: " .. state.shots .. " | Menu confirms: " .. state.confirms, 24, 108)
-  love.graphics.print("Practice upgrades: " .. state.upgrades, 24, 132)
-  love.graphics.setColor(0.35, 0.8, 0.7)
-  love.graphics.rectangle("fill", 24 + model.marker.x, 185, 24, 24)
-  love.graphics.setColor(0.8, 0.7, 0.95, model.menu.opacity)
-  love.graphics.print("PAUSED - UI continues, gameplay stops", 24, 260)
+  love.graphics.clear(0.08, 0.12, 0.14)
+  love.graphics.setColor(0.94, 0.92, 0.85)
+  love.graphics.setFont(title)
+  if model.flow:is("title") then
+    love.graphics.print("A short crossing", 32, 48)
+    love.graphics.setFont(body)
+    love.graphics.print("Press Enter or Space to begin.", 32, 108)
+    love.graphics.print("Escape to quit", 32, 418)
+    return
+  end
+  love.graphics.print(model.flow:is("paused") and "Paused" or "On the move", 32, 48)
+  love.graphics.setFont(body)
+  love.graphics.print("Shots: " .. model.state.shots, 32, 104)
+  love.graphics.print("Time: " .. string.format("%.1f", model.state.gameplayTime), 32, 132)
+  love.graphics.setColor(0.67, 0.79, 0.75)
+  love.graphics.circle("fill", 48 + model.marker.x, 248, 12)
+  love.graphics.setColor(0.94, 0.92, 0.85)
+  if model.flow:is("paused") then
+    love.graphics.print("Enter / Space / Esc   Resume", 32, 324)
+    love.graphics.print("R   Restart     Backspace   Title", 32, 358)
+  else
+    love.graphics.print("Space   Fire     Esc   Pause", 32, 358)
+    love.graphics.print("R   Restart     Backspace   Title", 32, 392)
+  end
+  -- This small pause caption uses UI time, even while the world is frozen.
+  love.graphics.setColor(0.67, 0.79, 0.75, model.menu.opacity)
+  love.graphics.print("Take your time.", 32, 188)
 end
+function love.quit()
+  title:release()
+  body:release()
+end
+return model

@@ -1,15 +1,21 @@
 -- Independent input instances keep edge detection current even while paused.
-local globalInput = input({ controls = { pause = { "key:escape" } } })
+local globalInput = input({
+  controls = {
+    pause = { "key:escape" },
+    restart = { "key:r" },
+    title = { "key:backspace" },
+  },
+})
 local playInput = input({ controls = { fire = { "key:space" } } })
-local menuInput = input({ controls = { confirm = { "key:space" } } })
+local menuInput = input({ controls = { confirm = { "key:space", "key:return" } } })
 local debugInput = input({ controls = { upgrade = { "key:u" } } })
+local focused = true
 local gameplayTweens = Tween.group()
 local uiTweens = Tween.group()
 local marker = { x = 0 }
 local menu = { opacity = 0 }
 local menuTween = uiTweens:to(menu, 0.15, { opacity = 0 })
 local state = {
-  paused = false,
   practice = false,
   gameplayTime = 0,
   uiTime = 0,
@@ -18,16 +24,48 @@ local state = {
   upgrades = 0,
 }
 
-local function pause(value: boolean)
-  state.paused = value
+local flow = stateMachine({
+  initial = "title",
+  events = {
+    { name = "start", from = "title", to = "playing" },
+    { name = "pause", from = "playing", to = "paused" },
+    { name = "resume", from = "paused", to = "playing" },
+    { name = "restart", from = { "playing", "paused" }, to = "playing" },
+    { name = "leave", from = { "playing", "paused" }, to = "title" },
+  },
+})
+
+local function fadeMenu(value: boolean)
   menuTween:stop()
   menuTween = uiTweens:to(menu, 0.15, { opacity = value and 1 or 0 })
 end
 
+local function pause(value: boolean)
+  if value and flow:is("playing") then
+    flow:pause()
+    fadeMenu(true)
+  elseif not value and flow:is("paused") then
+    flow:resume()
+    fadeMenu(false)
+  end
+end
+
+local function focus(value: boolean)
+  focused = value
+  if not focused then pause(true) end
+end
+
+local function leave()
+  if flow:is("title") then return end
+  flow:leave()
+  fadeMenu(false)
+end
+
 local function reset(practice: boolean)
+  menuTween:stop()
   gameplayTweens = Tween.group()
   uiTweens = Tween.group()
-  state.paused = false
+  if flow:is("title") then flow:start() else flow:restart() end
   state.practice = practice
   state.gameplayTime = 0
   state.uiTime = 0
@@ -47,14 +85,30 @@ local function update(dt: number)
   debugInput:update()
   state.uiTime += dt
   uiTweens:update(dt)
+  if not focused then return end
 
-  -- Route global commands first. A pause transition consumes this frame.
-  if globalInput:pressed("pause") then
-    pause(not state.paused)
+  -- One transition owns the frame; polling already consumed all input edges.
+  if globalInput:pressed("title") and not flow:is("title") then
+    leave()
     return
   end
-  if state.paused then
-    if menuInput:pressed("confirm") then state.confirms += 1 end
+  if globalInput:pressed("restart") and not flow:is("title") then
+    reset(state.practice)
+    return
+  end
+  if flow:is("title") then
+    if menuInput:pressed("confirm") then reset(false) end
+    return
+  end
+  if globalInput:pressed("pause") then
+    pause(flow:is("playing"))
+    return
+  end
+  if flow:is("paused") then
+    if menuInput:pressed("confirm") then
+      state.confirms += 1
+      pause(false)
+    end
     return
   end
 
@@ -67,9 +121,12 @@ end
 
 return {
   state = state,
+  flow = flow,
   marker = marker,
   menu = menu,
   reset = reset,
   pause = pause,
+  focus = focus,
+  leave = leave,
   update = update,
 }

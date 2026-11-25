@@ -1,0 +1,106 @@
+-- Loaded only by the replay runner; the interactive game starts at the title.
+type Context = { frame: number, dt: number, key: (key: string, down: boolean) -> nil }
+local model = require("state")
+local frozenTime = 0
+local frozenX = 0
+local function setup(context: Context)
+  assert(model.flow:is("title"))
+end
+local function beforeFrame(context: Context)
+  local frame = context.frame
+  if frame == 16 then
+    assert(model.state.gameplayTime == 0)
+    context.key("space", true)
+  end
+  if frame == 17 then
+    assert(model.flow:is("playing"))
+    assert(model.state.shots == 0 and model.state.gameplayTime == 0)
+  end
+  if frame == 26 then
+    assert(model.state.shots == 0, "held start key does not fire")
+    context.key("space", false)
+  end
+  if frame == 31 then context.key("space", true) end
+  if frame == 32 then
+    assert(model.state.shots == 1)
+    context.key("space", false)
+  end
+  if frame == 46 then
+    context.key("escape", true)
+    context.key("space", true)
+    frozenTime = model.state.gameplayTime
+    frozenX = model.marker.x
+  end
+  if frame == 47 then context.key("escape", false) end
+  if frame == 61 then
+    assert(model.flow:is("paused"))
+    assert(model.state.gameplayTime == frozenTime and model.marker.x == frozenX)
+    assert(model.menu.opacity == 1)
+    assert(model.state.shots == 1, "pause consumes simultaneous fire")
+    context.key("space", false)
+  end
+  if frame == 66 then context.key("space", true) end
+  if frame == 67 then
+    assert(model.flow:is("playing"))
+    assert(model.state.confirms == 1)
+    assert(model.state.gameplayTime == frozenTime, "resume consumes its frame")
+  end
+  if frame == 76 then
+    assert(model.state.shots == 1, "held resume key does not fire")
+    assert(model.state.gameplayTime <= frozenTime + 10 * context.dt + 0.00001)
+    context.key("space", false)
+    love.focus(false)
+    frozenTime = model.state.gameplayTime
+  end
+  if frame == 81 then context.key("return", true) end
+  if frame == 86 then context.key("return", false) end
+  if frame == 91 then
+    love.focus(true)
+    assert(model.flow:is("paused"), "refocus does not automatically resume")
+    assert(model.state.gameplayTime == frozenTime)
+    context.key("r", true)
+    context.key("space", true)
+  end
+  if frame == 92 then
+    assert(model.flow:is("playing"))
+    assert(model.state.shots == 0 and model.state.gameplayTime == 0)
+    context.key("r", false)
+  end
+  if frame == 106 then
+    assert(model.state.shots == 0, "restart consumes simultaneous fire")
+    context.key("space", false)
+    context.key("backspace", true)
+  end
+  if frame == 107 then
+    assert(model.flow:is("title"))
+    context.key("backspace", false)
+    frozenTime = model.state.gameplayTime
+  end
+  if frame == 116 then
+    assert(model.state.gameplayTime == frozenTime)
+    context.key("return", true)
+  end
+  if frame == 117 then
+    assert(model.state.gameplayTime == 0 and model.state.shots == 0)
+    context.key("return", false)
+  end
+end
+local function verify(context: Context)
+  -- Exercise repeated transitions without accumulating tween updates or run state.
+  model.reset(false)
+  model.update(0.1)
+  local expectedX = model.marker.x
+  assert(expectedX > 0)
+  for index = 1, 100 do
+    model.pause(true)
+    model.pause(true)
+    model.pause(false)
+    model.reset(false)
+    model.update(0.1)
+    assert(math.abs(model.marker.x - expectedX) < 0.00001)
+    assert(model.state.shots == 0)
+  end
+  assert(model.flow:is("playing"))
+  print("GAME_FLOW_OK title, pause, resume, held inputs, focus, restart, 100 lifecycle cycles")
+end
+return { setup = setup, beforeFrame = beforeFrame, verify = verify }
