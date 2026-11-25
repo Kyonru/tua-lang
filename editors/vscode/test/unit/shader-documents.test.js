@@ -27,3 +27,45 @@ test("shader overlays synchronize without registering language providers and dis
   sync.dispose();
   assert.equal(disposed, 3);
 });
+
+
+test("workspace Lua dependency overlays synchronize without duplicate language-client ownership", () => {
+  const { synchronizeLuaDocuments } = require("../../src/lua-documents");
+  const listeners = {};
+  const sent = [];
+  let disposed = 0;
+  const event = name => listener => {
+    listeners[name] = listener;
+    return { dispose() { disposed++; } };
+  };
+  const document = {
+    uri: { scheme: "file", path: "/project/en.lua", toString: () => "file:///project/en.lua" },
+    languageId: "lua", version: 1, getText: () => "return { en = {} }",
+  };
+  const vscode = {
+    workspace: {
+      textDocuments: [document],
+      getWorkspaceFolder: uri => uri.path.startsWith("/project/") ? {} : undefined,
+      onDidOpenTextDocument: event("open"), onDidChangeTextDocument: event("change"), onDidCloseTextDocument: event("close"),
+    },
+    languages: { match: (_, doc) => doc.languageId === "tua" ? 1 : 0 },
+  };
+  const client = { sendNotification(method, params) { sent.push({ method, params }); return Promise.resolve(); } };
+  const sync = synchronizeLuaDocuments(vscode, client, () => {});
+  assert.equal(sent.length, 1);
+  listeners.open(document);
+  listeners.open({ ...document, languageId: "tua" });
+  listeners.open({ ...document, uri: { ...document.uri, path: "/outside/en.lua" } });
+  assert.equal(sent.length, 1);
+  document.version = 2;
+  listeners.change({ document });
+  assert.equal(sent[1].params.textDocument.version, 2);
+  listeners.close(document);
+  assert.equal(sent[2].method, "textDocument/didClose");
+  sync.dispose();
+  assert.equal(disposed, 3);
+  const restarted = synchronizeLuaDocuments(vscode, client, () => {});
+  assert.equal(sent[3].method, "textDocument/didOpen");
+  assert.equal(sent[3].params.textDocument.version, 2);
+  restarted.dispose();
+});

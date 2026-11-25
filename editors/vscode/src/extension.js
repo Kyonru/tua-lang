@@ -1,7 +1,9 @@
 "use strict";
 
 const { synchronizeShaderDocuments } = require("./shader-documents");
+const { synchronizeLuaDocuments } = require("./lua-documents");
 let shaderDocuments;
+let luaDocuments;
 
 const childProcess = require("child_process");
 const fs = require("fs");
@@ -352,6 +354,7 @@ async function startLanguageServer() {
   try {
     await client.start();
     shaderDocuments = synchronizeShaderDocuments(vscode, client, (message) => outputChannel.appendLine(message));
+    luaDocuments = synchronizeLuaDocuments(vscode, client, (message) => outputChannel.appendLine(message));
     currentServerInfo.state = "running";
     setServerStatus("running", serverDetail(serverCommand, cwd, preflight.version));
     void loveDevex?.refreshAssets?.();
@@ -852,6 +855,8 @@ async function reportIssue() {
 async function stopLanguageServer(options = {}) {
   shaderDocuments?.dispose();
   shaderDocuments = undefined;
+  luaDocuments?.dispose();
+  luaDocuments = undefined;
   const activeClient = client;
   client = undefined;
 
