@@ -975,11 +975,34 @@ previews when prompted. The outline shows sections, dialogue text and outgoing
 routes. Click a section, **Open text**, or a route target to navigate to its source.
 A route target opens the authored target token so you can edit that connection.
 
-This is a static authoring view: both branch outcomes remain visible, speaker IDs
-are not resolved to portraits, and placeholders, conditions and rich-text marks
-are not evaluated. It does not play audio or invoke game handlers. Mock-context
-simulation and a graphical node layout remain planned. See the [editor reference](lsp.md)
-for refresh behavior and display limits.
+By default this is an authored view. To test conditions, enter explicit JSON in
+**Mock context**, then choose **Evaluate conditions**:
+
+```json
+{
+  "context": { "coins": 20, "unlocked": true },
+  "locals": { "visits": 1 }
+}
+```
+
+Each branch, visibility and availability condition is tested independently. The
+preview shows `true`, `false`, or a source-linked error. All routes remain visible:
+this does not simulate traversal, action results, waits, or mutations between
+sections. For example, an availability condition is tested even when its choice's
+visibility condition is false. Missing fields and JSON `null` behave as nil.
+
+Editing the JSON changes only the draft; press **Evaluate conditions** to apply it.
+Source refreshes reuse the last applied JSON. **Use authored view** stops evaluation
+and keeps the draft available. Closing the preview or switching to another dialogue
+clears both draft and applied input; they are not saved to project files or settings.
+
+Input accepts only `context` and `locals` record roots, with no arrays. Limits are
+64 KiB of JSON, 4,096 values, 32 nesting levels and finite numbers within ±2⁵³.
+At most 4,096 conditions are tested per request, with a notice if truncated.
+Imported context schemas are not validated against this input. Portraits, audio,
+placeholders and rich-text marks are not resolved or rendered, and game handlers
+never run. Graphical layout and text substitution remain planned. See the
+[editor reference](lsp.md) for refresh behavior and display limits.
 
 ## Authoring rules and common mistakes
 

@@ -96,3 +96,59 @@ test("invalid source clears prior content and stale responses do not render", as
   assert.match(f.panel().webview.html, /Source changed during analysis/);
   f.panel().dispose();
 });
+
+test("mock input is explicit, remains a draft during refresh and can be cleared", async () => {
+  const requests = [];
+  const f = fixture(async (document, _method, params) => {
+    requests.push(params);
+    return { documentVersion: document.version, preview };
+  });
+  await f.show();
+  const uri = f.document.uri.toString();
+  const text = '{"context":{"coins":2}}';
+  assert.equal(requests[0].mockContext, undefined);
+  await f.panel().receive({ command: "mockDraft", uri, text });
+  assert.equal(requests.length, 1);
+  await f.panel().receive({ command: "reload" });
+  assert.equal(requests[1].mockContext, undefined);
+  assert.match(f.panel().webview.html, /&quot;coins&quot;:2/);
+  await f.panel().receive({ command: "applyMock", uri, text });
+  assert.equal(requests[2].mockContext, text);
+  assert.match(f.panel().webview.html, /compiler does not support mock evaluation/);
+  await f.panel().receive({ command: "clearMock", uri });
+  assert.equal(requests[3].mockContext, undefined);
+  await f.panel().receive({ command: "applyMock", uri: "file:///other.tdialogue", text });
+  assert.equal(requests.length, 4);
+  f.panel().dispose();
+  await f.show();
+  assert.equal(requests[4].mockContext, undefined);
+  assert.doesNotMatch(f.panel().webview.html, /&quot;coins&quot;:2/);
+  f.panel().dispose();
+});
+
+test("clearing mock input discards an older in-flight result", async () => {
+  let finish;
+  const f = fixture(async (document, _method, params) => {
+    if (params.mockContext !== undefined) return new Promise(resolve => { finish = resolve; });
+    return { documentVersion: document.version, preview };
+  });
+  await f.show();
+  const uri = f.document.uri.toString();
+  const pending = f.panel().receive({ command: "applyMock", uri, text: "{}" });
+  await f.panel().receive({ command: "clearMock", uri });
+  finish({ documentVersion: 1, preview: { ...preview, mock: { conditions: [{ section: 0, line: null, choice: null, kind: "branch", value: true, range }] } } });
+  await pending;
+  assert.doesNotMatch(f.panel().webview.html, /Mock branch: true/);
+  f.panel().dispose();
+});
+
+test("mock errors and results are source-linked and HTML-safe", () => {
+  const f = fixture();
+  const evaluated = { ...preview, mock: { truncated: true, conditions: [{ section: 0, line: 0, choice: 0, kind: "visibility", error: "bad <type>", range }] } };
+  const html = f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), evaluated, undefined, { draft: '</textarea><script>bad()</script>', error: 'invalid <JSON>' });
+  assert.match(html, /Mock visibility: bad &lt;type&gt;/);
+  assert.match(html, /Open condition/);
+  assert.match(html, /invalid &lt;JSON&gt;/);
+  assert.doesNotMatch(html, /<script>bad/);
+  assert.match(html, /4,096 conditions/);
+});

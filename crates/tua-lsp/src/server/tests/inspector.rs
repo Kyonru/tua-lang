@@ -264,3 +264,53 @@ fn dialogue_preview_uses_current_overlay_and_utf16_navigation() {
         "Welcome reader"
     );
 }
+
+#[test]
+fn dialogue_preview_mock_is_opt_in_and_invalid_input_clears_results() {
+    let temp = TempProject::new("dialogue-preview-mock");
+    temp.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n@context \"context\"\n[gate]\n@branch context.coins > 0 [target:gate] [else:gate]\n";
+    temp.write("src/scene.tdialogue", source);
+    let uri = temp.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id, mock: Option<Value>| {
+        let mut params = json!({"textDocument":{"uri":uri}});
+        if let Some(mock) = mock {
+            params["mockContext"] = mock;
+        }
+        json!({"jsonrpc":"2.0", "id":id, "method":"tua/dialoguePreview", "params":params})
+    };
+    server.send(request(2, None));
+    assert!(response_with_id(server.output(), 2)["result"]["preview"]["mock"].is_null());
+    server.send(request(3, Some(json!(r#"{"context":{"coins":2}}"#))));
+    let result = &response_with_id(server.output(), 3)["result"];
+    assert_eq!(result["preview"]["mock"]["conditions"][0]["value"], true);
+    assert_eq!(result["preview"]["routes"].as_array().unwrap().len(), 2);
+    server.send(request(4, Some(json!(r#"{"context":{"coins":"two"}}"#))));
+    let result = &response_with_id(server.output(), 4)["result"];
+    assert_eq!(
+        result["preview"]["mock"]["conditions"][0]["error"],
+        "ordered comparison needs numbers"
+    );
+    assert_eq!(
+        result["preview"]["mock"]["conditions"][0]["range"]["start"]["line"],
+        3
+    );
+    for (id, input) in [
+        (5, json!("{")),
+        (6, json!({})),
+        (7, json!(" ".repeat(65_537))),
+    ] {
+        server.send(request(id, Some(input)));
+        let result = &response_with_id(server.output(), id)["result"];
+        assert!(result["mockError"].is_string());
+        assert!(result["preview"]["mock"].is_null());
+        assert_eq!(result["preview"]["routes"].as_array().unwrap().len(), 2);
+    }
+    server.send(request(8, None));
+    assert!(response_with_id(server.output(), 8)["result"]["preview"]["mock"].is_null());
+}

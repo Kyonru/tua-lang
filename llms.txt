@@ -287,10 +287,16 @@ reserved else/endif names. Prose, IDs, JSON, other scripts, host entry strings a
 saved checkpoints stay unchanged; migrate external entry references separately.
 The experimental VS Code Preview Dialogue command shows compiler-backed authored
 sections, text and choice/fallback/wait/branch/action routes with source links.
-It refreshes unsaved edits and clears invalid source. It does not execute handlers,
-resolve portraits/audio, evaluate conditions/placeholders/rich text, or simulate
-mock context. Large views explicitly limit sections/lines/routes; graphical layout
-and mock-context controls remain planned.
+It refreshes unsaved edits and clears invalid source. Evaluate conditions applies
+explicit JSON context/locals records; draft edits alone do not evaluate. Each
+condition is tested independently, with boolean results or source-linked errors;
+all routes stay visible. Use authored view clears evaluation. Closing the preview
+or switching dialogue clears in-memory mock input. Mock input is bounded to 64 KiB,
+4,096 values, 32 levels and finite numbers within ±2^53; arrays are rejected.
+Missing fields/null mean nil. No imported schema validation, handlers, portraits,
+audio, text substitution, traversal simulation or rich-text rendering occurs.
+At most 4,096 conditions are tested; large views also explicitly limit displayed
+sections/lines/routes. Graphical layout remains planned.
 Within @voice cue strings, completion reuses decoded cue IDs from valid dialogue
 scripts in the same project; hover and Find References describe authored uses,
 including different locales. JSON-aware edits preserve quotes/escapes and support

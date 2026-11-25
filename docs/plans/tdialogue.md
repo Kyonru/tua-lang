@@ -634,8 +634,7 @@ context objects. Core export/import works without a filesystem or LÖVE.
   route facts with UTF-16 ranges and document versions. Preview Dialogue uses
   shared source navigation and hidden-view refresh, rejects stale navigation and
   responses, clears invalid source and bounds large views. No host handlers or
-  assets execute; condition flags are explicitly unevaluated. Mock-context input
-  and graphical layout remain pending.
+  assets execute. Mock evaluation is described below; graphical layout remains pending.
 - [x] Mock-condition evaluation foundation: core parses explicit JSON `context`
   and `locals` records without imports or handlers. Strict boolean/nil rules,
   short-circuiting, scalar equality, ordered numeric comparisons and path errors
@@ -643,8 +642,15 @@ context objects. Core export/import works without a filesystem or LÖVE.
   expression source spans. Input is limited to 64 KiB, 4,096 values, 32 nesting
   levels and finite numbers within ±2^53 for interpreter portability. Arrays are
   rejected. This does not validate imported context schemas or execute a dialogue.
-  Transport/UI controls, placeholder substitution and route-state presentation
-  remain pending; the current editor outline still shows authored data only.
+  Transport/UI controls are implemented below; placeholder substitution and
+  route-state presentation remain pending.
+- [x] Explicit mock input in the editor: drafts stay in memory and only apply on
+  Evaluate conditions. Core probes branch/visibility/availability conditions
+  independently (up to 4,096), preserving all routes and source-located errors.
+  JSON validation errors clear mock results without discarding the static outline.
+  Clear, refresh, document switching and in-flight response ordering are covered.
+  The LSP accepts optional JSON text; no host code or imported schemas execute.
+  This is not conversation traversal, fallback selection or action simulation.
 - [ ] Add a static conversation graph/text preview with source navigation and
   explicit mock-context input. Analysis must not execute project handlers or
   asset loaders. Keep any opt-in runtime trace clearly separate from static views.

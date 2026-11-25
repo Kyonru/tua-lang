@@ -250,6 +250,14 @@ async function run() {
     assert.equal(await evaluate("document.activeElement.classList.contains('source')"), true);
     await evaluate("document.activeElement.click()");
     await waitFor(() => messages.some(message => message.command === "openLocation" && message.uri === "file:///arrival.tdialogue"), "dialogue source navigation");
+    await evaluate(`document.getElementById("mock-context").value = '{"context":{"ready":true}}'; document.getElementById("mock-context").dispatchEvent(new Event("input")); document.getElementById("apply-mock").click()`);
+    await waitFor(() => messages.some(message => message.command === "applyMock" && message.text === '{"context":{"ready":true}}'), "explicit mock application");
+    const mockDialogue = { ...dialogue, mock: { conditions: [{ section: 0, line: null, choice: null, kind: "branch", value: true, range: dialogueRange }] } };
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", mockDialogue, undefined, { draft: '{"context":{"ready":true}}' }), "Dialogue Preview");
+    assert.equal(await evaluate("document.body.textContent.includes('Mock branch: true')"), true);
+    assert.equal(await evaluate("document.getElementById('mock-context').value.includes('ready')"), true);
+    await evaluate("document.getElementById('clear-mock').click()");
+    await waitFor(() => messages.some(message => message.command === "clearMock"), "clear mock controls");
     await screenshot("dialogue-preview");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 360, height: 740, deviceScaleFactor: 1, mobile: false });
     assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "dialogue fits narrow pane");

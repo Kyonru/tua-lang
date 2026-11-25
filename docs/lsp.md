@@ -771,12 +771,15 @@ The bundled VS Code extension also uses version-matched Tua requests:
 **Tua: Preview Dialogue** opens a source-linked outline for the active `.tdialogue`
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
 choice, fallback, wait, branch and action routes come from the compiler. Select a
-section, text link or route target to open its authored source location. Conditions,
-placeholders and rich-text marks remain unevaluated; no game handler or asset loads.
+section, text link or route target to open its authored source location. Conditions
+can be tested with explicit mock JSON; placeholders and rich-text marks remain
+unevaluated. No game handler or asset loads.
 Edits refresh the visible view, while hidden views catch up on reveal. Invalid
 syntax clears the previous outline and points to Problems. Large views show at most
 200 sections, 100 lines per section and 200 routes per section with an explicit notice.
-Mock-context simulation and a graphical node layout are not available yet.
+Use **Evaluate conditions** to test each condition independently with explicit
+`context` and `locals` JSON records. **Use authored view** clears evaluation. These
+probes do not simulate conversation traversal; graphical layout remains planned.
 
 `tua/dialoguePreview` accepts `{ "textDocument": { "uri": "file:///..." } }` and
 returns `analysisRevision`, `documentVersion`, and `preview` (null when unavailable
@@ -784,6 +787,14 @@ or syntactically invalid). `preview.sections` carries authored text, speaker IDs
 action names and wait durations; `preview.routes` carries section/line/choice
 indices, route kinds, targets and their ranges. These are authored possibilities,
 not reachability or observed execution. Semantic project diagnostics remain separate.
+An optional `mockContext` parameter contains **JSON text**, not a JSON object.
+Omitting it leaves `preview.mock` null. Valid input returns `preview.mock.conditions`
+with section/line/choice indices, kind (`branch`, `visibility`, `availability`), a
+boolean `value` or `error` message, and source range. Results are independent and
+never prune routes. `preview.mock.truncated` indicates the 4,096-condition cap.
+Invalid mock input returns `mockError` and null mock results while preserving the
+static outline. See [mock input limits](dialogue.md#preview-the-authored-conversation).
+
 
 `tua/inspect` accepts an optional `kind` (`spriteSheet`, `stateMachine`, or
 `behaviorTree`). With a position and `fallbackToAll: true`, it returns all

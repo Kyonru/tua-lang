@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add explicit in-memory mock JSON to the dialogue preview, with bounded,
+  independent condition probes, source-linked errors and an authored-view reset.
+
 - Add an experimental source-linked dialogue outline with compiler-backed routes,
   unsaved refresh, invalid-source clearing and bounded rendering.
 

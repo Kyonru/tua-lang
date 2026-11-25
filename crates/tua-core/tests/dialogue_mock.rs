@@ -223,3 +223,58 @@ fn dialogue_mock_bounds_manually_constructed_conditions() {
     let exact_nodes = json!({"context": (0..4094).map(|n| (format!("x{n}"), json!(0))).collect::<serde_json::Map<_, _>>()});
     assert!(DialogueMockContext::parse(&exact_nodes.to_string()).is_ok());
 }
+
+#[test]
+fn dialogue_mock_preview_probes_conditions_independently_with_ownership() {
+    use tua_core::analysis::AnalysisHost;
+    use tua_core::dialogue_asset::preview::DialogueMockConditionKind;
+    let source = "@dialogue 1\n@context \"context\"\n[gate]\n@branch context.ready [target:shop] [else:shop]\n[shop]\n// @id prompt\n: Choose\n// @id choice\n-> Buy [target:gate]\n@visible false\n@enabled context.coins > 0\n@fallback gate\n";
+    let mut host = AnalysisHost::new();
+    host.set_file("scene.tdialogue", source);
+    let preview = host.snapshot().dialogue_preview("scene.tdialogue").unwrap();
+    let facts =
+        DialogueMockContext::parse(r#"{"context":{"ready":true,"coins":"invalid"}}"#).unwrap();
+    let result = preview.evaluate_conditions(&facts);
+    assert!(!result.truncated);
+    assert_eq!(result.conditions.len(), 3);
+    assert_eq!(result.conditions[0].kind, DialogueMockConditionKind::Branch);
+    assert_eq!(result.conditions[0].result, Ok(true));
+    assert_eq!(result.conditions[1].result, Ok(false));
+    assert_eq!(result.conditions[2].section, 1);
+    assert_eq!(result.conditions[2].line, Some(0));
+    assert_eq!(result.conditions[2].choice, Some(0));
+    assert_eq!(
+        result.conditions[2].kind,
+        DialogueMockConditionKind::Availability
+    );
+    assert_eq!(
+        result.conditions[2]
+            .result
+            .as_ref()
+            .unwrap_err()
+            .span
+            .start
+            .line,
+        11
+    );
+    assert_eq!(
+        preview.routes.len(),
+        4,
+        "probing must not prune authored routes"
+    );
+}
+
+#[test]
+fn dialogue_mock_preview_limits_evaluation_count() {
+    use std::sync::Arc;
+    use tua_core::dialogue_asset::preview::DialoguePreview;
+    let mut document = parse_dialogue_source("scene.tdialogue", &source("true")).unwrap();
+    document.sections = vec![document.sections[0].clone(); 4097];
+    let preview = DialoguePreview {
+        document: Arc::new(document),
+        routes: Vec::new(),
+    };
+    let result = preview.evaluate_conditions(&DialogueMockContext::parse("{}").unwrap());
+    assert_eq!(result.conditions.len(), 4096);
+    assert!(result.truncated);
+}

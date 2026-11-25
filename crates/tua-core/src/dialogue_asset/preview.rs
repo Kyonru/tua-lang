@@ -63,3 +63,84 @@ impl DialoguePreview {
         Self { document, routes }
     }
 }
+
+/// Independent condition probes; these do not select routes or execute a player.
+#[derive(Clone, Debug)]
+pub struct DialogueMockPreview {
+    pub conditions: Vec<DialogueMockCondition>,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct DialogueMockCondition {
+    pub section: usize,
+    pub line: Option<usize>,
+    pub choice: Option<usize>,
+    pub kind: DialogueMockConditionKind,
+    pub span: crate::SourceSpan,
+    pub result: Result<bool, super::mock::DialogueMockIssue>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DialogueMockConditionKind {
+    Branch,
+    Visibility,
+    Availability,
+}
+
+impl DialoguePreview {
+    /// Probe at most 4,096 authored conditions against explicit facts. Conditions
+    /// on hidden/unreachable choices are still tested; this is not a flow trace.
+    pub fn evaluate_conditions(
+        &self,
+        facts: &super::mock::DialogueMockContext,
+    ) -> DialogueMockPreview {
+        let mut preview = DialogueMockPreview {
+            conditions: Vec::new(),
+            truncated: false,
+        };
+        let mut push = |section, line, choice, kind, condition: &super::Condition| {
+            if preview.conditions.len() == 4096 {
+                preview.truncated = true;
+                return false;
+            }
+            preview.conditions.push(DialogueMockCondition {
+                section,
+                line,
+                choice,
+                kind,
+                span: condition.span,
+                result: facts.test(condition),
+            });
+            true
+        };
+        'sections: for (section, node) in self.document.sections.iter().enumerate() {
+            if let Some(branch) = &node.branch {
+                if !push(
+                    section,
+                    None,
+                    None,
+                    DialogueMockConditionKind::Branch,
+                    &branch.condition,
+                ) {
+                    break;
+                }
+            }
+            for (line, utterance) in node.lines.iter().enumerate() {
+                for (choice, option) in utterance.choices.iter().enumerate() {
+                    for (kind, condition) in [
+                        (DialogueMockConditionKind::Visibility, &option.visible),
+                        (DialogueMockConditionKind::Availability, &option.enabled),
+                    ] {
+                        if let Some(condition) = condition {
+                            if !push(section, Some(line), Some(choice), kind, condition) {
+                                break 'sections;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        preview
+    }
+}

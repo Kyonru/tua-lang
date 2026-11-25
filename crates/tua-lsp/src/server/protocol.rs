@@ -1944,3 +1944,27 @@ pub(super) fn lsp_dialogue_preview_from_core(
         "routes": routes,
     })
 }
+
+pub(super) fn lsp_dialogue_mock_from_core(
+    preview: tua_core::dialogue_asset::preview::DialogueMockPreview,
+    source: &str,
+) -> Value {
+    use tua_core::dialogue_asset::preview::DialogueMockConditionKind;
+    json!({
+        "truncated": preview.truncated,
+        "conditions": preview.conditions.into_iter().map(|condition| {
+            let kind = match condition.kind {
+                DialogueMockConditionKind::Branch => "branch",
+                DialogueMockConditionKind::Visibility => "visibility",
+                DialogueMockConditionKind::Availability => "availability",
+            };
+            let (value, error, span) = match condition.result {
+                Ok(value) => (Some(value), None, condition.span),
+                Err(error) => (None, Some(error.message), error.span),
+            };
+            json!({"section": condition.section, "line": condition.line,
+                "choice": condition.choice, "kind": kind, "value": value, "error": error,
+                "range": lsp_range_for_source(source, span)})
+        }).collect::<Vec<_>>()
+    })
+}

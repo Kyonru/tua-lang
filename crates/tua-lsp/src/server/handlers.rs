@@ -2174,11 +2174,25 @@ impl LspServer {
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
+        let mock = request.params.get("mockContext").map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| "mockContext must be JSON text".to_owned())
+                .and_then(tua_core::dialogue_asset::mock::DialogueMockContext::parse)
+        });
+        let mock_error = mock.as_ref().and_then(|result| result.as_ref().err());
+        let facts = mock.as_ref().and_then(|result| result.as_ref().ok());
         json!({
             "analysisRevision": snapshot.revision(),
             "documentVersion": self.document_versions.get(request.uri).copied(),
+            "mockError": mock_error,
             "preview": snapshot.dialogue_preview(&request.path).map(|preview| {
-                super::protocol::lsp_dialogue_preview_from_core(preview, request.source)
+                let evaluated = facts.map(|facts| preview.evaluate_conditions(facts));
+                let mut output = super::protocol::lsp_dialogue_preview_from_core(preview, request.source);
+                output["mock"] = evaluated.map(|mock| {
+                    super::protocol::lsp_dialogue_mock_from_core(mock, request.source)
+                }).unwrap_or(Value::Null);
+                output
             })
         })
     }
