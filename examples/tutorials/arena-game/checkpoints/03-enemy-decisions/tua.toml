@@ -1,0 +1,4 @@
+source = "src"
+out = "build"
+main = "main.tua"
+target = "love11-luajit"
