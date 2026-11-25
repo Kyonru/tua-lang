@@ -12,6 +12,7 @@ the previous one; there is no shared hidden framework or separate `latest` copy.
 | [04: sound](checkpoints/04-sound/README.md) | Hear cues/music, adjust buses, pause and mute | Runnable |
 | [05: visual feedback](checkpoints/05-visual-feedback/README.md) | Scope hit shaders, preload and recover from errors | Runnable |
 | [06: conversation and language](checkpoints/06-conversation-and-language/README.md) | Talk between waves and switch English/French presentation | Runnable |
+| [07: save progress](checkpoints/07-save-progress/README.md) | Resume cleared waves and restore preferences with explicit recovery | Runnable |
 
 Start in `checkpoints/01-playable-loop`, then run `tua build` and `love build`.
 Read the [series guide](../../../docs/tutorials/arena-game/index.md).
