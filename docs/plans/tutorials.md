@@ -32,7 +32,10 @@ what should happen, and what can I add next?
   minimal reproductions; keep upstream fixes separate from tutorial changes.
 - Keep source in `.tua`; generated Lua remains build output. Prefer readable
   concrete code over building a framework for the tutorial series.
-- Bundle small, appropriately licensed assets only where needed. Use primitives
+- Keep scenes simple and specific to the lesson. Do not use grid backgrounds or
+  generic dashboard/card decoration; only retain landmarks that teach spatial behavior.
+- Prefer Kenney assets when a tutorial needs artwork; include source and license.
+  Bundle small, appropriately licensed assets only where needed. Use primitives
   elsewhere; avoid mandatory downloads, accounts or network access at runtime.
 
 ## Teaching contract
@@ -96,11 +99,11 @@ explicit follow-ups, not invented APIs embedded in prose.
 
 References: [input](../input.md), [sprites](../sprites.md), [camera](../camera.md).
 
-- [ ] Move a visible character using typed input and delta time.
-- [ ] Add idle/walk animation with a small bundled sprite sheet.
-- [ ] Add a following camera and explain world-space versus screen-space drawing.
-- [ ] Explain diagonal movement, focus loss and animation transition policy.
-- [ ] Offer movement-speed and camera-follow experiments; keep combat optional.
+- [x] Move a visible character using typed input and delta time.
+- [x] Add idle/walk animation with a small bundled sprite sheet.
+- [x] Add a following camera and explain world-space versus screen-space drawing.
+- [x] Explain diagonal movement, focus loss and animation transition policy.
+- [x] Offer movement-speed and camera-follow experiments; keep combat optional.
 
 Acceptance: movement behaves consistently over different update step sizes, stopping
 input stops movement, animations change correctly, and a screen-space HUD remains
@@ -277,7 +280,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | --- | --- | --- |
 | Existing dialogue starter | Complete | `examples/dialogue/first-conversation`; `b1d4d112`, `edb2c04c`, `52647cee` |
 | M0 | Complete | API/source audit below; no runtime changes required |
-| M1 | Pending | |
+| M1 | Complete | `examples/tutorials/playable-character`; `8a11c484`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/playable-character.md) |
 | M2 | Pending | |
 | M3 | Pending | |
 | M4 | Pending | |
@@ -303,7 +306,7 @@ that all ten future compositions have passed runtime qualification.
 
 | Guide | Owning example decision | Existing source to consult | Asset / API boundary |
 | --- | --- | --- | --- |
-| M1 | New `examples/tutorials/playable-character` | `features/src/input.tua`, `sprites.tua`, `camera.tua` | Original vector atlas, bundled PNG; `input`, `spriteSheet`, `Camera.new` |
+| M1 | New `examples/tutorials/playable-character` | `features/src/input.tua`, `sprites.tua`, `camera.tua` | Kenney CC0 character atlas, unchanged PNG; `input`, `spriteSheet`, `Camera.new` |
 | M2 | Extend `examples/pause-input` | `features/src/state_machine.tua`, existing pause scenario | Primitives; add explicit title/state-machine flow without weakening held-input tests |
 | M3 | Extend `examples/love-save` | `features/src/save_contracts.tua` | No assets; versioned `Save.contract`, historical schemas and explicit recovery |
 | M4 | New `examples/tutorials/enemy-wave` | `features/src/ecs.tua`, `object_pool.tua` | Primitives; `ECS`, query/lifecycle APIs, optional `objectPool` effect |
@@ -333,5 +336,16 @@ Controls, Expected behavior, Try a change, Verification and Next steps headings.
 M1-specific audit findings: Baton normalizes diagonal pairs before applying its
 deadzone; repeated `sprite:play` on the active animation preserves its progress;
 `Camera:draw` restores the world transform before HUD drawing. Focus handling is
-host policy. Existing atlas provenance was not sufficiently clear for a new
-standalone tutorial, so M1 will use an original, reproducible SVG atlas instead.
+host policy. Per the user’s asset preference, M1 uses the unchanged Kenney Platformer Characters
+adventurer atlas, with bundled CC0 license and archive/file hashes.
+
+## M1 completion
+
+Published the playable-character walkthrough and Tutorials index. The independently
+runnable example uses Kenney CC0 art, typed normalized input, idle/walk animation,
+camera following, explicit focus policy and resource cleanup. It has no grid
+background or decorative panels. See the linked qualification record for native,
+headless, formatting, emission and editor-protocol checks and their limitations.
+
+Next: M2, extend the existing pause/input example with title/gameplay/pause/restart
+flow and a tutorial. Preserve its held-input and no-catch-up regressions.

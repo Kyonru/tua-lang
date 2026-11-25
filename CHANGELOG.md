@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add a playable-character tutorial combining typed input, Kenney sprite animation
+  and camera following, with explicit focus/reset policy and native replay checks.
+
 - Add a minimal playable dialogue starter and a guided learning path with explicit
   defaults; put the first conversation before advanced reference material.
 
