@@ -14657,3 +14657,34 @@ return require("context")
         .completion(path, fixture.position("binding"))
         .is_empty());
 }
+
+#[test]
+fn dialogue_expression_completion_refreshes_forwarded_literal_keys() {
+    let project = TempProject::new("expression-forward-refresh");
+    let root = project.path().join("src");
+    let cast_path = root.join("cast.tua");
+    let forward_path = root.join("forward.tua");
+    let scene_path = root.join("scene.tdialogue");
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([root]);
+    let cast = "return { Guide = { name = 'Guide', expressions = { ['face.half'] = { portrait = 'half.png' } } } }";
+    project.write("src/cast.tua", cast);
+    project.write("src/forward.tua", "return require('cast')");
+    host.set_file(&cast_path, cast);
+    host.set_file(&forward_path, "return require('cast')");
+    let source = "@dialogue 1\n@characters Cast \"forward\"\n[start]\n// @id hello\nCast.Guide: Hello (end)\n@expression face.ha";
+    host.set_file(&scene_path, source);
+    let position = SourcePosition {
+        line: 6,
+        column: 20,
+    };
+    assert_eq!(
+        completion_labels(&host.snapshot().completion(&scene_path, position)),
+        vec!["face.half"]
+    );
+    host.open_document(&cast_path, cast.replace("face.half", "face.halo"));
+    assert_eq!(
+        completion_labels(&host.snapshot().completion(&scene_path, position)),
+        vec!["face.halo"]
+    );
+}

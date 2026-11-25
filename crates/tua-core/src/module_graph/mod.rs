@@ -189,6 +189,7 @@ pub enum ModuleExportOrigin {
 
 #[derive(Clone, Debug)]
 struct RuntimeExportForward {
+    direct_require: bool,
     source_path: PathBuf,
     module: String,
     public_name: Option<String>,
@@ -566,9 +567,13 @@ impl ModuleGraph {
                         let existing = self
                             .export(&forward.source_path, &target.public_name)
                             .cloned();
-                        let should_replace = existing
-                            .as_ref()
-                            .is_none_or(|entry| entry.field.ty == crate::Type::Any)
+                        // A direct require has no local annotation to preserve.
+                        // Its initial inferred type may come from disk; the graph
+                        // target includes current editor overlays and is authoritative.
+                        let should_replace = forward.direct_require
+                            || existing
+                                .as_ref()
+                                .is_none_or(|entry| entry.field.ty == crate::Type::Any)
                             || self
                                 .export_type_source_path(&forward.source_path, &target.public_name)
                                 == Some(type_source.as_path());
@@ -1348,6 +1353,10 @@ fn runtime_export_forwards(
         return node_span(expression)
             .map(|span| {
                 vec![RuntimeExportForward {
+                    direct_require: matches!(
+                        unparenthesized_expression(expression),
+                        Expression::FunctionCall(_)
+                    ),
                     source_path: path.to_path_buf(),
                     module,
                     public_name: None,
@@ -1377,6 +1386,7 @@ fn runtime_export_forwards(
             let module = bindings.get(root.as_str())?.to_string();
 
             Some(RuntimeExportForward {
+                direct_require: false,
                 source_path: path.to_path_buf(),
                 module,
                 public_name: Some(token_text(key)),
