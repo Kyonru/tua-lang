@@ -154,6 +154,36 @@ catalog edits participate in conflict checks. Computed keys and arbitrary host
 strings are not rename targets or inferred references; maintain those mappings
 explicitly. The command does not migrate saved checkpoints or external catalogs.
 
+## Diagnose unreachable sections
+
+The checker reports `TL5012` warnings for sections with no path from the first
+section or a declared external entry. Declare labels started by game code in the
+header, before the first section:
+
+```text
+@dialogue 1
+@entry victory
+[start]
+// @id welcome
+: Welcome. (end)
+[victory]
+// @id victory.message
+: You did it! (end)
+```
+
+`@entry` is repeatable for different labels. Unknown labels, duplicate declarations
+and declarations after the first section are errors. It does not change the default
+entry, emitted gameplay data, or the host's ability to start another label. Label
+completion, hover, definition, references and rename include these declarations.
+
+Analysis follows waits, possible choices, fallback routes and both action outcomes.
+It evaluates only context-free conditions using the shared condition rules. Dynamic
+context, invalid/nonportable constant expressions and host outcomes remain unknown;
+no imports or callbacks execute. A warning is evidence of disconnected authored
+flow under these declared roots, not a prediction about arbitrary host calls.
+It does not remove code or prevent a build. Dangling targets, duplicate identities
+and malformed conditions remain errors. The CLI and editor use the same analysis.
+
 ## Format a script
 
 ```sh

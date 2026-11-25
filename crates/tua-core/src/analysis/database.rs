@@ -424,7 +424,10 @@ fn build_analysis_file(
     let dialogue_model = OnceLock::new();
     if kind == AnalysisSourceKind::Dialogue {
         let model = match crate::dialogue_asset::parse_dialogue_source(path, &source) {
-            Ok(model) => Some(Arc::new(model)),
+            Ok(model) => {
+                diagnostics.extend(model.reachability_diagnostics(path));
+                Some(Arc::new(model))
+            }
             Err(errors) => {
                 diagnostics.extend(errors);
                 None

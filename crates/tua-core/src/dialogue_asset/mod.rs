@@ -13,6 +13,7 @@ pub mod mock_text;
 pub mod paths;
 pub mod placeholders;
 pub mod preview;
+mod reachability;
 pub mod voice;
 mod waits;
 pub use actions::DialogueAction;
@@ -187,6 +188,8 @@ pub(crate) fn character_module_specifiers(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DialogueSource {
     pub rich_text: bool,
+    /// Additional labels started by host code; used only by static diagnostics.
+    pub external_entries: Vec<DialogueName>,
     pub actions: Option<CharacterImport>,
     pub events: Option<CharacterImport>,
     pub context: Option<CharacterImport>,
@@ -222,6 +225,7 @@ fn parser_for(path: &Path) -> Parser<'_> {
         path,
         document: DialogueSource {
             rich_text: false,
+            external_entries: Vec::new(),
             actions: None,
             events: None,
             context: None,
@@ -235,6 +239,7 @@ fn parser_for(path: &Path) -> Parser<'_> {
         pending_id: None,
         ids: BTreeSet::new(),
         labels: BTreeSet::new(),
+        external_entries: BTreeSet::new(),
         speakers: BTreeSet::new(),
         header: false,
         rich_directive_allowed: false,
@@ -294,6 +299,7 @@ struct Parser<'a> {
     pending_id: Option<DialogueName>,
     ids: BTreeSet<String>,
     labels: BTreeSet<String>,
+    external_entries: BTreeSet<String>,
     speakers: BTreeSet<String>,
     header: bool,
     rich_directive_allowed: bool,
@@ -396,6 +402,28 @@ impl Parser<'_> {
             return;
         }
         if self.context_line(raw, number) {
+            return;
+        }
+        if let Some(rest) = syntax.strip_prefix("@entry ") {
+            self.abandon_id();
+            if !self.document.sections.is_empty() {
+                self.error(at, "declare external entries before the first label");
+            } else {
+                let value = rest.trim();
+                let offset = syntax.len() - value.len();
+                let name_at = span(
+                    number,
+                    column + syntax[..offset].chars().count(),
+                    value.chars().count(),
+                );
+                if let Some(name) = self.name(value, name_at) {
+                    if !self.external_entries.insert(name.value.clone()) {
+                        self.error(name.span, "duplicate external entry");
+                    } else {
+                        self.document.external_entries.push(name);
+                    }
+                }
+            }
             return;
         }
         if let Some(rest) = syntax.strip_prefix("@document ") {
@@ -908,6 +936,14 @@ impl Parser<'_> {
             .iter()
             .map(|s| s.id.value.as_str())
             .collect();
+        for entry in &self.document.external_entries {
+            if !labels.contains(entry.value.as_str()) {
+                errors.push((
+                    entry.span,
+                    format!("unknown external entry `{}`", entry.value),
+                ));
+            }
+        }
         for speaker in &self.document.speakers {
             if self.document.imports.iter().any(|import| {
                 speaker.id.value == import.alias.value

@@ -14863,3 +14863,47 @@ fn dialogue_preview_actions_waits_and_terminal_sections_do_not_execute_or_fall_t
     assert_eq!(preview.routes[0].kind, DialogueRouteKind::Wait);
     assert_eq!(preview.routes[0].target.value, "done");
 }
+
+#[test]
+fn dialogue_reachability_refreshes_and_external_entries_are_refactorable() {
+    let path = Path::new("src/scene.tdialogue");
+    let source = "@dialogue 1\n@context \"context\"\n[start]\n@branch true [target:yes] [else:no]\n[yes]\n// @id yes\n: Yes (end)\n[no]\n// @id no\n: No (end)\n";
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file("src/context.tua", "return Dialogue.context({ facts = Save.shape(Save.record({})), locals = Save.shape(Save.record({})) })");
+    host.set_file(path, source);
+    let snapshot = host.snapshot();
+    let warnings = snapshot.pipeline_diagnostics(path);
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(warnings[0].severity, crate::DiagnosticSeverity::Warning);
+    assert_eq!(warnings[0].line, 8);
+    let declared = source.replace("@dialogue 1", "@dialogue 1\n@entry no");
+    host.set_file(path, &declared);
+    let snapshot = host.snapshot();
+    assert!(snapshot.pipeline_diagnostics(path).is_empty());
+    let position = SourcePosition { line: 2, column: 9 };
+    assert_eq!(snapshot.references(path, position, true).len(), 3);
+    assert_eq!(
+        snapshot
+            .rename(path, position, "other")
+            .unwrap()
+            .edits
+            .len(),
+        3
+    );
+    assert!(snapshot.rename(path, position, "yes").is_none());
+    host.set_file(path, declared.replace("@branch true", "@branch false"));
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics(path)
+        .iter()
+        .any(|d| d.message.contains("`yes` is unreachable")));
+    host.set_file(path, "@dialogue 1\n@entry n");
+    assert!(host.snapshot().dialogue_preview(path).is_none());
+    host.remove_file(path);
+    assert!(host.snapshot().dialogue_preview(path).is_none());
+    host.set_file(path, source);
+    assert_eq!(host.snapshot().pipeline_diagnostics(path).len(), 1);
+    // Immutable snapshots keep the facts of their own revision.
+    assert!(snapshot.pipeline_diagnostics(path).is_empty());
+}

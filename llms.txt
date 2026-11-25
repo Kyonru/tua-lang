@@ -272,9 +272,14 @@ Explicit `require("tuadialogue")` / `require("tuaboundedqueue")` remain supporte
 The host owns rendering, input and timing. Text IDs must be project-unique.
 Share characters using ordinary .tua exports with a required string `name` field.
 Dialogue editor queries complete file-local label references in choices, waits,
-branches, action outcomes and fallback directives. Hover and definition follow
+branches, action outcomes, fallback directives and header `@entry label` declarations. Hover and definition follow
 unique labels; incomplete targets and unsaved label edits are supported. Duplicate
 labels are ambiguous, and prose/comments/action payloads are not flow references.
+Repeatable `@entry label` headers declare additional host-started reachability roots;
+they do not change the default entry or emitted gameplay data. Unknown/duplicate
+entries are errors. TL5012 warns about sections unreachable from the first section
+and declared roots, pruning only context-free constant conditions; dynamic routes
+remain possible. Warnings never eliminate emitted code.
 With i18n enabled, explicit text-ID rename updates authored line/choice/reason IDs,
 locale entries and recognized typed literal localization uses in the same project.
 Rename accepts a new final key segment and rejects duplicate IDs, destination

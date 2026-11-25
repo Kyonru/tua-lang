@@ -7817,3 +7817,48 @@ fn fmt_dialogue_supports_project_explicit_stdin_and_parse_failure() {
     assert!(!output.status.success());
     assert_eq!(fs::read_to_string(&path).unwrap(), invalid);
 }
+
+#[test]
+fn dialogue_entry_warnings_agree_with_check_and_preserve_emission() {
+    let temp = TempDir::new("dialogue-reachability");
+    fs::write(temp.path().join(CONFIG_FILE), "source = 'src'\n").unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let path = temp.path().join("src/scene.tdialogue");
+    let source = "@dialogue 1\n[start]\n// @id hello\n: Hello (end)\n[external]\n// @id external.text\n: External (end)\n";
+    fs::write(&path, source).unwrap();
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(check.status.success(), "{check:?}");
+    let output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+    assert!(output.contains("unreachable"), "{output}");
+    fs::write(
+        &path,
+        source.replace("@dialogue 1", "@dialogue 1\n@entry external"),
+    )
+    .unwrap();
+    let check = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(check.status.success(), "{check:?}");
+    assert!(!String::from_utf8_lossy(&check.stdout).contains("unreachable"));
+    assert!(!String::from_utf8_lossy(&check.stderr).contains("unreachable"));
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(build.status.success(), "{build:?}");
+    let emitted = fs::read_to_string(temp.path().join("build/scene.lua")).unwrap();
+    assert!(emitted.contains("entry = \"start\""));
+    assert!(emitted.contains("External"));
+    assert!(!emitted.contains("external_entries"));
+}

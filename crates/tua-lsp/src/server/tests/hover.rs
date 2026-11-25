@@ -1419,3 +1419,42 @@ fn dialogue_voice_completion_and_references_respect_json_unicode_and_project_sco
     server.send(completion_request(4, &uri, source, "guide.h"));
     assert_completion_labels(server.output(), 4, ["guide.hello", "guide.hi"]);
 }
+
+#[test]
+fn dialogue_external_entry_diagnostics_and_rename_use_overlay_ranges() {
+    let project = TempProject::new("dialogue-entry-diagnostics");
+    project.write("tua.toml", "source = 'src'\n");
+    let source = "@dialogue 1\n[start]\n// @id first\n: First (end)\n[external]\n// @id external.text\n: External (end)\n";
+    project.write("src/scene.tdialogue", source);
+    let uri = project.uri_for("src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_pull_diagnostics(1, project.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(text_document_diagnostic_request(2, &uri));
+    let diagnostics = &response_with_id(server.output(), 2)["result"]["items"];
+    assert_eq!(diagnostics.as_array().unwrap().len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert_eq!(
+        diagnostics[0]["range"]["start"],
+        json!({"line":4,"character":1})
+    );
+    let overlay = source.replace("@dialogue 1", "@dialogue 1\n@entry external");
+    server.send(did_change(&uri, &overlay, 2));
+    server.send(text_document_diagnostic_request(3, &uri));
+    assert!(response_with_id(server.output(), 3)["result"]["items"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    server.send(rename_request(
+        4,
+        &uri,
+        &overlay,
+        "@entry external",
+        10,
+        "host-start",
+    ));
+    let edits = &response_with_id(server.output(), 4)["result"]["changes"][&uri];
+    assert_eq!(edits.as_array().unwrap().len(), 2);
+    assert_eq!(edits[0]["range"]["start"], json!({"line":1,"character":7}));
+    assert_eq!(edits[0]["newText"], "host-start");
+}

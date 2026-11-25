@@ -28,7 +28,11 @@ pub fn name_at(source: &str, position: SourcePosition) -> Option<DialogueName> {
     let text = raw.trim();
     let base = raw.len() - raw.trim_start().len();
     let mut ranges = Vec::new();
-    if let Some(rest) = raw.trim_start().strip_prefix("@fallback ") {
+    if let Some(rest) = raw
+        .trim_start()
+        .strip_prefix("@fallback ")
+        .or_else(|| raw.trim_start().strip_prefix("@entry "))
+    {
         let rest = rest.trim_start();
         ranges.push((raw.len() - rest.len(), rest.trim_end().len()));
     } else if text.starts_with('[') {
@@ -99,7 +103,11 @@ pub(crate) fn occurrences(
     source: &str,
 ) -> Option<Vec<(DialogueName, bool)>> {
     let document = super::parse_dialogue_source(path, source).ok()?;
-    let mut names = Vec::new();
+    let mut names: Vec<_> = document
+        .external_entries
+        .into_iter()
+        .map(|name| (name, false))
+        .collect();
     for section in document.sections {
         names.push((section.label, true));
         if let Some(wait) = section.wait {
