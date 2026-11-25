@@ -1,7 +1,7 @@
 # Beacon Harbor — The last light
 
 A dialogue-focused LÖVE showcase: a quiet stage, four interchangeable presentations,
-three original character portraits, and a branching conversation about a ferry that
+three Lorelei character portraits, and a branching conversation about a ferry that
 returns six years too late. Start with the story; press **H** when you want the controls.
 
 ```sh
@@ -135,4 +135,4 @@ the source replay and frame selected for each checked-in screenshot.
 
 See [DESIGN.md](DESIGN.md) for visual decisions and reference interpretation.
 Font licenses and provenance live in [src/assets/fonts/README.md](src/assets/fonts/README.md).
-Portraits are original procedural drawings; no reference-game artwork is redistributed.
+Portraits use Lisa Wischofsky’s CC0 Lorelei style via DiceBear, with the original slate-and-sage backgrounds preserved. See [portrait provenance](src/assets/portraits/README.md). No reference-game artwork is redistributed.

@@ -1,5 +1,8 @@
 """Check/build the showcase, run headless outcomes and optionally capture native replay."""
 import argparse
+import hashlib
+import json
+import struct
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,14 +17,25 @@ parser.add_argument("--video", action="store_true")
 parser.add_argument("--scenario", choices=["lifecycle", "styles"], default="lifecycle")
 args = parser.parse_args()
 tua = str(Path(args.tua).resolve())
+portrait_root = root / "src/assets/portraits"
+manifest = json.loads((portrait_root / "provenance.json").read_text())
+portrait_hashes = set()
+for asset in manifest["assets"]:
+    data = (portrait_root / asset["file"]).read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", data[16:24]) == (256, 256)
+    assert digest == asset["sha256"], asset["file"]
+    assert digest not in portrait_hashes, "expression images must differ"
+    portrait_hashes.add(digest)
+
 for command in [
     [tua, "fmt", "--check"],
-    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua", "tests/styles.lua"],
+    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua", "tests/styles.lua", "tests/portraits.lua"],
     [tua, "check"],
     [tua, "build"],
 ]:
     subprocess.run(command, cwd=root, check=True)
-for test in ["controller", "host_ui", "story"]:
+for test in ["controller", "host_ui", "story", "portraits"]:
     subprocess.run(["lua", f"../tests/{test}.lua"], cwd=root / "build", check=True)
 if args.love:
     output = args.output

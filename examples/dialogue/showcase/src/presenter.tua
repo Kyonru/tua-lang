@@ -12,6 +12,7 @@ export type Node = {
   options: { text: string, enabled?: boolean, reason?: string }[],
 }
 local function new()
+  local portraits = Portraits.new()
   local body = love.graphics.newFont("assets/fonts/manrope.ttf", 21)
   local literary = love.graphics.newFont("assets/fonts/lora.ttf", 22)
   local nameFont = love.graphics.newFont("assets/fonts/manrope.ttf", 16)
@@ -104,9 +105,9 @@ local function new()
         local renderedSize = portraitSize + 44
         px = portraitPosition == "right" and x + w - renderedSize - 6 or x + 6
         py = y - 35
-        Portraits.draw(portrait, node.expression or "", px, py, renderedSize, false)
+        portraits.draw(portrait, node.expression or "", px, py, renderedSize)
       else
-        Portraits.draw(portrait, node.expression or "", px, py, portraitSize)
+        portraits.draw(portrait, node.expression or "", px, py, portraitSize)
       end
     end
     love.graphics.setColor(theme.accent)
@@ -252,6 +253,7 @@ local function new()
   local function dispose()
     if disposed then return end
     disposed = true
+    portraits.dispose()
     body:release()
     literary:release()
     label:release()

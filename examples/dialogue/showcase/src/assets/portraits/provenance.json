@@ -1,0 +1,176 @@
+{
+  "style": "Lorelei",
+  "creator": "Lisa Wischofsky",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "styleUrl": "https://www.dicebear.com/styles/lorelei/",
+  "retrieved": "2026-11-25",
+  "apiVersion": "10.x",
+  "assets": [
+    {
+      "file": "mara.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Mara&hairColor=39494b&skinColor=ead8bd&earringsProbability=100&hairVariant=variant22&mouthVariant=happy04&eyesVariant=variant02&eyebrowsVariant=variant06&earringsVariant=variant03",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Mara",
+        "hairColor": "39494b",
+        "skinColor": "ead8bd",
+        "earringsProbability": 100,
+        "hairVariant": "variant22",
+        "mouthVariant": "happy04",
+        "eyesVariant": "variant02",
+        "eyebrowsVariant": "variant06",
+        "earringsVariant": "variant03"
+      },
+      "sha256": "5848c210b63d88f412648894b07649fec8a6ea4b0fcd07352df8b092fe9b35ec"
+    },
+    {
+      "file": "mara.happy.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Mara&hairColor=39494b&skinColor=ead8bd&earringsProbability=100&hairVariant=variant22&mouthVariant=happy02&eyesVariant=variant01&eyebrowsVariant=variant06&earringsVariant=variant03",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Mara",
+        "hairColor": "39494b",
+        "skinColor": "ead8bd",
+        "earringsProbability": 100,
+        "hairVariant": "variant22",
+        "mouthVariant": "happy02",
+        "eyesVariant": "variant01",
+        "eyebrowsVariant": "variant06",
+        "earringsVariant": "variant03"
+      },
+      "sha256": "4b759a5baf391576db571ec5424477700ae945803c47c4923b11a9a7293c55a1"
+    },
+    {
+      "file": "mara.worried.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Mara&hairColor=39494b&skinColor=ead8bd&earringsProbability=100&hairVariant=variant22&mouthVariant=sad02&eyesVariant=variant04&eyebrowsVariant=variant01&earringsVariant=variant03",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Mara",
+        "hairColor": "39494b",
+        "skinColor": "ead8bd",
+        "earringsProbability": 100,
+        "hairVariant": "variant22",
+        "mouthVariant": "sad02",
+        "eyesVariant": "variant04",
+        "eyebrowsVariant": "variant01",
+        "earringsVariant": "variant03"
+      },
+      "sha256": "99d05bd053a85a5bc5432c9a9eab645d022eaa5763194884e9b246a61bb04bb8"
+    },
+    {
+      "file": "mara.resolved.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Mara&hairColor=39494b&skinColor=ead8bd&earringsProbability=100&hairVariant=variant22&mouthVariant=happy04&eyesVariant=variant02&eyebrowsVariant=variant09&earringsVariant=variant03",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Mara",
+        "hairColor": "39494b",
+        "skinColor": "ead8bd",
+        "earringsProbability": 100,
+        "hairVariant": "variant22",
+        "mouthVariant": "happy04",
+        "eyesVariant": "variant02",
+        "eyebrowsVariant": "variant09",
+        "earringsVariant": "variant03"
+      },
+      "sha256": "37707e8efeef382856c0cd0a3908c208857c0e7f2c75bfad01e0e7c242dcfb0c"
+    },
+    {
+      "file": "ivo.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Ivo&hairColor=453932&skinColor=c49272&earringsProbability=0&hairVariant=variant12&mouthVariant=happy04&eyesVariant=variant02&eyebrowsVariant=variant06",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Ivo",
+        "hairColor": "453932",
+        "skinColor": "c49272",
+        "earringsProbability": 0,
+        "hairVariant": "variant12",
+        "mouthVariant": "happy04",
+        "eyesVariant": "variant02",
+        "eyebrowsVariant": "variant06"
+      },
+      "sha256": "347c084897c42378a75cf5a7dc8bf36a60657178aa6ac9699e9489166c1839a3"
+    },
+    {
+      "file": "ivo.happy.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Ivo&hairColor=453932&skinColor=c49272&earringsProbability=0&hairVariant=variant12&mouthVariant=happy02&eyesVariant=variant01&eyebrowsVariant=variant06",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Ivo",
+        "hairColor": "453932",
+        "skinColor": "c49272",
+        "earringsProbability": 0,
+        "hairVariant": "variant12",
+        "mouthVariant": "happy02",
+        "eyesVariant": "variant01",
+        "eyebrowsVariant": "variant06"
+      },
+      "sha256": "6dcae3173f41ef343635402060cad51c097297321bdf5972d9775c64a07f2554"
+    },
+    {
+      "file": "ivo.worried.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=0&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Ivo&hairColor=453932&skinColor=c49272&earringsProbability=0&hairVariant=variant12&mouthVariant=sad02&eyesVariant=variant04&eyebrowsVariant=variant01",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 0,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Ivo",
+        "hairColor": "453932",
+        "skinColor": "c49272",
+        "earringsProbability": 0,
+        "hairVariant": "variant12",
+        "mouthVariant": "sad02",
+        "eyesVariant": "variant04",
+        "eyebrowsVariant": "variant01"
+      },
+      "sha256": "2af65cb8da5881f9aaf8f209054c303f0218e891997ceeb4af2f1ba04169af93"
+    },
+    {
+      "file": "beacon.png",
+      "url": "https://api.dicebear.com/10.x/lorelei/png?size=512&beardProbability=0&glassesProbability=100&hairAccessoriesProbability=0&frecklesProbability=0&seed=BeaconHarbor-Beacon&hairColor=52716a&skinColor=dce6da&earringsProbability=0&hairVariant=variant04&mouthVariant=happy04&eyesVariant=variant02&eyebrowsVariant=variant06&glassesVariant=variant02",
+      "options": {
+        "size": 512,
+        "beardProbability": 0,
+        "glassesProbability": 100,
+        "hairAccessoriesProbability": 0,
+        "frecklesProbability": 0,
+        "seed": "BeaconHarbor-Beacon",
+        "hairColor": "52716a",
+        "skinColor": "dce6da",
+        "earringsProbability": 0,
+        "hairVariant": "variant04",
+        "mouthVariant": "happy04",
+        "eyesVariant": "variant02",
+        "eyebrowsVariant": "variant06",
+        "glassesVariant": "variant02"
+      },
+      "sha256": "19ecb0e74914e363e395b9cf5964ac19cc5aaa7717919bc574e81d50dce8f836"
+    }
+  ]
+}
