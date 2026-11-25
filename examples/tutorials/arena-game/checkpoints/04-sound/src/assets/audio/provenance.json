@@ -1,0 +1,33 @@
+{
+  "origin": "Original procedural tones; no third-party samples",
+  "license": "CC0-1.0",
+  "generator": "scripts/generate_audio.py",
+  "sample_rate": 22050,
+  "channels": 1,
+  "files": [
+    {
+      "file": "shot.wav",
+      "sha256": "8dd4d0988e0dc5a283ccf73805016bfb46eb71e63c0e1700f64eb486e95dc082"
+    },
+    {
+      "file": "hit.wav",
+      "sha256": "7e60ef95131f54b488459cde8a9b0ae37f510eb831f88e16482752d0ccc69d8f"
+    },
+    {
+      "file": "hurt.wav",
+      "sha256": "7ae41133e64cb067d71294b5df2bab8ba32200ac10ad4ec82c9eb6126ad91083"
+    },
+    {
+      "file": "defeat.wav",
+      "sha256": "a4b072f4d46a6432a0a5fbd3e76c740dd1c0a0075c138cb90a3ac9173e08ea9f"
+    },
+    {
+      "file": "harbor.wav",
+      "sha256": "d2a83ecd7801fcba5063d40c906ea649e2ddf23fb8107a7f3fe7c01800d55420"
+    },
+    {
+      "file": "combat.wav",
+      "sha256": "0649010f6b69934d79db5d72964e0e13166d17dd7cc68a6ef5e68252a1e0ce25"
+    }
+  ]
+}

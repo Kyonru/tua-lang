@@ -1,0 +1,60 @@
+export type Context = {
+  distance: number,
+  dx: number,
+  dy: number,
+  patrol: number,
+  cooldown: number,
+  vx: number,
+  vy: number,
+  attack: boolean,
+  mode: string,
+}
+type Runner = {
+  context: Context,
+  update: (self: Self, dt: number) -> ("success" | "failure" | "running"),
+  cancel: (self: Self) -> nil,
+}
+local Brain = ECS.component("Brain", { context = "Context", runner = "Runner", homeX = "number" })
+-- One immutable definition; each entity owns an independent runner and context.
+local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
+  BehaviorTree.reactiveSequence({
+    BehaviorTree.condition(function(actor: Context) return actor.distance <= 32 end),
+    BehaviorTree.action(function(actor: Context)
+      actor.mode = "attack"
+      if actor.cooldown == 0 then
+        actor.attack = true
+        actor.cooldown = 120
+      end
+      return "running"
+    end),
+  }),
+  BehaviorTree.reactiveSequence({
+    BehaviorTree.condition(function(actor: Context) return actor.distance <= 300 end),
+    BehaviorTree.action(function(actor: Context)
+      actor.mode = "chase"
+      actor.vx = actor.dx / actor.distance * 60
+      actor.vy = actor.dy / actor.distance * 60
+      return "running"
+    end),
+  }),
+  BehaviorTree.action(function(actor: Context)
+    actor.mode = "patrol"
+    actor.vx = actor.patrol * 25
+    return "running"
+  end),
+}))
+local function create(x: number)
+  local context: Context = {
+    distance = 0,
+    dx = 0,
+    dy = 0,
+    patrol = 1,
+    cooldown = 0,
+    vx = 0,
+    vy = 0,
+    attack = false,
+    mode = "patrol",
+  }
+  return { context = context, runner = tree:instance(context), homeX = x }
+end
+return { Brain = Brain, create = create, tree = tree }

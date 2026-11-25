@@ -1,0 +1,24 @@
+-- Earliest segment/circle contact, including starting inside and zero motion.
+local function contact(
+  x: number,
+  y: number,
+  nx: number,
+  ny: number,
+  cx: number,
+  cy: number,
+  radius: number
+): number | nil
+  local ox, oy = x - cx, y - cy
+  local c = ox * ox + oy * oy - radius * radius
+  if c <= 0 then return 0 end
+  local dx, dy = nx - x, ny - y
+  local a = dx * dx + dy * dy
+  if a == 0 then return nil end
+  local b = 2 * (ox * dx + oy * dy)
+  local discriminant = b * b - 4 * a * c
+  if discriminant < 0 then return nil end
+  local t = (-b - math.sqrt(discriminant)) / (2 * a)
+  if t >= 0 and t <= 1 then return t end
+  return nil
+end
+return { contact = contact }
