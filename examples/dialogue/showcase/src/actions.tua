@@ -1,4 +1,8 @@
 return Dialogue.actions({
+  remember = {
+    payload = Save.shape(Save.record({ topic = Save.string("") })),
+    effect = "presentation",
+  },
   collect = {
     payload = Save.shape(Save.record({ amount = Save.number(1) })),
     effect = "consequential",

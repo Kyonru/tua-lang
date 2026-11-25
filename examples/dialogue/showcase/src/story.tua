@@ -4,5 +4,9 @@ return Dialogue.context({
   actions = actions,
   events = events,
   facts = Save.shape(Save.record({ name = Save.string("Ada"), permit = Save.boolean(true) })),
-  locals = Save.shape(Save.record({ visits = Save.number(0) })),
+  locals = Save.shape(Save.record({
+    visits = Save.number(0),
+    charted = Save.boolean(false),
+    trusted = Save.boolean(false),
+  })),
 })

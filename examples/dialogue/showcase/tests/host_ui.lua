@@ -43,6 +43,8 @@ love = {
   },
 }
 local host = require("main")
+host.settings.entry = "quick"
+host.reset()
 host.settings.mode = "bubble"
 host.radio:start()
 love.draw()

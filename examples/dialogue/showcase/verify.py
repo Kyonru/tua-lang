@@ -15,12 +15,12 @@ args = parser.parse_args()
 tua = str(Path(args.tua).resolve())
 for command in [
     [tua, "fmt", "--check"],
-    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua"],
+    [tua, "fmt", "--check", "src/conf.lua", "tests/controller.lua", "tests/replay.lua", "tests/host_ui.lua", "tests/story.lua"],
     [tua, "check"],
     [tua, "build"],
 ]:
     subprocess.run(command, cwd=root, check=True)
-for test in ["controller", "host_ui"]:
+for test in ["controller", "host_ui", "story"]:
     subprocess.run(["lua", f"../tests/{test}.lua"], cwd=root / "build", check=True)
 if args.love:
     output = args.output

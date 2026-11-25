@@ -5,6 +5,8 @@ local function press(context, key)
 end
 local function setup(context)
   host = require("__tua_replay_game")
+  host.settings.entry = "quick"
+  host.reset()
   love.window.setMode(640, 480, { vsync = 0 })
 end
 local function beforeFrame(context)
@@ -76,7 +78,8 @@ local function beforeFrame(context)
   if frame == 145 then
     host.settings.reducedMotion = true
     host.reset()
-    host.advance()
+    host.player():start("decision")
+    host.update(0)
     host.advance()
     assert(host.player():snapshot().state == "awaiting_choice")
     press(context, "down")

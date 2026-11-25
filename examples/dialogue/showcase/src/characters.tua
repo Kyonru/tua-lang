@@ -1,7 +1,12 @@
 return {
   Guide = {
-    name = "Mara / harbor keeper",
-    expressions = { happy = { portrait = "mara.happy" } },
+    name = "Mara",
+    portrait = "mara",
+    expressions = {
+      happy = { portrait = "mara.happy" },
+      worried = { portrait = "mara.worried" },
+      resolved = { portrait = "mara.resolved" },
+    },
     speech = Dialogue.speechProfile({
       sampleSet = "guide",
       pitchMin = 0.8,
@@ -12,8 +17,23 @@ return {
       cadence = "character",
     }),
   },
+  Courier = {
+    name = "Ivo",
+    portrait = "ivo",
+    expressions = { happy = { portrait = "ivo.happy" }, worried = { portrait = "ivo.worried" } },
+    speech = Dialogue.speechProfile({
+      sampleSet = "guide",
+      pitchMin = 1.05,
+      pitchMax = 1.5,
+      variation = 0.5,
+      gain = 0.22,
+      minCueInterval = 0.075,
+      cadence = "word",
+    }),
+  },
   Robot = {
-    name = "Beacon / radio",
+    name = "Beacon",
+    portrait = "beacon",
     speech = Dialogue.speechProfile({
       sampleSet = "robot",
       pitchMin = 0.6,

@@ -6,8 +6,9 @@ local radioScene = require("radio")
 import type { Backend } from "audio"
 
 -- The host owns channel priority, queues, rewards and settings. The player owns flow.
-local function new(conversationBackend: Backend, radioBackend: Backend)
+local function new(conversationBackend: Backend, radioBackend: Backend, entry: string = "start")
   local rewards = 0
+  local memoryTopic = ""
   local shown = 0
   local revealed = 0
   local initial: string[] = {}
@@ -25,6 +26,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     scroll = 0,
     locale = "en",
     notice = "",
+    entry = entry,
   }
   local function createPlayer()
     return Story.new(scene, { name = "Ada", permit = true }, {
@@ -34,6 +36,10 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
       checkpointEffects = "settled",
       resolveTemplate = Translations.resolve,
       handlers = {
+        remember = function(payload: { topic: string }): boolean
+          memoryTopic = payload.topic
+          return true
+        end,
         collect = function(payload: { amount: number }): boolean
           rewards += payload.amount
           return true
@@ -45,8 +51,9 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
   local radio = Dialogue.new(radioScene, { locale = "en", resolveTemplate = Translations.resolve })
   local audio = Audio.new(conversationBackend, 71)
   local radioAudio = Audio.new(radioBackend, 99)
-  player:start()
+  player:start(settings.entry)
   local saved = player:checkpoint()
+  local savedEntry = settings.entry
   local view = audio.update(player:snapshot(), 0)
   local radioView = radioAudio.update(radio:snapshot(), 0)
   local radioAge = 0
@@ -59,7 +66,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
   end
   local function enqueue(channel: string): boolean
     local accepted = false
-    if channel == "conversation" then accepted = conversationQueue.push("start")
+    if channel == "conversation" then accepted = conversationQueue.push(settings.entry)
     else accepted = radioQueue.push("start") end
     if not accepted then rejected += 1 end
     return accepted
@@ -79,6 +86,16 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     end
     if not settings.paused and player:snapshot().state == "awaiting_action" then
       player:runAction()
+      -- Remember actions settle into response lines, before any dependent branch.
+      if memoryTopic ~= "" then
+        local memory = player:getLocals()
+        player:setLocals({
+          visits = memory.visits + 1,
+          charted = memory.charted or memoryTopic == "chart",
+          trusted = memory.trusted or memoryTopic == "trust",
+        })
+        memoryTopic = ""
+      end
     end
     -- Resolve modal handoffs before advancing the background channel's clock.
     if not settings.paused and not active() then
@@ -142,6 +159,7 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
       return false
     end
     saved = player:checkpoint()
+    savedEntry = settings.entry
     settings.notice = "Checkpoint saved."
     return true
   end
@@ -151,6 +169,8 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     restored:setLocale(settings.locale)
     player:dispose()
     player = restored
+    settings.entry = savedEntry
+    settings.notice = "Checkpoint restored."
     audio.reset()
     settings.selected = 1
     settings.scroll = 0
@@ -162,10 +182,11 @@ local function new(conversationBackend: Backend, radioBackend: Backend)
     conversationQueue.clear()
     radioQueue.clear()
     player:clearHistory()
+    settings.notice = ""
     settings.selected = 1
     settings.scroll = 0
     radioAge = 0
-    player:start()
+    player:start(settings.entry)
     update(0)
   end
   local function locale()

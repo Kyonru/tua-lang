@@ -6,7 +6,198 @@
 @actions "actions"
 @events "events"
 @bind name context.name
+@entry quick
 [start]
+// @id crossing.open
+Cast.Guide: You came back, %{name}. I left the lamp burning. [pause=0.35]I wasn't certain you would.
+@expression worried
+@speech character
+@emit shown 0 signal [id:crossing.open.shown] {"phase":"shown"}
+@emit revealed 0.1 signal [id:crossing.open.revealed] {"phase":"revealed"}
+// @id crossing.weather
+Cast.Guide: There is a boat beyond the breakwater. No running lights. Every few minutes, someone rings a bell.
+@speech character
+// @id crossing.arrival
+Cast.Courier: Three rings. Then two. The same as the old ferry. I know because I used to count them from my window.
+@speech character
+// @id crossing.question
+Cast.Guide: Before we do anything foolish, tell me what you need to know.
+@speech character
+// @id crossing.start.choice.1
+-> Who is on the boat? [target:passengers]
+// @id crossing.start.choice.2
+-> Why is the lighthouse dark? [target:lamp]
+// @id crossing.start.choice.3
+-> Show me the channel chart. [target:chart]
+// @id crossing.start.choice.4
+-> We should decide what to do. [target:decision]
+[hub]
+// @id crossing.hub
+Cast.Guide: Ask. We still have a little time.
+@speech character
+// @id crossing.hub.choice.1
+-> Who is on the boat? [target:passengers]
+// @id crossing.hub.choice.2
+-> Why is the lighthouse dark? [target:lamp]
+// @id crossing.hub.choice.3
+-> Show me the channel chart. [target:chart]
+// @id crossing.hub.choice.4
+-> We should decide what to do. [target:decision]
+// @id crossing.hub.choice.5
+-> Repeat the safe route. [target:chart_reply]
+@visible locals.charted
+@fallback decision
+[passengers]
+// @id crossing.passengers.1
+Cast.Courier: My sister took that ferry six years ago. So did half the people whose names are on the wall.
+@expression worried
+@speech character
+// @id crossing.passengers.2
+Cast.Guide: We never found the hull. That is not the same as saying the passengers survived.
+@expression worried
+@speech character
+// @id crossing.passengers.3
+Cast.Courier: I know the difference between hope and evidence. I just don't like it very much.
+@speech character
+// @id crossing.passengers.choice.1
+-> Ask another question. [target:hub]
+// @id crossing.passengers.choice.2
+-> Tell Ivo you believe him. [target:trust]
+[trust]
+@action remember [id:crossing.trust.action] [success:trust_reply] [failure:hub] {"topic":"trust"}
+[trust_reply]
+// @id crossing.trust.reply
+Cast.Courier: Thank you. You don't have to believe every word. Just don't make me listen to that bell alone.
+@expression happy
+@speech character
+// @id crossing.trust_reply.choice.1
+-> Return to Mara. [target:hub]
+[lamp]
+// @id crossing.lamp.1
+Cast.Guide: The lens is intact. The keeper isn't. My hands shake when I climb the last flight of stairs.
+@expression worried
+@speech character
+// @id crossing.lamp.2
+Cast.Guide: People think a lighthouse is a promise that the sea is safe. It isn't. It's a promise that somebody is watching.
+@speech character
+// @id crossing.lamp.3
+Cast.Courier: Then let somebody else watch tonight.
+@speech character
+// @id crossing.lamp.choice.1
+-> Ask another question. [target:hub]
+// @id crossing.lamp.choice.2
+-> We can light it together. [target:decision]
+[chart]
+// @id crossing.chart.1
+Cast.Guide: Here. The wide channel is silted up. The narrow one follows a seam of pale stone under the water.
+@speech character
+// @id crossing.chart.2
+Cast.Guide: Look for [em]three white markers[/em]. Keep the last one on your left. Everything else on this chart is a warning.
+@speech character
+// @id crossing.chart.choice.1
+-> Memorize the safe passage. [target:remember_chart]
+// @id crossing.chart.choice.2
+-> Put the chart away. [target:hub]
+[remember_chart]
+@action remember [id:crossing.chart.action] [success:chart_reply] [failure:hub] {"topic":"chart"}
+[chart_reply]
+// @id crossing.chart.reply
+Cast.Courier: Three white markers. Last one on the left. I'll say it until one of us stops being afraid.
+@expression happy
+@speech character
+// @id crossing.chart_reply.choice.1
+-> Return to the question at hand. [target:hub]
+[decision]
+// @id crossing.decision
+Cast.Guide: Once we turn the light toward them, there is no calling it back. Are we guiding them in, going out, or leaving the sea to keep its secrets?
+@expression resolved
+@speech character
+// @id crossing.decision.choice.1
+-> Light the beacon. Guide them home. [target:beacon_route]
+// @id crossing.decision.choice.2
+-> Take the skiff through the narrow channel. [target:skiff_route]
+@enabled locals.charted and context.permit
+// @id crossing.skiff.reason
+@reason Study the chart and obtain a harbor permit. G toggles the permit for this demo.
+// @id crossing.decision.choice.3
+-> Leave the light dark tonight. [target:dark_route]
+// @id crossing.decision.choice.4
+-> I still have questions. [target:hub]
+@fallback hub
+[beacon_route]
+// @id crossing.beacon.1
+Cast.Guide: Take the lower handle. Slowly. The mechanism is older than either of us, and much less forgiving.
+@speech character
+// @id crossing.beacon.2
+: Together, you turn the wheel. A thin bar of light crosses the room. Then the glass. Then the sea.
+@speech off
+// @id crossing.beacon.3
+Cast.Robot: [style=radio]Channel open.[/style] Incoming vessel, identify yourself.
+@speech character
+@emit shown 0.2 signal [id:crossing.radio.shown] {"phase":"shown"}
+// @id crossing.beacon_route.choice.1
+-> Listen. [target:signal_wait]
+[signal_wait]
+@wait 0.8 [target:signal_reply]
+[signal_reply]
+// @id crossing.signal.reply
+Cast.Robot: Passenger ferry, last transmission. Engine failure. We are leaving the ship. If this reaches the harbor... tell them we tried.
+@voice {"cue":"greeting","sourceLocale":"en","fallback":"source"}
+// @id crossing.signal.after
+Cast.Courier: Not a voice. A recording. It has been calling for someone all this time.
+@expression worried
+@speech character
+// @id crossing.signal_reply.choice.1
+-> Stay beside Ivo. [target:trust_variant]
+[trust_variant]
+@branch locals.trusted [target:trusted_end] [else:reserved_end]
+[trusted_end]
+// @id crossing.trusted.1
+Cast.Courier: You said you believed me. I think I needed that more than I needed to be right.
+@expression happy
+@speech character
+// @id crossing.trusted.2
+Cast.Guide: The boat reaches the harbor at dawn. Empty, but not lost. We can finally put a date beneath those names. (end)
+@expression happy
+@speech character
+[reserved_end]
+// @id crossing.reserved.1
+Cast.Courier: I should go and tell the others. They'll want to see it before the morning crowd arrives.
+@speech character
+// @id crossing.reserved.2
+Cast.Guide: At dawn the empty ferry comes home. Some answers are smaller than the questions that bring us to them. (end)
+@speech character
+[skiff_route]
+// @id crossing.skiff.1
+Cast.Courier: Three white markers. Last one on the left. See? I was listening.
+@expression happy
+@speech character
+// @id crossing.skiff.2
+Cast.Guide: Take my coat. It has brought back everyone who borrowed it. That is not a guarantee, but it is a very good coat.
+@expression happy
+@speech character
+// @id crossing.skiff.3
+: The harbor falls quiet behind you. [style=wave]One white marker. Two. Three.[/style] On the ferry's deck, a bell moves in the wind.
+@speech off
+// @id crossing.skiff.4
+Cast.Courier: Her scarf. Still tied to the rail. She said she would leave it there so I could find her boat.
+@expression worried
+@speech character
+// @id crossing.skiff.5
+: You bring the scarf home. By morning, the harbor has stopped waiting for a miracle and started remembering a person. (end)
+@speech off
+[dark_route]
+// @id crossing.dark.1
+Cast.Courier: I won't pretend I understand. But I won't take the skiff without you, either.
+@expression worried
+@speech character
+// @id crossing.dark.2
+Cast.Guide: Staying is a decision too. We will keep watch until morning. Both of us.
+@speech character
+// @id crossing.dark.3
+: At sunrise, there is no boat. Only the faint impression of a bell, and three people who heard it together. (end)
+@speech off
+[quick]
 // @id harbor.welcome
 Cast.Guide: Welcome to [em]Beacon Harbor[/em], %{name}. [style=wave]The tide is turning.[/style]
 @speech character
