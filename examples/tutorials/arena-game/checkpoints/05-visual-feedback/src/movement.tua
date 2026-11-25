@@ -1,0 +1,7 @@
+export type Position = { x: number, y: number }
+-- Input supplies a normalized direction. Speed is world pixels per second.
+local function move(player: Position, x: number, y: number, speed: number, dt: number)
+  player.x = math.max(32, math.min(1568, player.x + x * speed * dt))
+  player.y = math.max(48, math.min(1168, player.y + y * speed * dt))
+end
+return { move = move }
