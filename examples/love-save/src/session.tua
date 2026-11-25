@@ -1,0 +1,102 @@
+local Profile = require("profile")
+local function new()
+  local profile = Profile.new()
+  local saved, loadIssue = profile:load()
+  -- Only persistent data belongs in this store; UI notices must not dirty it.
+  local game = store(saved or profile:defaults())
+  local ui = {
+    notice = loadIssue and loadIssue.message or (saved and "Saved progress loaded." or "A new run. No save yet."),
+    confirmReset = false,
+  }
+  local function bind()
+    return profile:bind(game, {
+      select = function(state) return state end,
+      debounce = 1,
+      max_interval = 10,
+    })
+  end
+  local persistence = bind()
+  local disposed = false
+  local function score(): boolean
+    if disposed or loadIssue or ui.confirmReset then return false end
+    game:update(function(state) state.score += 1 end)
+    ui.notice = "Progress changed. Autosave pending."
+    return true
+  end
+  local function save(force: boolean = true): boolean
+    if disposed or ui.confirmReset then return false end
+    if loadIssue then
+      ui.notice = loadIssue.message
+      return false
+    end
+    if force then persistence:markDirty() end
+    local ok, issue = persistence:flush()
+    ui.notice = ok and "Progress saved." or (issue and issue.message or "Save failed.")
+    return ok
+  end
+  local function update(dt: number)
+    if disposed or loadIssue or ui.confirmReset then return end
+    local wrote = persistence:update(dt)
+    local issue = persistence:lastIssue()
+    if issue then ui.notice = issue.message
+    elseif wrote then ui.notice = "Progress autosaved." end
+  end
+  local function acceptRecovery(): boolean
+    if disposed or ui.confirmReset or not loadIssue then return false end
+    if loadIssue.code ~= "damaged_slot_unverified" then return false end
+    if not profile:acceptRecovery() then return false end
+    loadIssue = nil
+    persistence:markDirty()
+    ui.notice = "Recovered progress accepted. It may be older than the damaged copy."
+    return true
+  end
+  local function requestReset()
+    if not disposed then
+      ui.confirmReset = true
+      ui.notice = "This cannot be undone."
+    end
+  end
+  local function cancelReset()
+    ui.confirmReset = false
+    ui.notice = loadIssue and loadIssue.message or "Reset cancelled. Progress kept."
+  end
+  local function confirmReset(): boolean
+    if disposed or not ui.confirmReset then return false end
+    local defaults, issue = profile:reset()
+    if not defaults then
+      loadIssue = issue or loadIssue
+      ui.notice = issue and issue.message or "Reset failed."
+      return false
+    end
+    persistence:dispose()
+    game:set(defaults)
+    loadIssue = nil
+    ui.confirmReset = false
+    persistence = bind()
+    persistence:markDirty()
+    ui.notice = "Save reset. A new run has started."
+    return true
+  end
+  local function dispose(saveOnExit: boolean = true): boolean
+    if disposed then return true end
+    local ok = true
+    if saveOnExit and not ui.confirmReset then ok = save(false) end
+    persistence:dispose()
+    disposed = true
+    return ok
+  end
+  return {
+    snapshot = function() return game:get() end,
+    issue = function() return loadIssue end,
+    ui = ui,
+    score = score,
+    save = save,
+    update = update,
+    acceptRecovery = acceptRecovery,
+    requestReset = requestReset,
+    cancelReset = cancelReset,
+    confirmReset = confirmReset,
+    dispose = dispose,
+  }
+end
+return { new = new }

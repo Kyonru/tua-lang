@@ -1,15 +1,15 @@
-local Profile = Save.contract({
-  slot = "profile",
-  version = 2,
-  schema = Save.record({
-    score = Save.number(0),
-    musicOn = Save.boolean(true),
-  }),
-  migrations = {
-    [1] = function(old: any)
-      return { score = old.points or 0, musicOn = true }
-    end,
-  },
-})
-
-return Profile
+-- Each session owns a contract and its independent recovery state.
+local function new()
+  return Save.contract({
+    slot = "profile",
+    version = 2,
+    schema = Save.record({ score = Save.number(0), musicOn = Save.boolean(true) }),
+    migration_schemas = { [1] = Save.record({ points = Save.number(0) }) },
+    migrations = {
+      [1] = function(old: { points: number })
+        return { score = old.points, musicOn = true }
+      end,
+    },
+  })
+end
+return { new = new }
