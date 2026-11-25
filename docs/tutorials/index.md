@@ -4,7 +4,11 @@ icon: lucide/graduation-cap
 
 # Tutorials
 
-Build one small working feature, then add depth when you need it. Each tutorial
+Start with [Build an arena game](arena-game/index.md): one evolving game with
+runnable chapter checkpoints. Its first chapter combines movement, animation,
+camera follow and game flow.
+
+The standalone guides below remain available as focused foundations. Each tutorial
 has a runnable example and explains which behavior belongs to Tua and which is
 chosen by the game. Choose the guide that matches what you want to build.
 

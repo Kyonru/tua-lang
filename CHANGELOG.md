@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Start the cumulative arena-game tutorial with a runnable character, camera and
+  title/pause/restart checkpoint, plus lifecycle and native replay verification.
+
 - Add an enemy-wave tutorial with live ECS health, explicit wave boundaries,
   optional bounded defeat rings and native LÖVE lifecycle verification.
 

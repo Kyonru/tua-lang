@@ -61,7 +61,7 @@ status does **not** establish that the integrated chapters are complete.
 
 | Chapter / checkpoint | Playable outcome | APIs and requirements carried forward | Status |
 | --- | --- | --- | --- |
-| C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Pending |
+| C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Complete; see C1 qualification |
 | C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Pending; weapon model prototype verified, not an integrated checkpoint |
 | C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Pending |
 | C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Pending |
@@ -85,14 +85,14 @@ combat snapshot is not an implicit requirement.
 
 ### Immediate work and migration
 
-- [ ] C1: create the first combined checkpoint from the qualified M1/M2 foundations,
+- [x] C1: create the first combined checkpoint from the qualified M1/M2 foundations,
       with native movement/pause/restart verification and a cumulative walkthrough.
 - [ ] C2: adapt the weapon prototype to live ECS enemies and the C1 player/camera.
       Keep its rate, pooling and swept-collision tests; add nearest-enemy selection,
       one-hit/one-damage, pause/reset and feedback-independent outcome regressions.
 - [ ] Fold later M requirements into the same game in chapter order above; do not
       add new independent `scene-audio`, `first-shader` or `enemy-decisions` projects.
-- [ ] Publish a project landing page and chapter navigation when C1 is runnable.
+- [x] Publish a project landing page and chapter navigation when C1 is runnable.
       Until then, keep the current guides honest about being standalone foundations.
 - [ ] Review each existing standalone guide after its replacement is qualified.
       Move short API-only material into its owning reference page; use a concise
@@ -462,5 +462,14 @@ M4 now includes a standalone Kenney enemy wave, live component readers, determin
 click targeting, reset/disposal checks and optional bounded rings. Native replay
 checks the actual callbacks and drawing; no runtime or compiler changes were needed.
 
-Next: C1, the combined playable loop. Then integrate the M5 weapon groundwork with
-M4 enemy lifecycle in C2; do not publish another isolated weapon tutorial.
+## C1 completion
+
+Published the cumulative `01-playable-loop` checkpoint and project landing page.
+Input, movement, sprites, camera and state-machine flow now share one session
+boundary. Emitted-Lua tests cover 100 cycles; native replay covers pause/focus,
+animation/camera freeze, transition input, reset and screen-space HUD. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-01.md).
+Existing standalone examples remain available; their migration audit is pending.
+
+Next: C2, integrate weapons and ECS enemy waves into the C1 game. The M5 prototype
+is groundwork, not a completed combat chapter.
