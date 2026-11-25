@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add Beacon Harbor, a runnable LÖVE dialogue showcase with interchangeable presenters,
+  headless/native checks, localized rich text, optional audio, bounded channels and
+  explicit accessibility controls; document small adoption paths and icon tradeoffs.
+
 - Group dialogue runtime internals under `tuadialogue/` and independently runnable
   examples under `examples/dialogue/`; preserve the public runtime entry and replacements.
 

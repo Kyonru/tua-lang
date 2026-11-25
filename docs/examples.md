@@ -22,6 +22,7 @@ folder in VS Code and use **Tua: Run LOVE Project** without building the compile
 | `love-tua` | A game combining typed systems with existing Lua libraries. |
 | `audio-system` | Audio buses, cues, music scenes, and analysis metadata. |
 | `dialogue/durable` | Typed local-action reconciliation with Save receipts and crash-window recovery tests. |
+| `dialogue/showcase` | Three interchangeable LÖVE presentations, localized story, voice, bounded channels, accessibility controls and headless/native verification. |
 | `dialogue/checkpoint` | Line, choice and wait checkpoints; optional typed Save persistence with recovery tests. |
 | `dialogue/audio` | Playable character chatter, recording cues, independent mute and pause controls. |
 | `dialogue/localization` | Headless English/French conversations, plural text, independent locales and translation coverage. |

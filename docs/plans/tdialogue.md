@@ -736,7 +736,7 @@ synthetic protocol timing is not presented as perceived UI latency.
   packaged output and module loading under Lua 5.1/LuaJIT and LÖVE, including hosts
   whose module search path omits `?/init.lua`. Keep file moves separate from gameplay
   or dialogue behavior changes; shared examples must not require unrelated features.
-- [ ] Use [SYSL-Text](https://github.com/sysl-dev/SYSL-Text) as presentation inspiration:
+- [x] Use [SYSL-Text](https://github.com/sysl-dev/SYSL-Text) as presentation inspiration:
   demonstrate per-presenter defaults, named style mappings for font/color/shadow and
   optional wave/shake effects, plus layout metrics, wrapping/scrolling and character
   sound profiles. Keep resources and visual effects in the LÖVE adapter, honor reduced
@@ -756,7 +756,7 @@ synthetic protocol timing is not presented as perceived UI latency.
   overflow, channel priority and interruption policy. Keep queue policy in the host.
 - [x] Maintain a headless counterpart and explain small adoption paths, rather
   than requiring every game to adopt every showcase feature.
-- [ ] Update `docs/dialogue.md`, the example README and relevant existing feature
+- [x] Update `docs/dialogue.md`, the example README and relevant existing feature
   pages. Update `docs/llms.txt` and regenerate the embedded contract when APIs change;
   add changelog entries and accurate feature-example/navigation links.
 - [ ] After upstream APIs pass, integrate the relevant adapters in the zombie game

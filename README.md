@@ -138,6 +138,8 @@ Makefile for specialized test and benchmark workflows, and
 - `examples/love-full` is a larger LÖVE conversion example with Lua interop.
 - `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,
   object pools, stores, state machines, typed input, and vendored Feel feedback.
+- `examples/dialogue/showcase` demonstrates conversation panels, NPC bubbles and radio
+  with custom rendering, localized rich text, voice, queues and checkpoint restore.
 - `examples/audio-system` demonstrates typed audio buses, cues, music scenes,
   cached waveform and tempo analysis, and the VS Code Audio Workbench data.
 - `examples/project-model` demonstrates config-aware source/output roots,
