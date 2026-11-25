@@ -64,7 +64,7 @@ status does **not** establish that the integrated chapters are complete.
 | C1 — `01-playable-loop` | Move an animated character, start, pause, resume and restart the same run | M1 + M2: input, sprites, camera, state machine; focus and input ownership | Complete; see C1 qualification |
 | C2 — `02-combat-waves` | Aim, fire projectiles, defeat enemies and start another bounded wave | M4 + M5: ECS, pool, tween, camera; swept hits, health, cadence, recoil and reduced motion | Complete; cumulative checkpoint and qualification |
 | C3 — `03-enemy-decisions` | Enemies detect and approach the player, attack, and produce a game-over transition | M8: behavior trees + ECS; actor cancellation and cooldowns; reuse C1 flow | Complete; C3 qualification records selected-compiler typing limits |
-| C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Pending |
+| C4 — `04-sound` | Hear shots, hits and scene transitions; adjust music/effects or mute | M6: audio cues/buses; pause, concurrency and resource ownership | Complete; fake-backend and native Source qualification |
 | C5 — `05-visual-feedback` | Add a scoped hit shader to the existing combat and show loading/failure states | M7: shader loading, initialization and optional preload; retain feedback controls | Pending |
 | C6 — `06-conversation-and-language` | Meet a character between waves and switch the game's UI/dialogue locale | Existing dialogue starter + M9: dialogue, catalogs, layout; explicit modal/nonmodal ownership | Pending |
 | C7 — `07-save-progress` | Leave and resume durable game progress and preferences across launches | M3: typed saves, migration and deliberate recovery; no saved ECS IDs or runtime handles | Pending |
@@ -256,11 +256,11 @@ Feedback settings must not change damage or hit outcomes.
 
 Reference: [audio](../audio.md).
 
-- [ ] Play one effect through a cue and one music track through its intended bus.
-- [ ] Add separate music/effects volume controls and demonstrate a scene transition.
-- [ ] Explain source creation, reuse, concurrency limits and shutdown ownership.
-- [ ] Keep generated or licensed audio small and provide a mute control.
-- [ ] Distinguish host pause policy from volume and transport state.
+- [x] Play one effect through a cue and one music track through its intended bus.
+- [x] Add separate music/effects volume controls and demonstrate a scene transition.
+- [x] Explain source creation, reuse, concurrency limits and shutdown ownership.
+- [x] Keep generated or licensed audio small and provide a mute control.
+- [x] Distinguish host pause policy from volume and transport state.
 
 Acceptance: controls affect the intended buses, transitions do not accumulate music
 sources, and restart/disposal releases owned resources. Verify adapter logic with a
@@ -369,7 +369,7 @@ other contributors' work separate. Do not push or publish without authorization.
 | M3 | Complete | `examples/love-save`; `46a9df23`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/save-and-resume.md) |
 | M4 | Complete | `examples/tutorials/enemy-wave`; `936b615a`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/enemy-wave.md) |
 | M5 | Complete in C2 | `02-combat-waves`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-02.md) |
-| M6 | Pending | |
+| M6 | Complete in C4 | `04-sound`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-04.md) |
 | M7 | Pending | |
 | M8 | Complete in C3 | `03-enemy-decisions`; [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md) |
 | M9 | Pending | |
@@ -488,4 +488,13 @@ natural defeat/restart and feedback parity. The selected compiler rejects incorr
 known-field types but accepts unknown context field assignment; see the exact probe
 in [qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-03.md).
 
-Next: C4, sound cues, music/effects controls and scene-transition ownership.
+## C4 completion
+
+Added cue/bus declarations, title/combat music scenes, independent gains and mute,
+with typed testable host policy. Native Source clocks verify pause/resume; repeated
+restarts retain one music voice and shutdown stops playback. Original generated WAV
+fixtures are bundled with provenance; the replay MP4 remains silent. Enemy shadows
+were added separately to the existing combat examples and carried into C4. See
+[qualification](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/tutorials/arena-game-04.md).
+
+Next: C5, scoped hit shaders, initialization and loading/failure states.

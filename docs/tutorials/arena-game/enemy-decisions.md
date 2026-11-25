@@ -192,5 +192,4 @@ Enemy overlap is intentional here—avoidance would be a separate behavior probl
 - Stand still until game over, then restart: health is ten and no old attack survives.
 
 See [behavior trees](../../behavior-trees.md), [ECS](../../ecs.md) and
-[state machines](../../state-machines.md) for full contracts. The next chapter adds
-sound to shots, hits, transitions and settings in this same game.
+[state machines](../../state-machines.md) for full contracts. Continue with [sound](sound.md) to add cues, music and volume controls to this same game.

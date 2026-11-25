@@ -70,6 +70,7 @@ nav = [
       { "1. The Playable Loop" = "tutorials/arena-game/playable-loop.md" },
       { "2. Combat And Waves" = "tutorials/arena-game/combat-waves.md" },
       { "3. Enemy Decisions" = "tutorials/arena-game/enemy-decisions.md" },
+      { "4. Give The Game Sound" = "tutorials/arena-game/sound.md" },
     ] },
     { "Your First Playable Character" = "tutorials/playable-character.md" },
     { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },

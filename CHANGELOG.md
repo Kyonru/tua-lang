@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add enemy ground shadows and an arena audio chapter with typed cues/buses, music
+  scenes, independent gains, mute and native transport/cleanup verification.
+
 - Add the arena tutorial chapter on typed ECS behavior runners, patrol/chase/attack,
   moving-target projectile sweeps, player health and restartable game over.
 
