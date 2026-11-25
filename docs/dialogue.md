@@ -19,7 +19,7 @@ not enough to identify one of these development builds.
 | Timed event records | Event handlers: sounds, animations or game actions |
 | Independent player state and clocks | Whether a conversation pauses gameplay |
 
-**New to dialogue?** Start with [your first playable dialogue](dialogue-start.md):
+**New to dialogue?** Start with [your first playable dialogue](tutorials/first-dialogue.md):
 one question, two replies, two source files. It explains the defaults before
 introducing optional capabilities. This page is the detailed reference.
 
@@ -35,7 +35,7 @@ introducing optional capabilities. This page is the detailed reference.
 ## Your first conversation
 
 Prefer a terminal? This walkthrough needs no LÖVE window, font or image assets.
-For a window with interactive replies, use the [playable starter](dialogue-start.md).
+For a window with interactive replies, use the [playable starter](tutorials/first-dialogue.md).
 
 ### 1. Create the project
 

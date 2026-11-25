@@ -30,7 +30,7 @@ no typewriter effect, audio, history, save file or gameplay pause policy. Those 
 independent additions, not setup requirements. Layout is intentionally small and
 intended for short lines; borrow wrapping/scrolling from the showcase for long content.
 
-Follow the [guided learning path](../../../docs/dialogue-start.md) next. Prefer a
+Follow the [guided learning path](../../../docs/tutorials/first-dialogue.md) next. Prefer a
 terminal? Use [basics](../basics/README.md). The [showcase](../showcase/README.md) is
 the full presentation sampler, not the starter template.
 

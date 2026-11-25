@@ -138,7 +138,7 @@ Makefile for specialized test and benchmark workflows, and
 - `examples/love-full` is a larger LÖVE conversion example with Lua interop.
 - `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,
   object pools, stores, state machines, typed input, and vendored Feel feedback.
-- [Your first dialogue](docs/dialogue-start.md) starts with the two-source-file
+- [Your first dialogue](docs/tutorials/first-dialogue.md) starts with the two-source-file
   `examples/dialogue/first-conversation` LÖVE example and introduces optional features gradually.
 - `examples/dialogue/showcase` demonstrates conversation panels, NPC bubbles and radio
   with custom rendering, localized rich text, voice, queues and checkpoint restore.

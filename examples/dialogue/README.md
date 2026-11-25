@@ -28,7 +28,7 @@ examples require LÖVE 11.5 and run with `love build` from the scenario director
 
 For the complete presentation sampler, see [showcase](showcase/README.md): seven
 styles, rich-text and staging tours, audio, queues, checkpoints and transcript UI.
-Follow the [learning path](../../docs/dialogue-start.md#grow-one-feature-at-a-time)
+Follow the [learning path](../../docs/tutorials/first-dialogue.md#grow-one-feature-at-a-time)
 to add these independently.
 
 The scenarios do not import one another. The compiler includes runtime helpers

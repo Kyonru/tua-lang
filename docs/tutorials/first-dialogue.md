@@ -11,7 +11,7 @@ translations or a custom UI framework.
 Use LÖVE 11.5 and a compiler/extension containing the dialogue feature, available
 in development builds for the release after 0.11.0. The version number alone is
 not sufficient to identify those builds. Prefer a terminal? The
-[headless walkthrough](dialogue.md#your-first-conversation) uses the same player.
+[headless walkthrough](../dialogue.md#your-first-conversation) uses the same player.
 
 ## 1. Run a conversation
 
@@ -157,12 +157,12 @@ starter's fixed spacing.
 | With this starter | Add only when you need it |
 | --- | --- |
 | The first label is the starting point | `start("label")` for another entry |
-| The snapshot contains the whole line; this host draws it immediately | [Reveal text progressively](dialogue.md#reveal-text-by-grapheme-cluster) |
-| Lines wait for `advance()`; replies wait for `choose()` | [Auto-advance or skip policy](dialogue.md#choose-an-advance-and-skip-policy) |
-| Authored source text is available without catalogs | [Translations](dialogue.md#localize-lines-choices-and-character-names) |
-| No history is retained by default | [Bounded history](dialogue.md#keep-a-bounded-conversation-history) |
+| The snapshot contains the whole line; this host draws it immediately | [Reveal text progressively](../dialogue.md#reveal-text-by-grapheme-cluster) |
+| Lines wait for `advance()`; replies wait for `choose()` | [Auto-advance or skip policy](../dialogue.md#choose-an-advance-and-skip-policy) |
+| Authored source text is available without catalogs | [Translations](../dialogue.md#localize-lines-choices-and-character-names) |
+| No history is retained by default | [Bounded history](../dialogue.md#keep-a-bounded-conversation-history) |
 | No audio or gameplay pause is imposed | Your audio adapter and host pause policy |
-| No save file is created | [Checkpoints](dialogue.md#checkpoint-a-plain-conversation) and persistence |
+| No save file is created | [Checkpoints](../dialogue.md#checkpoint-a-plain-conversation) and persistence |
 
 Referencing `Dialogue` automatically includes its runtime. You do not register a
 plugin or require an internal runtime module in typed source. The ordinary
@@ -170,7 +170,7 @@ plugin or require an internal runtime module in typed source. The ordinary
 
 There is no update callback here because this script has no timed behavior. Add
 `player:update(dt, fullyRevealed)` when using timed events/waits, and dispatch the
-returned event records. [Timing](dialogue.md#advance-both-clocks-explicitly) explains
+returned event records. [Timing](../dialogue.md#advance-both-clocks-explicitly) explains
 when to report reveal completion; calling `update` does not render or play sounds.
 
 ## Grow one feature at a time
@@ -179,14 +179,14 @@ You can stop after any step. These are independent capabilities, not prerequisit
 
 | Next need | Small next step | Runnable example |
 | --- | --- | --- |
-| Reuse a cast | [Share characters](dialogue.md#share-characters-between-scripts), then add portrait metadata | [basics](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/basics) |
-| React to gameplay | [Typed context](dialogue.md#typed-context-and-conversation-locals), then conditional replies | [context](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/context), [conditions](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/conditions) |
+| Reuse a cast | [Share characters](../dialogue.md#share-characters-between-scripts), then add portrait metadata | [basics](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/basics) |
+| React to gameplay | [Typed context](../dialogue.md#typed-context-and-conversation-locals), then conditional replies | [context](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/context), [conditions](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/conditions) |
 | Improve presentation | Reveal first; add rich styles or audio independently | [reveal](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/reveal), [rich](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/rich), [audio](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/audio) |
 | Reach another language | Keep IDs stable, add catalogs and select a locale | [localization](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/localization) |
 | Change game state | Distinguish notification events from acknowledged actions | [events](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/events), [actions](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/actions) |
 | Resume later | Save a plain checkpoint before adding consequential rewards | [checkpoint](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/checkpoint), then [durable](https://github.com/kyonru/tua-lang/tree/main/examples/dialogue/durable) |
 
-For visual inspiration, open [Beacon Harbor](dialogue.md#try-the-love-showcase).
+For visual inspiration, open [Beacon Harbor](../dialogue.md#try-the-love-showcase).
 It combines these features and offers interchangeable renderers. Borrow one adapter
 when you need it; you do not need to copy its controller to use dialogue.
 
@@ -198,5 +198,5 @@ when you need it; you do not need to copy its controller to use dialogue.
 - **A reply does not work:** acknowledge the greeting first, then press 1 or 2.
 - **Edited text is unchanged:** rebuild, close the running game and launch `love build` again.
 
-Keep the [dialogue reference](dialogue.md) nearby for syntax, timing, lifecycle and
+Keep the [dialogue reference](../dialogue.md) nearby for syntax, timing, lifecycle and
 editor tools once the first conversation works.

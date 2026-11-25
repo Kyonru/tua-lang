@@ -21,6 +21,9 @@ nav = [
     { "Examples" = "examples.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ] },
+  { "Tutorials" = [
+    { "Your First Playable Dialogue" = "tutorials/first-dialogue.md" },
+  ] },
   { "Language" = [
     { "Overview" = "language.md" },
     { "Typing" = "typing.md" },
@@ -49,7 +52,6 @@ nav = [
     { "Bounded Queues" = "bounded-queues.md" },
     { "Audio" = "audio.md" },
     { "Localization" = "localization.md" },
-    { "First dialogue" = "dialogue-start.md" },
     { "Dialogue" = "dialogue.md" },
   ] },
   { "Tooling" = [
