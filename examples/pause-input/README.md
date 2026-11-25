@@ -82,7 +82,7 @@ explicitly loaded by the runner. Video capture requires ffmpeg and does not meas
 
 ## Next steps
 
-Read the [walkthrough](../../docs/tutorials/game-flow.md), then consult
+Read the [integrated game chapter](../../docs/tutorials/arena-game/playable-loop.md), then consult
 [state machines](../../docs/state-machines.md), [input](../../docs/input.md) and
 [tweening](../../docs/tweening.md). These are host policies composed from ordinary
 helpers, not a required game framework.

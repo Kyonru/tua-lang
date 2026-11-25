@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Consolidate standalone character, pause, save and enemy-wave tutorials into the arena
+  series, retaining old URL landing pages and example projects. Keep the standalone
+  first-dialogue tutorial as the short independent introduction.
+
 - Run clean-copy arena tutorial qualification on Linux CI with explicit LuaJIT selection
   and retained diagnostic artifacts; expose the same headless gate through Make.
 

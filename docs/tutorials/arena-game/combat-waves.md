@@ -62,7 +62,10 @@ both the enemy query and the active-bullet array are empty. Waiting for bullets
 prevents leftover shots from damaging a newly spawned wave.
 
 The query is the enemy registry. No copied enemy array owns health. Destroying an
-enemy removes all its components. Readers resolve the current position/health or
+enemy removes all its components. The query counts only entities with every required
+component. If you introduce partially constructed enemies, revisit whether its count
+still means the whole wave is empty. Spawn complete enemies outside selection callbacks;
+do not depend on a newly matching entity being visited in the same iteration. Readers resolve the current position/health or
 nil, including after replacement, removal or a world clear. Rendering reads the
 same health used by collision, so its bars cannot diverge from damage state.
 
@@ -116,7 +119,11 @@ or 1.2-second expiry, remove the bullet from the active array and release it onc
 The pool's reset callback clears **every field**, including velocity and hit state.
 
 This is an explicit capacity policy layered over `objectPool`; the pool itself
-is not told a maximum. Pooling demonstrates ownership and bounded reuse, not a
+is not told a maximum. The same ownership rule applies to cosmetic pools: copy hit
+coordinates into an effect, reject excess effects at a chosen bound, and release all
+active effects on reset or disable. A dropped cosmetic effect must never undo damage.
+The retained [small enemy-wave example](https://github.com/Kyonru/tua-lang/tree/main/examples/tutorials/enemy-wave)
+contains a separate, bounded defeat-ring pool if you want to explore that variation. Pooling demonstrates ownership and bounded reuse, not a
 measured performance improvement. An aim point at the exact muzzle does not define
 a direction, so that attempt produces no projectile and still starts the normal firing cooldown.
 

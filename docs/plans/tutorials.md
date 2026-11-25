@@ -95,8 +95,9 @@ combat snapshot is not an implicit requirement.
 - [x] Publish a project landing page and chapter navigation when C1 is runnable.
       Until then, keep the current guides honest about being standalone foundations.
 - [x] Review existing standalone guides after the integrated replacements qualify.
-      Retain these focused first-use workflows and add links to the corresponding
-      arena chapters; none is a short API-only duplicate that needs a redirect.
+      Following the user-requested consolidation, fold character/pause/save/wave
+      guidance into C1/C2/C7 and retain their URLs as short replacement pages.
+      Keep the first-dialogue tutorial as the independent introduction.
 - [x] Audit consumers before changing existing paths. `pause-input` and `love-save`
       remain Makefile targets; state-machine, save and dialogue reference pages link
       to the focused guides. Existing examples and unique regressions are preserved.
@@ -555,3 +556,13 @@ consumer review. See
 
 The current C1–C9 tutorial plan is complete. Future feature series require a separate
 learning goal; no additional chapter is implied by this completion.
+
+## Post-qualification tutorial consolidation
+
+The tutorial navigation now has two entry points: the arena series and the first
+playable dialogue. Character, pause, save and wave guides point to C1, C2 or C7;
+useful setup/lifecycle details were folded into those chapters. Reference pages and
+example READMEs link directly to the integrated guides. Existing focused example
+projects, build targets, assets and regression suites remain intact. This supersedes
+the earlier decision to keep all five full standalone guides in navigation, without
+changing the historical C9 qualification record.

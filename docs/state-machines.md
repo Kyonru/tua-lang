@@ -27,8 +27,8 @@ replace the machine instance or simulate callback behavior.
 | Inspect the declared routes | [Preview the graph](#preview-the-graph) |
 | Keep computed configuration | [Static and dynamic configurations](#static-and-dynamic-configurations) |
 
-For a small runnable game, follow [A pause menu and game flow](tutorials/game-flow.md).
-It combines transitions with input ownership and separate UI/gameplay clocks.
+For a runnable game with title, pause and restart, follow [The playable loop](tutorials/arena-game/playable-loop.md).
+It combines transitions with input ownership and explains when to separate UI and gameplay clocks.
 
 ## Create A Machine
 

@@ -60,7 +60,8 @@ adds these responsibilities:
 | `session.tua`, `combat.tua` | Recreate the saved empty boundary |
 
 `conf.tua` sets `t.identity = "tua-arena-tutorial"` before loading the profile.
-Keep that identity stable across releases. The slot is `arena`; neither loading
+Keep that identity stable across releases. Saves live in LÖVE's save directory,
+not beside your source. Changing identity selects another directory; it is not a migration. The slot is `arena`; neither loading
 this example nor its tests accesses another game's saves.
 
 The current contract is version 2. Its literal schema infers the snapshot type:
@@ -90,6 +91,11 @@ over them. A missing slot, by contrast, is an ordinary new game.
 
 ## 3. Separate durable data from transient UI
 
+For a game that needs only explicit checkpoints, `profile:save(snapshot)` writes a
+validated plain record directly and returns success plus an optional issue. Check the
+result: changing progress in memory does not prove it reached storage. Autosave is
+optional; this chapter adds a store binding because it also persists preferences.
+
 The progress controller owns a store containing only the profile. Status messages,
 reset confirmation and live combat state stay outside it. The binding observes
 store revisions:
@@ -112,7 +118,10 @@ immediately. A generation-and-wave marker prevents repeated checkpoint writes wh
 standing in the empty harbor. If a write fails, the binding retains the dirty data
 and uses retry backoff. **F5** requests an explicit retry; quit flushes pending data
 before disposing the binding. Quitting while reset confirmation is open leaves the
-files alone. An untouched new profile does not create a file merely by being opened.
+files alone. `dispose()` itself does not flush. F5 retries pending data; it does not
+force a clean profile to be written. If your UI promises an explicit save even when
+nothing changed, call `markDirty()` before `flush()` for that separate policy.
+An untouched new profile does not create a file merely by being opened.
 
 ## 4. Restore through the normal lifecycle
 
@@ -141,7 +150,9 @@ migration_schemas = {
 
 The migration carries those two values forward and supplies defaults for preferences.
 The current schema then validates its result, followed by the game's range checks.
-A malformed old payload never reaches the callback. A future version blocks writes.
+A malformed old payload never reaches the callback. Migrations go directly from each
+supported old version to the current schema; they do not form an automatic chain.
+Do not increment a schema version without deciding which old formats remain supported. A future version blocks writes.
 
 Loading alone leaves files unchanged. A successful migration marks the binding for
 an upgrade: a later scheduled write or quit flush commits the new representation.
@@ -157,6 +168,7 @@ cannot be accepted through F8. Keep the files for backup or use a compatible ver
 **Delete** opens a confirmation before removing both save copies. Enter confirms;
 Escape cancels. Confirmation consumes its input, so Enter cannot also start a run.
 A failed or partial deletion remains blocked, with visible retry/cancel feedback.
+Cancelling after a partial failure cannot restore a copy that was already deleted.
 A successful reset returns preferences to defaults and removes the resume boundary.
 
 ![Reset confirmation in French](../../assets/tutorials/arena-game/07-reset.png)

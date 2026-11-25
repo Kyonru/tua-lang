@@ -91,7 +91,20 @@ starting the next run resets it.
 ## 3. Poll input, then decide whether the world can advance
 
 Create one `input` object in `main.tua`. Its `move` pair combines left/right/up/down;
-menu commands use Enter, Escape, R and Backspace. Poll it on **every update**, even
+menu commands use Enter, Escape, R and Backspace. The movement portion is:
+
+```tua
+controls = {
+  left = { "key:a", "key:left" },
+  right = { "key:d", "key:right" },
+  up = { "key:w", "key:up" },
+  down = { "key:s", "key:down" },
+},
+pairs = { move = { "left", "right", "up", "down" } },
+```
+
+These are fields inside the complete `input` declaration, alongside its menu bindings.
+Pair entries are ordered left, right, up, down. Poll the input on **every update**, even
 when the session is paused or unfocused, so press edges stay current.
 
 The host picks at most one command, with priority leave → restart → pause → confirm.
@@ -116,7 +129,27 @@ and pauses an active run. Focus return alone does not change paused to playing.
 
 Declare the included sprite sheet once: cells are 80×110, idle uses column 0/row 0,
 and walking uses columns 0 and 6 of row 1 at 8 FPS. Tua's `spriteSheet` loads the
-image and creates animation players; `hero:play` selects idle or walk. Repeatedly
+image and creates animation players:
+
+```tua
+local Courier = spriteSheet({
+  image = "assets/adventurer.png",
+  frame = { width = 80, height = 110 },
+  origin = { x = 40, y = 110 },
+  animations = {
+    idle = { column = 0, row = 0, fps = 1 },
+    walk = { frames = { { column = 0, row = 1 }, { column = 6, row = 1 } }, fps = 8 },
+  },
+})
+local hero = Courier:player("idle")
+```
+
+The origin sits at the feet. `hero:draw(player.x, player.y, 0, facing * 0.6, 0.6)`
+keeps those feet on the world position; `facing` is 1 or -1 and remains unchanged
+while idle. The negative scale mirrors leftward travel. Animation follows input
+intent here, so pushing against a world boundary still plays walking.
+
+`hero:play` selects idle or walk. Repeatedly
 selecting the same animation preserves its frame progress.
 
 The camera follows the updated player, with smoothing 6:
@@ -132,6 +165,12 @@ All four operations belong after the session guard. Pausing freezes the current
 animation frame and camera position, not just the character coordinates. Restart
 snaps the camera to the reset character before the next draw, so it does not glide
 back from the previous run.
+
+If a later pause menu needs animation, give it a separate `Tween.group()` and update
+that UI clock before the simulation guard. Keep gameplay tweens after the guard.
+This checkpoint has a static menu and does not need that extra group. Pausing the
+session does not automatically pause audio, particles or other external clocks; each
+system needs an explicit owner. Never accumulate paused time and replay it on resume.
 
 ## 5. Draw the world, then the menu
 
@@ -158,6 +197,12 @@ or resource per restart, so repeated restarts do not accumulate subscriptions or
   still resets both positions together.
 - Change speed in `session.tua`: movement changes without altering the sprite frame
   rate or menu behavior. Keep all world updates behind the same session boundary.
+
+If a sprite fails to load, rebuild and launch `love build`, not `love src`. If it stays
+idle, check bindings and focus. If HUD text moves, draw it outside `camera:draw`.
+If restart speeds up an animation, check that old tween groups or callbacks are no
+longer being updated. The [state-machine preview](../../state-machines.md#preview-the-graph)
+shows authored routes; live state still belongs to the running session.
 
 See [input](../../input.md), [sprites](../../sprites.md), [camera](../../camera.md)
 and [state machines](../../state-machines.md) for complete APIs. Continue with [combat and waves](combat-waves.md), extending this checkpoint

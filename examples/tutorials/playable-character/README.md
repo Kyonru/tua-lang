@@ -66,6 +66,6 @@ checks, not frame-rate measurements. Generated output is not committed.
 
 ## Next steps
 
-Read the [walkthrough](../../../docs/tutorials/playable-character.md), then explore
+Read the [integrated game chapter](../../../docs/tutorials/arena-game/playable-loop.md), then explore
 [input](../../../docs/input.md), [sprites](../../../docs/sprites.md), or
 [camera](../../../docs/camera.md) independently. Combat and ECS are not required here.

@@ -76,10 +76,6 @@ nav = [
       { "7. Save Progress And Preferences" = "tutorials/arena-game/save-progress.md" },
       { "8. Profile The Game" = "tutorials/arena-game/profile-the-game.md" },
     ] },
-    { "Your First Playable Character" = "tutorials/playable-character.md" },
-    { "A Pause Menu And Game Flow" = "tutorials/game-flow.md" },
-    { "Save And Resume A Run" = "tutorials/save-and-resume.md" },
-    { "A Wave Of Enemies" = "tutorials/enemy-wave.md" },
     { "Your First Playable Dialogue" = "tutorials/first-dialogue.md" },
   ] },
   { "Project" = [

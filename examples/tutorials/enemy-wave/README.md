@@ -58,7 +58,7 @@ Use a fresh output directory. This is a functional replay, not a performance tes
 
 ## Next steps
 
-Read [the tutorial](../../../docs/tutorials/enemy-wave.md) and
+Read [the integrated game chapter](../../../docs/tutorials/arena-game/combat-waves.md) and
 [qualification results](../../../benchmarks/tutorials/enemy-wave.md).
-The next planned tutorial adds a responsive weapon. This example intentionally
-uses clicks rather than projectile collision.
+The arena chapter adds weapons and projectile collision. This focused example
+uses clicks to apply damage.

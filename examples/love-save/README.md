@@ -90,7 +90,7 @@ typed source and the authored Lua tests separately; generated output is not comm
 
 ## Next steps
 
-Follow the [walkthrough](../../docs/tutorials/save-and-resume.md). Consult
+Follow the [integrated game chapter](../../docs/tutorials/arena-game/save-progress.md). Consult
 [save contracts](../../docs/save-contracts.md) for validation and recovery guarantees.
 Consequential inventory actions and cloud synchronization need additional design;
 they are not implied by this score example.
