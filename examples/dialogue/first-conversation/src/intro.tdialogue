@@ -1,0 +1,18 @@
+@dialogue 1
+@character Guide "Mara"
+
+[start]
+// @id intro.hello
+Guide: The ferry is ready. Will you come with us?
+// @id intro.yes
+-> I'm ready. [target:aboard]
+// @id intro.no
+-> I'll take the next one. [target:later]
+
+[aboard]
+// @id intro.welcome
+Guide: Welcome aboard. (end)
+
+[later]
+// @id intro.farewell
+Guide: Then I'll keep a light on for you. (end)

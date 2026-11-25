@@ -1,0 +1,51 @@
+-- The script owns the conversation; this file owns drawing and input.
+local document = require("intro")
+local player = Dialogue.new(document)
+local font = love.graphics.newFont(20)
+player:start()
+
+function love.draw()
+  local width, height = love.graphics.getDimensions()
+  love.graphics.clear(0.08, 0.12, 0.14)
+  love.graphics.setFont(font)
+  love.graphics.setColor(0.94, 0.92, 0.85)
+  local snapshot = player:snapshot()
+  local node = snapshot.node
+  if snapshot.state == "completed" then
+    love.graphics.print("Until the next crossing.", 32, 48)
+  elseif node then
+    love.graphics.print(node.speaker or "Your reply", 32, 48)
+    love.graphics.printf(node.text, 32, 92, width - 64)
+    for index, option in ipairs(node.options) do
+      love.graphics.printf(tostring(index) .. "  " .. option.text, 32, 100 + index * 56, width - 64)
+    end
+  end
+  love.graphics.setColor(0.65, 0.76, 0.75)
+  love.graphics.printf("SPACE  Continue     1 / 2  Reply     R  Restart     ESC  Quit",
+    32, height - 64, width - 64)
+end
+
+function love.keypressed(key: string)
+  if key == "escape" then love.event.quit()
+  elseif key == "r" then player:start()
+  else
+    local snapshot = player:snapshot()
+    local node = snapshot.node
+    if snapshot.state == "awaiting_advance" and key == "space" then
+      player:advance()
+    elseif snapshot.state == "awaiting_choice" and node then
+      local index = key == "1" and 1 or (key == "2" and 2 or 0)
+      local option = node.options[index]
+      -- Input selects a row; the player receives its stable authored ID.
+      if option then player:choose(option.id) end
+    end
+  end
+end
+
+function love.quit()
+  player:dispose()
+  font:release()
+end
+
+-- Used by the optional replay test; not required by LÖVE.
+return player
