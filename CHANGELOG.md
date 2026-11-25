@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Refresh the dialogue showcase transcript with readable speaker-separated passages,
+  a scroll indicator, clickable bracket controls and [ / ] keyboard scrolling.
+
 - Add an F4 dialogue staging tour with opposite character portraits, speaker-specific
   bubbles, per-line position overrides, bilingual content and document-aware checkpoints.
 

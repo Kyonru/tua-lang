@@ -59,7 +59,8 @@ The typed host layout uses stable speaker/text IDs and survives language changes
 **Up/Down** and **Enter** select replies. **F** changes reveal speed, **M** reduces
 motion, **S** toggles subtitles and **V** mutes recorded voice. **L** switches
 language, **P** pauses, **R** resets, **Q/N** queue conversations/announcements,
-and **F5/F9** capture/restore an in-memory checkpoint. Page Up/Down scroll content.
+and **F5/F9** capture/restore an in-memory checkpoint. **[ / ]** scroll content (Page Up/Down remain aliases). The recent-conversation
+panel also has clickable Older/Newer buttons and a scroll-position indicator.
 
 The F4 staging tour always reserves modal priority. Elsewhere, cinematic, mythic
 and tactics modes give the conversation modal priority and suspend radio; the other

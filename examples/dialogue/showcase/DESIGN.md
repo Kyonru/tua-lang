@@ -96,3 +96,10 @@ Keep portrait slots and bubble anchors independent. Screen-anchored speech has n
 At compact sizes reduce typography and reserve the same header/footer boundaries;
 scroll long content rather than covering character portraits. The staging tour owns
 modal priority, regardless of frame style, so radio cannot obscure its upper bubble.
+
+## Conversation record
+
+The transcript is a dimmed reading overlay: Lora for its heading, Manrope at 18 px
+for remembered text, and brass speaker rails separating turns. Keep history plain
+text and its existing bounds. Bracket keycaps double as clickable Older/Newer
+controls, dimmed at the limits; a slim thumb shows the current reading position.

@@ -71,7 +71,7 @@ For example, the line override changes the bubble while retaining Mara's portrai
 
 Coordinates are normalized over the bubble's available travel inside the safe area:
 0 is the left/top edge, 1 the right/bottom edge. Geometry reserves room for portraits,
-controls and headings. Long content scrolls with Page Up/Down; choices scroll to focus.
+controls and headings. Long content scrolls with [ / ] (or Page Up/Down); choices scroll to focus.
 An `actor` anchor points toward a portrait slot in this example. A world-space game
 would project its actor position before passing geometry to the presenter.
 
@@ -86,6 +86,15 @@ python3 verify.py --tua ../../../target/release/tua \
   --love /Applications/love.app/Contents/MacOS/love \
   --scenario staging --output /tmp/beacon-staging --video
 ```
+
+## Recent conversation
+
+**Tab** opens the reading panel. Speaker labels, larger body text and a position
+indicator make the bounded history easier to scan. **[** scrolls toward older text;
+**]** scrolls toward newer text. The matching footer buttons are clickable and dim
+at the beginning/end. Page Up/Down remain keyboard aliases. Tab or Escape closes it.
+
+![Recent conversation with bracket scrolling controls](screenshots/transcript.png)
 
 ## Rich text tour
 
@@ -149,7 +158,7 @@ restoring a checkpoint also restores which story entry it belongs to.
 | O | Portrait left / right / above / hidden |
 | Space / Enter | Finish revealing, continue, or confirm a reply |
 | Up / Down | Focus a reply; disabled replies explain their requirement |
-| Page Up / Page Down | Scroll dialogue or the open transcript |
+| **[ / ]** | Scroll dialogue or the open transcript; Page Up / Page Down remain aliases |
 | H / Tab | Controls and diagnostics / bounded recent conversation |
 | F / M | Normal or 3× reveal speed / reduced motion and instant reveal |
 | S / V | Subtitles / recorded voice mute |
@@ -178,7 +187,7 @@ restoring a checkpoint also restores which story entry it belongs to.
 | Independent non-blocking messages | N in styles 2–4 or 7. Styles 1, 5 and 6 suspend radio until the modal conversation releases priority. |
 | Bounded queues | Q: two waiting conversations. N: four waiting messages. Overflow is counted in H. Active entries are additional. |
 | Checkpoint boundaries and restore | F5 saves line/choice/wait boundaries and gives feedback elsewhere. F9 creates a fresh player without replaying settled effects. |
-| Transcript | Tab shows the last eight entries within a 2 KiB string budget; Page Up/Down scrolls. Locale changes preserve the language originally recorded. |
+| Transcript | Tab shows the last eight entries within a 2 KiB string budget; [ / ] (or Page Up/Down) scrolls. Locale changes preserve the language originally recorded. |
 | Pause and resource ownership | P freezes reveal and audio. R resets; Escape disposes both players and all fonts/Sources. |
 
 This showcase focuses on presentation and conversation flow. The complete library also
