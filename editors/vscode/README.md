@@ -160,3 +160,10 @@ LÖVE, and debugging or Busted tests require their respective tools.
 - [Troubleshooting](https://kyonru.github.io/tua-lang/troubleshooting/) · [Report an issue](https://github.com/Kyonru/tua-lang/issues)
 
 The screenshots show actual editor views. [Screenshot capture and verification notes](docs/screenshots/README.md) are available for contributors.
+
+### Dialogue file icon
+
+`.tdialogue` files use the dedicated dialogue artwork, with light/dark variants.
+Choose **Preferences: File Icon Theme → tua Icons** to use the bundled mapping.
+Other file-icon themes can use the language default, but may override or hide it
+according to [VS Code’s file-icon rules](https://code.visualstudio.com/api/extension-guides/file-icon-theme#language-default-icons).

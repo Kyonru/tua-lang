@@ -2,12 +2,28 @@
   "iconDefinitions": {
     "_tua": {
       "iconPath": "../assets/logo.svg"
+    },
+    "_tdialogue": {
+      "iconPath": "../assets/dialogue.svg"
+    },
+    "_tdialogue_light": {
+      "iconPath": "../assets/dialogue-light.svg"
     }
   },
   "fileExtensions": {
-    "tua": "_tua"
+    "tua": "_tua",
+    "tdialogue": "_tdialogue"
   },
   "languageIds": {
-    "tua": "_tua"
+    "tua": "_tua",
+    "tdialogue": "_tdialogue"
+  },
+  "light": {
+    "fileExtensions": {
+      "tdialogue": "_tdialogue_light"
+    },
+    "languageIds": {
+      "tdialogue": "_tdialogue_light"
+    }
   }
 }

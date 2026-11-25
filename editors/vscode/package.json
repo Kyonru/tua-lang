@@ -2119,7 +2119,11 @@
         "extensions": [
           ".tdialogue"
         ],
-        "configuration": "./tdialogue-language-configuration.json"
+        "configuration": "./tdialogue-language-configuration.json",
+        "icon": {
+          "light": "./assets/dialogue-light.svg",
+          "dark": "./assets/dialogue.svg"
+        }
       }
     ],
     "grammars": [
