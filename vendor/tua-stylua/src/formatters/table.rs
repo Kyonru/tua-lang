@@ -101,36 +101,24 @@ fn handle_field_key_equals_comments<T: Node>(
     // Get the current leading and trailing trivia around the key
     let (key_leading_trivia, key_trailing_trivia) = key.surrounding_trivia();
 
-    // Take leading and trailing comments from the equal sign, and put it before the key
-    let equal_sign_comments =
-        trivia_util::comments(equal.leading_trivia().chain(equal.trailing_trivia()));
-
-    // Join the key trailing comments with the equal sign comments, as we will move them to before the key.
-    // Also adds in the necessary whitespace trivia
-    let key_leading_comments = trivia_util::comments(key_trailing_trivia.iter().copied())
-        .chain(equal_sign_comments)
-        .flat_map(|trivia| {
-            // Prepend an indent before the comment, and append a newline after the comments
-            vec![
-                create_indent_trivia(ctx, shape),
-                trivia,
-                create_newline_trivia(ctx),
-            ]
-        });
-
-    // Join the new leading comments with the existing leading comments, and collect into into a Vec
-    let key_leading_comments = key_leading_trivia
-        .iter()
-        .map(|x| x.to_owned().to_owned())
-        .chain(key_leading_comments)
-        .collect::<Vec<_>>();
-
-    // Create the new equals token
+    // Keep comments after the key. Moving them before it changes their order
+    // relative to string keys and can detach annotation-like comments.
+    let comments = trivia_util::comments(key_trailing_trivia.iter().copied()).chain(
+        trivia_util::comments(equal.leading_trivia().chain(equal.trailing_trivia())),
+    );
+    let mut equal_leading = vec![Token::new(TokenType::spaces(1))];
+    for comment in comments {
+        equal_leading.push(comment);
+        equal_leading.push(create_newline_trivia(ctx));
+        equal_leading.push(create_indent_trivia(
+            ctx,
+            shape.increment_additional_indent(),
+        ));
+    }
+    let key_leading_comments = key_leading_trivia.into_iter().cloned().collect();
     let equal = TokenReference::symbol("=")
         .unwrap()
-        .update_leading_trivia(FormatTriviaType::Replace(vec![Token::new(
-            TokenType::spaces(1),
-        )]))
+        .update_leading_trivia(FormatTriviaType::Replace(equal_leading))
         .update_trailing_trivia(FormatTriviaType::Replace(vec![Token::new(
             TokenType::spaces(1),
         )]));
@@ -181,7 +169,7 @@ fn format_field(
                 format_expression(ctx, key, shape + 1) // 1 = "["
             };
 
-            // Get the new leading comments to add before the key, and the equal token
+            // Keep leading key comments and move trailing comments onto the equals token.
             let (key_leading_comments, equal) =
                 handle_field_key_equals_comments(ctx, &brackets, equal, shape);
 
@@ -195,8 +183,11 @@ fn format_field(
             let (equal, value) = if value.has_leading_comments(CommentSearch::Single) {
                 hang_field_value_at_equals_due_to_comments(ctx, &equal, value, shape)
             } else {
-                let shape =
-                    shape.take_last_line(&key) + (2 + 3 + if space_brackets { 2 } else { 0 }); // 2 = brackets, 3 = " = ", 2 = spaces around brackets if necessary
+                let shape = if equal.leading_trivia().any(trivia_util::trivia_is_newline) {
+                    shape.increment_additional_indent().reset() + 2 // "= "
+                } else {
+                    shape.take_last_line(&key) + (2 + 3 + if space_brackets { 2 } else { 0 })
+                };
                 let value = format_field_expression_value(ctx, value, shape);
                 (equal, value)
             };
@@ -212,7 +203,7 @@ fn format_field(
             trailing_trivia = value.trailing_comments_search(CommentSearch::Single);
             let key = format_token_reference(ctx, key, shape);
 
-            // Get the new leading comments to add before the key, and the equal token
+            // Keep leading key comments and move trailing comments onto the equals token.
             let (key_leading_comments, equal) =
                 handle_field_key_equals_comments(ctx, &key, equal, shape);
 
@@ -226,7 +217,11 @@ fn format_field(
             let (equal, value) = if value.has_leading_comments(CommentSearch::Single) {
                 hang_field_value_at_equals_due_to_comments(ctx, &equal, value, shape)
             } else {
-                let shape = shape + (strip_trivia(&key).to_string().len() + 3); // 3 = " = "
+                let shape = if equal.leading_trivia().any(trivia_util::trivia_is_newline) {
+                    shape.increment_additional_indent().reset() + 2 // "= "
+                } else {
+                    shape + (strip_trivia(&key).to_string().len() + 3) // " = "
+                };
                 let value = format_field_expression_value(ctx, value, shape);
                 (equal, value)
             };

@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Keep table-key comments after their keys, allowing quoted keys to format
+  without weakening string/comment preservation checks.
+
 - Preserve comments after named table keys when formatting, including one-token
   nodes with both leading and trailing comments.
 

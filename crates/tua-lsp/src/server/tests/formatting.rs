@@ -272,3 +272,23 @@ fn on_type_formatting_preserves_statements_when_line_counts_match() {
     ));
     assert_eq!(response_with_id(server.output(), 2)["result"], json!([]));
 }
+
+#[test]
+fn formatting_keeps_comments_between_table_keys_and_values() {
+    let temp = TempProject::new("formatting-key-comments");
+    temp.write("tua.toml", "source = \"src\"\n");
+    for key in ["key", "[\"key\"]"] {
+        let source = format!("local t={{ {key} -- key note\n= \"value\" }}\n");
+        let uri = temp.uri_for("src/main.tua");
+        let mut server = TestServer::new();
+        server.send(initialize_with_root(1, temp.uri()));
+        server.send(did_open(&uri, &source));
+        server.send(formatting_request(2, &uri));
+        let edits = response_with_id(server.output(), 2)["result"]
+            .as_array()
+            .expect("valid commented keys should format");
+        let output = edits[0]["newText"].as_str().unwrap();
+        assert!(output.find(key).unwrap() < output.find("-- key note").unwrap());
+        assert!(output.find("-- key note").unwrap() < output.find("\"value\"").unwrap());
+    }
+}

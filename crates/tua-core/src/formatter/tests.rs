@@ -2058,3 +2058,27 @@ fn named_table_key_comments_survive_formatting() {
         corpus::same_program(&source, &output).unwrap();
     }
 }
+
+#[test]
+fn table_key_comments_keep_their_order_relative_to_strings() {
+    for key in ["key", "[\"key\"]", "[lookup(\"key\")]"] {
+        for comment in ["-- key note\n", "--[[ key note ]] ", "---@type string\n"] {
+            for field in [
+                format!("{key} {comment}= \"value\""),
+                format!("{key} = {comment}\"value\""),
+            ] {
+                let source = format!("local t={{ {field} }}\n");
+                let output =
+                    format_tua_source("input.tua", &source, &FormatOptions::default()).unwrap();
+                assert!(output.contains(comment.trim()));
+                assert!(output.find(key).unwrap() < output.find(comment.trim()).unwrap());
+                assert!(output.find(comment.trim()).unwrap() < output.find("\"value\"").unwrap());
+                assert_eq!(
+                    format_tua_source("input.tua", &output, &FormatOptions::default()).unwrap(),
+                    output
+                );
+                corpus::same_program(&source, &output).unwrap();
+            }
+        }
+    }
+}
