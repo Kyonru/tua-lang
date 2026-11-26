@@ -31,6 +31,36 @@ pub(super) fn normalize_tua_source_for_luau_parser(
     (parser_source, provenance, native_array_types, syntax_source)
 }
 
+/// Validate a protocol return annotation without lowering declarations (which
+/// would recursively parse protocols and could erase an unsupported body).
+pub(crate) fn valid_protocol_return_type(annotation: &str) -> bool {
+    let source = format!("local function __protocol_return(): {annotation}\nend");
+    // Optional record keys are Tua syntax. For validation their required form
+    // has the same grammar; erase only the marker, never statements or bodies.
+    let mut chars = source.chars().collect::<Vec<_>>();
+    let protected = protected_syntax_characters(&chars);
+    for index in 0..chars.len() {
+        if !protected[index] && is_optional_field_marker(&chars, index) {
+            chars[index] = ' ';
+        }
+    }
+    let source = chars.into_iter().collect::<String>();
+    let (source, _) = normalize_native_array_types(&source);
+    let Ok(ast) =
+        full_moon::parse_fallible(&source, full_moon::ast::LuaVersion::luau()).into_result()
+    else {
+        return false;
+    };
+    let mut statements = ast.nodes().stmts();
+    let Some(full_moon::ast::Stmt::LocalFunction(function)) = statements.next() else {
+        return false;
+    };
+    statements.next().is_none()
+        && ast.nodes().last_stmt().is_none()
+        && function.body().block().stmts().next().is_none()
+        && function.body().block().last_stmt().is_none()
+}
+
 /// Return whether source contains syntax that requires Tua's Luau-backed
 /// parser. This deliberately prefers false positives: ordinary code can always
 /// use the Tua parser, while plain generated data should reach Lua 5.1 without

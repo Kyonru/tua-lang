@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Reject method bodies and trailing executable code in protocol requirements
+  instead of silently erasing them as part of a return annotation. Implement
+  protocol methods in conforming classes.
+
 - Upgrade full_moon from 2.2 to 3.0 and adapt shared AST consumers to its boxed
   nodes, retaining Tua's existing syntax and Lua/LuaJIT output contract. Refresh
   compatible Rust dependencies in the main and fuzz workspaces, and update the

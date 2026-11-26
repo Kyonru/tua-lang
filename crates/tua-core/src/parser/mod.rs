@@ -35,6 +35,7 @@ pub use model::{
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance, ParserSourceFragment};
 use normalize::normalize_tua_source_for_luau_parser;
+pub(crate) use normalize::valid_protocol_return_type;
 
 pub fn parse_lua_source(
     path: impl AsRef<Path>,

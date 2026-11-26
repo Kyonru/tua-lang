@@ -300,7 +300,9 @@ conforming class into the original concrete array; create a fresh
 protocol-typed array literal instead.
 
 Protocol bodies currently describe methods only. They do not declare fields,
-default implementations, or protocol inheritance.
+default implementations, or protocol inheritance. A method body in a protocol
+is an error, even if it is empty; put the implementation in a class that
+implements the protocol.
 
 From a protocol-typed
 method call, completion, hover signatures, and signature help use the declared

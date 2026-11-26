@@ -545,6 +545,60 @@ fn protocol_declarations_preserve_method_contracts_and_erase_from_lua() {
 }
 
 #[test]
+fn protocol_method_bodies_are_rejected_before_emission() {
+    for member in [
+        "read(value: number): nil { print(value) }",
+        "read(): nil {}",
+        "read(): nil {\n    print(1)\n  }",
+        "read(): nil\n  { print(1) }",
+        "read(): { value: number } { return { value = 1 } }",
+        "read(): nil -- body follows\n  { print(1) }",
+        "read(): nil print(1)",
+    ] {
+        let source = format!("protocol Broken {{\n  {member}\n}}\n");
+        let diagnostics = parse_tua_source("src/protocol_body.tua", &source)
+            .expect_err("protocol implementations must not be silently erased");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic
+                    .message
+                    .contains("invalid protocol member in `Broken`")
+                    && diagnostic.message.contains("without a method body")
+            }),
+            "{member}: {diagnostics:#?}"
+        );
+        assert!(crate::emit_tua_source("src/protocol_body.tua", &source).is_err());
+    }
+}
+
+#[test]
+fn protocol_return_types_allow_structured_types_and_braces_in_strings() {
+    for annotation in [
+        "nil",
+        "Self",
+        "number[]",
+        "{ value: number }",
+        "{ [string]: number[] }",
+        "{ value?: number }",
+        "{ nested?: { value?: number[] } }",
+        "(number, string)",
+        "(value: number) -> string",
+        "{ value: number } | nil",
+        "\"{ body }\"",
+        "Box<{ value: number }>",
+    ] {
+        let source = format!("protocol Valid {{\n  read(): {annotation} -- {{ not a body }}\n}}\n");
+        let parsed = parse_tua_source("src/protocol_return.tua", &source)
+            .unwrap_or_else(|errors| panic!("{annotation}: {errors:#?}"));
+        assert_eq!(
+            parsed.protocol_declarations[0].methods[0].return_type,
+            annotation
+        );
+        assert!(crate::emit_tua_source("src/protocol_return.tua", &source).is_ok());
+    }
+}
+
+#[test]
 fn protocol_headers_allow_comments_between_declaration_tokens() {
     let source = "export -- public contract\nprotocol -- behavior name\nRenderable -- contract body\n{\n  render(): nil\n}\n";
     let parsed = parse_tua_source("src/commented_protocol.tua", source)
@@ -3124,4 +3178,41 @@ type Line = { speech?: Profile | "off", required: Profile | "off", nested: { gai
     );
     assert!(!fields[1].optional);
     assert!(!fields[2].optional);
+}
+
+#[test]
+fn class_multiline_fields_and_commented_parameters_preserve_contracts() {
+    let source = r#"class Factory {
+  create: (number) -> number = function(value: number): number
+    return value + 1
+  end
+  entries: { name: string, value: number }[] = {
+    { name = "a=b", value = 1 },
+  }
+  init(
+    -- value docs
+    value: number
+  ) {
+    print(value)
+  }
+}
+local factory = Factory.new(1)
+print(factory.create(2))
+"#;
+    let parsed = parse_tua_source("factory.tua", source).unwrap();
+    let class = &parsed.class_declarations[0];
+    assert_eq!(class.fields.len(), 2);
+    assert_eq!(class.fields[0].ty, "(number) -> number");
+    assert!(class.fields[0]
+        .default
+        .as_ref()
+        .unwrap()
+        .contains("return value + 1"));
+    assert!(class.fields[1].default.as_ref().unwrap().contains("a=b"));
+    assert_eq!(
+        class.init.as_ref().unwrap().parameters.trim(),
+        "value: number"
+    );
+    let emitted = crate::emit_tua_source("factory.tua", source).unwrap();
+    crate::parse_lua_source("factory.lua", emitted).unwrap();
 }

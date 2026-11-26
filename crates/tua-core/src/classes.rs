@@ -495,7 +495,7 @@ pub(crate) fn parse_protocol_declarations(
                         ),
                     );
                 }
-                Ok(None) => diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{}`; expected `method(parameters): ReturnType`", header.name))),
+                Ok(None) => diagnostics.push(class_diagnostic(path, positions.position(body_cursor), format!("invalid protocol member in `{}`; expected `method(parameters): ReturnType` without a method body", header.name))),
             }
             body_cursor = if line_end < body_end {
                 line_end + 1
@@ -611,7 +611,7 @@ fn parse_protocol_method_line(
         .trim_end_matches(',')
         .trim()
         .to_owned();
-    if return_type.is_empty() {
+    if return_type.is_empty() || !crate::parser::valid_protocol_return_type(&return_type) {
         return Ok(None);
     }
     Ok(Some(ProtocolMethodSignature {
@@ -733,9 +733,7 @@ fn protocol_method_line_end(source: &str, start: usize, body_end: usize) -> usiz
         return first_line_end;
     }
     annotation = skip_protocol_whitespace_and_comments(source, annotation + 1, body_end);
-    source[annotation..body_end]
-        .find('\n')
-        .map_or(body_end, |offset| annotation + offset)
+    class_field_end(&source[..body_end], annotation).0
 }
 
 fn skip_protocol_whitespace_and_comments(source: &str, mut index: usize, end: usize) -> usize {
@@ -2090,13 +2088,13 @@ fn parse_class_method(
     loop {
         if starts_keyword(body, cursor, "final") {
             is_final = true;
-            cursor = skip_whitespace(body, cursor + "final".len());
+            cursor = skip_body_ws_and_comments(body, cursor + "final".len());
             continue;
         }
 
         if starts_keyword(body, cursor, "override") {
             is_override = true;
-            cursor = skip_whitespace(body, cursor + "override".len());
+            cursor = skip_body_ws_and_comments(body, cursor + "override".len());
             continue;
         }
 
@@ -2104,7 +2102,7 @@ fn parse_class_method(
     }
 
     let (name, name_start, name_end) = take_identifier(body, cursor)?;
-    cursor = skip_whitespace(body, name_end);
+    cursor = skip_body_ws_and_comments(body, name_end);
 
     if !body[cursor..].starts_with('(') {
         return None;
@@ -2115,13 +2113,17 @@ fn parse_class_method(
         start: source_position_from_byte(source, body_offset + cursor + 1),
         end: source_position_from_byte(source, body_offset + params_close),
     };
-    let parameters = body[cursor + 1..params_close].trim().to_owned();
-    cursor = skip_whitespace(body, params_close + 1);
+    let parameters = strip_protocol_comments(&body[cursor + 1..params_close])
+        .trim()
+        .to_owned();
+    cursor = skip_body_ws_and_comments(body, params_close + 1);
 
     let return_type = if body[cursor..].starts_with(':') {
-        let return_start = skip_whitespace(body, cursor + 1);
+        let return_start = skip_body_ws_and_comments(body, cursor + 1);
         let brace = find_method_body_brace(body, return_start)?;
-        let ty = body[return_start..brace].trim().to_owned();
+        let ty = strip_protocol_comments(&body[return_start..brace])
+            .trim()
+            .to_owned();
         cursor = brace;
         (!ty.is_empty()).then_some(ty)
     } else {
@@ -2169,22 +2171,19 @@ fn parse_class_field(
     index: usize,
 ) -> Option<(ClassField, usize)> {
     let (name, name_start, name_end) = take_identifier(body, index)?;
-    let mut cursor = skip_whitespace(body, name_end);
+    let mut cursor = skip_body_ws_and_comments(body, name_end);
 
     if !body[cursor..].starts_with(':') {
         return None;
     }
 
-    cursor = skip_whitespace(body, cursor + 1);
-    let line_end = body[cursor..]
-        .find('\n')
-        .map(|offset| cursor + offset)
-        .unwrap_or(body.len());
-    let line = &body[cursor..line_end];
-    let (ty, default) = match line.split_once('=') {
-        Some((ty, default)) => (ty.trim().to_owned(), Some(default.trim().to_owned())),
-        None => (line.trim().to_owned(), None),
-    };
+    cursor = skip_body_ws_and_comments(body, cursor + 1);
+    let (line_end, equal) = class_field_end(body, cursor);
+    let type_end = equal.unwrap_or(line_end);
+    let ty = strip_protocol_comments(&body[cursor..type_end])
+        .trim()
+        .to_owned();
+    let default = equal.map(|equal| body[equal + 1..line_end].trim().to_owned());
 
     if ty.is_empty() {
         return None;
@@ -2207,6 +2206,63 @@ fn parse_class_field(
         },
         line_end,
     ))
+}
+
+/// A field ends at a top-level newline, not a newline inside a record,
+/// initializer, or function body. Strings/comments cannot introduce delimiters.
+fn class_field_end(body: &str, start: usize) -> (usize, Option<usize>) {
+    let mut cursor = start;
+    let mut groups = 0usize;
+    let mut blocks = Vec::new();
+    let mut equal = None;
+    let mut value_started = false;
+    while cursor < body.len() {
+        if body[cursor..].starts_with("--") {
+            cursor = consume_comment(body, cursor);
+            continue;
+        }
+        if let Some(end) = consume_string_literal(body, cursor) {
+            value_started |= equal.is_some();
+            cursor = end;
+            continue;
+        }
+        let byte = body.as_bytes()[cursor];
+        if byte == b'\n' && groups == 0 && blocks.is_empty() {
+            let next = skip_body_ws_and_comments(body, cursor);
+            let next_text = &body[next..];
+            let continues = next_text
+                .starts_with(['=', '|', '&', '.', '+', '-', '*', '/', '%', '^'])
+                || starts_keyword(body, next, "and")
+                || starts_keyword(body, next, "or");
+            if !continues && (equal.is_none() || value_started) {
+                return (cursor, equal);
+            }
+        }
+        if let Some((word, _, end)) = take_identifier(body, cursor) {
+            if equal.is_some() {
+                update_lua_block_stack(&word, &mut blocks);
+                value_started = true;
+            }
+            cursor = end;
+            continue;
+        }
+        match byte {
+            b'=' if groups == 0 && blocks.is_empty() && equal.is_none() => equal = Some(cursor),
+            b'<' if equal.is_none() => groups += 1,
+            b'>' if equal.is_none() && cursor > 0 && body.as_bytes()[cursor - 1] != b'-' => {
+                groups = groups.saturating_sub(1);
+            }
+            b'(' | b'[' | b'{' => {
+                groups += 1;
+                value_started |= equal.is_some();
+            }
+            b')' | b']' | b'}' => groups = groups.saturating_sub(1),
+            _ if !byte.is_ascii_whitespace() => value_started |= equal.is_some(),
+            _ => {}
+        }
+        cursor += next_char_len(body, cursor);
+    }
+    (cursor, equal)
 }
 
 fn lower_class_declaration(
