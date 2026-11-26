@@ -1,0 +1,19 @@
+---
+source: full-moon/tests/fail_cases.rs
+expression: result.errors()
+input_file: full-moon/tests/roblox_cases/fail/parser/const_count_mismatch_too_many
+---
+- AstError:
+    token:
+      start_position:
+        bytes: 0
+        line: 1
+        character: 1
+      end_position:
+        bytes: 5
+        line: 1
+        character: 6
+      token_type:
+        type: Identifier
+        identifier: const
+    additional: const declaration has 1 name but 2 values

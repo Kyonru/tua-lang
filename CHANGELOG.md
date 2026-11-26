@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Replace Tua source formatting with a shared StyLua-based formatter that retains
+  authored Tua syntax. Defaults use two spaces, width 100 and `auto-double` quotes;
+  existing `preserve`, `double` and `single` policies remain available. Avoid
+  repeated source-prefix scans when validating expanded multiline output.
+
 - Reject method bodies and trailing executable code in protocol requirements
   instead of silently erasing them as part of a return annotation. Implement
   protocol methods in conforming classes.

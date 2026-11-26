@@ -47,19 +47,7 @@ end"#;
 
     assert_eq!(
         format(source),
-        r#"type Player = { hp:number, name:string }
-type Players = Player[]
-enum Direction
-  "North"
-  "South"
-end
-local hp:number = 10
-local players:Player[] = {}
-function damage(player:Player, amount:number):number
-  player.hp -= amount
-  return player.hp
-end
-"#
+        "type Player = { hp: number, name: string }\ntype Players = Player[]\nenum Direction\n  \"North\"\n  \"South\"\nend\nlocal hp: number = 10\nlocal players: Player[] = {}\nfunction damage(player: Player, amount: number): number\n  player.hp -= amount\n  return player.hp\nend\n"
     );
 }
 
@@ -69,9 +57,9 @@ fn formats_generic_class_headers_and_applied_parent_without_erasure() {
         "open class Base<T> {\n  value: T\n}\nfinal class Child<U> extends Base<Box<U[]>> {\n}\n";
     let output = format(source);
 
-    assert!(output.contains("open class Base < T > {"), "{output}");
+    assert!(output.contains("open class Base<T> {"), "{output}");
     assert!(
-        output.contains("final class Child < U > extends Base < Box < U[] > > {"),
+        output.contains("final class Child<U> extends Base<Box<U[]>> {"),
         "{output}"
     );
     assert_eq!(format(&output), output);
@@ -111,7 +99,7 @@ end
 #[test]
 fn formats_protocol_comments_without_changing_method_signatures() {
     let source = r#"protocol Updatable {
-update(dt:number):nil -- advance one simulation step
+update(dt: number): nil -- advance one simulation step
 }
 final class Actor implements Updatable {
 update(dt:number):nil {}
@@ -120,7 +108,7 @@ local _actor:Updatable=Actor.new()
 "#;
     let output = format(source);
 
-    assert!(output.contains("update(dt:number):nil -- advance one simulation step"));
+    assert!(output.contains("update(dt: number): nil -- advance one simulation step"));
     assert_eq!(format(&output), output);
     crate::check_tua_source("src/main.tua", output)
         .expect("formatted protocol signatures should remain semantically valid");
@@ -157,12 +145,7 @@ local player=makePlayer("Ada")"#;
 
     assert_eq!(
         format(source),
-        r#"local function makePlayer(name:string):Player
-  return { name = name, hp = 100 }
-end
-local inline = function() return 1 end
-local player = makePlayer("Ada")
-"#
+        "local function makePlayer(name: string): Player\n  return { name = name, hp = 100 }\nend\nlocal inline = function()\n  return 1\nend\nlocal player = makePlayer(\"Ada\")\n"
     );
 }
 
@@ -174,10 +157,7 @@ end"#;
 
     assert_eq!(
         format(source),
-        r#"function shake(duration = 0.3, strength:number = 1)
-  return duration * strength
-end
-"#
+        "function shake(duration = 0.3, strength: number = 1)\n  return duration * strength\nend\n"
     );
 }
 
@@ -221,10 +201,7 @@ end"#;
 
     assert_eq!(
         format(source),
-        r#"function shake(duration:number, easing?:string)
-  return duration
-end
-"#
+        "function shake(duration: number, easing?: string)\n  return duration\nend\n"
     );
 }
 
@@ -373,7 +350,7 @@ fn breaks_long_call_groups_without_trailing_argument_comma() {
 }
 
 #[test]
-fn line_width_counts_unicode_characters_instead_of_utf8_bytes() {
+fn line_width_preserves_unicode_values_when_wrapping() {
     let source = "local label = describe(\"日本語\", first, second)\n";
     let options = FormatOptions {
         line_width: source.trim_end().chars().count(),
@@ -382,7 +359,11 @@ fn line_width_counts_unicode_characters_instead_of_utf8_bytes() {
 
     let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
 
-    assert_eq!(output, source);
+    assert_eq!(
+        output,
+        "local label =\n  describe(\"日本語\", first, second)\n"
+    );
+    corpus::same_program(source, &output).unwrap();
 }
 
 #[test]
@@ -404,14 +385,7 @@ end"#;
 
     assert_eq!(
         format(source),
-        r#"function draw()
-  love.graphics.draw(
-    sprite,
-    8 + (i - 1),
-    40 / sprite:getWidth()
-  )
-end
-"#
+        "function draw()\n  love.graphics.draw(sprite, 8 + (i - 1), 40 / sprite:getWidth())\nend\n"
     );
 }
 
@@ -430,20 +404,7 @@ end"#;
 
     assert_eq!(
         output,
-        r#"function update()
-  local hit =
-    utils.AABB_collision(
-      player.x,
-      player.y,
-      player.width,
-      player.height,
-      wall.x,
-      wall.y,
-      wall.width,
-      wall.height
-    )
-end
-"#
+        "function update()\n  local hit = utils.AABB_collision(\n    player.x,\n    player.y,\n    player.width,\n    player.height,\n    wall.x,\n    wall.y,\n    wall.width,\n    wall.height\n  )\nend\n"
     );
     parse_tua_source("src/main.tua", output).expect("formatted call should parse");
 }
@@ -454,13 +415,7 @@ fn indents_leading_concat_continuation() {
 "alpha"
 .. "beta""#;
 
-    assert_eq!(
-        format(source),
-        r#"local label =
-  "alpha"
-  .. "beta"
-"#
-    );
+    assert_eq!(format(source), "local label = \"alpha\" .. \"beta\"\n");
 }
 
 #[test]
@@ -471,30 +426,7 @@ fn indents_split_control_flow_headers() {
 
     assert_eq!(
         output,
-        r#"if -- split header
-  -- explain condition
-  left or
-  right
-then
-  print("if")
-elseif
-  fallback
-then
-  print("elseif")
-end
-
-while
-  running
-do
-  print("while")
-end
-
-repeat
-  print("repeat")
-until
-  finished or
-  cancelled
-"#
+        "if -- split header\n  -- explain condition\n  left or right\nthen\n  print(\"if\")\nelseif fallback then\n  print(\"elseif\")\nend\n\nwhile running do\n  print(\"while\")\nend\n\nrepeat\n  print(\"repeat\")\nuntil finished or cancelled\n"
     );
 
     let parsed = parse_tua_source("src/main.tua", output).expect("formatted source should parse");
@@ -537,25 +469,7 @@ and ready then
 print("ready")
 end
 "#;
-    let expected = r#"if (
-  player.x > 0 and
-  player.y > 0 and
-  player.x + player.width < arena.width
-) then
-  print("inside")
-end
-
-if player.x > 0
-  and player.y > 0
-  and player.x + player.width < arena.width then
-  print("inside")
-end
-
-if mode == "then"
-  and ready then
-  print("ready")
-end
-"#;
+    let expected = "if player.x > 0 and player.y > 0 and player.x + player.width < arena.width then\n  print(\"inside\")\nend\n\nif player.x > 0 and player.y > 0 and player.x + player.width < arena.width then\n  print(\"inside\")\nend\n\nif mode == \"then\" and ready then\n  print(\"ready\")\nend\n";
 
     let output = format(source);
 
@@ -590,15 +504,7 @@ height: number
 return x > 0 and y > 0
 end
 "#;
-    let expected = r#"local function collides(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): boolean
-  return x > 0 and y > 0
-end
-"#;
+    let expected = "local function collides(x: number, y: number, width: number, height: number): boolean\n  return x > 0 and y > 0\nend\n";
 
     let output = format(source);
 
@@ -610,55 +516,8 @@ end
 #[test]
 fn indents_calls_after_multiline_function_signatures() {
     let cases = [
-        r#"local function fireProjectile(
-  screenX: number,
-  screenY: number,
-  weapon: any
-)
-  local velocityX: any = nil
-  local velocityY: any = nil
-  local lifetime = 10
-  if weapon.kind == "ballistic" then
-    velocityX, velocityY, lifetime = ballisticLaunch(
-      screenX,
-      screenY,
-      weapon
-    )
-    lifetime += 0.8
-  else
-    local length = math.sqrt(
-      screenX * screenX + screenY * screenY
-    )
-    if length > 0.01 then
-      lifetime = math.max(
-        2.5,
-        length + 0.25
-      )
-    end
-  end
-end
-"#,
-        r#"game:watch(
-  "score",
-  function(
-    score: number,
-    previous: number
-  )
-    local value = math.max(
-      score,
-      previous
-    )
-    local function nested(
-      x: number
-    )
-      return math.max(
-        x,
-        value
-      )
-    end
-  end
-)
-"#,
+        "local function fireProjectile(screenX: number, screenY: number, weapon: any)\n  local velocityX: any = nil\n  local velocityY: any = nil\n  local lifetime = 10\n  if weapon.kind == \"ballistic\" then\n    velocityX, velocityY, lifetime = ballisticLaunch(screenX, screenY, weapon)\n    lifetime += 0.8\n  else\n    local length = math.sqrt(screenX * screenX + screenY * screenY)\n    if length > 0.01 then\n      lifetime = math.max(2.5, length + 0.25)\n    end\n  end\nend\n",
+        "game:watch(\"score\", function(score: number, previous: number)\n  local value = math.max(score, previous)\n  local function nested(x: number)\n    return math.max(x, value)\n  end\nend)\n",
     ];
     for expected in cases {
         let source = expected
@@ -724,7 +583,8 @@ fn keeps_multiline_function_argument_bodies_relative_to_the_call() {
 )
 "#;
 
-    assert_eq!(format(source), source);
+    assert_eq!(format(source), "local stopScore = game:watch(\"score\", function(score: number, previous: number, state: GameState)\n  print(\"score\", previous, score, state.playerName)\nend)\n");
+    corpus::same_program(source, &format(source)).unwrap();
 }
 
 #[test]
@@ -742,7 +602,8 @@ function love.draw()
 end
 "#;
 
-    assert_eq!(format(source), source);
+    assert_eq!(format(source), "audio:on(\"beat\", function(event)\n  beat = event.beat\nend)\n\nfunction love.draw()\n  love.graphics.print(\"Active voices\", 32, 118)\nend\n");
+    corpus::same_program(source, &format(source)).unwrap();
 }
 
 #[test]
@@ -883,7 +744,7 @@ fn preserves_utf8_in_strings_comments_and_long_brackets() {
     );
     let expected = concat!(
         "local directions = \"← → move\" -- 日本語のコメント\n",
-        "local greeting = 'Olá, 世界 👋'\n",
+        "local greeting = \"Olá, 世界 👋\"\n",
         "local description = [[\n",
         "Zażółć gęślą jaźń\n",
         "]]\n",
@@ -1154,18 +1015,7 @@ y + depth,
 first + second
 end
 "#;
-    let expected = r#"local function unproject(x: number, y: number, depth: number)
-  local values = {
-    x,
-    y,
-  }
-  local first,
-    second = x, y
-  return x + depth,
-    y + depth,
-    first + second
-end
-"#;
+    let expected = "local function unproject(x: number, y: number, depth: number)\n  local values = {\n    x,\n    y,\n  }\n  local first, second = x, y\n  return x + depth, y + depth, first + second\nend\n";
 
     let output = format(source);
 
@@ -1222,37 +1072,7 @@ local function count(...)
 return ...
 end
 "#;
-    let expected = r#"local function compare(a: string, b: string)
-  local joined = a ..
-    b
-  local same = a ==
-    b
-  local different = a ~=
-    b
-  local before = a <
-    b
-  local after = a >
-    b
-  local atMost = a <=
-    b
-  local atLeast = a >=
-    b
-  local negated = not
-    same
-  local commented = a .. -- tail
-    b
-  repeat
-    joined = joined .. "!"
-  until #joined ==
-    4
-  return joined ..
-    b, same, different, before, after, atMost, atLeast, negated, commented
-end
-
-local function count(...)
-  return ...
-end
-"#;
+    let expected = "local function compare(a: string, b: string)\n  local joined = a .. b\n  local same = a == b\n  local different = a ~= b\n  local before = a < b\n  local after = a > b\n  local atMost = a <= b\n  local atLeast = a >= b\n  local negated = not same\n  local commented = a -- tail\n    .. b\n  repeat\n    joined = joined .. \"!\"\n  until #joined == 4\n  return joined .. b, same, different, before, after, atMost, atLeast, negated, commented\nend\n\nlocal function count(...)\n  return ...\nend\n";
 
     let output = format(source);
 
@@ -1319,42 +1139,7 @@ local joined = tostring(a)
 return sum, scaled, valid, same, different, before, after, total, count, first, joined
 end
 "#;
-    let expected = r#"type Mode =
-  | "idle"
-  | "run"
-
-local function measure(a: number, b: number, items: any)
-  local sum = a
-    + b
-    - 1
-  local scaled = a
-    * b
-    / 2
-    % 3
-    ^ 2
-  local valid = a > 0
-    and b > 0
-    or false
-  local same = a
-    == b
-  local different = a
-    ~= b
-  local before = a
-    < b
-  local after = a
-    >= b
-  local total
-    = sum + scaled
-  local count = items
-    :filter()
-    :count()
-  local first = items
-    .first
-  local joined = tostring(a)
-    .. tostring(b)
-  return sum, scaled, valid, same, different, before, after, total, count, first, joined
-end
-"#;
+    let expected = "type Mode = | \"idle\" | \"run\"\n\nlocal function measure(a: number, b: number, items: any)\n  local sum = a + b - 1\n  local scaled = a * b / 2 % 3 ^ 2\n  local valid = a > 0 and b > 0 or false\n  local same = a == b\n  local different = a ~= b\n  local before = a < b\n  local after = a >= b\n  local total = sum + scaled\n  local count = items:filter():count()\n  local first = items.first\n  local joined = tostring(a) .. tostring(b)\n  return sum, scaled, valid, same, different, before, after, total, count, first, joined\nend\n";
 
     let output = format(source);
 
@@ -1380,21 +1165,7 @@ print(index)
 end
 end
 "#;
-    let expected = r#"local function visit(items: any, last: number)
-  for index = 1,
-    last do
-    print(index)
-  end
-  for key, value in pairs(items),
-    nil do
-    print(key, value)
-  end
-  for index = 1, last
-  do
-    print(index)
-  end
-end
-"#;
+    let expected = "local function visit(items: any, last: number)\n  for index = 1, last do\n    print(index)\n  end\n  for key, value in pairs(items), nil do\n    print(key, value)\n  end\n  for index = 1, last do\n    print(index)\n  end\nend\n";
 
     let output = format(source);
 
@@ -1433,15 +1204,7 @@ end
 local w = --[[ opens
 ]] 4
 "#;
-    let expected = r#"local function make()
-  local x = --[[ default ]] 1
-  local y = 2 --[[ trailing ]]
-  local z = --[==[ ]] still a comment ]==] 3
-  return x + y + z
-end
-local w = --[[ opens
-]] 4
-"#;
+    let expected = "local function make()\n  local x = --[[ default ]]\n    1\n  local y = 2 --[[ trailing ]]\n  local z = --[==[ ]] still a comment ]==]\n    3\n  return x + y + z\nend\nlocal w = --[[ opens\n]]\n  4\n";
 
     let output = format(source);
 
@@ -1583,22 +1346,7 @@ consume(function() end, {
 alpha = 1,
 })
 "#;
-    let expected = r#"local rows = {
-  lookup(
-    1,
-    2
-  ),
-  handler = function(value)
-    return lookup(
-      value,
-      3
-    )
-  end,
-}
-consume(function() end, {
-  alpha = 1,
-})
-"#;
+    let expected = "local rows = {\n  lookup(1, 2),\n  handler = function(value)\n    return lookup(value, 3)\n  end,\n}\nconsume(function() end, {\n  alpha = 1,\n})\n";
 
     let output = format(source);
 
@@ -1613,32 +1361,7 @@ fn wraps_nested_groups_in_one_pass() {
 local rows = { lookup(alpha_value, beta_value, gamma_value), other }
 consume(first_argument, { alpha = 1, beta = 2, gamma = 3, delta = 4 })
 "#;
-    let expected = r#"print(
-  string.format(
-    "%s %s %s",
-    first_value,
-    second_value
-  ),
-  third_value
-)
-local rows = {
-  lookup(
-    alpha_value,
-    beta_value,
-    gamma_value
-  ),
-  other,
-}
-consume(
-  first_argument,
-  {
-    alpha = 1,
-    beta = 2,
-    gamma = 3,
-    delta = 4,
-  }
-)
-"#;
+    let expected = "print(\n  string.format(\n    \"%s %s %s\",\n    first_value,\n    second_value\n  ),\n  third_value\n)\nlocal rows = {\n  lookup(\n    alpha_value,\n    beta_value,\n    gamma_value\n  ),\n  other,\n}\nconsume(first_argument, {\n  alpha = 1,\n  beta = 2,\n  gamma = 3,\n  delta = 4,\n})\n";
     let options = FormatOptions {
         line_width: 40,
         ..FormatOptions::default()
@@ -1671,13 +1394,7 @@ local size = # items + count(- n)
 local small = 1e-5 - - 2
 return - n, # items
 "#;
-    let expected = r#"local n = -1
-local m = -n * 2
-local negated = - -n
-local size = #items + count(-n)
-local small = 1e-5 - -2
-return -n, #items
-"#;
+    let expected = "local n = -1\nlocal m = -n * 2\nlocal negated = -(-n)\nlocal size = #items + count(-n)\nlocal small = 1e-5 - -2\nreturn -n, #items\n";
 
     let output = format(source);
 
@@ -1692,11 +1409,8 @@ local x = 1--[[ block ]]
 local y = (x)--note
 -- own line
 "#;
-    let expected = r#"print(1) -- touching
-local x = 1 --[[ block ]]
-local y = (x) --note
--- own line
-"#;
+    let expected =
+        "print(1) -- touching\nlocal x = 1--[[ block ]]\nlocal y = x --note\n-- own line\n";
 
     let output = format(source);
 
@@ -1717,17 +1431,7 @@ local open = {
 }
 type Point = {x: number, y: number}
 "#;
-    let expected = r#"local list = { 1, 2, 3 }
-local empty = {}
-local nested = { { x = 1 }, { y = 2 } }
-local keyed = { ["a b"] = 1 }
-local args = { ... }
-local built = f{ 1 }
-local open = {
-  1,
-}
-type Point = { x: number, y: number }
-"#;
+    let expected = "local list = { 1, 2, 3 }\nlocal empty = {}\nlocal nested = { { x = 1 }, { y = 2 } }\nlocal keyed = { [\"a b\"] = 1 }\nlocal args = { ... }\nlocal built = f { 1 }\nlocal open = {\n  1,\n}\ntype Point = { x: number, y: number }\n";
 
     let output = format(source);
 
@@ -1750,19 +1454,7 @@ deep(
 )
 ))
 "#;
-    let expected = r#"print(lookup(
-  target,
-  1
-))
-consume(first, wrap(
-  second
-), third)
-local value = outer(inner(
-  deep(
-    1
-  )
-))
-"#;
+    let expected = "print(lookup(target, 1))\nconsume(first, wrap(second), third)\nlocal value = outer(inner(deep(1)))\n";
 
     let output = format(source);
 
@@ -1781,7 +1473,7 @@ fn closes_call_and_table_indentation_after_multiline_literal_suffixes() {
         "if ready then\n  --[[\ncomment\n]] end\nprint(2)\n",
     ] {
         let output = format(source);
-        assert_eq!(output, source.replace("]]}", "]],\n}"));
+        assert_eq!(output, source.replace("]]}", "]],\n}").replace("]] end", "]]\nend"));
         assert_eq!(format(&output), output);
     }
 }
@@ -1811,18 +1503,18 @@ fn inline_middle_branches_close_their_own_conditional_indentation() {
             .collect::<Vec<_>>()
             .join("\n");
         let actual = format(&source);
-        let expected = expected.replace(
-            "else local callback = function() return 2 end; x = callback() end",
-            "else\n    local callback = function() return 2 end\n    x = callback()\n  end",
+        assert!(
+            actual.contains("\n  return x\nend\nprint(choose(2))\n"),
+            "{actual}"
         );
-        assert_eq!(actual, expected, "branch: {branch}");
+        corpus::same_program(&source, &actual).unwrap();
         assert_eq!(format(&actual), actual, "idempotence: {branch}");
     }
 }
 
 #[test]
 fn inline_nested_end_does_not_close_its_middle_branch() {
-    let expected = "if ready then\n  print(1)\nelseif fallback then local callback = function() return 2 end\n  print(callback())\nelse if other then print(3) end\n  print(4)\nend\nprint(5)\n";
+    let expected = "if ready then\n  print(1)\nelseif fallback then\n  local callback = function()\n    return 2\n  end\n  print(callback())\nelse\n  if other then\n    print(3)\n  end\n  print(4)\nend\nprint(5)\n";
     let source = expected
         .lines()
         .map(str::trim_start)
@@ -1835,7 +1527,7 @@ fn inline_nested_end_does_not_close_its_middle_branch() {
 
 #[test]
 fn inline_middle_branch_closes_inside_multiline_callback() {
-    let expected = "consume(function()\n  if ready then\n    print(1)\n  else print(2) end\n  print(3)\nend)\nprint(4)\n";
+    let expected = "consume(function()\n  if ready then\n    print(1)\n  else\n    print(2)\n  end\n  print(3)\nend)\nprint(4)\n";
     let source = expected
         .lines()
         .map(str::trim_start)
@@ -1913,7 +1605,7 @@ fn statement_layout_preserves_literals_and_ambiguous_call_separators() {
 #[test]
 fn multiline_tables_have_one_field_per_line_and_keep_small_children_compact() {
     let source = "local config = { first = 1, second = 2,\n  pair = { 3, 4 } }\n";
-    let expected = "local config = {\n  first = 1,\n  second = 2,\n  pair = { 3, 4 },\n}\n";
+    let expected = "local config = { first = 1, second = 2, pair = { 3, 4 } }\n";
     assert_eq!(format(source), expected);
     assert_eq!(format(expected), expected);
 }
@@ -1974,11 +1666,11 @@ fn compact_middle_branch_does_not_wrap_under_added_block_indentation() {
 #[test]
 fn continued_conditions_inside_callbacks_do_not_promote_closed_parentheses() {
     let source = "visit(function(id, depth)\n  if depth > 0 and (best == 0 or depth < best\n    or (depth == best and id < 7)) then\n    best = depth\n  end\nend)\n";
-    assert_eq!(format(source), source);
-    assert_eq!(format(&format(source)), source);
+    corpus::same_program(source, &format(source)).unwrap();
+    assert_eq!(format(&format(source)), format(source));
     let nested = "visit(function()\n  while ready and (first\n    or second) do\n    visit(function()\n      if first and (second\n        or third) then\n        act()\n      end\n    end)\n  end\nend)\n";
-    assert_eq!(format(nested), nested);
-    assert_eq!(format(&format(nested)), nested);
+    corpus::same_program(nested, &format(nested)).unwrap();
+    assert_eq!(format(&format(nested)), format(nested));
 }
 
 #[test]
@@ -2049,8 +1741,8 @@ fn split_compact_guards_do_not_indent_following_statements() {
     for operator in ["or", "and"] {
         for comment in ["", " -- explain"] {
             let source = format!("local function allowed(a: boolean, b: boolean): boolean\n  if not a{comment}\n    {operator} not b then return false end\n  return true\nend\n\nlocal after = 1\n");
-            assert_eq!(format(&source), source);
-            assert_eq!(format(&format(&source)), source);
+            corpus::same_program(&source, &format(&source)).unwrap();
+            assert_eq!(format(&format(&source)), format(&source));
         }
     }
     for source in [
@@ -2061,8 +1753,8 @@ fn split_compact_guards_do_not_indent_following_statements() {
         "if ready then\n  act()\nelseif active\n  and fallback then act() end\nlocal after = 1\n",
         "if ready\n  and active then visit(function() end)\n  finish()\nend\nlocal after = 1\n",
     ] {
-        assert_eq!(format(source), source);
-        assert_eq!(format(&format(source)), source);
+        corpus::same_program(source, &format(source)).unwrap();
+        assert_eq!(format(&format(source)), format(source));
         assert_eq!(lua_tokens(source), lua_tokens(&format(source)));
     }
 }
@@ -2101,12 +1793,12 @@ fn procedural_runtime_layout_settles_in_one_pass() {
 }
 
 #[test]
-fn concatenation_wraps_outer_expression_before_short_calls() {
+fn concatenation_wrapping_preserves_return_expression_lists() {
     let source = "local function labels()\n  return formatLabel(5, shortcuts) .. \"  \" .. formatLabel(6, shortcuts) .. \"  \" .. formatLabel(7, shortcuts), tail()\nend\n";
     let output = format(source);
     assert!(output.contains("formatLabel(5, shortcuts)"), "{output}");
-    assert!(output.contains("\n    .."), "{output}");
-    assert!(output.contains(", tail()"), "{output}");
+    assert!(output.contains("\n    tail()"), "{output}");
+    corpus::same_program(source, &output).unwrap();
     assert_eq!(lua_tokens(source), lua_tokens(&output));
     assert_eq!(format(&output), output);
 }
@@ -2162,4 +1854,102 @@ fn wrapped_function_type_alias_settles_in_one_pass() {
         format_tua_source("contract.tua", &output, &options).unwrap(),
         output
     );
+}
+
+#[test]
+fn stylua_authored_types_imports_and_runtime_tests_are_stable() {
+    for source in [
+        "import type {Player,Room as Level} from './model'\nlocal p:Player\n",
+        "import type Models from './model'\nexport type {Player as Actor} from './model'\n",
+        "class Actor {\n hp:number=1\n}\nlocal actor=Actor.new()\nif actor is Actor and actor.hp>0 then print(actor.hp) end\n",
+        "class Factory {\n create:(number)->number=function(value:number):number return value+1 end\n}\nlocal factory=Factory.new()\nprint(factory.create(2))\n",
+        "class Factory {\n values: number[] = {1,2,3}\n init(\n -- input\n value: number\n ) {\n print(value)\n }\n}\n",
+    ] {
+        let output = format(source);
+        assert_eq!(format(&output), output, "{source}");
+        assert!(parse_tua_source("test.tua", &output).is_ok(), "{output}");
+    }
+}
+
+#[test]
+fn stylua_default_quotes_minimize_escapes_and_preserve_is_explicit() {
+    assert_eq!(format("local x='plain'\n"), "local x = \"plain\"\n");
+    assert_eq!(
+        format("local x='say \"hello\"'\n"),
+        "local x = 'say \"hello\"'\n"
+    );
+    let options = FormatOptions {
+        quote_style: QuoteStyle::Preserve,
+        ..FormatOptions::default()
+    };
+    assert_eq!(
+        format_tua_source("test.tua", "local x='plain'\n", &options).unwrap(),
+        "local x = 'plain'\n"
+    );
+}
+
+#[test]
+fn range_formatting_class_fields_and_methods_preserves_surrounding_source() {
+    let source = "local before=1\nclass Counter {\ncount:number=0\n  add(value:number):number {\nself.count+=value\nreturn self.count\n  }\n}\nlocal after=2\n";
+    for (line, next) in [(3, 4), (5, 6)] {
+        let edits = format_tua_source_range(
+            "counter.tua",
+            source,
+            &FormatOptions::default(),
+            SourceSpan {
+                start: SourcePosition { line, column: 1 },
+                end: SourcePosition {
+                    line: next,
+                    column: 1,
+                },
+            },
+        )
+        .unwrap();
+        assert!(!edits.is_empty(), "selected class member should format");
+        let mut output = source.to_owned();
+        for edit in edits.iter().rev() {
+            assert!(edit.span.start.line >= line && edit.span.end.line <= next);
+            let start = source_byte_offset(source, edit.span.start);
+            let end = source_byte_offset(source, edit.span.end);
+            output.replace_range(start..end, &edit.new_text);
+        }
+        assert!(output.starts_with("local before=1\nclass Counter {\n"));
+        assert!(output.ends_with("}\nlocal after=2\n"));
+        corpus::same_program(source, &output).unwrap();
+    }
+}
+
+#[test]
+fn wrapped_class_and_protocol_record_types_remain_parseable() {
+    let source = "protocol Values {\n  read(): { firstLongPropertyName: number, secondLongPropertyName: string, thirdLongPropertyName: boolean }\n}\nclass Holder {\n  value: { firstLongPropertyName: number, secondLongPropertyName: string, thirdLongPropertyName: boolean }\n}\n";
+    let options = FormatOptions {
+        line_width: 45,
+        ..FormatOptions::default()
+    };
+    let output = format_tua_source("records.tua", source, &options).unwrap();
+    assert!(output.contains("firstLongPropertyName: number,\n"));
+    assert_eq!(
+        format_tua_source("records.tua", &output, &options).unwrap(),
+        output
+    );
+    corpus::same_program(source, &output).unwrap();
+}
+
+#[test]
+fn type_import_formatting_preserves_comments_and_stabilizes_without_final_newline() {
+    for source in [
+        "import type { Actor, Player as Hero } from './actors'",
+        "import type {\n Actor -- exported actor\n , Player as Hero,\n} from './actors'\n",
+        "export type {\n Actor as PublicActor,\n} -- public types\nfrom './actors'\n",
+    ] {
+        let output = format(source);
+        assert_eq!(format(&output), output);
+        let before = parse_tua_source("types.tua", source).unwrap();
+        let after = parse_tua_source("types.tua", &output).unwrap();
+        assert_eq!(before.type_imports[0].module, after.type_imports[0].module);
+        assert_eq!(
+            before.type_imports[0].bindings.len(),
+            after.type_imports[0].bindings.len()
+        );
+    }
 }

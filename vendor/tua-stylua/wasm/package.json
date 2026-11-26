@@ -1,0 +1,60 @@
+{
+  "name": "@johnnymorganz/stylua",
+  "collaborators": [
+    "JohnnyMorganz <johnnymorganz@outlook.com>"
+  ],
+  "description": "A code formatter for Lua",
+  "version": "2.6.0",
+  "license": "MPL-2.0",
+  "readme": "README.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JohnnyMorganz/StyLua.git"
+  },
+  "scripts": {
+    "test": "node --test tests/smoke.test.mjs tests/smoke.test.cjs"
+  },
+  "files": [
+    "stylua_lib_*",
+    "stylua_lib.*",
+    "*.md"
+  ],
+  "type": "module",
+  "main": "stylua_lib_node.cjs",
+  "module": "stylua_lib.js",
+  "types": "stylua_lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./stylua_lib.d.ts",
+      "webpack": "./stylua_lib.js",
+      "node": {
+        "module-sync": "./stylua_lib_node.mjs",
+        "require": "./stylua_lib_node.cjs",
+        "default": "./stylua_lib_node.mjs"
+      },
+      "deno": "./stylua_lib_deno.js",
+      "bun": "./stylua_lib_node.mjs",
+      "default": "./stylua_lib.js"
+    },
+    "./web": {
+      "types": "./stylua_lib_web.d.ts",
+      "default": "./stylua_lib_web.js"
+    },
+    "./stylua_lib_bg.wasm": "./stylua_lib_bg.wasm",
+    "./package.json": "./package.json",
+    "./*": "./*"
+  },
+  "sideEffects": [
+    "./stylua_lib.js",
+    "./stylua_lib_node.mjs",
+    "./stylua_lib_node.cjs",
+    "./stylua_lib_deno.js"
+  ],
+  "keywords": [
+    "cli",
+    "utility",
+    "lua",
+    "lua51",
+    "formatter"
+  ]
+}

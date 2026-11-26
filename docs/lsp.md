@@ -466,7 +466,7 @@ Project defaults come from `tua.toml`:
 [format]
 indent_width = 2
 line_width = 100
-quote_style = "preserve"
+quote_style = "auto-double"
 final_newline = true
 ```
 

@@ -35,10 +35,13 @@ def write_checksum(path: Path) -> Path:
 
 
 def release_entries(repo_root: Path, binary: Path, target: str) -> list[tuple[str, bytes, int]]:
+    from formatter_sources import formatter_source_entries
+
     executable = "tua.exe" if target in WINDOWS_TARGETS else "tua"
     entries = [(executable, binary.read_bytes(), 0o755)]
     for name in ("README.md", "LICENSE", "CHANGELOG.md"):
         entries.append((name, (repo_root / name).read_bytes(), 0o644))
+    entries.extend(formatter_source_entries(repo_root))
     return entries
 
 

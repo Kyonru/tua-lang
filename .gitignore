@@ -86,3 +86,6 @@ tmbootpicker.efi
 
 # Independently runnable dialogue scenarios are nested one level deeper.
 /examples/dialogue/*/build/
+
+# Generated formatter source notices bundled with the extension.
+/editors/vscode/third-party/

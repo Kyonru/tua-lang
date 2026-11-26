@@ -52,7 +52,7 @@ catalogs = []
 indent_style = \"spaces\"
 indent_width = 2
 line_width = 100
-quote_style = \"preserve\"
+quote_style = \"auto-double\"
 line_ending = \"lf\"
 final_newline = true
 
@@ -304,7 +304,7 @@ impl Default for FormatConfig {
             indent_style: IndentStyle::Spaces,
             indent_width: 2,
             line_width: 100,
-            quote_style: QuoteStyle::Preserve,
+            quote_style: QuoteStyle::AutoDouble,
             line_ending: LineEnding::Lf,
             final_newline: true,
         }

@@ -5,7 +5,7 @@
 
 use full_moon::{
     ast::LuaVersion,
-    tokenizer::{Lexer, LexerResult, StringLiteralQuoteType, TokenType},
+    tokenizer::{StringLiteralQuoteType, TokenType},
 };
 
 use super::*;
@@ -51,6 +51,20 @@ impl Case {
 
 #[test]
 fn formatter_corpus_holds_every_guarantee() {
+    if let Ok(path) = std::env::var("TUA_FORMATTER_LAYOUT_REVIEW") {
+        let outputs = cases()
+            .iter()
+            .map(|case| {
+                (
+                    case.name,
+                    format_tua_source("src/main.tua", case.source, &case.options)
+                        .map_err(|errors| format!("{errors:?}")),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        std::fs::write(path, serde_json::to_string_pretty(&outputs).unwrap()).unwrap();
+    }
+
     // Compiling and linting each case needs the CLI/LSP analysis stack.
     let failures = std::thread::Builder::new()
         .stack_size(8 * 1024 * 1024)
@@ -121,90 +135,86 @@ fn check(case: &Case) -> Vec<String> {
         .collect()
 }
 
-fn same_program(source: &str, output: &str) -> Result<(), String> {
-    let before = program_tokens(source).map_err(|error| format!("source: {error}"))?;
-    let after = program_tokens(output).map_err(|error| format!("output: {error}"))?;
-
-    if before == after {
-        return Ok(());
-    }
-    let index = before
-        .iter()
-        .zip(&after)
-        .position(|(before, after)| before != after)
-        .unwrap_or(before.len().min(after.len()));
-    Err(format!(
-        "formatting changed the compiled program at token {index}: {:?} became {:?}",
-        before.get(index),
-        after.get(index)
-    ))
-}
-
-/// Compiles the source and returns the Lua tokens that carry meaning. String
-/// literals compare by content, since quote styles may change delimiters,
-/// and a separator before `}` is dropped, since wrapping adds one.
-fn program_tokens(source: &str) -> Result<Vec<String>, String> {
-    let lua = emit_tua_source("src/main.tua", source)
-        .map_err(|diagnostics| format!("does not compile: {diagnostics:?}"))?;
-    let tokens = match Lexer::new(&lua, LuaVersion::lua51()).collect() {
-        LexerResult::Ok(tokens) => tokens,
-        LexerResult::Recovered(_, errors) | LexerResult::Fatal(errors) => {
-            return Err(format!("emitted Lua does not tokenize: {errors:?}"));
-        }
+pub(super) fn same_program(source: &str, output: &str) -> Result<(), String> {
+    use full_moon::{
+        ast::{
+            self,
+            punctuated::{Pair, Punctuated},
+        },
+        node::Node,
+        tokenizer::{Token, TokenReference},
+        visitors::VisitorMut,
     };
-    let mut texts = Vec::<String>::new();
-
-    let mut meaningful = tokens
-        .iter()
-        .filter(|token| !token.token_type().is_trivia())
-        .peekable();
-    while let Some(token) = meaningful.next() {
-        // Statement separators are optional except before a parenthesized call.
-        if token.to_string() == ";" && meaningful.peek().is_none_or(|next| next.to_string() != "(")
-        {
-            continue;
+    struct Normalize;
+    impl VisitorMut for Normalize {
+        fn visit_expression_end(&mut self, expression: ast::Expression) -> ast::Expression {
+            match expression {
+                ast::Expression::Parentheses { ref expression, .. }
+                    if !matches!(expression.as_ref(), ast::Expression::FunctionCall(_))
+                        && !matches!(expression.as_ref(), ast::Expression::Symbol(token) if token.token().to_string() == "...") =>
+                {
+                    *expression.clone()
+                }
+                _ => expression,
+            }
         }
-        let text = match token.token_type() {
-            TokenType::Eof => continue,
-            TokenType::StringLiteral {
-                literal,
+        fn visit_block(&mut self, block: ast::Block) -> ast::Block {
+            let statements = block.stmts().cloned().map(|stmt| (stmt, None)).collect();
+            let last = block.last_stmt().cloned().map(|stmt| (stmt, None));
+            block.with_stmts(statements).with_last_stmt(last)
+        }
+        fn visit_table_constructor(
+            &mut self,
+            table: ast::TableConstructor,
+        ) -> ast::TableConstructor {
+            let mut fields = Punctuated::new();
+            for field in table.fields().iter() {
+                fields.push(Pair::Punctuated(
+                    field.clone(),
+                    TokenReference::symbol(",").unwrap(),
+                ));
+            }
+            table.with_fields(fields)
+        }
+        fn visit_number(&mut self, token: Token) -> Token {
+            match token.token_type() {
+                TokenType::Number { text } if text.starts_with('.') => {
+                    Token::new(TokenType::Number {
+                        text: format!("0{text}").into(),
+                    })
+                }
+                _ => token,
+            }
+        }
+        fn visit_string_literal(&mut self, token: Token) -> Token {
+            let reference = TokenReference::new(Vec::new(), token.clone(), Vec::new());
+            let Some(bytes) = crate::ast_utils::string_literal_runtime_bytes(&reference) else {
+                return token;
+            };
+            Token::new(TokenType::StringLiteral {
+                literal: bytes
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+                    .into(),
+                multi_line_depth: 0,
                 quote_type: StringLiteralQuoteType::Brackets,
-                ..
-            } => format!("[[{}]]", literal.replace("\r\n", "\n")),
-            TokenType::StringLiteral { literal, .. } => {
-                format!("\"{}\"", unescape_quotes(literal))
-            }
-            _ => token.to_string(),
-        };
-        if text == "}" && texts.last().is_some_and(|last| last == "," || last == ";") {
-            texts.pop();
-        }
-        texts.push(text);
-    }
-
-    Ok(texts)
-}
-
-fn unescape_quotes(literal: &str) -> String {
-    let mut output = String::with_capacity(literal.len());
-    let mut characters = literal.chars();
-
-    while let Some(character) = characters.next() {
-        if character != '\\' {
-            output.push(character);
-            continue;
-        }
-        match characters.next() {
-            Some(quote @ ('"' | '\'')) => output.push(quote),
-            Some(escaped) => {
-                output.push('\\');
-                output.push(escaped);
-            }
-            None => output.push('\\'),
+            })
         }
     }
-
-    output
+    let ast = |source: &str| {
+        let lua =
+            emit_tua_source("src/main.tua", source).map_err(|errors| format!("{errors:?}"))?;
+        let ast = full_moon::parse_fallible(&lua, LuaVersion::lua51().with_luajit())
+            .into_result()
+            .map_err(|errors| format!("{errors:?}"))?;
+        Ok::<_, String>(Normalize.visit_ast(ast))
+    };
+    if ast(source)?.similar(&ast(output)?) {
+        Ok(())
+    } else {
+        Err("formatting changed the emitted Lua AST".to_owned())
+    }
 }
 
 fn layout_lints(output: &str) -> Vec<Diagnostic> {
@@ -239,33 +249,86 @@ fn layout_lints(output: &str) -> Vec<Diagnostic> {
 fn cases() -> Vec<Case> {
     vec![
         Case::new("crowded_statements", "local a=1; local b=2\nif ready then a=3; b=4; return a+b end\n")
-            .formats_to("local a = 1\nlocal b = 2\nif ready then\n  a = 3\n  b = 4\n  return a + b\nend\n"),
+        .formats_to(r##"local a = 1
+local b = 2
+if ready then
+  a = 3
+  b = 4
+  return a + b
+end
+"##),
         Case::new("readable_multiline_table", "local config = { first = 1, second = 2,\n  pair = { 3, 4 } }\n")
-            .formats_to("local config = {\n  first = 1,\n  second = 2,\n  pair = { 3, 4 },\n}\n"),
+        .formats_to(r##"local config = { first = 1, second = 2, pair = { 3, 4 } }
+"##),
         Case::new("required_statement_separator", "call(); (factory())()\n")
-            .formats_to("call();\n(factory())()\n"),
+        .formats_to(r##"call();
+(factory())()
+"##),
         Case::new("logical_group_parentheses", "if inside and(not closest or target.depth < closest.depth) then\n  closest = target\nend\n")
-            .formats_to("if inside and (not closest or target.depth < closest.depth) then\n  closest = target\nend\n"),
+        .formats_to(r##"if inside and (not closest or target.depth < closest.depth) then
+  closest = target
+end
+"##),
         Case::new("nested_logical_group_parentheses", "local result = a and(not(b) or(c))\nreturn result\n")
-            .formats_to("local result = a and (not (b) or (c))\nreturn result\n"),
+        .formats_to(r##"local result = a and (not b or c)
+return result
+"##),
         Case::new("keyword_suffix_call_parentheses", "return candy (a), floor (b), is_not (c)\n")
-            .formats_to("return candy(a), floor(b), is_not(c)\n"),
+        .formats_to(r##"return candy(a), floor(b), is_not(c)
+"##),
         Case::new("comment_blocks_outer_table_wrap", "return {f(a, b), f --[[ note ]] (a, b)}\n")
-            .formats_to("return { f(a, b), f --[[ note ]] (a, b)}\n")
+        .formats_to(r##"return {
+  f(a, b),
+  f --[[ note ]](
+    a,
+    b
+  ),
+}
+"##)
             .with(|options| options.line_width = 15),
         Case::new("nested_comment_blocks_outer_table_wrap", "local x = {f(a, b), {a, --[[ note ]] b}} -- comment\n")
-            .formats_to("local x = { f(a, b), { a, --[[ note ]] b}} -- comment\n")
+        .formats_to(r##"local x = {
+  f(a, b),
+  {
+    a, --[[ note ]]
+    b,
+  },
+} -- comment
+"##)
             .with(|options| options.line_width = 25),
-        Case::new("binary_minus_before_inline_table", "return a\n  - f({ b, c })\n"),
+        Case::new("binary_minus_before_inline_table", "return a\n  - f({ b, c })\n")
+        .formats_to(r##"return a - f({ b, c })
+"##),
         Case::new("wrap_negative_table_value", "return {a, - n}\n")
-            .formats_to("return {\n  a,\n  -n,\n}\n")
+        .formats_to(r##"return {
+  a,
+  -n,
+}
+"##)
             .with(|options| options.line_width = 15),
         Case::new("wrap_first_negative_table_value", "return {- n, a}\n")
-            .formats_to("return {\n  -n,\n  a,\n}\n")
+        .formats_to(r##"return {
+  -n,
+  a,
+}
+"##)
             .with(|options| options.line_width = 15),
-        Case::new("table_unary_and_binary_minus", "return {\n  -a,\n\n  -- Negative value after a comment.\n  -b;\n  a\n    - b,\n  value =\n    -c,\n}\n"),
+        Case::new("table_unary_and_binary_minus", "return {\n  -a,\n\n  -- Negative value after a comment.\n  -b;\n  a\n    - b,\n  value =\n    -c,\n}\n")
+        .formats_to(r##"return {
+  -a,
+
+  -- Negative value after a comment.
+  -b,
+  a - b,
+  value = -c,
+}
+"##),
         Case::new("nested_negative_table_value", "return outer({a, -b}, {c, -d})\n")
-            .formats_to("return outer(\n  { a, -b },\n  { c, -d }\n)\n")
+        .formats_to(r##"return outer({
+  a,
+  -b,
+}, { c, -d })
+"##)
             .with(|options| options.line_width = 20),
         Case::new(
             "spacing_assign",
@@ -273,18 +336,18 @@ fn cases() -> Vec<Case> {
 print(x)
 "#,
         )
-        .formats_to(r#"local x = 1
+        .formats_to(r##"local x = 1
 print(x)
-"#),
+"##),
         Case::new(
             "spacing_arith",
             r#"local y=1+2*3-4/5%6^2
 print(y)
 "#,
         )
-        .formats_to(r#"local y = 1 + 2 * 3 - 4 / 5 % 6 ^ 2
+        .formats_to(r##"local y = 1 + 2 * 3 - 4 / 5 % 6 ^ 2
 print(y)
-"#),
+"##),
         Case::new(
             "spacing_compare",
             r#"local a=1
@@ -292,35 +355,35 @@ local b=a==1 and a~=2 or a<=3 or a>=4 or a<5 or a>6
 print(b)
 "#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 local b = a == 1 and a ~= 2 or a <= 3 or a >= 4 or a < 5 or a > 6
 print(b)
-"#),
+"##),
         Case::new(
             "spacing_concat",
             r#"local s="a".."b"
 print(s)
 "#,
         )
-        .formats_to(r#"local s = "a" .. "b"
+        .formats_to(r##"local s = "a" .. "b"
 print(s)
-"#),
+"##),
         Case::new(
             "spacing_concat_numbers",
             r#"local s=1 ..2
 print(s)
 "#,
         )
-        .formats_to(r#"local s = 1 .. 2
+        .formats_to(r##"local s = 1 .. 2
 print(s)
-"#),
+"##),
         Case::new(
             "spacing_comma",
             r#"print(1,2,3)
 "#,
         )
-        .formats_to(r#"print(1, 2, 3)
-"#),
+        .formats_to(r##"print(1, 2, 3)
+"##),
         Case::new(
             "spacing_varargs",
             r##"local function v(...)
@@ -340,9 +403,9 @@ print(v())
 print(t)
 "#,
         )
-        .formats_to(r#"local t = { 1, 2, x = 3 }
+        .formats_to(r##"local t = { 1, 2, x = 3 }
 print(t)
-"#),
+"##),
         Case::new(
             "spacing_compound",
             r#"local x = 1
@@ -353,13 +416,13 @@ x/=2
 print(x)
 "#,
         )
-        .formats_to(r#"local x = 1
+        .formats_to(r##"local x = 1
 x += 1
 x -= 1
 x *= 2
 x /= 2
 print(x)
-"#),
+"##),
         Case::new(
             "spacing_sci_notation",
             r#"local e = 1e-5
@@ -367,7 +430,12 @@ local f = 2E+3
 local g = 1.5e10
 print(e, f, g)
 "#,
-        ),
+        )
+        .formats_to(r##"local e = 1e-5
+local f = 2E+3
+local g = 1.5e10
+print(e, f, g)
+"##),
         Case::new(
             "spacing_numbers",
             r#"local h = 0xFF
@@ -375,32 +443,43 @@ local d = .5
 local t = 5.
 print(h, d, t)
 "#,
-        ),
+        )
+        .formats_to(r##"local h = 0xFF
+local d = 0.5
+local t = 5.
+print(h, d, t)
+"##),
         Case::new(
             "spacing_field_method",
             r#"local t = { a = { b = {} } }
 function t.a.b:c() return 1 end
 print(t.a.b:c())
 "#,
-        ),
+        )
+        .formats_to(r##"local t = { a = { b = {} } }
+function t.a.b:c()
+  return 1
+end
+print(t.a.b:c())
+"##),
         Case::new(
             "spacing_index_spaces",
             r#"local t = {}
 print(t[ 1 ], t [2])
 "#,
         )
-        .formats_to(r#"local t = {}
+        .formats_to(r##"local t = {}
 print(t[1], t[2])
-"#),
+"##),
         Case::new(
             "spacing_call_paren_spaces",
             r#"print( 1 )
 print (2)
 "#,
         )
-        .formats_to(r#"print(1)
+        .formats_to(r##"print(1)
 print(2)
-"#),
+"##),
         Case::new(
             "unary_minus_compact",
             r#"local n = 1
@@ -408,19 +487,21 @@ local m = - n
 print(m)
 "#,
         )
-        .formats_to(
-            r#"local n = 1
+        .formats_to(r##"local n = 1
 local m = -n
 print(m)
-"#,
-        ),
+"##),
         Case::new(
             "unary_minus_minus",
             r#"local a = 1
 local b = a - -1
 print(b)
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+local b = a - -1
+print(b)
+"##),
         Case::new(
             "unary_minus_minus_messy",
             r#"local a = 1
@@ -428,56 +509,68 @@ local b = a- -1
 print(b)
 "#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 local b = a - -1
 print(b)
-"#),
+"##),
         Case::new(
             "unary_double_negation",
             r#"local c = - -1
 print(c)
 "#,
-        ),
+        )
+        .formats_to(r##"local c = -(-1)
+print(c)
+"##),
         Case::new(
             "unary_double_negation_paren",
             r#"local c = -(-1)
 print(c)
 "#,
-        ),
+        )
+        .formats_to(r##"local c = -(-1)
+print(c)
+"##),
         Case::new(
             "unary_not_len",
             r#"local s = "abc"
 print(not true, #s, - #s)
 "#,
         )
-        .formats_to(
-            r#"local s = "abc"
+        .formats_to(r##"local s = "abc"
 print(not true, #s, -#s)
-"#,
-        ),
+"##),
         Case::new(
             "unary_minus_after_paren",
             r#"local a = 2
 print((a)-1, a*-1, a^-1)
 "#,
         )
-        .formats_to(r#"local a = 2
-print((a) - 1, a * -1, a ^ -1)
-"#),
+        .formats_to(r##"local a = 2
+print(a - 1, a * -1, a ^ -1)
+"##),
         Case::new(
             "string_operator_chars",
             r#"local s = "a=b+c,d..e"
 local t = 'x==y'
 print(s, t)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "a=b+c,d..e"
+local t = "x==y"
+print(s, t)
+"##),
         Case::new(
             "string_escapes",
             r#"local s = "tab\tq\"\\n"
 local t = 'it\'s'
 print(s, t)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = 'tab\tq"\\n'
+local t = "it's"
+print(s, t)
+"##),
         Case::new(
             "string_keywords",
             r#"local function f()
@@ -487,27 +580,45 @@ print(s, t)
 end
 f()
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  print("if x then")
+  print("function end")
+  print("while do repeat until")
+end
+f()
+"##),
         Case::new(
             "string_comment_marker",
             r#"local s = "-- not a comment"
 local t = "a" -- real
 print(s, t)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "-- not a comment"
+local t = "a" -- real
+print(s, t)
+"##),
         Case::new(
             "string_brackets",
             r#"local s = "({[ unbalanced"
 local t = "]})"
 print(s, t)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "({[ unbalanced"
+local t = "]})"
+print(s, t)
+"##),
         Case::new(
             "string_unicode",
             r#"local s = "héllo — ü 漢字"
 print(s)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "héllo — ü 漢字"
+print(s)
+"##),
         Case::new(
             "string_escaped_newline",
             r#"local s = "a\
@@ -515,6 +626,10 @@ print(s)
 print(s)
 "#,
         )
+        .formats_to(r##"local s = "a\
+  b"
+print(s)
+"##)
         .keep_indentation(),
         Case::new(
             "string_call_syntax",
@@ -522,25 +637,33 @@ print(s)
 print"hi"
 print(m)
 "#,
-        ),
+        )
+        .formats_to(r##"local m = require "string"
+print "hi"
+print(m)
+"##),
         Case::new(
             "string_table_call_syntax",
             r#"local function f(t) return t end
 print(f{1, 2})
 "#,
         )
-        .formats_to(
-            r#"local function f(t) return t end
-print(f{ 1, 2 })
-"#,
-        ),
+        .formats_to(r##"local function f(t)
+  return t
+end
+print(f { 1, 2 })
+"##),
         Case::new(
             "comment_operator_chars",
             r#"-- a=b+c,d
 local x = 1 -- x=1,2
 print(x)
 "#,
-        ),
+        )
+        .formats_to(r##"-- a=b+c,d
+local x = 1 -- x=1,2
+print(x)
+"##),
         Case::new(
             "comment_keywords",
             r#"local function f()
@@ -549,7 +672,13 @@ print(x)
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  -- if this then do that end
+  return 1 -- function
+end
+print(f())
+"##),
         Case::new(
             "comment_block_comment",
             r#"--[[ a=b
@@ -559,20 +688,34 @@ local x = 1
 print(x)
 "#,
         )
+        .formats_to(r##"--[[ a=b
+  c+d
+    if then ]]
+local x = 1
+print(x)
+"##)
         .keep_indentation(),
         Case::new(
             "comment_block_comment_inline",
             r#"local x = --[[ c=1 ]] 1
 print(x)
 "#,
-        ),
+        )
+        .formats_to(r##"local x = --[[ c=1 ]]
+  1
+print(x)
+"##),
         Case::new(
             "comment_block_level",
             r#"--[==[ ]] still comment ]==]
 local x = 1
 print(x)
 "#,
-        ),
+        )
+        .formats_to(r##"--[==[ ]] still comment ]==]
+local x = 1
+print(x)
+"##),
         Case::new(
             "comment_indented_in_block",
             r#"local function f()
@@ -585,6 +728,15 @@ end
 print(f())
 "#,
         )
+        .formats_to(r##"local function f()
+  -- explains
+  local y = 1
+  --[[ block
+  ]]
+  return y
+end
+print(f())
+"##)
         .keep_indentation(),
         Case::new(
             "comment_before_end",
@@ -595,7 +747,14 @@ print(f())
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  local y = 1
+  return y
+  -- trailing note
+end
+print(f())
+"##),
         Case::new(
             "comment_in_table",
             r#"local t = {
@@ -605,7 +764,14 @@ print(f())
 }
 print(t)
 "#,
-        ),
+        )
+        .formats_to(r##"local t = {
+  -- first
+  a = 1, -- one
+  -- last
+}
+print(t)
+"##),
         Case::new(
             "comment_between_if_then",
             r#"local a = 1
@@ -614,18 +780,29 @@ then
   print(a)
 end
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+if
+  a == 1 -- check
+then
+  print(a)
+end
+"##),
         Case::new(
             "long_string_contents",
             "local s = [[\n a=b\n    c  \n]]\nprint(s)\n",
         )
+        .formats_to("local s = [[\n a=b\n    c  \n]]\nprint(s)\n")
         .keep_indentation(),
         Case::new(
             "long_string_level",
             r#"local s = [==[ ]] a=b ]==]
 print(s)
 "#,
-        ),
+        )
+        .formats_to(r##"local s = [==[ ]] a=b ]==]
+print(s)
+"##),
         Case::new(
             "long_string_keywords_inside_function",
             r#"local function f()
@@ -638,11 +815,25 @@ end
 print(f())
 "#,
         )
+        .formats_to(r##"local function f()
+  return [[
+function x()
+  if y then
+end
+]]
+end
+print(f())
+"##)
         .keep_indentation(),
         Case::new(
             "shader_long_string_followed_by_code",
             "local s = love.graphics.newShader([[\nvec4 effect() { return vec4(1); }\n]])\nprint(s)\n",
-        ).keep_indentation(),
+        )
+        .formats_to(r##"local s = love.graphics.newShader([[
+vec4 effect() { return vec4(1); }
+]])
+print(s)
+"##).keep_indentation(),
         Case::new(
             "long_string_in_call",
             r#"print([[
@@ -650,6 +841,13 @@ line one
   line two]], 1)
 "#,
         )
+        .formats_to(r##"print(
+  [[
+line one
+  line two]],
+  1
+)
+"##)
         .keep_indentation(),
         Case::new(
             "quote_double",
@@ -659,11 +857,11 @@ local u = 'it\'s'
 print(s, t, u)
 "#,
         )
-        .formats_to(r#"local s = "plain"
+        .formats_to(r##"local s = "plain"
 local t = "say \"hi\""
 local u = "it's"
 print(s, t, u)
-"#)
+"##)
         .with(|options| options.quote_style = QuoteStyle::Double),
         Case::new(
             "quote_single",
@@ -673,11 +871,11 @@ local u = "say \"hi\""
 print(s, t, u)
 "#,
         )
-        .formats_to(r#"local s = 'plain'
+        .formats_to(r##"local s = 'plain'
 local t = 'it\'s'
 local u = 'say "hi"'
 print(s, t, u)
-"#)
+"##)
         .with(|options| options.quote_style = QuoteStyle::Single),
         Case::new(
             "quote_double_escapes",
@@ -685,9 +883,9 @@ print(s, t, u)
 print(s)
 "#,
         )
-        .formats_to(r#"local s = "a\\b\n'"
+        .formats_to(r##"local s = "a\\b\n'"
 print(s)
-"#)
+"##)
         .with(|options| options.quote_style = QuoteStyle::Double),
         Case::new(
             "quote_preserve_long",
@@ -695,6 +893,9 @@ print(s)
 print(s)
 "#,
         )
+        .formats_to(r##"local s = [[it's "x"]]
+print(s)
+"##)
         .with(|options| options.quote_style = QuoteStyle::Double),
         Case::new(
             "blank_lines_collapse",
@@ -706,11 +907,11 @@ local b = 2
 print(a, b)
 "#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 
 local b = 2
 print(a, b)
-"#),
+"##),
         Case::new(
             "blank_lines_leading",
             r#"
@@ -719,9 +920,9 @@ local a = 1
 print(a)
 "#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 print(a)
-"#),
+"##),
         Case::new(
             "blank_lines_trailing",
             r#"local a = 1
@@ -730,9 +931,9 @@ print(a)
 
 "#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 print(a)
-"#),
+"##),
         Case::new(
             "blank_lines_after_block_open",
             r#"local function f()
@@ -742,42 +943,51 @@ print(a)
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  return 1
+end
+print(f())
+"##),
         Case::new(
             "whitespace_trailing",
             "local a = 1   \nprint(a)\t\n",
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 print(a)
-"#),
+"##),
         Case::new(
             "whitespace_final_newline",
             r#"local a = 1
 print(a)"#,
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 print(a)
-"#),
+"##),
         Case::new(
             "whitespace_no_final_newline_opt",
             r#"local a = 1
 print(a)
 "#,
         )
-        .formats_to(r#"local a = 1
-print(a)"#)
+        .formats_to(r##"local a = 1
+print(a)"##)
         .with(|options| options.final_newline = false),
         Case::new(
             "whitespace_semicolons",
             "local a = 1;\nlocal b = 2; print(a, b)\n",
-        ).formats_to("local a = 1;\nlocal b = 2\nprint(a, b)\n"),
+        )
+        .formats_to(r##"local a = 1
+local b = 2
+print(a, b)
+"##),
         Case::new(
             "line_ending_crlf_to_lf",
             "local a = 1\r\nprint(a)\r\n",
         )
-        .formats_to(r#"local a = 1
+        .formats_to(r##"local a = 1
 print(a)
-"#),
+"##),
         Case::new(
             "line_ending_crlf_opt",
             r#"local a = 1
@@ -790,20 +1000,22 @@ print(a)
             "line_ending_preserve_crlf",
             "local a = 1\r\nprint(a)\r\n",
         )
+        .formats_to("local a = 1\r\nprint(a)\r\n")
         .with(|options| options.line_ending = LineEnding::Preserve),
         Case::new(
             "line_ending_crlf_long_string",
             "local s = [[a\r\nb]]\r\nprint(s)\r\n",
         )
-        .formats_to(r#"local s = [[a
+        .formats_to(r##"local s = [[a
 b]]
 print(s)
-"#)
+"##)
         .keep_indentation(),
         Case::new(
             "indent_tabs",
             "local function f()\n\tif true then\n\t\treturn 1\n\tend\nend\nprint(f())\n",
         )
+        .formats_to("local function f()\n\tif true then\n\t\treturn 1\n\tend\nend\nprint(f())\n")
         .with(|options| options.indent_style = IndentStyle::Tabs),
         Case::new(
             "indent_width4",
@@ -815,6 +1027,13 @@ end
 print(f())
 "#,
         )
+        .formats_to(r##"local function f()
+    if true then
+        return 1
+    end
+end
+print(f())
+"##)
         .with(|options| options.indent_width = 4),
         Case::new(
             "wrap_long_call",
@@ -822,24 +1041,25 @@ print(f())
 print(alpha_value_one, beta_value_two, gamma_value_three)
 "#,
         )
-        .formats_to(r#"local alpha_value_one, beta_value_two, gamma_value_three = 1, 2, 3
+        .formats_to(r##"local alpha_value_one, beta_value_two, gamma_value_three =
+  1, 2, 3
 print(
   alpha_value_one,
   beta_value_two,
   gamma_value_three
 )
-"#)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "wrap_string_with_commas",
             r#"print("a, b, c, d, e, f, g, h, i, j, k, l", 1)
 "#,
         )
-        .formats_to(r#"print(
+        .formats_to(r##"print(
   "a, b, c, d, e, f, g, h, i, j, k, l",
   1
 )
-"#)
+"##)
         .with(|options| options.line_width = 30),
         Case::new(
             "wrap_long_table",
@@ -847,14 +1067,14 @@ print(
 print(t)
 "#,
         )
-        .formats_to(r#"local t = {
+        .formats_to(r##"local t = {
   alpha = 1,
   beta = 2,
   gamma = 3,
   delta = 4,
 }
 print(t)
-"#)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "wrap_nested_call",
@@ -862,7 +1082,8 @@ print(t)
 print(string.format("%s %s %s", first_value, second_value), third_value)
 "#,
         )
-        .formats_to(r#"local first_value, second_value, third_value = 1, 2, 3
+        .formats_to(r##"local first_value, second_value, third_value =
+  1, 2, 3
 print(
   string.format(
     "%s %s %s",
@@ -871,7 +1092,7 @@ print(
   ),
   third_value
 )
-"#)
+"##)
         .with(|options| options.line_width = 50),
         Case::new(
             "wrap_trailing_comment",
@@ -879,13 +1100,14 @@ print(
 print(alpha_value_one, beta_value_two, gamma_value_three) -- note
 "#,
         )
-        .formats_to(r#"local alpha_value_one, beta_value_two, gamma_value_three = 1, 2, 3
+        .formats_to(r##"local alpha_value_one, beta_value_two, gamma_value_three =
+  1, 2, 3
 print(
   alpha_value_one,
   beta_value_two,
   gamma_value_three
 ) -- note
-"#)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "wrap_callback_arg",
@@ -893,17 +1115,22 @@ print(
 each({ 1, 2, 3 }, function(value) print(value, value, value) end)
 "#,
         )
-        .formats_to(r#"local function each(t, f) end
+        .formats_to(r##"local function each(t, f) end
 each({ 1, 2, 3 }, function(value)
   print(value, value, value)
 end)
-"#)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "wrap_unicode_width",
             r#"print("ééééééééééééé", "üüüüüüüü")
 "#,
         )
+        .formats_to(r##"print(
+  "ééééééééééééé",
+  "üüüüüüüü"
+)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "function_table_nested_table",
@@ -917,14 +1144,28 @@ end)
 }
 print(t)
 "#,
-        ),
+        )
+        .formats_to(r##"local t = {
+  a = {
+    b = { 1, 2 },
+  },
+  c = function()
+    return 1
+  end,
+}
+print(t)
+"##),
         Case::new(
             "function_table_table_in_call",
             r#"print({
   a = 1,
 }, 2)
 "#,
-        ),
+        )
+        .formats_to(r##"print({
+  a = 1,
+}, 2)
+"##),
         Case::new(
             "function_table_callbacks",
             r#"local function on(name, f) f() end
@@ -934,7 +1175,16 @@ on("a", function()
   end)
 end)
 "#,
-        ),
+        )
+        .formats_to(r##"local function on(name, f)
+  f()
+end
+on("a", function()
+  on("b", function()
+    print("x")
+  end)
+end)
+"##),
         Case::new(
             "function_table_return_function",
             r#"local function make()
@@ -944,19 +1194,36 @@ end)
 end
 print(make()())
 "#,
-        ),
+        )
+        .formats_to(r##"local function make()
+  return function()
+    return 1
+  end
+end
+print(make()())
+"##),
         Case::new(
             "function_table_one_line_function",
             r#"local function f() return 1 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  return 1
+end
+print(f())
+"##),
         Case::new(
             "function_table_one_line_if",
             r#"local a = 1
 if a then print(a) end
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+if a then
+  print(a)
+end
+"##),
         Case::new(
             "function_table_method_def",
             r#"local M = {}
@@ -965,20 +1232,32 @@ function M:greet(name)
 end
 print(M:greet("x"))
 "#,
-        ),
+        )
+        .formats_to(r##"local M = {}
+function M:greet(name)
+  return self, name
+end
+print(M:greet("x"))
+"##),
         Case::new(
             "function_table_empty_function",
             r#"local function f()
 end
 f()
 "#,
-        ),
+        )
+        .formats_to(r##"local function f() end
+f()
+"##),
         Case::new(
             "function_table_paren_expr",
             r#"local a, b = nil, { x = 1 }
 print((a or b).x)
 "#,
-        ),
+        )
+        .formats_to(r##"local a, b = nil, { x = 1 }
+print((a or b).x)
+"##),
         Case::new(
             "control_flow_if_chain",
             r#"local a = 1
@@ -990,7 +1269,16 @@ else
   print(3)
 end
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+if a == 1 then
+  print(1)
+elseif a == 2 then
+  print(2)
+else
+  print(3)
+end
+"##),
         Case::new(
             "control_flow_loops",
             r#"for i = 1, 3 do
@@ -1011,7 +1299,25 @@ do
   print(scoped)
 end
 "#,
-        ),
+        )
+        .formats_to(r##"for i = 1, 3 do
+  print(i)
+end
+for k, v in pairs({}) do
+  print(k, v)
+end
+local n = 0
+while n < 2 do
+  n = n + 1
+end
+repeat
+  n = n - 1
+until n == 0
+do
+  local scoped = 1
+  print(scoped)
+end
+"##),
         Case::new(
             "control_flow_nested_deep",
             r#"local function f(a)
@@ -1027,7 +1333,20 @@ end
 end
 f(true)
 "#,
-        ),
+        )
+        .formats_to(r##"local function f(a)
+  if a then
+    for i = 1, 2 do
+      while a do
+        repeat
+          a = false
+        until true
+      end
+    end
+  end
+end
+f(true)
+"##),
         Case::new(
             "control_flow_break_return",
             r#"for i = 1, 3 do
@@ -1042,7 +1361,19 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"for i = 1, 3 do
+  if i == 2 then
+    break
+  end
+end
+local function f()
+  do
+    return 1
+  end
+end
+print(f())
+"##),
         Case::new(
             "tua_annotations",
             r#"local score: number = 0
@@ -1050,16 +1381,21 @@ local title: string = "Arena"
 local values: (number | string)[] = {}
 print(score, title, values)
 "#,
-        ),
+        )
+        .formats_to(r##"local score: number = 0
+local title: string = "Arena"
+local values: (number | string)[] = {}
+print(score, title, values)
+"##),
         Case::new(
             "tua_annotation_messy",
             r#"local score:number=0
 print(score)
 "#,
         )
-        .formats_to(r#"local score:number = 0
+        .formats_to(r##"local score: number = 0
 print(score)
-"#),
+"##),
         Case::new(
             "tua_type_table",
             r#"type Player = {
@@ -1069,7 +1405,14 @@ print(score)
 local p: Player = { name = "a", hp = 1 }
 print(p)
 "#,
-        ),
+        )
+        .formats_to(r##"type Player = {
+  name: string,
+  hp: number,
+}
+local p: Player = { name = "a", hp = 1 }
+print(p)
+"##),
         Case::new(
             "tua_function_type",
             r#"type Predicate = (value: number) -> boolean
@@ -1078,7 +1421,13 @@ local check: Predicate = function(value: number): boolean
 end
 print(check(1))
 "#,
-        ),
+        )
+        .formats_to(r##"type Predicate = (value: number) -> boolean
+local check: Predicate = function(value: number): boolean
+  return value > 0
+end
+print(check(1))
+"##),
         Case::new(
             "tua_arrow_messy",
             r#"type Predicate = (value: number)->boolean
@@ -1086,10 +1435,12 @@ local p: Predicate = function(v: number): boolean return v > 0 end
 print(p(1))
 "#,
         )
-        .formats_to(r#"type Predicate = (value: number) -> boolean
-local p: Predicate = function(v: number): boolean return v > 0 end
+        .formats_to(r##"type Predicate = (value: number) -> boolean
+local p: Predicate = function(v: number): boolean
+  return v > 0
+end
 print(p(1))
-"#),
+"##),
         Case::new(
             "tua_enum",
             r#"enum MovementState
@@ -1099,7 +1450,14 @@ end
 local m: MovementState = "idle"
 print(m)
 "#,
-        ),
+        )
+        .formats_to(r##"enum MovementState
+  "idle"
+  "run"
+end
+local m: MovementState = "idle"
+print(m)
+"##),
         Case::new(
             "tua_class",
             r#"open class Entity {
@@ -1117,7 +1475,22 @@ print(m)
 local e = Entity.new(1)
 e:update(0.5)
 "#,
-        ),
+        )
+        .formats_to(r##"open class Entity {
+  x: number
+
+  init(x: number) {
+    self.x = x
+  }
+
+  update(dt: number) {
+    self.x += dt
+  }
+}
+
+local e = Entity.new(1)
+e:update(0.5)
+"##),
         Case::new(
             "tua_class_extends",
             r#"open class Base {
@@ -1135,7 +1508,22 @@ final class Child extends Base {
 
 print(Child.new())
 "#,
-        ),
+        )
+        .formats_to(r##"open class Base {
+  init() {
+  }
+}
+
+final class Child extends Base {
+  speed: number = 120
+
+  init() {
+    super()
+  }
+}
+
+print(Child.new())
+"##),
         Case::new(
             "tua_default_param",
             r#"local function heal(amount: number = 5)
@@ -1143,7 +1531,12 @@ print(Child.new())
 end
 print(heal())
 "#,
-        ),
+        )
+        .formats_to(r##"local function heal(amount: number = 5)
+  return amount
+end
+print(heal())
+"##),
         Case::new(
             "tua_multiline_params",
             r#"local function move(
@@ -1154,14 +1547,23 @@ print(heal())
 end
 print(move(1, 2))
 "#,
-        ),
+        )
+        .formats_to(r##"local function move(x: number, y: number)
+  return x + y
+end
+print(move(1, 2))
+"##),
         Case::new(
             "keyword_identifiers",
             r#"local endpoint, doit, ending, functional, iffy = 1, 2, 3, 4, 5
 local t = { ["end"] = 1, then_value = 2, do_thing = 3 }
 print(endpoint, doit, ending, functional, iffy, t["end"], t.then_value, t.do_thing)
 "#,
-        ),
+        )
+        .formats_to(r##"local endpoint, doit, ending, functional, iffy = 1, 2, 3, 4, 5
+local t = { ["end"] = 1, then_value = 2, do_thing = 3 }
+print(endpoint, doit, ending, functional, iffy, t["end"], t.then_value, t.do_thing)
+"##),
         Case::new(
             "keyword_field_names",
             r#"local t = { repeat_count = 1, until_done = 2, elseif_case = 3 }
@@ -1170,7 +1572,13 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local t = { repeat_count = 1, until_done = 2, elseif_case = 3 }
+local function f()
+  return t.repeat_count + t.until_done + t.elseif_case
+end
+print(f())
+"##),
         Case::new(
             "mixed_string_block_comment_marker",
             r#"local s = "--[["
@@ -1179,7 +1587,13 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "--[["
+local function f()
+  return s
+end
+print(f())
+"##),
         Case::new(
             "mixed_string_long_marker",
             r#"local s = "[["
@@ -1188,7 +1602,13 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "[["
+local function f()
+  return s
+end
+print(f())
+"##),
         Case::new(
             "mixed_comment_close_bracket",
             r#"-- ]] not special
@@ -1197,7 +1617,13 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"-- ]] not special
+local function f()
+  return 1
+end
+print(f())
+"##),
         Case::new(
             "mixed_single_quote_backslash_end",
             r#"local s = 'a\\'
@@ -1206,29 +1632,39 @@ local function f()
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local s = "a\\"
+local function f()
+  return s
+end
+print(f())
+"##),
         Case::new(
             "mixed_concat_negative",
             r#"local a = 1
 print(a .. -1)
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+print(a .. -1)
+"##),
         Case::new(
             "mixed_mixed_tabs_spaces",
             "local function f()\n\t  if true then\n  \t\treturn 1\n\tend\nend\nprint(f())\n",
         )
-        .formats_to(r#"local function f()
+        .formats_to(r##"local function f()
   if true then
     return 1
   end
 end
 print(f())
-"#)
+"##)
         .keep_indentation(),
         Case::new(
             "mixed_tab_width_counts",
             "local function f(alpha, beta)\n\tprint(alpha, beta, alpha, beta)\nend\nf(1, 2)\n",
         )
+        .formats_to("local function f(alpha, beta)\n\tprint(alpha, beta, alpha, beta)\nend\nf(1, 2)\n")
         .with(|options| options.indent_style = IndentStyle::Tabs)
         .with(|options| options.line_width = 40),
         Case::new(
@@ -1239,7 +1675,7 @@ end
 print(configure(1, 2, 3))
 "#,
         )
-        .formats_to(r#"local function configure(
+        .formats_to(r##"local function configure(
   first_option,
   second_option,
   third_option
@@ -1247,7 +1683,7 @@ print(configure(1, 2, 3))
   return first_option, second_option, third_option
 end
 print(configure(1, 2, 3))
-"#)
+"##)
         .with(|options| options.line_width = 50),
         Case::new(
             "mixed_long_method_call",
@@ -1256,20 +1692,31 @@ local obj = { run = function(self, a, b, c) return a end }
 print(obj:run(first_argument_value, second_argument_value, 3))
 "#,
         )
-        .formats_to(r#"local first_argument_value, second_argument_value = 1, 2
+        .formats_to(r##"local first_argument_value, second_argument_value =
+  1, 2
 local obj = {
   run = function(self, a, b, c)
     return a
   end,
 }
-print(obj:run(first_argument_value, second_argument_value, 3))
-"#)
+print(
+  obj:run(
+    first_argument_value,
+    second_argument_value,
+    3
+  )
+)
+"##)
         .with(|options| options.line_width = 50),
         Case::new(
             "mixed_long_string_arg",
             r#"print("this single string argument is longer than the configured width")
 "#,
         )
+        .formats_to(r##"print(
+  "this single string argument is longer than the configured width"
+)
+"##)
         .with(|options| options.line_width = 30),
         Case::new(
             "mixed_only_semicolon",
@@ -1277,7 +1724,10 @@ print(obj:run(first_argument_value, second_argument_value, 3))
 ;
 print(a)
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+print(a)
+"##),
         Case::new(
             "mixed_return_table",
             r#"local function f()
@@ -1287,7 +1737,14 @@ print(a)
 end
 print(f())
 "#,
-        ),
+        )
+        .formats_to(r##"local function f()
+  return {
+    a = 1,
+  }
+end
+print(f())
+"##),
         Case::new(
             "mixed_table_of_functions",
             r#"local handlers = {
@@ -1300,7 +1757,17 @@ print(f())
 }
 print(handlers)
 "#,
-        ),
+        )
+        .formats_to(r##"local handlers = {
+  load = function()
+    return 1
+  end,
+  save = function()
+    return 2
+  end,
+}
+print(handlers)
+"##),
         Case::new(
             "mixed_closing_paren_alone",
             r#"print(
@@ -1308,14 +1775,20 @@ print(handlers)
   2
 )
 "#,
-        ),
+        )
+        .formats_to(r##"print(1, 2)
+"##),
         Case::new(
             "mixed_closing_brace_paren",
             r#"print({
   a = 1,
 })
 "#,
-        ),
+        )
+        .formats_to(r##"print({
+  a = 1,
+})
+"##),
         Case::new(
             "mixed_index_assign",
             r#"local t = {}
@@ -1323,31 +1796,48 @@ t["key"] = 1
 t[1] = 2
 print(t)
 "#,
-        ),
+        )
+        .formats_to(r##"local t = {}
+t["key"] = 1
+t[1] = 2
+print(t)
+"##),
         Case::new(
             "mixed_string_keys_in_table",
             r#"local t = { ["a b"] = 1, ["c"] = 2 }
 print(t)
 "#,
-        ),
+        )
+        .formats_to(r##"local t = { ["a b"] = 1, ["c"] = 2 }
+print(t)
+"##),
         Case::new(
             "mixed_long_concat",
             r#"local s = "aaaaaaaaaaaaaaaaaaaa" .. "bbbbbbbbbbbbbbbbbbbbbbbb" .. "cccccccccccccccccc"
 print(s)
 "#,
         )
-        .formats_to(r#"local s = "aaaaaaaaaaaaaaaaaaaa"
+        .formats_to(r##"local s = "aaaaaaaaaaaaaaaaaaaa"
   .. "bbbbbbbbbbbbbbbbbbbbbbbb"
   .. "cccccccccccccccccc"
 print(s)
-"#)
+"##)
         .with(|options| options.line_width = 40),
         Case::new(
             "mixed_elseif_one_line",
             r#"local a = 1
 if a then print(1) elseif a then print(2) else print(3) end
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+if a then
+  print(1)
+elseif a then
+  print(2)
+else
+  print(3)
+end
+"##),
         Case::new(
             "mixed_function_in_table_call",
             r#"local function g(t) return t end
@@ -1357,13 +1847,25 @@ print(g({
   end,
 }))
 "#,
-        ),
+        )
+        .formats_to(r##"local function g(t)
+  return t
+end
+print(g({
+  cb = function()
+    return 1
+  end,
+}))
+"##),
         Case::new(
             "mixed_deep_parens",
             r#"local a = 1
 print(((a + 1) * (a - 1)) / ((a)))
 "#,
-        ),
+        )
+        .formats_to(r##"local a = 1
+print(((a + 1) * (a - 1)) / a)
+"##),
         Case::new(
             "mixed_require_multiline",
             r#"local m = require(
@@ -1371,7 +1873,10 @@ print(((a + 1) * (a - 1)) / ((a)))
 )
 print(m)
 "#,
-        ),
+        )
+        .formats_to(r##"local m = require("string")
+print(m)
+"##),
         Case::new(
             "mixed_vararg_table",
             r#"local function f(...)
@@ -1380,7 +1885,13 @@ print(m)
 end
 print(f(1, 2))
 "#,
-        ),
+        )
+        .formats_to(r##"local function f(...)
+  local t = { ... }
+  return #t
+end
+print(f(1, 2))
+"##),
         Case::new(
             "mixed_class_method_body",
             r#"class Counter {
@@ -1399,7 +1910,23 @@ print(f(1, 2))
 local c = Counter.new()
 c:bump(1)
 "#,
-        ),
+        )
+        .formats_to(r##"class Counter {
+  count: number = 0
+
+  init() {
+  }
+
+  bump(by: number) {
+    if by > 0 then
+      self.count += by
+    end
+  }
+}
+
+local c = Counter.new()
+c:bump(1)
+"##),
         Case::new(
             "mixed_class_table_field",
             r#"class Bag {
@@ -1412,14 +1939,33 @@ c:bump(1)
 
 print(Bag.new())
 "#,
-        ),
+        )
+        .formats_to(r##"class Bag {
+  items: number[] = {}
+
+  init() {
+    self.items = { 1, 2 }
+  }
+}
+
+print(Bag.new())
+"##),
         Case::new("mixed_byte_order_mark", "\u{feff}local a = 1\nprint(a)\n")
-            .formats_to("local a = 1\nprint(a)\n"),
+        .formats_to(r##"local a = 1
+print(a)
+"##),
         Case::new("comment_touching_code", "local a = 1-- one\nprint(a)--[[ two ]]\n")
-            .formats_to("local a = 1 -- one\nprint(a) --[[ two ]]\n"),
+        .formats_to(r##"local a = 1 -- one
+print(a)--[[ two ]]
+"##),
         Case::new(
             "wrap_hugged_nested_call",
             "local function f(...) return ... end\nprint(f(\n  1,\n  2\n))\n",
-        ),
+        )
+        .formats_to(r##"local function f(...)
+  return ...
+end
+print(f(1, 2))
+"##),
     ]
 }

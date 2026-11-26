@@ -202,7 +202,7 @@ fn formatting_uses_shared_readable_statement_and_table_defaults() {
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
     server.send(formatting_request(2, &uri));
-    let expected = "local a = 1\nlocal b = 2\nreturn {\n  a = a,\n  b = b,\n}\n";
+    let expected = "local a = 1\nlocal b = 2\nreturn { a = a, b = b }\n";
     assert_eq!(
         response_with_id(server.output(), 2)["result"][0]["newText"],
         expected
@@ -222,8 +222,35 @@ fn formatting_preserves_scope_after_split_compact_guard() {
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
     server.send(formatting_request(2, &uri));
-    assert!(response_with_id(server.output(), 2)["result"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    let expected = "local function allowed(a: boolean, b: boolean): boolean\n  if not a or not b then\n    return false\n  end\n  return true\nend\nlocal after = 1\n";
+    assert_eq!(
+        response_with_id(server.output(), 2)["result"][0]["newText"],
+        expected
+    );
+    server.send(did_change(&uri, expected, 2));
+    server.send(formatting_request(3, &uri));
+    assert_eq!(response_with_id(server.output(), 3)["result"], json!([]));
+}
+
+#[test]
+fn range_formatting_uses_utf16_columns_after_non_bmp_string() {
+    let temp = TempProject::new("formatting-utf16");
+    let source = "local label = \"😀\"; local amount=1\nlocal after=2\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    temp.write("tua.toml", "source = \"src\"\n");
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    let start = lsp_position_of(source, "local amount");
+    let end = lsp_position_of(source, "local after");
+    server.send(range_formatting_request(2, &uri, start, end));
+    let response = response_with_id(server.output(), 2);
+    let edits = response["result"].as_array().expect("format edits");
+    assert!(!edits.is_empty());
+    for edit in edits {
+        assert_eq!(edit["range"]["start"]["line"], 0);
+        assert!(edit["range"]["start"]["character"].as_u64().unwrap() >= 20);
+        assert!(!edit["newText"].as_str().unwrap().contains("😀"));
+        assert!(!edit["newText"].as_str().unwrap().contains("after"));
+    }
 }

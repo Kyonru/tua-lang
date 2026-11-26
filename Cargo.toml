@@ -4,6 +4,7 @@ members = [
   "crates/tua-cli",
   "crates/tua-lsp",
 ]
+exclude = ["vendor/tua-full-moon", "vendor/tua-stylua"]
 resolver = "2"
 
 [workspace.package]

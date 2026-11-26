@@ -624,3 +624,15 @@ change, include the relevant integration test and run `make diff-check`.
 - [Lua Interoperability](lua-interop.md)
 - [Diagnostics](luahelper-code-matrix.md)
 - [External API Bridge](external-api-bridge.md)
+
+### Authored-source formatting
+
+`tua-core::formatter` owns configuration, source validation and edit boundaries
+for CLI and LSP formatting. It uses the local StyLua and full_moon forks described
+in `vendor/FORMATTER.md`. The formatting parser has an explicit Tua dialect and
+separate package identity; the compiler keeps its existing full_moon AST and
+semantic pipeline. Formatter ASTs never become semantic facts or emitted code.
+
+The adapter verifies the authored AST, string values and comments, then parses
+the result through the compiler. Invalid output produces a diagnostic. Dialogue
+formatting remains separate because its prose is not Lua syntax.

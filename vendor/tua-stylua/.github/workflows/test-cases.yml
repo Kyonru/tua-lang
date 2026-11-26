@@ -1,0 +1,35 @@
+name: Pull Latest Test Cases
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 0 * * *" # Runs at 00:10 UTC every day
+
+jobs:
+  retrieve_cases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull latest tests
+        run: python ./.github/retrieve_test_cases.py
+
+      - name: Update insta snapshots
+        run: |
+          cargo install cargo-insta
+          CI=false cargo insta test --accept
+          CI=false cargo insta test --features lua52 --accept
+          CI=false cargo insta test --features lua53 --accept
+          CI=false cargo insta test --features lua54 --accept
+          CI=false cargo insta test --features luau --accept
+          CI=false cargo insta test --features cfxlua --accept
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: Update external test cases
+          body: |
+            Pulls in new changes from external repositories for test cases
+            - This pull request is **auto-generated**
+          branch: auto/update-external-test-cases
+          commit-message: Update external test cases
+          base: main

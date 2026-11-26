@@ -1,0 +1,42 @@
+{
+  "name": "@johnnymorganz/stylua-bin",
+  "version": "2.6.0",
+  "description": "A code formatter for Lua",
+  "bin": {
+    "stylua": "run.js"
+  },
+  "engines": {
+    "node": ">=10"
+  },
+  "files": [
+    "run.js"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JohnnyMorganz/StyLua.git"
+  },
+  "keywords": [
+    "cli",
+    "utility",
+    "lua",
+    "lua52",
+    "formatter"
+  ],
+  "author": "JohnnyMorganz <johnnymorganz@outlook.com>",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/johnnymorganz/stylua/issues"
+  },
+  "homepage": "https://github.com/johnnymorganz/stylua#readme",
+  "optionalDependencies": {
+    "@johnnymorganz/stylua-bin-linux-x64": "2.6.0",
+    "@johnnymorganz/stylua-bin-linux-arm64": "2.6.0",
+    "@johnnymorganz/stylua-bin-darwin-x64": "2.6.0",
+    "@johnnymorganz/stylua-bin-darwin-arm64": "2.6.0",
+    "@johnnymorganz/stylua-bin-win32-x64": "2.6.0"
+  }
+}

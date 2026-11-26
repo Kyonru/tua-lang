@@ -1,0 +1,26 @@
+---
+source: full-moon/tests/fail_cases.rs
+expression: result.errors()
+input_file: full-moon/tests/roblox_cases/fail/parser/const_no_assignment
+---
+- AstError:
+    token:
+      start_position:
+        bytes: 0
+        line: 1
+        character: 1
+      end_position:
+        bytes: 5
+        line: 1
+        character: 6
+      token_type:
+        type: Identifier
+        identifier: const
+    additional: const declaration must have an assignment
+    range:
+      - bytes: 0
+        line: 1
+        character: 1
+      - bytes: 7
+        line: 1
+        character: 8

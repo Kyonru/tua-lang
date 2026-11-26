@@ -1,0 +1,10 @@
+---
+source: full-moon/tests/fail_cases.rs
+expression: "String::from_utf8(output.into_inner()).unwrap()"
+input_file: full-moon/tests/roblox_cases/fail/parser/const_count_mismatch_too_few
+---
+error[ast]: const declaration has 2 names but 1 value
+  ┌─ source.lua:1:1
+  │
+1 │ const x, y = 1
+  │ ^^^^^

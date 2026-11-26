@@ -1,0 +1,555 @@
+use crate::{
+    BlockNewlineGaps, CallParenType, CollapseSimpleStatement, Config, IndentType, LineEndings,
+    LuaVersion, QuoteStyle, SortRequiresConfig, SpaceAfterFunctionNames,
+};
+use ec4rs::{
+    properties_of,
+    property::{EndOfLine, IndentSize, IndentStyle, MaxLineLen, TabWidth, UnknownValueError},
+    rawvalue::RawValue,
+    Error, Properties, PropertyKey, PropertyValue,
+};
+use std::path::Path;
+
+// Extracted from ec4rs::property
+macro_rules! property_choice {
+    ($prop_id:ident, $name:literal; $(($variant:ident, $string:literal)),+) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        #[repr(u8)]
+        pub enum $prop_id {$($variant),+}
+
+        impl PropertyValue for $prop_id {
+            const MAYBE_UNSET: bool = false;
+            type Err = UnknownValueError;
+            fn parse(raw: &RawValue) -> Result<Self, Self::Err> {
+                match raw.into_str().to_lowercase().as_str() {
+                    $($string => Ok($prop_id::$variant),)+
+                    _ => Err(UnknownValueError)
+                }
+            }
+        }
+
+        impl From<$prop_id> for RawValue {
+            fn from(val: $prop_id) -> RawValue {
+                match val {
+                    $($prop_id::$variant => RawValue::from($string)),*
+                }
+            }
+        }
+
+        impl PropertyKey for $prop_id {
+            fn key() -> &'static str {$name}
+        }
+
+        impl std::fmt::Display for $prop_id {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", match self {
+                    $($prop_id::$variant => $string),*
+                })
+            }
+        }
+    }
+}
+
+property_choice! {
+    QuoteTypeChoice, "quote_type";
+    (Double, "double"),
+    (Single, "single"),
+    (Auto, "auto")
+}
+
+property_choice! {
+    CallParenthesesChoice, "call_parentheses";
+    (Always, "always"),
+    (NoSingleString, "nosinglestring"),
+    (NoSingleTable, "nosingletable"),
+    (None, "none"),
+    (Input, "input")
+}
+
+property_choice! {
+    SpaceAfterFunctionNamesChoice, "space_after_function_names";
+    (Always, "always"),
+    (Definitions, "definitions"),
+    (Calls, "calls"),
+    (Never, "never")
+}
+
+property_choice! {
+    CollapseSimpleStatementChoice, "collapse_simple_statement";
+    (Never, "never"),
+    (Input, "input"),
+    (FunctionOnly, "functiononly"),
+    (ConditionalOnly, "conditionalonly"),
+    (Always, "always")
+}
+
+property_choice! {
+    SortRequiresChoice, "sort_requires";
+    (True, "true"),
+    (False, "false")
+}
+
+property_choice! {
+    StyluaSyntaxChoice, "stylua_syntax";
+    (All, "all"),
+    (Lua51, "lua51"),
+    (Lua52, "lua52"),
+    (Lua53, "lua53"),
+    (Lua54, "lua54"),
+    (Luau, "luau"),
+    (LuaJIT, "luajit"),
+    (CfxLua, "cfxlua")
+}
+
+property_choice! {
+    StyluaBlockNewlineGapsChoice, "stylua_block_newline_gaps";
+    (Never, "never"),
+    (Preserve, "preserve")
+}
+
+// Override StyLua config with EditorConfig properties
+fn load(mut config: Config, properties: &Properties) -> Config {
+    if let Ok(end_of_line) = properties.get::<EndOfLine>() {
+        config.line_endings = match end_of_line {
+            EndOfLine::Cr | EndOfLine::Lf => LineEndings::Unix,
+            EndOfLine::CrLf => LineEndings::Windows,
+        };
+    }
+    if let Ok(indent_size) = properties.get::<IndentSize>() {
+        config.indent_width = match indent_size {
+            IndentSize::Value(indent_width) => indent_width,
+            IndentSize::UseTabWidth => match properties.get::<TabWidth>() {
+                Ok(TabWidth::Value(tab_width)) => tab_width,
+                _ => config.indent_width,
+            },
+        };
+    }
+    if let Ok(indent_style) = properties.get::<IndentStyle>() {
+        config.indent_type = match indent_style {
+            IndentStyle::Tabs => IndentType::Tabs,
+            IndentStyle::Spaces => IndentType::Spaces,
+        };
+    }
+    if let Ok(max_line_length) = properties.get::<MaxLineLen>() {
+        config.column_width = match max_line_length {
+            MaxLineLen::Value(column_width) => column_width,
+            MaxLineLen::Off => usize::MAX,
+        };
+    }
+    if let Ok(quote_type) = properties.get::<QuoteTypeChoice>() {
+        config.quote_style = match quote_type {
+            QuoteTypeChoice::Double => QuoteStyle::AutoPreferDouble,
+            QuoteTypeChoice::Single => QuoteStyle::AutoPreferSingle,
+            QuoteTypeChoice::Auto => config.quote_style,
+        };
+    }
+    if let Ok(call_parentheses) = properties.get::<CallParenthesesChoice>() {
+        config.call_parentheses = match call_parentheses {
+            CallParenthesesChoice::Always => CallParenType::Always,
+            CallParenthesesChoice::NoSingleString => CallParenType::NoSingleString,
+            CallParenthesesChoice::NoSingleTable => CallParenType::NoSingleTable,
+            CallParenthesesChoice::None => CallParenType::None,
+            CallParenthesesChoice::Input => CallParenType::Input,
+        };
+    }
+    if let Ok(space_after_function_names) = properties.get::<SpaceAfterFunctionNamesChoice>() {
+        config.space_after_function_names = match space_after_function_names {
+            SpaceAfterFunctionNamesChoice::Always => SpaceAfterFunctionNames::Always,
+            SpaceAfterFunctionNamesChoice::Definitions => SpaceAfterFunctionNames::Definitions,
+            SpaceAfterFunctionNamesChoice::Calls => SpaceAfterFunctionNames::Calls,
+            SpaceAfterFunctionNamesChoice::Never => SpaceAfterFunctionNames::Never,
+        };
+    }
+    if let Ok(collapse_simple_statement) = properties.get::<CollapseSimpleStatementChoice>() {
+        config.collapse_simple_statement = match collapse_simple_statement {
+            CollapseSimpleStatementChoice::Never => CollapseSimpleStatement::Never,
+            CollapseSimpleStatementChoice::Input => CollapseSimpleStatement::Input,
+            CollapseSimpleStatementChoice::FunctionOnly => CollapseSimpleStatement::FunctionOnly,
+            CollapseSimpleStatementChoice::ConditionalOnly => {
+                CollapseSimpleStatement::ConditionalOnly
+            }
+            CollapseSimpleStatementChoice::Always => CollapseSimpleStatement::Always,
+        };
+    }
+    if let Ok(sort_requires) = properties.get::<SortRequiresChoice>() {
+        config.sort_requires = match sort_requires {
+            SortRequiresChoice::True => SortRequiresConfig { enabled: true },
+            SortRequiresChoice::False => SortRequiresConfig { enabled: false },
+        };
+    }
+    if let Ok(syntax) = properties.get::<StyluaSyntaxChoice>() {
+        config.syntax = match syntax {
+            StyluaSyntaxChoice::All => LuaVersion::All,
+            StyluaSyntaxChoice::Lua51 => LuaVersion::Lua51,
+            #[cfg(feature = "lua52")]
+            StyluaSyntaxChoice::Lua52 => LuaVersion::Lua52,
+            #[cfg(feature = "lua53")]
+            StyluaSyntaxChoice::Lua53 => LuaVersion::Lua53,
+            #[cfg(feature = "lua54")]
+            StyluaSyntaxChoice::Lua54 => LuaVersion::Lua54,
+            #[cfg(feature = "luau")]
+            StyluaSyntaxChoice::Luau => LuaVersion::Luau,
+            #[cfg(feature = "luajit")]
+            StyluaSyntaxChoice::LuaJIT => LuaVersion::LuaJIT,
+            #[cfg(feature = "cfxlua")]
+            StyluaSyntaxChoice::CfxLua => LuaVersion::CfxLua,
+            // If the feature is not enabled, ignore the value
+            #[allow(unreachable_patterns)]
+            _ => config.syntax,
+        };
+    }
+    if let Ok(block_newline_gaps) = properties.get::<StyluaBlockNewlineGapsChoice>() {
+        config.block_newline_gaps = match block_newline_gaps {
+            StyluaBlockNewlineGapsChoice::Never => BlockNewlineGaps::Never,
+            StyluaBlockNewlineGapsChoice::Preserve => BlockNewlineGaps::Preserve,
+        };
+    }
+
+    config
+}
+
+// Read the EditorConfig files that would apply to a file at the given path
+pub fn parse(config: Config, path: &Path) -> Result<Config, Error> {
+    let properties = properties_of(path)?;
+
+    if properties.iter().count() == 0 {
+        return Ok(config);
+    }
+
+    log::debug!("editorconfig: found properties for {}", path.display());
+    let new_config = load(config, &properties);
+
+    Ok(new_config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl From<&Properties> for Config {
+        fn from(properties: &Properties) -> Self {
+            load(Config::default(), properties)
+        }
+    }
+
+    #[test]
+    fn test_end_of_line_cr() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("end_of_line", "CR");
+        let config = Config::from(&properties);
+        assert_eq!(config.line_endings, LineEndings::Unix);
+    }
+
+    #[test]
+    fn test_end_of_line_lf() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("end_of_line", "lf");
+        let config = Config::from(&properties);
+        assert_eq!(config.line_endings, LineEndings::Unix);
+    }
+
+    #[test]
+    fn test_end_of_line_crlf() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("end_of_line", "CrLf");
+        let config = Config::from(&properties);
+        assert_eq!(config.line_endings, LineEndings::Windows);
+    }
+
+    #[test]
+    fn test_indent_size() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("indent_size", "2");
+        let config = Config::from(&properties);
+        assert_eq!(config.indent_width, 2);
+    }
+
+    #[test]
+    fn test_indent_size_use_tab_width() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("tab_width", "8");
+        properties.insert_raw_for_key("indent_size", "tab");
+        let config = Config::from(&properties);
+        assert_eq!(config.indent_width, 8);
+    }
+
+    #[test]
+    fn test_indent_style_space() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("indent_style", "space");
+        let config = Config::from(&properties);
+        assert_eq!(config.indent_type, IndentType::Spaces);
+    }
+
+    #[test]
+    fn test_indent_style_tab() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("indent_style", "Tab");
+        let config = Config::from(&properties);
+        assert_eq!(config.indent_type, IndentType::Tabs);
+    }
+
+    #[test]
+    fn test_max_line_length() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("max_line_length", "80");
+        let config = Config::from(&properties);
+        assert_eq!(config.column_width, 80);
+    }
+
+    #[test]
+    fn test_max_line_length_off() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("max_line_length", "off");
+        let config = Config::from(&properties);
+        assert_eq!(config.column_width, usize::MAX);
+    }
+
+    #[test]
+    fn test_quote_type_double() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("quote_type", "double");
+        let config = Config::from(&properties);
+        assert_eq!(config.quote_style, QuoteStyle::AutoPreferDouble);
+    }
+
+    #[test]
+    fn test_quote_type_single() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("quote_type", "Single");
+        let config = Config::from(&properties);
+        assert_eq!(config.quote_style, QuoteStyle::AutoPreferSingle);
+    }
+
+    #[test]
+    fn test_quote_type_auto() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("quote_type", "auto");
+        let config = Config::from(&properties);
+        assert_eq!(config.quote_style, QuoteStyle::AutoPreferDouble);
+    }
+
+    #[test]
+    fn test_call_parentheses_always() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("call_parentheses", "always");
+        let config = Config::from(&properties);
+        assert_eq!(config.call_parentheses, CallParenType::Always);
+    }
+
+    #[test]
+    fn test_call_parentheses_no_single_string() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("call_parentheses", "NoSingleString");
+        let config = Config::from(&properties);
+        assert_eq!(config.call_parentheses, CallParenType::NoSingleString);
+    }
+
+    #[test]
+    fn test_call_parentheses_no_single_table() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("call_parentheses", "NoSingleTable");
+        let config = Config::from(&properties);
+        assert_eq!(config.call_parentheses, CallParenType::NoSingleTable);
+    }
+
+    #[test]
+    fn test_call_parentheses_none() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("call_parentheses", "None");
+        let config = Config::from(&properties);
+        assert_eq!(config.call_parentheses, CallParenType::None);
+    }
+
+    #[test]
+    fn test_call_parentheses_input() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("call_parentheses", "Input");
+        let config = Config::from(&properties);
+        assert_eq!(config.call_parentheses, CallParenType::Input);
+    }
+
+    #[test]
+    fn test_space_after_function_names_always() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("space_after_function_names", "Always");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.space_after_function_names,
+            SpaceAfterFunctionNames::Always
+        );
+    }
+
+    #[test]
+    fn test_space_after_function_names_definitions() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("space_after_function_names", "Definitions");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.space_after_function_names,
+            SpaceAfterFunctionNames::Definitions
+        );
+    }
+
+    #[test]
+    fn test_space_after_function_names_calls() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("space_after_function_names", "Calls");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.space_after_function_names,
+            SpaceAfterFunctionNames::Calls
+        );
+    }
+
+    #[test]
+    fn test_space_after_function_names_never() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("space_after_function_names", "Never");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.space_after_function_names,
+            SpaceAfterFunctionNames::Never
+        );
+    }
+
+    #[test]
+    fn test_collapse_simple_statement_never() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("collapse_simple_statement", "Never");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.collapse_simple_statement,
+            CollapseSimpleStatement::Never
+        );
+    }
+
+    #[test]
+    fn test_collapse_simple_statement_input() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("collapse_simple_statement", "Input");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.collapse_simple_statement,
+            CollapseSimpleStatement::Input
+        );
+    }
+
+    #[test]
+    fn test_collapse_simple_statement_function_only() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("collapse_simple_statement", "FunctionOnly");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.collapse_simple_statement,
+            CollapseSimpleStatement::FunctionOnly
+        );
+    }
+
+    #[test]
+    fn test_collapse_simple_statement_conditional_only() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("collapse_simple_statement", "ConditionalOnly");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.collapse_simple_statement,
+            CollapseSimpleStatement::ConditionalOnly
+        );
+    }
+
+    #[test]
+    fn test_collapse_simple_statement_always() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("collapse_simple_statement", "always");
+        let config = Config::from(&properties);
+        assert_eq!(
+            config.collapse_simple_statement,
+            CollapseSimpleStatement::Always
+        );
+    }
+
+    #[test]
+    fn test_sort_requires_enabled() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("sort_requires", "true");
+        let config = Config::from(&properties);
+        assert!(config.sort_requires.enabled);
+    }
+
+    #[test]
+    fn test_sort_requires_disabled() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("sort_requires", "false");
+        let config = Config::from(&properties);
+        assert!(!config.sort_requires.enabled);
+    }
+
+    #[test]
+    fn test_stylua_syntax_all() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("stylua_syntax", "all");
+        let config = Config::from(&properties);
+        assert_eq!(config.syntax, LuaVersion::All);
+    }
+
+    #[test]
+    fn test_stylua_syntax_lua51() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("stylua_syntax", "Lua51");
+        let config = Config::from(&properties);
+        assert_eq!(config.syntax, LuaVersion::Lua51);
+    }
+
+    #[test]
+    fn test_stylua_block_newline_gaps_never() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("stylua_block_newline_gaps", "Never");
+        let config = Config::from(&properties);
+        assert_eq!(config.block_newline_gaps, BlockNewlineGaps::Never);
+    }
+
+    #[test]
+    fn test_stylua_block_newline_gaps_preserve() {
+        let mut properties = Properties::new();
+        properties.insert_raw_for_key("stylua_block_newline_gaps", "Preserve");
+        let config = Config::from(&properties);
+        assert_eq!(config.block_newline_gaps, BlockNewlineGaps::Preserve);
+    }
+
+    #[test]
+    fn test_invalid_properties() {
+        let mut properties = Properties::new();
+        let default_config = Config::new();
+        let invalid_value = " ";
+        for key in [
+            "end_of_line",
+            "indent_size",
+            "indent_style",
+            "quote_style",
+            "call_parentheses",
+            "collapse_simple_statement",
+            "sort_requires",
+            "stylua_syntax",
+            "stylua_block_newline_gaps",
+        ] {
+            properties.insert_raw_for_key(key, invalid_value);
+        }
+        let config = Config::from(&properties);
+        assert_eq!(config.line_endings, default_config.line_endings);
+        assert_eq!(config.indent_width, default_config.indent_width);
+        assert_eq!(config.indent_type, default_config.indent_type);
+        assert_eq!(config.column_width, default_config.column_width);
+        assert_eq!(config.quote_style, default_config.quote_style);
+        assert_eq!(config.call_parentheses, default_config.call_parentheses);
+        assert_eq!(
+            config.collapse_simple_statement,
+            default_config.collapse_simple_statement
+        );
+        assert_eq!(
+            config.sort_requires.enabled,
+            default_config.sort_requires.enabled
+        );
+        assert_eq!(config.syntax, default_config.syntax);
+        assert_eq!(config.block_newline_gaps, default_config.block_newline_gaps);
+    }
+}

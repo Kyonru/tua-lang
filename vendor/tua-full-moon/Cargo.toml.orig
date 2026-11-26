@@ -1,0 +1,54 @@
+[package]
+name = "full_moon"
+version = "3.0.0"
+authors = ["Kampfkarren <kampfkarren@gmail.com>"]
+description = "A lossless Lua parser"
+license = "MPL-2.0"
+readme = "README.md"
+repository = "https://github.com/Kampfkarren/full-moon"
+categories = ["parsing"]
+keywords = ["lua", "parser", "lua51", "lua52", "luau"]
+edition = "2021"
+
+[package.metadata.docs.rs]
+# Build Locally: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --features luau,lua52,lua53,lua54,luajit,cfxlua  --no-deps --open
+features = ["luau", "lua52", "lua53", "lua54", "luajit", "cfxlua"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["serde"]
+luau = ["roblox"]
+roblox = ["luau"]    # backwards compatibility
+lua52 = []
+lua53 = ["lua52"]
+lua54 = ["lua53"]
+luajit = []
+cfxlua = ["lua54"]
+no-source-tests = []
+
+[dependencies]
+bytecount = "0.6"
+cfg-if = "1.0"
+derive_more = { version = "1.0", features = ["display"] }
+full_moon_derive = { path = "../full-moon-derive", version = "=0.11.0" }
+paste = "1.0"
+serde = { version = "1.0", features = ["derive", "rc"], optional = true }
+smol_str = { version = "0.3.1", features = ["serde"] }
+
+[dev-dependencies]
+codespan = "0.11.1"
+codespan-reporting = "0.11.1"
+criterion = "0.5.1"
+insta = { version = "1.40.0", features = ["glob", "yaml"] }
+pretty_assertions = "1.4.1"
+termcolor = "1.4.1"
+
+[[bench]]
+name = "date"
+path = "../benches/date.rs"
+harness = false
+
+[[bench]]
+name = "t"
+path = "../benches/t.rs"
+harness = false

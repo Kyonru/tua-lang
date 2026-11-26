@@ -6,6 +6,7 @@ const path = require("path");
 const vscode = require("vscode");
 const { previewContext, verifyGraphPreviews } = require("./graph-previews");
 
+const { verifySourceFormatting } = require("./source-formatting");
 const { verifyDialogueFormatting } = require("./dialogue-formatting");
 const { verifyDialogueAuthoring } = require("./dialogue-authoring");
 const { verifyDialoguePreview } = require("./dialogue-preview");
@@ -19,7 +20,11 @@ async function run() {
   await extension.activate();
   await waitForServer();
   const selectedSuite = process.env.TUA_REAL_SERVER_SUITE || "all";
-  assert(["all", "dialogue-preview", "dialogue-formatting"].includes(selectedSuite), "unsupported real-server suite");
+  assert(["all", "source-formatting", "dialogue-preview", "dialogue-formatting"].includes(selectedSuite), "unsupported real-server suite");
+  if (selectedSuite === "all" || selectedSuite === "source-formatting") {
+    await verifySourceFormatting(fixtures.mainPath);
+  }
+  if (selectedSuite === "source-formatting") return;
   await verifyDialogueFormatting(fixtures.mainPath);
   if (selectedSuite === "dialogue-formatting") return;
   await verifyDialogueAuthoring(fixtures.mainPath);

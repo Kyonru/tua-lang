@@ -711,6 +711,7 @@ fn quote_style_setting(
         .and_then(Value::as_str)
     {
         Some("preserve") => Some(QuoteStyle::Preserve),
+        Some("auto-double") => Some(QuoteStyle::AutoDouble),
         Some("double") => Some(QuoteStyle::Double),
         Some("single") => Some(QuoteStyle::Single),
         _ => None,

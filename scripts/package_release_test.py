@@ -7,6 +7,16 @@ from pathlib import Path
 from package_release import changelog_notes, create_server_archive, sha256, write_checksum
 
 
+def formatter_fixture(root: Path) -> None:
+    (root / "vendor").mkdir()
+    (root / "vendor/FORMATTER.md").write_text("Formatter notices")
+    for package in ("tua-full-moon", "tua-stylua"):
+        folder = root / "vendor" / package
+        (folder / "src").mkdir(parents=True)
+        for name in ("Cargo.toml", "LICENSE.md", "src/lib.rs"):
+            (folder / name).write_text(f"{package}: {name}")
+
+
 class PackageReleaseTests(unittest.TestCase):
     def test_checksum_files_use_portable_lf_line_endings(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -23,6 +33,7 @@ class PackageReleaseTests(unittest.TestCase):
     def test_archives_are_deterministic_and_include_release_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            formatter_fixture(root)
             for name in ("README.md", "LICENSE", "CHANGELOG.md"):
                 (root / name).write_text(name, encoding="utf-8")
             binary = root / "tua.exe"
@@ -39,7 +50,7 @@ class PackageReleaseTests(unittest.TestCase):
             self.assertTrue(first.with_name(f"{first.name}.sha256").is_file())
             with zipfile.ZipFile(first) as archive:
                 self.assertEqual(
-                    sorted(archive.namelist()),
+                    sorted(name for name in archive.namelist() if "/third-party/" not in name),
                     [
                         "tua-1.2.3-x86_64-pc-windows-msvc/CHANGELOG.md",
                         "tua-1.2.3-x86_64-pc-windows-msvc/LICENSE",
@@ -48,9 +59,21 @@ class PackageReleaseTests(unittest.TestCase):
                     ],
                 )
 
+    def test_formatter_sources_are_required_and_packaged(self) -> None:
+        from formatter_sources import formatter_source_entries
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaises(FileNotFoundError):
+                formatter_source_entries(root)
+            formatter_fixture(root)
+            entries = formatter_source_entries(root)
+            self.assertEqual(len(entries), 7)
+            self.assertIn(("third-party/formatter/tua-stylua/src/lib.rs", b"tua-stylua: src/lib.rs", 0o644), entries)
+
     def test_tar_archives_are_deterministic_and_executable(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            formatter_fixture(root)
             for name in ("README.md", "LICENSE", "CHANGELOG.md"):
                 (root / name).write_text(name, encoding="utf-8")
             binary = root / "tua"

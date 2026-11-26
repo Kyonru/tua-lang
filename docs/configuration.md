@@ -51,7 +51,7 @@ annotation_mode = "off"
 [format]
 indent_width = 2
 line_width = 100
-quote_style = "preserve"
+quote_style = "auto-double"
 final_newline = true
 
 [jit]
@@ -129,7 +129,7 @@ the behavior and tradeoffs of each option.
 | `format.indent_style` | string | `"spaces"` | `tua.format.indentStyle` |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
 | `format.line_width` | integer | `100` | `tua.format.lineWidth` |
-| `format.quote_style` | string | `"preserve"` | `tua.format.quoteStyle` |
+| `format.quote_style` | string | `"auto-double"` | `tua.format.quoteStyle` |
 | `format.line_ending` | string | `"lf"` | `tua.format.lineEnding` |
 | `format.final_newline` | boolean | `true` | `tua.format.finalNewline` |
 | `jit.enabled` | boolean | `false` | `tua.jit.enabled` |
@@ -307,7 +307,7 @@ lines inside multiline strings and block comments are preserved.
 indent_style = "spaces"
 indent_width = 2
 line_width = 100
-quote_style = "preserve"
+quote_style = "auto-double"
 line_ending = "lf"
 final_newline = true
 ```
@@ -323,7 +323,8 @@ final_newline = true
 : Preferred maximum line width for line-aware groups.
 
 `quote_style`
-: `preserve` keeps each short string's source delimiter. `double` or `single`
+: `auto-double` (default) prefers double quotes, choosing single quotes when that
+  avoids escapes. `preserve` keeps each short string's source delimiter. `double` or `single`
   consistently rewrites complete short strings while preserving their values.
   Long-bracket strings are never rewritten.
 
@@ -332,7 +333,7 @@ final_newline = true
   source document's convention.
 
 `final_newline`
-: Writes a final LF newline when formatting.
+: Writes a final newline using the selected line-ending convention.
 
 ## LuaJIT Guidance
 

@@ -496,6 +496,7 @@ extension-server: ## Build and stage the tua server binary for the VS Code exten
 	$(CARGO) build --release --package tua-cli
 	mkdir -p $(VSCODE_DIR)/bin
 	cp $(RELEASE_TUA) $(VSCODE_TUA)
+	python3 scripts/formatter_sources.py $(VSCODE_DIR)
 
 .PHONY: extension-clean-server
 extension-clean-server: ## Remove the staged VS Code extension server binary.

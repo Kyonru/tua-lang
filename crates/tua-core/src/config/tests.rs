@@ -95,6 +95,7 @@ fn localization_is_opt_in_and_validates_catalog_identity_and_paths() {
 fn parses_all_formatter_quote_styles() {
     for (value, expected) in [
         ("preserve", QuoteStyle::Preserve),
+        ("auto-double", QuoteStyle::AutoDouble),
         ("double", QuoteStyle::Double),
         ("single", QuoteStyle::Single),
     ] {
