@@ -11,7 +11,9 @@ end)
 conversation.start()
 local before = conversation.player:snapshot()
 I18n.setLocale("fr")
-for _ = 1, 10 do conversation.locale() end
+for _ = 1, 10 do
+  conversation.locale()
+end
 local after = conversation.player:snapshot()
 assert(before.visit == after.visit and before.generation == after.generation)
 assert(after.node.text:find("Vous avez", 1, true) and after.node.speaker == "Gardienne du port")
@@ -41,7 +43,9 @@ local visit = conversation.player:snapshot().visit
 conversation.locale()
 assert(conversation.player:snapshot().visit == visit and starts == 0)
 conversation.update(0, true, 0)
-for _ = 1, 10 do conversation.update(0, true, 0) end
+for _ = 1, 10 do
+  conversation.update(0, true, 0)
+end
 assert(starts == 1 and conversation.state.wavesStarted == 1)
 conversation.start()
 conversation.update(0, true, 0)
@@ -62,4 +66,6 @@ conversation.dispose()
 conversation.dispose()
 conversation.start()
 assert(not conversation.state.active)
-print("ARENA_CONVERSATION_OK locale identity, focus, stable replies, fallback, one-shot wave request, cancellation")
+print(
+  "ARENA_CONVERSATION_OK locale identity, focus, stable replies, fallback, one-shot wave request, cancellation"
+)

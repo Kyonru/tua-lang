@@ -12,7 +12,9 @@ function love.focus(focused: boolean)
   model.focus(focused)
 end
 function love.keypressed(key: string)
-  if key == "escape" and model.flow:is("title") then love.event.quit() end
+  if key == "escape" and model.flow:is("title") then
+    love.event.quit()
+  end
 end
 function love.draw()
   love.graphics.clear(0.08, 0.12, 0.14)

@@ -26,11 +26,15 @@ local function new()
   local function focus(value: boolean)
     state.focused = value
     trigger.held = false
-    if not value and flow:is("playing") then flow:pause() end
+    if not value and flow:is("playing") then
+      flow:pause()
+    end
   end
   -- Return true only when simulation advanced, never on a transition frame.
   local function update(dt: number, x: number, y: number, command: Command): boolean
-    if not state.focused then return false end
+    if not state.focused then
+      return false
+    end
     if command == "leave" and not flow:is("title") then
       flow:leave()
       return false
@@ -48,11 +52,17 @@ local function new()
       return false
     end
     if command == "pause" then
-      if flow:is("playing") then flow:pause() else flow:resume() end
+      if flow:is("playing") then
+        flow:pause()
+      else
+        flow:resume()
+      end
       return false
     end
     if flow:is("paused") then
-      if command == "confirm" then flow:resume() end
+      if command == "confirm" then
+        flow:resume()
+      end
       return false
     end
     combat.update(dt, x, y, trigger.held, trigger.x, trigger.y)

@@ -3,12 +3,16 @@ local Session = require("session")
 local Collision = require("collision")
 local Brain = require("brain")
 local function step(combat, count, held)
-  for _ = 1, count do combat.update(1 / 120, 0, 0, held or false, 1100, 572) end
+  for _ = 1, count do
+    combat.update(1 / 120, 0, 0, held or false, 1100, 572)
+  end
 end
 local function first(combat)
   local selected
   combat.enemies:each(function(id)
-    if not selected or id < selected then selected = id end
+    if not selected or id < selected then
+      selected = id
+    end
   end)
   return selected
 end
@@ -59,8 +63,14 @@ assert(Collision.contact(0 - -50, 0, 0 - 50, 0, 0, 0, 25) ~= nil)
 combat = Combat.new({ x = 800, y = 600 })
 id = first(combat)
 local remove = {}
-combat.enemies:each(function(other) if other ~= id then remove[#remove + 1] = other end end)
-for _, other in ipairs(remove) do combat.destroyEnemy(other) end
+combat.enemies:each(function(other)
+  if other ~= id then
+    remove[#remove + 1] = other
+  end
+end)
+for _, other in ipairs(remove) do
+  combat.destroyEnemy(other)
+end
 position = combat.readPosition(id)
 position.x, position.y = 820, 572
 combat.readHealth(id).current = 1
@@ -83,7 +93,9 @@ session.update(0, 0, 0, "confirm")
 session.combat.enemies:each(function(_, pos)
   pos.x, pos.y = 800, 572
 end)
-for _ = 1, 10 do session.update(0.25, 0, 0, "none") end
+for _ = 1, 10 do
+  session.update(0.25, 0, 0, "none")
+end
 assert(session.flow:is("gameover") and session.combat.state.health == 0)
 local ticks = session.combat.state.ticks
 session.trigger.held = true
@@ -96,4 +108,6 @@ session.update(1, 1, 0, "confirm")
 assert(session.flow:is("playing") and session.combat.state.health == 10)
 assert(session.player.x == 800 and session.combat.state.ticks == 0)
 session.combat.dispose()
-print("ARENA_DECISIONS_OK patrol/chase/attack, cooldown, cancellation, replacement, kill priority, game over")
+print(
+  "ARENA_DECISIONS_OK patrol/chase/attack, cooldown, cancellation, replacement, kill priority, game over"
+)

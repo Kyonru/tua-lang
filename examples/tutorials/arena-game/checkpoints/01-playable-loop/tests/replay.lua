@@ -25,7 +25,9 @@ local function beforeFrame(context)
     assert(host.player.x == 800, "start consumes its frame")
     context.key("return", false)
   end
-  if frame == 40 then context.key("escape", true) end
+  if frame == 40 then
+    context.key("escape", true)
+  end
   if frame == 41 then
     context.key("escape", false)
     assert(host.session.flow:is("paused"))
@@ -47,7 +49,9 @@ local function beforeFrame(context)
     love.focus(false)
     frozenX = host.player.x
   end
-  if frame == 90 then love.focus(true) end
+  if frame == 90 then
+    love.focus(true)
+  end
   if frame == 95 then
     assert(host.session.flow:is("paused") and host.player.x == frozenX)
     context.key("d", false)
@@ -59,12 +63,20 @@ local function beforeFrame(context)
     assert(host.player.x == 800 and host.player.y == 600)
     assert(host.hero.name == "idle" and host.camera.x == 800)
   end
-  if frame == 100 then love.window.setMode(640, 480) end
-  if frame == 110 then context.key("backspace", true) end
-  if frame == 111 then context.key("backspace", false) end
+  if frame == 100 then
+    love.window.setMode(640, 480)
+  end
+  if frame == 110 then
+    context.key("backspace", true)
+  end
+  if frame == 111 then
+    context.key("backspace", false)
+  end
 end
 local function verify(context)
   assert(host.session.flow:is("title") and hudDraws > 0)
-  print("ARENA_NATIVE_OK transition input, movement, animation/camera pause, focus, reset, title, HUD")
+  print(
+    "ARENA_NATIVE_OK transition input, movement, animation/camera pause, focus, reset, title, HUD"
+  )
 end
 return { setup = setup, beforeFrame = beforeFrame, verify = verify }

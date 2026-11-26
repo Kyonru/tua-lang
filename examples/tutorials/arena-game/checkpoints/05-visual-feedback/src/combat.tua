@@ -12,7 +12,9 @@ local function new(player: Movement.Position)
   local readBrain = world:reader(Brain.Brain)
   local readHealth = world:reader(Components.Health)
   local pool = objectPool({
-    create = function(): Bullet return { x = 0, y = 0, vx = 0, vy = 0, age = 0, hit = false } end,
+    create = function(): Bullet
+      return { x = 0, y = 0, vx = 0, vy = 0, age = 0, hit = false }
+    end,
     reset = function(bullet: Bullet)
       bullet.x = 0
       bullet.y = 0
@@ -65,8 +67,11 @@ local function new(player: Movement.Position)
       actor.dy = player.y - 28 - position.y
       actor.distance = math.sqrt(actor.dx * actor.dx + actor.dy * actor.dy)
       actor.cooldown = math.max(0, actor.cooldown - 1)
-      if position.x >= brain.homeX + 40 then actor.patrol = -1
-      elseif position.x <= brain.homeX - 40 then actor.patrol = 1 end
+      if position.x >= brain.homeX + 40 then
+        actor.patrol = -1
+      elseif position.x <= brain.homeX - 40 then
+        actor.patrol = 1
+      end
       brain.runner:update(STEP)
       position.previousX = position.x
       position.previousY = position.y
@@ -75,7 +80,9 @@ local function new(player: Movement.Position)
     end)
   end
   local function nextWave(): boolean
-    if disposed or state.health <= 0 or enemies:count() > 0 or #bullets > 0 then return false end
+    if disposed or state.health <= 0 or enemies:count() > 0 or #bullets > 0 then
+      return false
+    end
     state.wave += 1
     for index = 1, 8 do
       local angle = (index - 1) * math.pi / 4
@@ -90,7 +97,9 @@ local function new(player: Movement.Position)
   local function fire(aimX: number, aimY: number)
     local dx, dy = aimX - player.x, aimY - (player.y - 28)
     local length = math.sqrt(dx * dx + dy * dy)
-    if length < 0.001 then return end
+    if length < 0.001 then
+      return
+    end
     if #bullets >= 8 then
       state.skipped += 1
       return
@@ -106,7 +115,9 @@ local function new(player: Movement.Position)
   local function tick(x: number, y: number, held: boolean, aimX: number, aimY: number)
     Movement.move(player, x, y, 180, STEP)
     decideAndMove()
-    if cooldown > 0 then cooldown -= 1 end
+    if cooldown > 0 then
+      cooldown -= 1
+    end
     if held and cooldown == 0 then
       fire(aimX, aimY)
       cooldown = 15
@@ -117,10 +128,17 @@ local function new(player: Movement.Position)
       local selected = 0
       local nearest = 2
       enemies:each(function(id, position, health)
-        if health.current <= 0 then return end
+        if health.current <= 0 then
+          return
+        end
         local t = Collision.contact(
-          bullet.x - position.previousX, bullet.y - position.previousY,
-          nx - position.x, ny - position.y, 0, 0, 25
+          bullet.x - position.previousX,
+          bullet.y - position.previousY,
+          nx - position.x,
+          ny - position.y,
+          0,
+          0,
+          25
         )
         if t and (t < nearest or (t == nearest and id < selected)) then
           selected = id
@@ -158,11 +176,15 @@ local function new(player: Movement.Position)
       end
       brain.context.attack = false
     end)
-    if state.health == 0 then cancelBrains() end
+    if state.health == 0 then
+      cancelBrains()
+    end
     state.ticks += 1
   end
   local function update(dt: number, x: number, y: number, held: boolean, aimX: number, aimY: number)
-    if disposed or state.health <= 0 or dt <= 0 then return end
+    if disposed or state.health <= 0 or dt <= 0 then
+      return
+    end
     -- Host stall policy: discard time beyond 250 ms, at most 30 simulation ticks.
     accumulator += math.min(dt, 0.25)
     while accumulator + 0.000000001 >= STEP do
@@ -184,7 +206,9 @@ local function new(player: Movement.Position)
     world:clear()
   end
   local function reset()
-    if disposed then return end
+    if disposed then
+      return
+    end
     clearWorld()
     cooldown = 0
     accumulator = 0
@@ -202,7 +226,9 @@ local function new(player: Movement.Position)
     nextWave()
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     clearWorld()
     pool:clear()
     disposed = true
@@ -221,7 +247,9 @@ local function new(player: Movement.Position)
     reset = reset,
     nextWave = nextWave,
     dispose = dispose,
-    capacity = function() return pool:capacity() end,
+    capacity = function()
+      return pool:capacity()
+    end,
   }
 end
 return { new = new }

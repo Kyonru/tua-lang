@@ -66,10 +66,15 @@ function love.update(dt: number)
   -- Poll even when paused/unfocused so old press edges cannot leak into play.
   controls:update()
   local command: Session.Command = "none"
-  if controls:pressed("leave") then command = "leave"
-  elseif controls:pressed("restart") then command = "restart"
-  elseif controls:pressed("pause") then command = "pause"
-  elseif controls:pressed("confirm") then command = "confirm" end
+  if controls:pressed("leave") then
+    command = "leave"
+  elseif controls:pressed("restart") then
+    command = "restart"
+  elseif controls:pressed("pause") then
+    command = "pause"
+  elseif controls:pressed("confirm") then
+    command = "confirm"
+  end
   local x, y = controls:get("move")
   local mx, my = love.mouse.getPosition()
   -- Aim uses the unshaken camera; cosmetic feedback cannot alter trajectories.
@@ -89,8 +94,12 @@ function love.update(dt: number)
     generation = session.state.generation
     resetPresentation()
   end
-  if not advanced then return end
-  if session.flow:is("playing") and controls:pressed("nextWave") then combat.nextWave() end
+  if not advanced then
+    return
+  end
+  if session.flow:is("playing") and controls:pressed("nextWave") then
+    combat.nextWave()
+  end
   feedback.update(
     dt,
     combat.state.shots > shots,
@@ -98,7 +107,9 @@ function love.update(dt: number)
     combat.state.hitX,
     combat.state.hitY
   )
-  if x ~= 0 then facing = x < 0 and -1 or 1 end
+  if x ~= 0 then
+    facing = x < 0 and -1 or 1
+  end
   hero:play((x ~= 0 or y ~= 0) and "walk" or "idle")
   hero:update(dt)
   zombieWalk:update(dt)
@@ -125,9 +136,12 @@ local function drawWorld()
   hero:draw(player.x, player.y, 0, facing * 0.6, 0.6)
   local angle = math.atan2(session.trigger.y - (player.y - 28), session.trigger.x - player.x)
   love.graphics.setColor(0.95, 0.78, 0.45)
-  love.graphics.line(player.x, player.y - 28,
+  love.graphics.line(
+    player.x,
+    player.y - 28,
     player.x + math.cos(angle) * (26 - feedback.values.recoil),
-    player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil))
+    player.y - 28 + math.sin(angle) * (26 - feedback.values.recoil)
+  )
   combat.enemies:each(function(id, position, health)
     love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
     love.graphics.ellipse("fill", position.x, position.y + 25, 23, 7)
@@ -147,7 +161,9 @@ local function drawWorld()
     )
   end)
   love.graphics.setColor(0.98, 0.83, 0.55)
-  for _, bullet in ipairs(combat.bullets) do love.graphics.circle("fill", bullet.x, bullet.y, 3) end
+  for _, bullet in ipairs(combat.bullets) do
+    love.graphics.circle("fill", bullet.x, bullet.y, 3)
+  end
   if feedback.values.impact > 0 then
     love.graphics.setColor(0.98, 0.83, 0.55, feedback.values.impact)
     love.graphics.circle(
@@ -181,8 +197,21 @@ function love.draw()
   if session.flow:is("playing") then
     love.graphics.print("Clear the harbor", 32, 56)
     love.graphics.setFont(label)
-    love.graphics.print("Health " .. combat.state.health .. "/10   Wave " .. combat.state.wave .. "   Enemies " .. combat.enemies:count()
-      .. "   Hits " .. combat.state.hits .. "   Shots " .. #combat.bullets .. "/8", 32, 92)
+    love.graphics.print(
+      "Health "
+        .. combat.state.health
+        .. "/10   Wave "
+        .. combat.state.wave
+        .. "   Enemies "
+        .. combat.enemies:count()
+        .. "   Hits "
+        .. combat.state.hits
+        .. "   Shots "
+        .. #combat.bullets
+        .. "/8",
+      32,
+      92
+    )
     if combat.enemies:count() == 0 then
       love.graphics.print(
         #combat.bullets == 0 and "N   Start the next wave" or "Waiting for shots to expire…",
@@ -191,19 +220,27 @@ function love.draw()
       )
     end
   else
-    love.graphics.print(session.flow:is("title") and "A place to begin"
-      or (session.flow:is("gameover") and "The harbor fell" or "Take a breath"), 32, 112)
+    love.graphics.print(
+      session.flow:is("title") and "A place to begin"
+        or (session.flow:is("gameover") and "The harbor fell" or "Take a breath"),
+      32,
+      112
+    )
     love.graphics.setFont(label)
     love.graphics.print(
       session.flow:is("title") and "Enter   Start a run"
-      or (session.flow:is("gameover") and "Enter / R   Try again" or "Enter / Esc   Resume"),
+        or (session.flow:is("gameover") and "Enter / R   Try again" or "Enter / Esc   Resume"),
       32,
       172
     )
     if session.flow:is("paused") or session.flow:is("gameover") then
-      love.graphics.print(session.flow:is("gameover")
-        and "Defeated " .. combat.state.defeated .. " enemies in wave " .. combat.state.wave
-        or "R   Restart from the harbor", 32, 208)
+      love.graphics.print(
+        session.flow:is("gameover")
+            and "Defeated " .. combat.state.defeated .. " enemies in wave " .. combat.state.wave
+          or "R   Restart from the harbor",
+        32,
+        208
+      )
       love.graphics.print("Backspace   Return to title", 32, 244)
     else
       love.graphics.print("Aim with the mouse. Hold left click or Space to fire.", 32, 212)
@@ -212,12 +249,21 @@ function love.draw()
   end
   love.graphics.setFont(label)
   love.graphics.setColor(0.69, 0.80, 0.79)
-  love.graphics.print("F   Feedback: " .. (feedback.options.enabled and "on" or "off")
-    .. "     M   Reduced motion: " .. (feedback.options.reducedMotion and "on" or "off"), 32, height - 62)
-  love.graphics.print(session.state.focused and (session.flow:is("gameover")
-    and "Enter / R   Restart     Backspace   Title"
-    or "WASD / Arrows   Move     Esc   Pause     R   Restart")
-    or "Window unfocused — return, then press Enter to resume", 32, height - 36)
+  love.graphics.print(
+    "F   Feedback: "
+      .. (feedback.options.enabled and "on" or "off")
+      .. "     M   Reduced motion: "
+      .. (feedback.options.reducedMotion and "on" or "off"),
+    32,
+    height - 62
+  )
+  love.graphics.print(
+    session.state.focused
+        and (session.flow:is("gameover") and "Enter / R   Restart     Backspace   Title" or "WASD / Arrows   Move     Esc   Pause     R   Restart")
+      or "Window unfocused — return, then press Enter to resume",
+    32,
+    height - 36
+  )
 end
 function love.focus(hasFocus: boolean)
   session.focus(hasFocus)

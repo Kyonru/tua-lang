@@ -11,14 +11,16 @@ export type Context = {
 }
 type Runner = {
   context: Context,
-  update: (self: Self, dt: number) -> ("success" | "failure" | "running"),
+  update: (self: Self, dt: number) -> "success" | "failure" | "running",
   cancel: (self: Self) -> nil,
 }
 local Brain = ECS.component("Brain", { context = "Context", runner = "Runner", homeX = "number" })
 -- One immutable definition; each entity owns an independent runner and context.
 local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
   BehaviorTree.reactiveSequence({
-    BehaviorTree.condition(function(actor: Context) return actor.distance <= 32 end),
+    BehaviorTree.condition(function(actor: Context)
+      return actor.distance <= 32
+    end),
     BehaviorTree.action(function(actor: Context)
       actor.mode = "attack"
       if actor.cooldown == 0 then
@@ -29,7 +31,9 @@ local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
     end),
   }),
   BehaviorTree.reactiveSequence({
-    BehaviorTree.condition(function(actor: Context) return actor.distance <= 300 end),
+    BehaviorTree.condition(function(actor: Context)
+      return actor.distance <= 300
+    end),
     BehaviorTree.action(function(actor: Context)
       actor.mode = "chase"
       actor.vx = actor.dx / actor.distance * 60

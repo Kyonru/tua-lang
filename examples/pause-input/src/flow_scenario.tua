@@ -20,7 +20,9 @@ local function beforeFrame(context: Context)
     assert(model.state.shots == 0, "held start key does not fire")
     context.key("space", false)
   end
-  if frame == 31 then context.key("space", true) end
+  if frame == 31 then
+    context.key("space", true)
+  end
   if frame == 32 then
     assert(model.state.shots == 1)
     context.key("space", false)
@@ -31,7 +33,9 @@ local function beforeFrame(context: Context)
     frozenTime = model.state.gameplayTime
     frozenX = model.marker.x
   end
-  if frame == 47 then context.key("escape", false) end
+  if frame == 47 then
+    context.key("escape", false)
+  end
   if frame == 61 then
     assert(model.flow:is("paused"))
     assert(model.state.gameplayTime == frozenTime and model.marker.x == frozenX)
@@ -39,7 +43,9 @@ local function beforeFrame(context: Context)
     assert(model.state.shots == 1, "pause consumes simultaneous fire")
     context.key("space", false)
   end
-  if frame == 66 then context.key("space", true) end
+  if frame == 66 then
+    context.key("space", true)
+  end
   if frame == 67 then
     assert(model.flow:is("playing"))
     assert(model.state.confirms == 1)
@@ -52,8 +58,12 @@ local function beforeFrame(context: Context)
     love.focus(false)
     frozenTime = model.state.gameplayTime
   end
-  if frame == 81 then context.key("return", true) end
-  if frame == 86 then context.key("return", false) end
+  if frame == 81 then
+    context.key("return", true)
+  end
+  if frame == 86 then
+    context.key("return", false)
+  end
   if frame == 91 then
     love.focus(true)
     assert(model.flow:is("paused"), "refocus does not automatically resume")

@@ -13,7 +13,9 @@ local function new()
   local function update(dt: number, fired: boolean, hit: boolean, x: number, y: number)
     group:update(dt)
     values.clock += dt
-    if not options.enabled then return end
+    if not options.enabled then
+      return
+    end
     if fired and not options.reducedMotion then
       values.recoil = 6
       group:to(values, 0.1, { recoil = 0 }):ease("quadout")

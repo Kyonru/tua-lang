@@ -1,7 +1,9 @@
 local Movement = require("movement")
 local function simulate(steps)
   local player = { x = 800, y = 600 }
-  for index = 1, steps do Movement.move(player, 1, 0, 180, 1 / steps) end
+  for index = 1, steps do
+    Movement.move(player, 1, 0, 180, 1 / steps)
+  end
   return player
 end
 assert(math.abs(simulate(30).x - simulate(144).x) < 0.000001)

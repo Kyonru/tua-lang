@@ -52,11 +52,15 @@ end
 
 local function focus(value: boolean)
   focused = value
-  if not focused then pause(true) end
+  if not focused then
+    pause(true)
+  end
 end
 
 local function leave()
-  if flow:is("title") then return end
+  if flow:is("title") then
+    return
+  end
   flow:leave()
   fadeMenu(false)
 end
@@ -65,7 +69,11 @@ local function reset(practice: boolean)
   menuTween:stop()
   gameplayTweens = Tween.group()
   uiTweens = Tween.group()
-  if flow:is("title") then flow:start() else flow:restart() end
+  if flow:is("title") then
+    flow:start()
+  else
+    flow:restart()
+  end
   state.practice = practice
   state.gameplayTime = 0
   state.uiTime = 0
@@ -85,7 +93,9 @@ local function update(dt: number)
   debugInput:update()
   state.uiTime += dt
   uiTweens:update(dt)
-  if not focused then return end
+  if not focused then
+    return
+  end
 
   -- One transition owns the frame; polling already consumed all input edges.
   if globalInput:pressed("title") and not flow:is("title") then
@@ -97,7 +107,9 @@ local function update(dt: number)
     return
   end
   if flow:is("title") then
-    if menuInput:pressed("confirm") then reset(false) end
+    if menuInput:pressed("confirm") then
+      reset(false)
+    end
     return
   end
   if globalInput:pressed("pause") then
@@ -113,8 +125,12 @@ local function update(dt: number)
   end
 
   -- Explicit mode gates prevent debug upgrades from altering normal runs.
-  if state.practice and debugInput:pressed("upgrade") then state.upgrades += 1 end
-  if playInput:pressed("fire") then state.shots += 1 end
+  if state.practice and debugInput:pressed("upgrade") then
+    state.upgrades += 1
+  end
+  if playInput:pressed("fire") then
+    state.shots += 1
+  end
   state.gameplayTime += dt
   gameplayTweens:update(dt)
 end

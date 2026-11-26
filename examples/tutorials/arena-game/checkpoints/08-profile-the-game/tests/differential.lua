@@ -15,12 +15,17 @@ local function snapshot(combat, player)
     "hitEntity",
     "hitX",
     "hitY",
-  }) do values[#values + 1] = combat.state[key] end
+  }) do
+    values[#values + 1] = combat.state[key]
+  end
   local ids = {}
-  combat.enemies:each(function(id) ids[#ids + 1] = id end)
+  combat.enemies:each(function(id)
+    ids[#ids + 1] = id
+  end)
   table.sort(ids)
   for _, id in ipairs(ids) do
-    local position, health, brain = combat.readPosition(id), combat.readHealth(id), combat.readBrain(id)
+    local position, health, brain =
+      combat.readPosition(id), combat.readHealth(id), combat.readBrain(id)
     for _, value in ipairs({
       id,
       position.x,
@@ -67,14 +72,19 @@ for _, count in ipairs({ 8, 32, 128 }) do
     end
     if index % 37 == 0 then
       local id
-      left.enemies:each(function(candidate) if not id or candidate < id then id = candidate end end)
+      left.enemies:each(function(candidate)
+        if not id or candidate < id then
+          id = candidate
+        end
+      end)
       if id then
         for _, game in ipairs({ left, right }) do
-          game.world:add(
-            id,
-            Components.Position,
-            { x = 820, y = 572, previousX = 820, previousY = 572 }
-          )
+          game.world:add(id, Components.Position, {
+            x = 820,
+            y = 572,
+            previousX = 820,
+            previousY = 572,
+          })
           game.readHealth(id).current = 1
         end
       end
@@ -93,4 +103,6 @@ for _, count in ipairs({ 8, 32, 128 }) do
   left.dispose()
   right.dispose()
 end
-print("ARENA_DIFFERENTIAL_OK 3600 mixed steps, 8/32/128 enemies, attacks, replacements, deaths and resets")
+print(
+  "ARENA_DIFFERENTIAL_OK 3600 mixed steps, 8/32/128 enemies, attacks, replacements, deaths and resets"
+)

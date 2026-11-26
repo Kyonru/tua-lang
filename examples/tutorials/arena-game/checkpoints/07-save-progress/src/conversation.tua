@@ -9,7 +9,9 @@ local function new(startWave: () -> boolean)
     state.selected = 1
   end
   local function start()
-    if disposed or state.active then return end
+    if disposed or state.active then
+      return
+    end
     state.startRequested = false
     state.selected = 1
     player:setLocale(I18n.getLocale())
@@ -17,10 +19,14 @@ local function new(startWave: () -> boolean)
     state.active = true
   end
   local function locale()
-    if not disposed then player:setLocale(I18n.getLocale()) end
+    if not disposed then
+      player:setLocale(I18n.getLocale())
+    end
   end
   local function update(dt: number, advance: boolean, direction: number)
-    if disposed or not state.active then return end
+    if disposed or not state.active then
+      return
+    end
     player:update(dt, true)
     local snapshot = player:snapshot()
     local node = snapshot.node
@@ -41,11 +47,15 @@ local function new(startWave: () -> boolean)
     if player:snapshot().state == "completed" then
       local requested = state.startRequested
       close()
-      if requested and startWave() then state.wavesStarted += 1 end
+      if requested and startWave() then
+        state.wavesStarted += 1
+      end
     end
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     close()
     player:dispose()
     disposed = true

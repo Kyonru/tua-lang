@@ -5,16 +5,29 @@ local function new()
   local game = store(saved or profile:defaults())
   -- Schema numbers are finite; gameplay constraints are a separate validation step.
   local data = game:get()
-  local invalid = data.clearedWave < 0 or data.clearedWave % 1 ~= 0
-    or data.health < 1 or data.health > 10 or data.health % 1 ~= 0
-    or data.music < 0 or data.music > 1 or data.effects < 0 or data.effects > 1
+  local invalid = data.clearedWave < 0
+    or data.clearedWave % 1 ~= 0
+    or data.health < 1
+    or data.health > 10
+    or data.health % 1 ~= 0
+    or data.music < 0
+    or data.music > 1
+    or data.effects < 0
+    or data.effects > 1
   local ui = { status = "new", confirmReset = false, resetFailed = false }
-  if loadIssue or invalid then ui.status = "blocked"
-  elseif saved then ui.status = "loaded" end
-  local function blocked(): boolean return loadIssue ~= nil or invalid end
+  if loadIssue or invalid then
+    ui.status = "blocked"
+  elseif saved then
+    ui.status = "loaded"
+  end
+  local function blocked(): boolean
+    return loadIssue ~= nil or invalid
+  end
   local function bind()
     return profile:bind(game, {
-      select = function(state) return state end,
+      select = function(state)
+        return state
+      end,
       debounce = 1,
       max_interval = 10,
     })
@@ -22,18 +35,29 @@ local function new()
   local binding = bind()
   local disposed = false
   local function save(): boolean
-    if disposed or blocked() or ui.confirmReset then return false end
+    if disposed or blocked() or ui.confirmReset then
+      return false
+    end
     local ok = binding:flush()
     ui.status = ok and "saved" or "failed"
     return ok
   end
   local function preferences(options: Profile.Preferences)
-    if disposed or blocked() or ui.confirmReset then return end
+    if disposed or blocked() or ui.confirmReset then
+      return
+    end
     local current = game:get()
-    if current.locale == options.locale and current.music == options.music
-      and current.effects == options.effects and current.muted == options.muted
-      and current.feedback == options.feedback and current.reducedMotion == options.reducedMotion
-      and current.shader == options.shader then return end
+    if
+      current.locale == options.locale
+      and current.music == options.music
+      and current.effects == options.effects
+      and current.muted == options.muted
+      and current.feedback == options.feedback
+      and current.reducedMotion == options.reducedMotion
+      and current.shader == options.shader
+    then
+      return
+    end
     game:update(function(state)
       state.locale = options.locale
       state.music = options.music
@@ -47,8 +71,18 @@ local function new()
   end
   -- The host must establish the empty-world boundary before calling this.
   local function checkpoint(wave: number, health: number): boolean
-    if disposed or blocked() or ui.confirmReset or wave < 1 or wave % 1 ~= 0
-      or health < 1 or health > 10 or health % 1 ~= 0 then return false end
+    if
+      disposed
+      or blocked()
+      or ui.confirmReset
+      or wave < 1
+      or wave % 1 ~= 0
+      or health < 1
+      or health > 10
+      or health % 1 ~= 0
+    then
+      return false
+    end
     game:update(function(state)
       state.clearedWave = wave
       state.health = health
@@ -56,13 +90,20 @@ local function new()
     return save()
   end
   local function update(dt: number)
-    if disposed or blocked() or ui.confirmReset then return end
+    if disposed or blocked() or ui.confirmReset then
+      return
+    end
     local wrote = binding:update(dt)
-    if binding:lastIssue() then ui.status = "failed"
-    elseif wrote then ui.status = "saved" end
+    if binding:lastIssue() then
+      ui.status = "failed"
+    elseif wrote then
+      ui.status = "saved"
+    end
   end
   local function recover(): boolean
-    if disposed or invalid or ui.confirmReset or not loadIssue then return false end
+    if disposed or invalid or ui.confirmReset or not loadIssue then
+      return false
+    end
     if loadIssue.code ~= "damaged_slot_unverified" or not profile:acceptRecovery() then
       return false
     end
@@ -77,9 +118,13 @@ local function new()
       ui.resetFailed = false
     end
   end
-  local function cancelReset() ui.confirmReset = false end
+  local function cancelReset()
+    ui.confirmReset = false
+  end
   local function confirmReset(): boolean
-    if disposed or not ui.confirmReset then return false end
+    if disposed or not ui.confirmReset then
+      return false
+    end
     local defaults, issue = profile:reset()
     if not defaults then
       loadIssue = issue or loadIssue
@@ -97,15 +142,21 @@ local function new()
     return true
   end
   local function dispose(): boolean
-    if disposed then return true end
+    if disposed then
+      return true
+    end
     local ok = save()
     binding:dispose()
     disposed = true
     return ok
   end
   return {
-    snapshot = function() return game:get() end,
-    issue = function() return loadIssue end,
+    snapshot = function()
+      return game:get()
+    end,
+    issue = function()
+      return loadIssue
+    end,
     blocked = blocked,
     ui = ui,
     preferences = preferences,

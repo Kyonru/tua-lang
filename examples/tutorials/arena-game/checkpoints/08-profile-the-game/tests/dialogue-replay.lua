@@ -7,8 +7,12 @@ local function tap(context, key)
 end
 local function clearWave()
   local ids = {}
-  host.combat.enemies:each(function(id) ids[#ids + 1] = id end)
-  for _, id in ipairs(ids) do host.combat.destroyEnemy(id) end
+  host.combat.enemies:each(function(id)
+    ids[#ids + 1] = id
+  end)
+  for _, id in ipairs(ids) do
+    host.combat.destroyEnemy(id)
+  end
 end
 local function setup(context)
   host = require("__tua_replay_game")
@@ -52,9 +56,15 @@ local function beforeFrame(context)
     tap(context, "return")
     assert(not host.conversation.state.active and host.combat.state.wave == 1)
   end
-  if context.frame == 30 then tap(context, "n") end
-  if context.frame == 35 then tap(context, "return") end
-  if context.frame == 40 then tap(context, "return") end
+  if context.frame == 30 then
+    tap(context, "n")
+  end
+  if context.frame == 35 then
+    tap(context, "return")
+  end
+  if context.frame == 40 then
+    tap(context, "return")
+  end
   if context.frame == 45 then
     local ticks = host.combat.state.ticks
     tap(context, "tab")
@@ -74,6 +84,8 @@ local function beforeFrame(context)
 end
 local function verify(context)
   assert(host.conversation.state.wavesStarted == 1 and host.combat.state.wave == 1)
-  print("ARENA_DIALOGUE_NATIVE_OK modal input, focus resume, French wrapping, locale identity, rest/start/cancel")
+  print(
+    "ARENA_DIALOGUE_NATIVE_OK modal input, focus resume, French wrapping, locale identity, rest/start/cancel"
+  )
 end
 return { setup = setup, beforeFrame = beforeFrame, verify = verify }

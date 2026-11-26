@@ -10,27 +10,45 @@ local calls = {
   disposed = 0,
 }
 local backend = {
-  update = function() calls.updates = calls.updates + 1 end,
+  update = function()
+    calls.updates = calls.updates + 1
+  end,
   scene = function(active)
     calls.scenes = calls.scenes + 1
     calls.active = active
   end,
-  pauseMusic = function(value) calls.paused = value end,
-  stopEffects = function() calls.stops = calls.stops + 1 end,
-  shot = function() calls.shot = calls.shot + 1 end,
-  hit = function() calls.hit = calls.hit + 1 end,
-  hurt = function() calls.hurt = calls.hurt + 1 end,
-  defeat = function() calls.defeat = calls.defeat + 1 end,
+  pauseMusic = function(value)
+    calls.paused = value
+  end,
+  stopEffects = function()
+    calls.stops = calls.stops + 1
+  end,
+  shot = function()
+    calls.shot = calls.shot + 1
+  end,
+  hit = function()
+    calls.hit = calls.hit + 1
+  end,
+  hurt = function()
+    calls.hurt = calls.hurt + 1
+  end,
+  defeat = function()
+    calls.defeat = calls.defeat + 1
+  end,
   volumes = function(music, effects, muted)
     calls.music, calls.effects, calls.muted = music, effects, muted
   end,
-  dispose = function() calls.disposed = calls.disposed + 1 end,
+  dispose = function()
+    calls.disposed = calls.disposed + 1
+  end,
 }
 local sound = Soundscape.new(backend)
 assert(calls.music == 0.35 and calls.effects == 0.6 and not calls.muted)
 sound.update(0.1, "title", true, 0, 0, 0, 0)
 assert(calls.scenes == 1 and not calls.active)
-for _ = 1, 100 do sound.update(0.1, "title", true, 0, 0, 0, 0) end
+for _ = 1, 100 do
+  sound.update(0.1, "title", true, 0, 0, 0, 0)
+end
 assert(calls.scenes == 1, "updates must not restart music")
 sound.update(0.1, "playing", true, 1, 0, 0, 0)
 assert(calls.scenes == 2 and calls.active)

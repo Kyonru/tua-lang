@@ -7,8 +7,12 @@ local function tap(context, key)
 end
 local function clearWave()
   local ids = {}
-  host.combat.enemies:each(function(id) ids[#ids + 1] = id end)
-  for _, id in ipairs(ids) do host.combat.destroyEnemy(id) end
+  host.combat.enemies:each(function(id)
+    ids[#ids + 1] = id
+  end)
+  for _, id in ipairs(ids) do
+    host.combat.destroyEnemy(id)
+  end
 end
 local function setup(context)
   assert(love.filesystem.getIdentity():match("^tua%-replay%-"))
@@ -25,7 +29,9 @@ local function setup(context)
   host.update(0)
   assert(#host.combat.bullets > 0 and host.progress.snapshot().clearedWave == 0)
   host.session.trigger.held = false
-  for _ = 1, 7 do host.update(0.25) end
+  for _ = 1, 7 do
+    host.update(0.25)
+  end
   assert(host.progress.snapshot().clearedWave == 1)
   assert(host.progress.snapshot().health == 7 and host.progress.snapshot().locale == "fr")
   tap(context, "n")
@@ -49,7 +55,9 @@ local function setup(context)
   love.window.setMode(640, 480)
 end
 local function beforeFrame(context)
-  if context.frame == 20 then tap(context, "delete") end
+  if context.frame == 20 then
+    tap(context, "delete")
+  end
   if context.frame == 30 then
     tap(context, "return")
     assert(host.progress.snapshot().clearedWave == 0 and not host.progress.ui.confirmReset)

@@ -8,7 +8,9 @@ end
 local function aimAtFirst(context)
   local selected
   host.combat.enemies:each(function(id)
-    if not selected or id < selected then selected = id end
+    if not selected or id < selected then
+      selected = id
+    end
   end)
   if selected then
     local position = host.combat.readPosition(selected)
@@ -36,7 +38,9 @@ local function setup(context)
   local baseline = burst(context, "on")
   for _, mode in ipairs({ "off", "reduced" }) do
     local result = burst(context, mode)
-    for i = 1, 3 do assert(result[i] == baseline[i], "feedback must not affect damage") end
+    for i = 1, 3 do
+      assert(result[i] == baseline[i], "feedback must not affect damage")
+    end
   end
   tap(context, "r")
   host.feedback.options.enabled = true
@@ -77,9 +81,13 @@ local function beforeFrame(context)
     tap(context, "0")
     assert(host.audioBackend.snapshot().buses.master.muted)
   end
-  if frame == 15 then tap(context, "0") end
+  if frame == 15 then
+    tap(context, "0")
+  end
   aimAtFirst(context)
-  if frame == 1 then context.key("space", true) end
+  if frame == 1 then
+    context.key("space", true)
+  end
   if frame == 25 then
     tap(context, "escape")
     shots = host.combat.state.shots
@@ -88,14 +96,18 @@ local function beforeFrame(context)
   end
   if frame == 40 then
     assert(host.combat.state.shots == shots and host.hero.animation.position == framePosition)
-    if bulletX then assert(host.combat.bullets[1].x == bulletX) end
+    if bulletX then
+      assert(host.combat.bullets[1].x == bulletX)
+    end
     tap(context, "return")
   end
   if frame == 70 then
     love.focus(false)
     shots = host.combat.state.shots
   end
-  if frame == 75 then love.focus(true) end
+  if frame == 75 then
+    love.focus(true)
+  end
   if frame == 80 then
     assert(host.combat.state.shots == shots and host.session.flow:is("paused"))
     context.key("space", false)
@@ -112,7 +124,9 @@ end
 local function verify(context)
   -- Let the live wave approach and attack without firing.
   tap(context, "r")
-  for _ = 1, 360 do host.update(1 / 30) end
+  for _ = 1, 360 do
+    host.update(1 / 30)
+  end
   assert(host.session.flow:is("gameover") and host.combat.state.health == 0)
   local ticks = host.combat.state.ticks
   host.update(1)

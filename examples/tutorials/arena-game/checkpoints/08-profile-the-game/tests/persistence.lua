@@ -13,7 +13,9 @@ end
 local function clear()
   assert(love.filesystem.getIdentity():match("^tua%-arena%-save%-test%-"))
   for _, path in ipairs(paths) do
-    if love.filesystem.getInfo(path) then assert(love.filesystem.remove(path)) end
+    if love.filesystem.getInfo(path) then
+      assert(love.filesystem.remove(path))
+    end
   end
 end
 local options = {
@@ -27,7 +29,9 @@ local options = {
 }
 local function blocked(progress, code)
   assert(progress.blocked())
-  if code then assert(progress.issue().code == code) end
+  if code then
+    assert(progress.issue().code == code)
+  end
   local a, b = bytes()
   progress.preferences(options)
   assert(not progress.checkpoint(3, 7) and not progress.save())
@@ -136,7 +140,9 @@ local function run(phase)
   assert(not progress.confirmReset(), "reset needs confirmation")
   progress.requestReset()
   local remove = love.filesystem.remove
-  love.filesystem.remove = function() return nil, "injected reset failure" end
+  love.filesystem.remove = function()
+    return nil, "injected reset failure"
+  end
   assert(not progress.confirmReset() and progress.ui.confirmReset)
   love.filesystem.remove = remove
   assert(progress.confirmReset() and not progress.blocked())
@@ -168,7 +174,9 @@ local function run(phase)
   progress = Progress.new()
   progress.requestReset()
   love.filesystem.remove = function(path)
-    if path == paths[2] then return nil, "second deletion failed" end
+    if path == paths[2] then
+      return nil, "second deletion failed"
+    end
     return remove(path)
   end
   assert(not progress.confirmReset())
@@ -182,7 +190,9 @@ local function run(phase)
   clear()
   progress = Progress.new()
   local write = love.filesystem.write
-  love.filesystem.write = function() return nil, "injected write failure" end
+  love.filesystem.write = function()
+    return nil, "injected write failure"
+  end
   assert(not progress.checkpoint(5, 8))
   assert(progress.ui.status == "failed" and progress.snapshot().clearedWave == 5)
   love.filesystem.write = write
@@ -191,6 +201,8 @@ local function run(phase)
   progress.dispose()
   clear()
   love.filesystem.remove("__tua_saves")
-  print("SAVE_PHASE_2_OK relaunch, restore, debounce, quit, migration, corruption, recovery, reset, retry")
+  print(
+    "SAVE_PHASE_2_OK relaunch, restore, debounce, quit, migration, corruption, recovery, reset, retry"
+  )
 end
 return { run = run }

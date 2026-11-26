@@ -28,11 +28,18 @@ local function new()
   local function scene(active: boolean)
     -- Stop first: rapid scene changes cannot stack crossfading music voices.
     audio:stopBus("music")
-    if active then audio:setMusicState("combat", { fade = 0.2 })
-    else audio:setMusicState("harbor", { fade = 0.2 }) end
+    if active then
+      audio:setMusicState("combat", { fade = 0.2 })
+    else
+      audio:setMusicState("harbor", { fade = 0.2 })
+    end
   end
   local function pauseMusic(value: boolean)
-    if value then audio:pauseBus("music") else audio:resumeBus("music") end
+    if value then
+      audio:pauseBus("music")
+    else
+      audio:resumeBus("music")
+    end
   end
   local function volumes(musicGain: number, effectsGain: number, muted: boolean)
     audio:setBusVolume("music", musicGain)
@@ -40,7 +47,9 @@ local function new()
     audio:setBusMuted("master", muted)
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     audio:stopBus("master")
     shot:release()
     hit:release()
@@ -51,17 +60,31 @@ local function new()
     disposed = true
   end
   return {
-    update = function(dt: number) audio:update(dt) end,
+    update = function(dt: number)
+      audio:update(dt)
+    end,
     scene = scene,
     pauseMusic = pauseMusic,
-    stopEffects = function() audio:stopBus("sfx") end,
-    shot = function() audio:play("shot") end,
-    hit = function() audio:play("hit") end,
-    hurt = function() audio:play("hurt") end,
-    defeat = function() audio:play("defeat") end,
+    stopEffects = function()
+      audio:stopBus("sfx")
+    end,
+    shot = function()
+      audio:play("shot")
+    end,
+    hit = function()
+      audio:play("hit")
+    end,
+    hurt = function()
+      audio:play("hurt")
+    end,
+    defeat = function()
+      audio:play("defeat")
+    end,
     volumes = volumes,
     dispose = dispose,
-    snapshot = function() return audio:snapshot() end,
+    snapshot = function()
+      return audio:snapshot()
+    end,
   }
 end
 return { new = new }
