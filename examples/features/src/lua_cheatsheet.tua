@@ -514,13 +514,11 @@ local vectorMissingLength = vectorA.length
 -- type, Tua can infer the key/value variables inside the generic for loop.
 ---@param value any
 ---@return ["speed" | "power", number]
-local function iterateStats(value)
-end
+local function iterateStats(value) end
 
 ---@param value any
 ---@return [number, string]
-local function iterateLabels(value)
-end
+local function iterateLabels(value) end
 
 local statBag = {}
 setmetatable(statBag, { __pairs = iterateStats })

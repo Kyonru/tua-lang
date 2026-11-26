@@ -90,7 +90,9 @@ local function resolve(
   locale: string
 )
   local translated = french[key]
-  if locale == "fr" and translated then return { template = translated, locale = "fr" } end
+  if locale == "fr" and translated then
+    return { template = translated, locale = "fr" }
+  end
   return { template = source, locale = "en" }
 end
 return { resolve = resolve }

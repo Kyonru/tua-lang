@@ -11,7 +11,9 @@ function love.load()
   local state = journal.load()
   print("operation", active.key, "coins", state.coins, "shells", state.shells)
   local line = active.player:snapshot().node
-  if line then print(line.text) end
+  if line then
+    print(line.text)
+  end
   active.acknowledge()
   love.event.quit()
 end

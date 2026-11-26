@@ -1,5 +1,5 @@
-local Globals = require('global')
-local ECS = require('ecs')
+local Globals = require("global")
+local ECS = require("ecs")
 local patterns = require("patterns")
 
 local world = ECS.world
@@ -17,12 +17,7 @@ local function drawPlayer()
   love.graphics.rotate(rotation.r + math.pi / 2)
 
   love.graphics.setColor(0.42, 0.86, 0.78, 1)
-  love.graphics.polygon(
-    "fill",
-    0, -12,
-    -9, 10,
-    9, 10
-  )
+  love.graphics.polygon("fill", 0, -12, -9, 10, 9, 10)
 
   love.graphics.pop()
 end

@@ -8,7 +8,9 @@ local names: { [string]: string } = {
   tactics = "Tactics box",
   terminal = "Field terminal",
 }
-local function name(mode: string): string return names[mode] or mode end
+local function name(mode: string): string
+  return names[mode] or mode
+end
 local function modal(mode: string): boolean
   return mode == "panel" or mode == "mythic" or mode == "tactics"
 end

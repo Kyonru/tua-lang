@@ -31,21 +31,33 @@ local function new()
   end
   local function skipConversation(): (boolean, string)
     local player = owner
-    if player == nil then return false, "unbound" end
+    if player == nil then
+      return false, "unbound"
+    end
     local view = player:snapshot()
-    if view.suspended then return false, "suspended" end
+    if view.suspended then
+      return false, "suspended"
+    end
     if view.state == "awaiting_action" then
       local action = view.action
-      if action == nil or action.status == "ready" then return false, "action_not_started" end
-      if action.status ~= "pending" then return false, "consume_action_result" end
+      if action == nil or action.status == "ready" then
+        return false, "action_not_started"
+      end
+      if action.status ~= "pending" then
+        return false, "consume_action_result"
+      end
       if view.generation ~= generation or view.visit ~= visit or view.nodeId ~= nodeId then
         return false, "unowned_action"
       end
-      if not cancellable then return false, "non_cancellable_action" end
+      if not cancellable then
+        return false, "non_cancellable_action"
+      end
     end
     -- Player cancellation detaches the handle before cleanup. A reentrant
     -- restart wins; no further navigation or manufactured result follows it.
-    if player:cancel() then return true, "cancelled" end
+    if player:cancel() then
+      return true, "cancelled"
+    end
     return false, "inactive"
   end
   return { bind = bind, begin = begin, skipConversation = skipConversation }

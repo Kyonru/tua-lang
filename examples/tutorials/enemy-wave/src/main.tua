@@ -25,19 +25,28 @@ function love.update(dt: number)
   effects.update(dt)
 end
 function love.mousepressed(x: number, y: number, button: number)
-  if button ~= 1 then return end
+  if button ~= 1 then
+    return
+  end
   local impact = wave.shoot(x, y)
-  if impact and options.effects then effects.spawn(impact.x, impact.y) end
+  if impact and options.effects then
+    effects.spawn(impact.x, impact.y)
+  end
 end
 function love.keypressed(key: string)
-  if key == "space" then wave.spawnWave()
+  if key == "space" then
+    wave.spawnWave()
   elseif key == "r" then
     effects.clear()
     wave.reset()
   elseif key == "e" then
     options.effects = not options.effects
-    if not options.effects then effects.clear() end
-  elseif key == "escape" then love.event.quit() end
+    if not options.effects then
+      effects.clear()
+    end
+  elseif key == "escape" then
+    love.event.quit()
+  end
 end
 function love.draw()
   love.graphics.clear(0.08, 0.12, 0.14)
@@ -45,8 +54,16 @@ function love.draw()
   love.graphics.setFont(heading)
   love.graphics.print("A wave of enemies", 32, 28)
   love.graphics.setFont(body)
-  love.graphics.print("Wave " .. wave.state.wave .. "     Remaining " .. wave.enemies:count()
-    .. "     Defeated " .. wave.state.defeated, 32, 76)
+  love.graphics.print(
+    "Wave "
+      .. wave.state.wave
+      .. "     Remaining "
+      .. wave.enemies:count()
+      .. "     Defeated "
+      .. wave.state.defeated,
+    32,
+    76
+  )
   wave.enemies:each(function(_, position, health, velocity)
     love.graphics.setColor(0.055, 0.12, 0.14, 0.6)
     love.graphics.ellipse("fill", position.x, position.y - 3, 23, 7)
@@ -69,13 +86,15 @@ function love.draw()
   end
   love.graphics.setColor(0.69, 0.80, 0.79)
   love.graphics.print(
-    wave.enemies:count() == 0 and "Wave cleared. Space starts the next one." or "Click an enemy to damage it.",
+    wave.enemies:count() == 0 and "Wave cleared. Space starts the next one."
+      or "Click an enemy to damage it.",
     32,
     430
   )
   love.graphics.print(
-    "Space  Next wave     R  Reset     E  Defeat rings: " .. (options.effects and "on" or "off")
-    .. "     Esc  Quit",
+    "Space  Next wave     R  Reset     E  Defeat rings: "
+      .. (options.effects and "on" or "off")
+      .. "     Esc  Quit",
     32,
     470
   )

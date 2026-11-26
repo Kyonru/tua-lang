@@ -1,6 +1,9 @@
 -- Host-owned layout data: stable speaker keys, never translated names or portrait filenames.
 export type Layout = {
-  portrait: "left" | "right" | "none", anchor: "screen" | "actor", x: number, y: number,
+  portrait: "left" | "right" | "none",
+  anchor: "screen" | "actor",
+  x: number,
+  y: number,
 }
 type Override = {
   portrait?: "left" | "right" | "none",
@@ -46,7 +49,8 @@ local function geometry(layout: Layout, width: number, height: number, choice: b
   -- The normalized position describes the available travel of the whole box, not its center.
   local x = 32 + (width - 64 - w) * math.max(0, math.min(1, layout.x))
   local y = top + (bottom - top - h) * math.max(0, math.min(1, layout.y))
-  local targetX = layout.portrait == "right" and width - 32 - portraitSize / 2 or 32 + portraitSize / 2
+  local targetX = layout.portrait == "right" and width - 32 - portraitSize / 2
+    or 32 + portraitSize / 2
   return {
     x = x,
     y = y,

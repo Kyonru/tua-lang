@@ -16,8 +16,14 @@ local function checkScene()
   assert(raw ~= nil, "authored action missing")
   local node: ActionIdentity = raw
   assert(scene.documentId == "merchant" and scene.entry == "buy", "authored document changed")
-  assert(node.kind == "action" and node.name == "purchase" and node.id == "merchant.purchase"
-    and node.success == "done" and node.failure == "declined", "authored action changed")
+  assert(
+    node.kind == "action"
+      and node.name == "purchase"
+      and node.id == "merchant.purchase"
+      and node.success == "done"
+      and node.failure == "declined",
+    "authored action changed"
+  )
 end
 
 local function new(backend?: Backend)
@@ -34,13 +40,19 @@ local function new(backend?: Backend)
     })
     player:start(intent.nodeId)
     local request = player:snapshot().action
-    assert(request ~= nil and request.documentId == intent.documentId
-      and request.actionId == intent.actionId, "authored action identity changed")
+    assert(
+      request ~= nil
+        and request.documentId == intent.documentId
+        and request.actionId == intent.actionId,
+      "authored action identity changed"
+    )
     local function acknowledge()
       local receipt = journal.receipt(operationKey)
       local expected = receipt.success == true and "done" or "declined"
-      assert(receipt.committed and player:snapshot().nodeId == expected,
-        "consume the action outcome before acknowledging")
+      assert(
+        receipt.committed and player:snapshot().nodeId == expected,
+        "consume the action outcome before acknowledging"
+      )
       journal.acknowledge(operationKey)
       player:dispose()
     end
@@ -58,7 +70,9 @@ local function new(backend?: Backend)
   end
   local function recover()
     local intent = journal.load().intent
-    if intent then return attach(intent.key) end
+    if intent then
+      return attach(intent.key)
+    end
     return nil
   end
   return { begin = begin, recover = recover }

@@ -39,7 +39,9 @@ end
 -- Feature: nullable wrapper returns are inferred, including early guards.
 local function visiblePosition(id: number)
   local value = readPosition(id)
-  if value and value.x < 0 then return nil end
+  if value and value.x < 0 then
+    return nil
+  end
   return value
 end
 

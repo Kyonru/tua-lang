@@ -2,18 +2,29 @@ local Session = require("session")
 local session = Session.new()
 local heading = love.graphics.newFont(28)
 local body = love.graphics.newFont(18)
-function love.update(dt: number) session.update(dt) end
+function love.update(dt: number)
+  session.update(dt)
+end
 function love.keypressed(key: string)
   if session.ui.confirmReset then
-    if key == "return" then session.confirmReset()
-    elseif key == "escape" then session.cancelReset() end
+    if key == "return" then
+      session.confirmReset()
+    elseif key == "escape" then
+      session.cancelReset()
+    end
     return
   end
-  if key == "space" then session.score()
-  elseif key == "s" then session.save()
-  elseif key == "r" then session.acceptRecovery()
-  elseif key == "d" then session.requestReset()
-  elseif key == "escape" then love.event.quit() end
+  if key == "space" then
+    session.score()
+  elseif key == "s" then
+    session.save()
+  elseif key == "r" then
+    session.acceptRecovery()
+  elseif key == "d" then
+    session.requestReset()
+  elseif key == "escape" then
+    love.event.quit()
+  end
 end
 function love.draw()
   local width = love.graphics.getWidth()
@@ -29,8 +40,12 @@ function love.draw()
     love.graphics.print("Score: " .. session.snapshot().score, 32, 92)
   end
   if session.ui.confirmReset then
-    love.graphics.printf("Delete saved progress and start again? Both save copies will be removed.",
-      32, 150, width - 64)
+    love.graphics.printf(
+      "Delete saved progress and start again? Both save copies will be removed.",
+      32,
+      150,
+      width - 64
+    )
     love.graphics.print("Enter   Delete and restart     Esc   Keep progress", 32, 250)
     love.graphics.printf(session.ui.notice, 32, 310, width - 64)
   else

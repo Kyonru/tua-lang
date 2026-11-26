@@ -34,7 +34,9 @@ end
 
 function score.draw()
   local font = score.font
-  if not font then return end
+  if not font then
+    return
+  end
   love.graphics.setFont(font)
   love.graphics.print(tostring(math.floor(score.time)), score.time_x, score.time_y)
   love.graphics.print(tostring(math.floor(score.score)), score.score_x, score.score_y)

@@ -10,18 +10,26 @@ local fast = false
 player:start()
 function love.update(dt: number)
   local step = dt
-  if fast then step = dt * 4 end
+  if fast then
+    step = dt * 4
+  end
   local revealed = audio.update(player:snapshot(), step)
   view = { text = revealed.text, complete = revealed.complete }
   player:update(step, revealed.complete)
 end
 function love.keypressed(key: string)
   if key == "space" then
-    if not view.complete then audio.finish()
-    else player:advance() end
+    if not view.complete then
+      audio.finish()
+    else
+      player:advance()
+    end
   elseif key == "p" then
-    if player:snapshot().suspended then player:resume()
-    else player:suspend() end
+    if player:snapshot().suspended then
+      player:resume()
+    else
+      player:suspend()
+    end
   elseif key == "m" then
     muted = not muted
   elseif key == "v" then
@@ -31,15 +39,22 @@ function love.keypressed(key: string)
   elseif key == "f" then
     fast = not fast
   elseif key == "l" then
-    if player:snapshot().locale == "en" then player:setLocale("fr")
-    else player:setLocale("en") end
+    if player:snapshot().locale == "en" then
+      player:setLocale("fr")
+    else
+      player:setLocale("en")
+    end
   elseif key == "escape" then
     player:cancel()
   end
   local chatterGain = 1
   local voiceGain = 1
-  if muted then chatterGain = 0 end
-  if voiceMuted then voiceGain = 0 end
+  if muted then
+    chatterGain = 0
+  end
+  if voiceMuted then
+    voiceGain = 0
+  end
   audio.volume(chatterGain, voiceGain)
   -- Apply navigation/cancellation before the next draw or audio frame.
   local revealed = audio.update(player:snapshot(), 0)

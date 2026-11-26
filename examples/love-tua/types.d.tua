@@ -9,7 +9,7 @@ export type Velocity = {
 }
 
 export type Rotation = {
-  r: number
+  r: number,
 }
 
 export type Bullet = {

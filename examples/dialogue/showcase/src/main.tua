@@ -14,17 +14,26 @@ local maxScroll = 0
 local maxHistoryScroll = 0
 function love.update(dt: number)
   host.update(dt)
-  if not host.settings.paused then presenter.update(dt) end
+  if not host.settings.paused then
+    presenter.update(dt)
+  end
 end
 function love.keypressed(key: string)
   local settings = host.settings
-  if key == "h" then settings.help = not settings.help
-  elseif key == "tab" then settings.transcript = not settings.transcript
+  if key == "h" then
+    settings.help = not settings.help
+  elseif key == "tab" then
+    settings.transcript = not settings.transcript
   elseif key == "o" then
-    if settings.portrait == "left" then settings.portrait = "right"
-    elseif settings.portrait == "right" then settings.portrait = "above"
-    elseif settings.portrait == "above" then settings.portrait = "none"
-    else settings.portrait = "left" end
+    if settings.portrait == "left" then
+      settings.portrait = "right"
+    elseif settings.portrait == "right" then
+      settings.portrait = "above"
+    elseif settings.portrait == "above" then
+      settings.portrait = "none"
+    else
+      settings.portrait = "left"
+    end
   elseif key == "f4" then
     settings.entry = settings.entry == "staging" and "start" or "staging"
     settings.mode = "bubble"
@@ -39,14 +48,23 @@ function love.keypressed(key: string)
     local facts = host.player():getContext()
     host.player():updateContext({ name = facts.name, permit = not facts.permit })
   elseif key == "space" or key == "return" then
-    if not settings.help and not settings.transcript then host.advance() end
-  elseif key == "1" then settings.mode = "panel"
-  elseif key == "2" then settings.mode = "bubble"
-  elseif key == "3" then settings.mode = "radio"
-  elseif key == "4" then settings.mode = "subtitles"
-  elseif key == "5" then settings.mode = "mythic"
-  elseif key == "6" then settings.mode = "tactics"
-  elseif key == "7" then settings.mode = "terminal"
+    if not settings.help and not settings.transcript then
+      host.advance()
+    end
+  elseif key == "1" then
+    settings.mode = "panel"
+  elseif key == "2" then
+    settings.mode = "bubble"
+  elseif key == "3" then
+    settings.mode = "radio"
+  elseif key == "4" then
+    settings.mode = "subtitles"
+  elseif key == "5" then
+    settings.mode = "mythic"
+  elseif key == "6" then
+    settings.mode = "tactics"
+  elseif key == "7" then
+    settings.mode = "terminal"
   elseif key == "up" or key == "down" then
     local snapshot = host.player():snapshot()
     local node = snapshot.node
@@ -55,28 +73,46 @@ function love.keypressed(key: string)
       settings.selected = math.max(1, math.min(#node.options, settings.selected + direction))
     end
   elseif key == "[" or key == "pageup" then
-    if settings.transcript then settings.historyScroll = math.max(0, settings.historyScroll - 58)
-    else settings.scroll = math.max(0, settings.scroll - 58) end
+    if settings.transcript then
+      settings.historyScroll = math.max(0, settings.historyScroll - 58)
+    else
+      settings.scroll = math.max(0, settings.scroll - 58)
+    end
   elseif key == "]" or key == "pagedown" then
     if settings.transcript then
       settings.historyScroll = math.min(maxHistoryScroll, settings.historyScroll + 58)
-    else settings.scroll = math.min(maxScroll, settings.scroll + 58) end
-  elseif key == "f" then settings.speed = settings.speed == 1 and 3 or 1
-  elseif key == "m" then settings.reducedMotion = not settings.reducedMotion
-  elseif key == "s" then settings.subtitles = not settings.subtitles
-  elseif key == "v" then settings.voiceMuted = not settings.voiceMuted
-  elseif key == "p" then settings.paused = not settings.paused
-  elseif key == "l" then host.locale()
-  elseif key == "q" then host.enqueue("conversation")
-  elseif key == "n" then host.enqueue("radio")
-  elseif key == "f5" then host.save()
-  elseif key == "f9" then host.restore()
-  elseif key == "r" then host.reset()
+    else
+      settings.scroll = math.min(maxScroll, settings.scroll + 58)
+    end
+  elseif key == "f" then
+    settings.speed = settings.speed == 1 and 3 or 1
+  elseif key == "m" then
+    settings.reducedMotion = not settings.reducedMotion
+  elseif key == "s" then
+    settings.subtitles = not settings.subtitles
+  elseif key == "v" then
+    settings.voiceMuted = not settings.voiceMuted
+  elseif key == "p" then
+    settings.paused = not settings.paused
+  elseif key == "l" then
+    host.locale()
+  elseif key == "q" then
+    host.enqueue("conversation")
+  elseif key == "n" then
+    host.enqueue("radio")
+  elseif key == "f5" then
+    host.save()
+  elseif key == "f9" then
+    host.restore()
+  elseif key == "r" then
+    host.reset()
   elseif key == "escape" then
     if settings.help or settings.transcript then
       settings.help = false
       settings.transcript = false
-    else love.event.quit() end
+    else
+      love.event.quit()
+    end
   end
   host.update(0)
 end
@@ -91,7 +127,11 @@ function love.draw()
   love.graphics.setFont(title)
   love.graphics.setColor(0.94, 0.92, 0.85)
   love.graphics.print(
-    settings.entry == "staging" and "Across the water" or (settings.entry == "start" and "The last light" or (settings.entry == "rich" and "Words with character" or "A short introduction")),
+    settings.entry == "staging" and "Across the water"
+      or (
+        settings.entry == "start" and "The last light"
+        or (settings.entry == "rich" and "Words with character" or "A short introduction")
+      ),
     32,
     47
   )
@@ -100,14 +140,18 @@ function love.draw()
   love.graphics.setColor(0.72, 0.77, 0.75)
   love.graphics.printf(
     style
-    .. (settings.entry == "staging" and "  /  Character staging · F4 to return" or "  /  Portrait: " .. settings.portrait),
+      .. (
+        settings.entry == "staging" and "  /  Character staging · F4 to return"
+        or "  /  Portrait: " .. settings.portrait
+      ),
     32,
     91,
     width - 64,
     "left"
   )
   love.graphics.printf(
-    settings.entry == "staging" and "1–7  Style     F4  Return     H  Controls" or "1–7  Style     O  Portrait     H  Controls",
+    settings.entry == "staging" and "1–7  Style     F4  Return     H  Controls"
+      or "1–7  Style     O  Portrait     H  Controls",
     32,
     height - 33,
     width - 64,
@@ -151,19 +195,47 @@ function love.draw()
         width - 64,
         "right"
       )
-      maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
-        settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, "none", false, box)
+      maxScroll, appliedScroll = presenter.draw(
+        node,
+        host.clusters(),
+        host.view().visible,
+        settings.mode,
+        settings.reducedMotion,
+        settings.subtitles,
+        settings.selected,
+        settings.scroll,
+        "none",
+        false,
+        box
+      )
     else
-      maxScroll, appliedScroll = presenter.draw(node, host.clusters(), host.view().visible, settings.mode,
-        settings.reducedMotion, settings.subtitles, settings.selected, settings.scroll, settings.portrait, showRadio)
+      maxScroll, appliedScroll = presenter.draw(
+        node,
+        host.clusters(),
+        host.view().visible,
+        settings.mode,
+        settings.reducedMotion,
+        settings.subtitles,
+        settings.selected,
+        settings.scroll,
+        settings.portrait,
+        showRadio
+      )
     end
     settings.scroll = appliedScroll or math.min(settings.scroll, maxScroll)
   end
   local radioNode = radio.node
-  if radioNode
-    and showRadio then
-    presenter.draw(radioNode, host.radioClusters(), host.radioView().visible, "announcement",
-      settings.reducedMotion, settings.subtitles, 0, 0)
+  if radioNode and showRadio then
+    presenter.draw(
+      radioNode,
+      host.radioClusters(),
+      host.radioView().visible,
+      "announcement",
+      settings.reducedMotion,
+      settings.subtitles,
+      0,
+      0
+    )
   end
   if snapshot.state == "completed" then
     love.graphics.setFont(title)
@@ -192,30 +264,48 @@ function love.draw()
     local facts = host.player():getContext()
     love.graphics.printf(
       "CONTROLS & FEATURES  ·  H to close\n\n1–4   Original styles     5 Mythic / 6 Tactics / 7 Terminal\nO   Portrait left / right / above / hidden\nSpace / Enter   Reveal, continue or confirm     ↑ ↓   Choose\n[ / ]   Scroll     Tab   Recent conversation\nF   Reveal speed   "
-      .. settings.speed .. "x     M   Reduced motion   " .. tostring(settings.reducedMotion) ..
-      "\nS   Subtitles   " .. tostring(settings.subtitles) .. "     V   Mute voice   "
-      .. tostring(settings.voiceMuted) ..
-      "\nL   Language   " .. settings.locale .. "     G   Harbor permit   "
-      .. tostring(facts.permit) ..
-      "\nP   Pause   " .. tostring(settings.paused)
-      .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text   F4   Staging\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
-      .. stats.conversations .. "/2 talks · " .. stats.messages .. "/4 messages · "
-      .. stats.rejected .. " rejected\nEvents: " .. stats.shown .. " shown · " .. stats.revealed
-      .. " revealed · Tokens: " .. stats.rewards,
-      44, 135, width - 88)
+        .. settings.speed
+        .. "x     M   Reduced motion   "
+        .. tostring(settings.reducedMotion)
+        .. "\nS   Subtitles   "
+        .. tostring(settings.subtitles)
+        .. "     V   Mute voice   "
+        .. tostring(settings.voiceMuted)
+        .. "\nL   Language   "
+        .. settings.locale
+        .. "     G   Harbor permit   "
+        .. tostring(facts.permit)
+        .. "\nP   Pause   "
+        .. tostring(settings.paused)
+        .. "     R   Restart\nF5 / F9   Save / restore checkpoint     F2   Story / short demo   F3   Rich text   F4   Staging\nQ / N   Queue conversation / radio     Esc   Quit\n\nWaiting: "
+        .. stats.conversations
+        .. "/2 talks · "
+        .. stats.messages
+        .. "/4 messages · "
+        .. stats.rejected
+        .. " rejected\nEvents: "
+        .. stats.shown
+        .. " shown · "
+        .. stats.revealed
+        .. " revealed · Tokens: "
+        .. stats.rewards,
+      44,
+      135,
+      width - 88
+    )
   end
   if settings.transcript and not settings.help then
-    maxHistoryScroll, settings.historyScroll = transcript.draw(
-      host.player():history().entries,
-      settings.historyScroll
-    )
+    maxHistoryScroll, settings.historyScroll =
+      transcript.draw(host.player():history().entries, settings.historyScroll)
   end
 end
 function love.mousepressed(x: number, y: number, button: number)
-  if button ~= 1 or not host.settings.transcript or host.settings.help then return end
+  if button ~= 1 or not host.settings.transcript or host.settings.help then
+    return
+  end
   local direction = transcript.click(x, y)
-  host.settings.historyScroll = math.max(0, math.min(maxHistoryScroll,
-    host.settings.historyScroll + direction * 58))
+  host.settings.historyScroll =
+    math.max(0, math.min(maxHistoryScroll, host.settings.historyScroll + direction * 58))
 end
 function love.quit()
   host.dispose()

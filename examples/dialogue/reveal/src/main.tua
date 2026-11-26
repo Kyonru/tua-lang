@@ -11,9 +11,13 @@ for _ = 1, 200 do
   assert(#view.cues <= 1)
   -- The host may play view.cues after checking identity; this example is silent.
   for _, event in ipairs(player:update(0.05, view.complete)) do
-    if event.name == "ready" then ready = true end
+    if event.name == "ready" then
+      ready = true
+    end
   end
-  if view.complete then break end
+  if view.complete then
+    break
+  end
 end
 assert(ready)
 local complete = reveal:snapshot()

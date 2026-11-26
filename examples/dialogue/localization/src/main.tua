@@ -1,13 +1,15 @@
 local scene = require("scene")
 assert(Dialogue.schemaVersion >= 1)
-local english = Dialogue.new(
-  scene,
-  { locale = "en", resolve = I18n.dialogue, args = { name = "Ada", count = 2 } }
-)
-local french = Dialogue.new(
-  scene,
-  { locale = "fr-CA", resolve = I18n.dialogue, args = { name = "Zoé", count = 1 } }
-)
+local english = Dialogue.new(scene, {
+  locale = "en",
+  resolve = I18n.dialogue,
+  args = { name = "Ada", count = 2 },
+})
+local french = Dialogue.new(scene, {
+  locale = "fr-CA",
+  resolve = I18n.dialogue,
+  args = { name = "Zoé", count = 1 },
+})
 english:start()
 french:start()
 local en = english:snapshot().node
@@ -37,12 +39,10 @@ french:dispose()
 print("localized dialogue passed")
 
 -- Select first, expand later: placeholder values cannot introduce template syntax.
-local template = I18n.dialogueTemplate(
-  "harbor.hello",
-  "Hello, %{name}! You have %{count} coins.",
-  { name = "[pause=60]", count = 1 },
-  "fr-CA"
-)
+local template = I18n.dialogueTemplate("harbor.hello", "Hello, %{name}! You have %{count} coins.", {
+  name = "[pause=60]",
+  count = 1,
+}, "fr-CA")
 assert(template.template == "Bonjour, %{name} ! Vous avez %{count} pièce.")
 assert(template.locale == "fr" and template.variant == "one")
 local authored = I18n.dialogueTemplate("absent", "Hello %{name}", {}, "fr")

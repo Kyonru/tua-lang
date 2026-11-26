@@ -20,7 +20,9 @@ local choice = resumed:checkpoint()
 
 -- Restore rejects an unavailable choice instead of silently following fallback.
 local blocked = context.new(scene, { coins = 0 }, options)
-assert(not pcall(function() blocked:restore(choice) end))
+assert(not pcall(function()
+  blocked:restore(choice)
+end))
 assert(blocked:snapshot().state == "idle")
 blocked:updateContext({ coins = 5 })
 blocked:restore(choice)

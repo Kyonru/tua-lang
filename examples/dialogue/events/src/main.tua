@@ -15,7 +15,9 @@ for _, event in ipairs(notifications) do
     print(portrait.expression)
   else
     local payload = event.payload
-    if type(payload) == "string" then print(payload) end
+    if type(payload) == "string" then
+      print(payload)
+    end
   end
 end
 assert(coins == 30)

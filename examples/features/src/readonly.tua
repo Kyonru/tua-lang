@@ -1,9 +1,9 @@
 -- Feature: read-only borrowed records and collections preserve typed reads.
 type Item = { value: number, child: { score: number } }
 local owned: Item[] = { { value = 2, child = { score = 3 } } }
-local borrowed: Readonly < Item[] > = owned
+local borrowed: Readonly<Item[]> = owned
 
-local function total(items: Readonly < Item[] >): number
+local function total(items: Readonly<Item[]>): number
   local result = 0
   for _, item in ipairs(items) do
     result += item.value + item.child.score

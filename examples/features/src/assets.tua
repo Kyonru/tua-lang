@@ -43,7 +43,6 @@ local playerParticles = particles(player, 64)
 local a, b = player:getDimensions()
 
 local function azul()
-
   return player:getDimensions()
 end
 

@@ -40,10 +40,14 @@ end
 function love.update(dt: number)
   -- Poll first, even while unfocused, so the input state stays current.
   controls:update()
-  if not focused then return end
+  if not focused then
+    return
+  end
   local x, y = controls:get("move")
   Movement.move(player, x, y, speed, dt)
-  if x ~= 0 then facing = x < 0 and -1 or 1 end
+  if x ~= 0 then
+    facing = x < 0 and -1 or 1
+  end
   hero:play((x ~= 0 or y ~= 0) and "walk" or "idle")
   hero:update(dt)
   camera:follow(player.x, player.y)
@@ -76,13 +80,10 @@ function love.draw()
   love.graphics.print("A walk around the harbor", 24, 19)
   love.graphics.setFont(label)
   love.graphics.setColor(0.69, 0.80, 0.79)
+  love.graphics.print("Walk toward the north gate or the east dock.", 24, 58)
   love.graphics.print(
-    "Walk toward the north gate or the east dock.",
-    24,
-    58
-  )
-  love.graphics.print(
-    focused and "WASD / Arrows  Move     R  Reset     Esc  Quit" or "Window unfocused — movement paused",
+    focused and "WASD / Arrows  Move     R  Reset     Esc  Quit"
+      or "Window unfocused — movement paused",
     24,
     height - 34
   )
@@ -90,11 +91,16 @@ end
 
 function love.focus(hasFocus: boolean)
   focused = hasFocus
-  if not focused then hero:play("idle") end
+  if not focused then
+    hero:play("idle")
+  end
 end
 function love.keypressed(key: string)
-  if key == "r" then reset()
-  elseif key == "escape" then love.event.quit() end
+  if key == "r" then
+    reset()
+  elseif key == "escape" then
+    love.event.quit()
+  end
 end
 function love.quit()
   Courier.image:release()

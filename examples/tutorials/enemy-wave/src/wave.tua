@@ -21,7 +21,9 @@ local function new()
     end
   end)
   local function spawnWave(): boolean
-    if disposed or enemies:count() > 0 then return false end
+    if disposed or enemies:count() > 0 then
+      return false
+    end
     state.wave += 1
     -- Eight is this host's spawn limit. Spawn outside query iteration.
     for index = 1, 8 do
@@ -37,18 +39,26 @@ local function new()
     return true
   end
   local function damage(id: number): boolean
-    if disposed then return false end
+    if disposed then
+      return false
+    end
     local health = readHealth(id)
     local position = readPosition(id)
-    if not health or not position or health.current <= 0 then return false end
+    if not health or not position or health.current <= 0 then
+      return false
+    end
     health.current -= 1
-    if health.current > 0 then return false end
+    if health.current > 0 then
+      return false
+    end
     world:destroy(id)
     state.defeated += 1
     return true
   end
   local function shoot(x: number, y: number): { x: number, y: number } | nil
-    if disposed then return nil end
+    if disposed then
+      return nil
+    end
     state.shots += 1
     local selected = 0
     local nearest = 30 * 30
@@ -71,10 +81,14 @@ local function new()
     return nil
   end
   local function update(dt: number)
-    if not disposed then movement:update(dt) end
+    if not disposed then
+      movement:update(dt)
+    end
   end
   local function reset()
-    if disposed then return end
+    if disposed then
+      return
+    end
     world:clear()
     state.wave = 0
     state.defeated = 0
@@ -82,7 +96,9 @@ local function new()
     spawnWave()
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     world:clear()
     disposed = true
   end

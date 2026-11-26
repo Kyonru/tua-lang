@@ -21,13 +21,19 @@ function love.draw()
     end
   end
   love.graphics.setColor(0.65, 0.76, 0.75)
-  love.graphics.printf("SPACE  Continue     1 / 2  Reply     R  Restart     ESC  Quit",
-    32, height - 64, width - 64)
+  love.graphics.printf(
+    "SPACE  Continue     1 / 2  Reply     R  Restart     ESC  Quit",
+    32,
+    height - 64,
+    width - 64
+  )
 end
 
 function love.keypressed(key: string)
-  if key == "escape" then love.event.quit()
-  elseif key == "r" then player:start()
+  if key == "escape" then
+    love.event.quit()
+  elseif key == "r" then
+    player:start()
   else
     local snapshot = player:snapshot()
     local node = snapshot.node
@@ -37,7 +43,9 @@ function love.keypressed(key: string)
       local index = key == "1" and 1 or (key == "2" and 2 or 0)
       local option = node.options[index]
       -- Input selects a row; the player receives its stable authored ID.
-      if option then player:choose(option.id) end
+      if option then
+        player:choose(option.id)
+      end
     end
   end
 end

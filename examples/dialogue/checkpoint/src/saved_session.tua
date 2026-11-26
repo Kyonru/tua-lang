@@ -11,10 +11,16 @@ local function new(coins: number, backend?: Backend)
   -- Explicit load: absence leaves an idle player; corruption never starts a new run.
   local function load(): boolean
     local saved, issue = persistence.open(backend):load()
-    if issue then error(issue.code .. ": " .. issue.message) end
-    if not saved then return false end
+    if issue then
+      error(issue.code .. ": " .. issue.message)
+    end
+    if not saved then
+      return false
+    end
     local checkpoint = saved.checkpoint
-    if not checkpoint then return false end
+    if not checkpoint then
+      return false
+    end
     player:restore(checkpoint)
     return true
   end
@@ -22,10 +28,14 @@ local function new(coins: number, backend?: Backend)
     local checkpoint = player:checkpoint()
     local contract = persistence.open(backend)
     local _, issue = contract:load()
-    if issue then error(issue.code .. ": " .. issue.message) end
+    if issue then
+      error(issue.code .. ": " .. issue.message)
+    end
     local ok, failure = contract:save({ checkpoint = checkpoint })
     if not ok then
-      if failure then error(failure.code .. ": " .. failure.message) end
+      if failure then
+        error(failure.code .. ": " .. failure.message)
+      end
       error("checkpoint write failed; reopen before retrying")
     end
   end

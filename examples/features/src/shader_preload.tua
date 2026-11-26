@@ -23,10 +23,21 @@ local function begin()
 
   local function draw()
     if not ready then
-      love.graphics.print(("Shaders %d / %d (ok %d, failed %d)"):format(
-        job.completed, job.total, job.successful, job.failed), 16, 16)
-      love.graphics.print((job.current_name or "Waiting") .. ": " ..
-        (job.current_path or ""), 16, 40)
+      love.graphics.print(
+        ("Shaders %d / %d (ok %d, failed %d)"):format(
+          job.completed,
+          job.total,
+          job.successful,
+          job.failed
+        ),
+        16,
+        16
+      )
+      love.graphics.print(
+        (job.current_name or "Waiting") .. ": " .. (job.current_path or ""),
+        16,
+        40
+      )
       if job.cancelled then
         love.graphics.print("Loading cancelled. Press R to retry", 16, 64)
         return
@@ -40,13 +51,17 @@ local function begin()
     end
 
     local wave = scanner.s.wave
-    if wave then love.graphics.setShader(wave) end
+    if wave then
+      love.graphics.setShader(wave)
+    end
     love.graphics.rectangle("fill", 16, 16, 320, 180)
     love.graphics.setShader()
   end
 
   local function retry()
-    if not job.done then job:cancel() end
+    if not job.done then
+      job:cancel()
+    end
     ready = false
     job = queue()
   end

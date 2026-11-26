@@ -12,7 +12,9 @@ shaders.on_compiled = function(
   replacement: Shader,
   previous: Shader | nil
 )
-  if name == "wave" then replacement:send("time", elapsed) end
+  if name == "wave" then
+    replacement:send("time", elapsed)
+  end
 end
 
 local function load()
@@ -23,12 +25,16 @@ local function update(dt: number)
   elapsed += dt
   shaders:update(dt)
   local wave = shaders.s.wave
-  if wave then wave:send("time", elapsed) end
+  if wave then
+    wave:send("time", elapsed)
+  end
 end
 
 local function draw()
   local wave = shaders.s.wave
-  if not wave then return end
+  if not wave then
+    return
+  end
   love.graphics.setShader(wave)
   love.graphics.rectangle("fill", 0, 0, 320, 180)
   love.graphics.setShader()

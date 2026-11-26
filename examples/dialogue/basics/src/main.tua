@@ -4,7 +4,9 @@ local player = Dialogue.new(document)
 player:start()
 local view = player:snapshot()
 local node = view.node
-if node then print(node.text) end
+if node then
+  print(node.text)
+end
 -- Acknowledge the line before choosing a reply. The first reply here loops back.
 assert(player:advance())
 assert(player:choose("intro.again"))

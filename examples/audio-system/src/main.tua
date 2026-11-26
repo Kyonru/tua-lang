@@ -76,16 +76,24 @@ function love.keypressed(key: string)
     current = "sample2"
     audio:setMusicState("sample2")
   end
-  if key == "1" then audio:play("low", { fadeIn = 0.03 }) end
-  if key == "2" then audio:play("high", { fadeIn = { duration = 0.08, curve = "smoothstep" } }) end
+  if key == "1" then
+    audio:play("low", { fadeIn = 0.03 })
+  end
+  if key == "2" then
+    audio:play("high", { fadeIn = { duration = 0.08, curve = "smoothstep" } })
+  end
   if key == "m" then
     local sfx = audio:snapshot().buses.sfx
     if sfx then
       audio:setBusMuted("sfx", not sfx.muted)
     end
   end
-  if key == "left" then audio:setBusVolume("sfx", 0.15, 0.5) end
-  if key == "right" then audio:setBusVolume("sfx", 1, 0.5) end
+  if key == "left" then
+    audio:setBusVolume("sfx", 0.15, 0.5)
+  end
+  if key == "right" then
+    audio:setBusVolume("sfx", 1, 0.5)
+  end
 end
 
 function love.update(dt: number)
@@ -114,16 +122,16 @@ function love.draw()
   love.graphics.print(message, 32, 72)
   love.graphics.print("Active voices: " .. snapshot.activeVoices, 32, 118)
   love.graphics.print(
-    "Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: "
-    .. snapshot.rejected,
+    "Started: "
+      .. snapshot.started
+      .. "  Stolen: "
+      .. snapshot.stolen
+      .. "  Rejected: "
+      .. snapshot.rejected,
     32,
     146
   )
-  love.graphics.print(
-    "Effective SFX gain: " .. gainLabel,
-    32,
-    174
-  )
+  love.graphics.print("Effective SFX gain: " .. gainLabel, 32, 174)
   love.graphics.print("Current scene: " .. current, 32, 202)
   love.graphics.print(
     "Sample1 BPM: " .. (detected.bpm and string.format("%.2f", detected.bpm) or "low confidence"),
@@ -132,7 +140,7 @@ function love.draw()
   )
   love.graphics.print(
     "Sample2 detected BPM: "
-    .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"),
+      .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"),
     32,
     258
   )

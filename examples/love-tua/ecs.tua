@@ -15,13 +15,7 @@ world:add(player, RotationComponent, { r = 0 })
 local movement = ecs.system(
   world,
   { PositionComponent, VelocityComponent, RotationComponent },
-  function(
-    _,
-    position: Position,
-    velocity: Velocity,
-    rotation: Rotation,
-    dt: number
-  )
+  function(_, position: Position, velocity: Velocity, rotation: Rotation, dt: number)
     position.x = math.max(18, math.min(702, position.x + velocity.x * dt))
     position.y = math.max(18, math.min(462, position.y + velocity.y * dt))
 

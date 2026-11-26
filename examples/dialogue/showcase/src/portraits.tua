@@ -17,9 +17,13 @@ local function new()
     images[id] = image
   end
   local function draw(id: string, expression: string, x: number, y: number, size: number)
-    if disposed then return end
+    if disposed then
+      return
+    end
     local image = images[id]
-    if image == nil then return end
+    if image == nil then
+      return
+    end
     love.graphics.push("all")
     love.graphics.translate(x, y)
     love.graphics.scale(size / 120, size / 120)
@@ -32,9 +36,13 @@ local function new()
     love.graphics.pop()
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     disposed = true
-    for _, image in pairs(images) do image:release() end
+    for _, image in pairs(images) do
+      image:release()
+    end
     images = {}
   end
   return { draw = draw, dispose = dispose }

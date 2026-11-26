@@ -37,26 +37,43 @@ local function new()
   local clock = 0
   local lastFocus = -1
   local lastContent = ""
-  local function update(dt: number) clock += dt end
-  local function draw(node: Node, clusters: Cluster[], visible: number, mode: string,
-    reduced: boolean, subtitles: boolean, selected: number, scroll: number,
-    portraitPosition: string = "left", reserveAnnouncement: boolean = false, placement: Placement | nil = nil):(
-      number,
-      number
-    )
-    if disposed then return 0, 0 end
+  local function update(dt: number)
+    clock += dt
+  end
+  local function draw(
+    node: Node,
+    clusters: Cluster[],
+    visible: number,
+    mode: string,
+    reduced: boolean,
+    subtitles: boolean,
+    selected: number,
+    scroll: number,
+    portraitPosition: string = "left",
+    reserveAnnouncement: boolean = false,
+    placement: Placement | nil = nil
+  ): (number, number)
+    if disposed then
+      return 0, 0
+    end
     local width, height = love.graphics.getDimensions()
     local theme = Theme.palette(mode)
     local announcement = mode == "announcement"
     local transmission = mode == "radio" or mode == "terminal" or announcement
     local minimal = mode == "subtitles"
     local w = math.min(width - 64, transmission and 620 or (mode == "bubble" and 720 or 940))
-    if mode == "tactics" then w = math.min(width - 64, 680) end
+    if mode == "tactics" then
+      w = math.min(width - 64, 680)
+    end
     local h = math.min(mode == "bubble" and 340 or 320, height - 210)
     local x = (width - w) / 2
     local y = height - h - 84
-    if mode == "radio" or mode == "terminal" then x = width - w - 32 end
-    if mode == "bubble" then x = math.max(32, (width - w) / 2 - 40) end
+    if mode == "radio" or mode == "terminal" then
+      x = width - w - 32
+    end
+    if mode == "bubble" then
+      x = math.max(32, (width - w) / 2 - 40)
+    end
     if announcement then
       w = math.min(width - 64, 440)
       x = width - w - 32
@@ -81,10 +98,18 @@ local function new()
       tw -= 28
     end
     local font = mode == "bubble" and literary or body
-    if mode == "tactics" then font = pixel end
-    if mode == "terminal" then font = mono end
-    if announcement then font = label end
-    if placement and width < 800 then font = compact end
+    if mode == "tactics" then
+      font = pixel
+    end
+    if mode == "terminal" then
+      font = mono
+    end
+    if announcement then
+      font = label
+    end
+    if placement and width < 800 then
+      font = compact
+    end
     local _, textLines = font:getWrap(node.text, tw)
     if placement == nil and not announcement and #node.options == 0 then
       h = math.min(h, math.max(side and portraitSize + 56 or 180, #textLines * 32 + 110))
@@ -108,7 +133,9 @@ local function new()
       lineHeight = width < 800 and 26 or 32
     end
     local speaker = node.speaker or (#node.options > 0 and "YOUR REPLY" or "THE CROSSING")
-    if transmission then speaker = "CH. 07  /  " .. speaker end
+    if transmission then
+      speaker = "CH. 07  /  " .. speaker
+    end
     love.graphics.push("all")
     if not minimal then
       love.graphics.setColor(theme.panel)
@@ -121,8 +148,15 @@ local function new()
         if tailX and tailY then
           local base = math.max(x + 24, math.min(x + w - 24, tailX))
           local tip = math.max(base - 24, math.min(base + 24, tailX))
-          love.graphics.polygon("fill", base - 10, y + h - 1, tip,
-            y + h + math.min(20, math.max(0, tailY - y - h)), base + 10, y + h - 1)
+          love.graphics.polygon(
+            "fill",
+            base - 10,
+            y + h - 1,
+            tip,
+            y + h + math.min(20, math.max(0, tailY - y - h)),
+            base + 10,
+            y + h - 1
+          )
         end
       else
         love.graphics.polygon("fill", x + 48, y + h - 1, x + 62, y + h + 14, x + 83, y + h - 1)
@@ -151,7 +185,9 @@ local function new()
     local namedFrame = Frames.draw(mode, x, y, w, h, tx, tw, speaker, nameFont)
     if hasPortrait and portrait then
       local px = portraitPosition == "right" and x + w - 28 - portraitSize or x + 28
-      if mode == "terminal" and portraitPosition == "left" then px += 28 end
+      if mode == "terminal" and portraitPosition == "left" then
+        px += 28
+      end
       local py = y + 28
       if portraitPosition == "above" then
         portraitSize = 80
@@ -170,9 +206,13 @@ local function new()
     end
     love.graphics.setColor(theme.accent)
     love.graphics.setFont(announcement and label or nameFont)
-    if not namedFrame then love.graphics.print(speaker, tx, y + 25) end
+    if not namedFrame then
+      love.graphics.print(speaker, tx, y + 25)
+    end
     local runs: Run[] = {}
-    if node.presentation then runs = node.presentation.runs end
+    if node.presentation then
+      runs = node.presentation.runs
+    end
     -- Measure complete text so reveal never changes wrapping or choice positions.
     local cx = 0
     local cy = 0
@@ -181,7 +221,8 @@ local function new()
       x: number,
       y: number,
       effects: Effects,
-    }[] = {}
+    }[] =
+      {}
     for index, cluster in ipairs(clusters) do
       local effects = RichStyles.resolve(runs, index)
       local previous: Cluster | nil = clusters[index - 1]
@@ -189,7 +230,9 @@ local function new()
         local wordWidth = 0
         for nextIndex = index, #clusters do
           local nextCluster = clusters[nextIndex]
-          if nextCluster.text == " " or nextCluster.text == "\n" then break end
+          if nextCluster.text == " " or nextCluster.text == "\n" then
+            break
+          end
           wordWidth += font:getWidth(nextCluster.text)
         end
         if cx > 0 and cx + wordWidth > tw then
@@ -208,11 +251,17 @@ local function new()
         y = cy,
         effects = effects,
       }
-      if cluster.text ~= "\n" and not (cx == 0 and cluster.text == " ") then cx += cw end
+      if cluster.text ~= "\n" and not (cx == 0 and cluster.text == " ") then
+        cx += cw
+      end
     end
-    if #clusters > 0 then cy += lineHeight end
+    if #clusters > 0 then
+      cy += lineHeight
+    end
     local choiceFont = (mode == "tactics" or mode == "terminal") and font or body
-    if placement and width < 800 then choiceFont = compact end
+    if placement and width < 800 then
+      choiceFont = compact
+    end
     local rows: { y: number, height: number, text: string, reason: string }[] = {}
     local focusTop = 0
     local focusBottom = 0
@@ -236,8 +285,12 @@ local function new()
     local maxScroll = math.max(0, cy - viewport)
     local content = node.text .. tostring(#node.options) .. mode .. portraitPosition
     if selected ~= lastFocus or content ~= lastContent then
-      if focusBottom > scroll + viewport then scroll = focusBottom - viewport end
-      if focusTop < scroll and #rows > 0 then scroll = focusTop end
+      if focusBottom > scroll + viewport then
+        scroll = focusBottom - viewport
+      end
+      if focusTop < scroll and #rows > 0 then
+        scroll = focusTop
+      end
     end
     scroll = math.max(0, math.min(scroll, maxScroll))
     if not announcement then
@@ -248,8 +301,17 @@ local function new()
     love.graphics.setFont(font)
     for index, glyph in ipairs(glyphs) do
       if index <= visible and subtitles and glyph.text ~= "\n" then
-        RichStyles.draw(glyph.text, font, glyph.effects, theme,
-          tx + glyph.x, ty + glyph.y - scroll, index, clock, reduced)
+        RichStyles.draw(
+          glyph.text,
+          font,
+          glyph.effects,
+          theme,
+          tx + glyph.x,
+          ty + glyph.y - scroll,
+          index,
+          clock,
+          reduced
+        )
       end
     end
     if not subtitles then
@@ -299,7 +361,9 @@ local function new()
     return maxScroll, scroll
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     disposed = true
     portraits.dispose()
     pixel:release()
@@ -311,7 +375,9 @@ local function new()
     nameFont:release()
   end
   local function portrait(id: string, x: number, y: number, size: number, active: boolean)
-    if disposed then return end
+    if disposed then
+      return
+    end
     love.graphics.push("all")
     portraits.draw(id, "", x, y, size)
     if not active then

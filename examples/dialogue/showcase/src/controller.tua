@@ -80,30 +80,49 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
   end
   local function active(): boolean
     local state = player:snapshot().state
-    return state == "awaiting_advance" or state == "awaiting_choice"
-      or state == "awaiting_action" or state == "waiting"
+    return state == "awaiting_advance"
+      or state == "awaiting_choice"
+      or state == "awaiting_action"
+      or state == "waiting"
   end
   local function modal(): boolean
     return active() and (settings.entry == "staging" or Styles.modal(settings.mode))
   end
   local function enqueue(channel: string): boolean
     local accepted = false
-    if channel == "conversation" then accepted = conversationQueue.push(settings.entry)
-    else accepted = radioQueue.push("start") end
-    if not accepted then rejected += 1 end
+    if channel == "conversation" then
+      accepted = conversationQueue.push(settings.entry)
+    else
+      accepted = radioQueue.push("start")
+    end
+    if not accepted then
+      rejected += 1
+    end
     return accepted
   end
   local function update(dt: number)
-    if disposed then return end
-    if settings.paused then player:suspend() else player:resume() end
+    if disposed then
+      return
+    end
+    if settings.paused then
+      player:suspend()
+    else
+      player:resume()
+    end
     audio.volume(0.6, settings.voiceMuted and 0 or 1)
     radioAudio.volume(0.4, settings.voiceMuted and 0 or 1)
     view = audio.update(player:snapshot(), dt * settings.speed)
-    if settings.reducedMotion and not settings.paused then view = audio.finish() end
+    if settings.reducedMotion and not settings.paused then
+      view = audio.finish()
+    end
     for _, event in ipairs(player:update(dt, view.complete)) do
       local payload = event.payload
       if payload is table then
-        if payload.phase == "shown" then shown += 1 else revealed += 1 end
+        if payload.phase == "shown" then
+          shown += 1
+        else
+          revealed += 1
+        end
       end
     end
     if not settings.paused and player:snapshot().state == "awaiting_action" then
@@ -122,10 +141,16 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     -- Resolve modal handoffs before advancing the background channel's clock.
     if not settings.paused and not active() then
       local nextEntry = conversationQueue.pop()
-      if nextEntry then startEntry(nextEntry) end
+      if nextEntry then
+        startEntry(nextEntry)
+      end
     end
     local blocked = modal()
-    if blocked or settings.paused then radio:suspend() else radio:resume() end
+    if blocked or settings.paused then
+      radio:suspend()
+    else
+      radio:resume()
+    end
     radioView = radioAudio.update(radio:snapshot(), dt * settings.speed)
     if settings.reducedMotion and not settings.paused and not blocked then
       radioView = radioAudio.finish()
@@ -133,8 +158,12 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     radio:update(dt, radioView.complete)
     if not settings.paused then
       if not blocked then
-        if radioView.complete then radioAge += dt end
-        if radioAge >= 1.5 then radio:advance() end
+        if radioView.complete then
+          radioAge += dt
+        end
+        if radioAge >= 1.5 then
+          radio:advance()
+        end
         local state = radio:snapshot().state
         if state == "idle" or state == "completed" or state == "cancelled" then
           local nextEntry = radioQueue.pop()
@@ -149,7 +178,9 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     local node = snapshot.node
     if snapshot.state == "awaiting_choice" and node then
       local identity = snapshot.generation .. ":" .. snapshot.visit
-      if focusedChoice ~= identity then settings.selected = 1 end
+      if focusedChoice ~= identity then
+        settings.selected = 1
+      end
       focusedChoice = identity
       settings.selected = math.max(1, math.min(#node.options, settings.selected))
     else
@@ -159,12 +190,16 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     radioView = radioAudio.update(radio:snapshot(), 0)
   end
   local function advance()
-    if settings.paused then return end
+    if settings.paused then
+      return
+    end
     local snapshot = player:snapshot()
     local node = snapshot.node
     if snapshot.state == "awaiting_choice" and node then
       local option = node.options[settings.selected]
-      if option and option.enabled ~= false then player:choose(option.id) end
+      if option and option.enabled ~= false then
+        player:choose(option.id)
+      end
       settings.selected = 1
     elseif not view.complete then
       view = audio.finish()
@@ -220,7 +255,9 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     update(0)
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     disposed = true
     conversationQueue.clear()
     radioQueue.clear()
@@ -230,7 +267,9 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     radio:dispose()
   end
   return {
-    player = function() return player end,
+    player = function()
+      return player
+    end,
     radio = radio,
     settings = settings,
     update = update,
@@ -245,8 +284,12 @@ local function new(conversationBackend: Backend, radioBackend: Backend, entry: s
     dispose = dispose,
     clusters = audio.clusters,
     radioClusters = radioAudio.clusters,
-    view = function() return view end,
-    radioView = function() return radioView end,
+    view = function()
+      return view
+    end,
+    radioView = function()
+      return radioView
+    end,
     metrics = function()
       return {
         rewards = rewards,

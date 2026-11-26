@@ -4,7 +4,9 @@ local coins = 10
 local player = actions.new(scene, {
   handlers = {
     purchase = function(payload: { item: string }): boolean
-      if payload.item ~= "shell" or coins < 5 then return false end
+      if payload.item ~= "shell" or coins < 5 then
+        return false
+      end
       coins -= 5
       return true
     end,

@@ -1,5 +1,5 @@
-local Globals = require('global')
-local ECS = require('ecs')
+local Globals = require("global")
+local ECS = require("ecs")
 local Renderer = require("renderer")
 local feel = require("lib.feel")
 
@@ -102,5 +102,4 @@ function love.draw()
   if flow:is("paused") then
     love.graphics.printf("PAUSED", 0, 220, 720, "center")
   end
-
 end

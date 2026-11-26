@@ -1,5 +1,7 @@
 -- Feature: a save contract describes the persistent slice of game state.
-local function migrateV1(old: { points: number }): { score: number, musicOn: boolean, unlocked: string[] }
+local function migrateV1(
+  old: { points: number }
+): { score: number, musicOn: boolean, unlocked: string[] }
   return { score = old.points, musicOn = true, unlocked = {} }
 end
 

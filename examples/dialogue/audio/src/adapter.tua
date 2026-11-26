@@ -23,7 +23,15 @@ type DialogueInput = {
   presentationRevision: number,
   revealComplete: boolean,
   suspended?: boolean,
-  state: "idle" | "awaiting_advance" | "awaiting_choice" | "completed" | "cancelled" | "disposed" | "faulted" | "awaiting_action" | "waiting",
+  state: "idle"
+    | "awaiting_advance"
+    | "awaiting_choice"
+    | "completed"
+    | "cancelled"
+    | "disposed"
+    | "faulted"
+    | "awaiting_action"
+    | "waiting",
   node?: Node,
 }
 type Backend = {
@@ -38,7 +46,9 @@ type Backend = {
   wordStart: (text: string, startByte: number) -> boolean,
 }
 local function selectedSpeech(value: Profile | "off" | nil): Profile | nil
-  if value is table then return value end
+  if value is table then
+    return value
+  end
   return nil
 end
 local function new(backend: Backend, seed: number)
@@ -69,7 +79,9 @@ local function new(backend: Backend, seed: number)
     reveal:present(snapshot)
     local node = snapshot.node
     local active = snapshot.state == "awaiting_advance" and node ~= nil and node.kind == "line"
-    if not active then backend.stop() end
+    if not active then
+      backend.stop()
+    end
     if changed and active and not snapshot.restored and node ~= nil and node.voice ~= nil then
       local voice = node.voice
       assert(voice ~= nil)
@@ -79,19 +91,33 @@ local function new(backend: Backend, seed: number)
       end
     end
     local suspended = snapshot.suspended == true
-    if suspended and (not paused or changed) then backend.pause() end
-    if not suspended and paused and not changed then backend.resume() end
+    if suspended and (not paused or changed) then
+      backend.pause()
+    end
+    if not suspended and paused and not changed then
+      backend.resume()
+    end
     paused = suspended
     local view = reveal:update(dt)
-    if suspended then return view end
+    if suspended then
+      return view
+    end
     elapsed = math.min(60, elapsed + math.min(dt, 60))
     local before = previousVisible
     previousVisible = view.visible
-    if not active or node == nil then return view end
+    if not active or node == nil then
+      return view
+    end
     local profile = selectedSpeech(node.speech)
-    if profile == nil then return view end
-    if muted or elapsed < profile.minCueInterval then return view end
-    if backend.speaking() and (node.voice == nil or not node.voice.mixSpeech) then return view end
+    if profile == nil then
+      return view
+    end
+    if muted or elapsed < profile.minCueInterval then
+      return view
+    end
+    if backend.speaking() and (node.voice == nil or not node.voice.mixSpeech) then
+      return view
+    end
     local eligible = #view.cues > 0
     if profile.cadence == "word" and eligible then
       eligible = false
@@ -125,7 +151,9 @@ local function new(backend: Backend, seed: number)
     backend.volume(chatter, voice)
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     disposed = true
     reveal:clear()
     backend.stop()

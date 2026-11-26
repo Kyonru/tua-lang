@@ -1,8 +1,6 @@
 -- Feature: the built-in tween module wraps flux and is bundled on use.
 local banner = { x = -200, alpha = 0 }
-local animation = Tween.to(banner, 0.6, { x = 40, alpha = 1 })
-  :ease("backout")
-  :delay(0.1)
+local animation = Tween.to(banner, 0.6, { x = 40, alpha = 1 }):ease("backout"):delay(0.1)
 
 local function update(dt: number)
   Tween.update(dt)

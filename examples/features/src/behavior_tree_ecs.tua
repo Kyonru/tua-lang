@@ -14,7 +14,7 @@ type Flash = { x: number, y: number, age: number }
 -- ECS schemas can name local type aliases, including the runner's context.
 type EnemyRunner = {
   context: EnemyContext,
-  update: (self: Self, dt: number) -> ("success" | "failure" | "running"),
+  update: (self: Self, dt: number) -> "success" | "failure" | "running",
   cancel: (self: Self) -> nil,
 }
 local Brain = ECS.component("Brain", { context = "EnemyContext", runner = "EnemyRunner" })
@@ -50,7 +50,9 @@ local tree = BehaviorTree.new(BehaviorTree.reactiveSelector({
       return "success"
     end),
   }),
-  BehaviorTree.action(function() return "running" end),
+  BehaviorTree.action(function()
+    return "running"
+  end),
 }))
 
 local brains = ECS.system(world, { Brain }, function(_, brain, dt)
@@ -91,7 +93,9 @@ end
 
 local function despawnEnemy(entity: number)
   local brain = world:get(entity, Brain)
-  if brain then brain.runner:cancel() end
+  if brain then
+    brain.runner:cancel()
+  end
   world:destroy(entity)
 end
 
@@ -99,14 +103,18 @@ end
 -- simulation makes the feature example runnable without a graphics context.
 local enemy = spawnEnemy(40, 80)
 local brain = world:get(enemy, Brain)
-if brain then brain.context.seesPlayer = true end
+if brain then
+  brain.context.seesPlayer = true
+end
 for _ = 1, 20 do
   brains:update(1 / 60)
   effects:update(1 / 60)
 end
 local shots = brain and brain.context.shots or 0
 despawnEnemy(enemy)
-for _ = 1, 10 do effects:update(1 / 60) end
+for _ = 1, 10 do
+  effects:update(1 / 60)
+end
 assert(shots >= 2)
 assert(flashes:activeCount() == 0)
 

@@ -1,6 +1,11 @@
 export type Color = number[]
 export type Palette = {
-  stage: Color, panel: Color, text: Color, muted: Color, accent: Color, focus: Color,
+  stage: Color,
+  panel: Color,
+  text: Color,
+  muted: Color,
+  accent: Color,
+  focus: Color,
 }
 local cinema: Palette = {
   stage = { 0.075, 0.105, 0.12 },
@@ -51,11 +56,21 @@ local terminal: Palette = {
   focus = { 0.23, 0.33, 0.28 },
 }
 local function palette(mode: string): Palette
-  if mode == "mythic" then return mythic end
-  if mode == "tactics" then return tactics end
-  if mode == "terminal" then return terminal end
-  if mode == "bubble" then return paper end
-  if mode == "radio" or mode == "announcement" then return radio end
+  if mode == "mythic" then
+    return mythic
+  end
+  if mode == "tactics" then
+    return tactics
+  end
+  if mode == "terminal" then
+    return terminal
+  end
+  if mode == "bubble" then
+    return paper
+  end
+  if mode == "radio" or mode == "announcement" then
+    return radio
+  end
   return cinema
 end
 return { palette = palette }

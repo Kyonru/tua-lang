@@ -2,7 +2,9 @@
 export type Ring = { x: number, y: number, age: number }
 local function new()
   local pool = objectPool({
-    create = function(): Ring return { x = 0, y = 0, age = 0 } end,
+    create = function(): Ring
+      return { x = 0, y = 0, age = 0 }
+    end,
     reset = function(ring: Ring)
       ring.x = 0
       ring.y = 0
@@ -12,7 +14,9 @@ local function new()
   local items: Ring[] = {}
   local disposed = false
   local function spawn(x: number, y: number): boolean
-    if disposed or #items >= 16 then return false end
+    if disposed or #items >= 16 then
+      return false
+    end
     local ring = pool:acquire()
     ring.x = x
     ring.y = y
@@ -37,7 +41,9 @@ local function new()
     end
   end
   local function dispose()
-    if disposed then return end
+    if disposed then
+      return
+    end
     clear()
     pool:clear()
     disposed = true
@@ -48,8 +54,12 @@ local function new()
     update = update,
     clear = clear,
     dispose = dispose,
-    activeCount = function() return pool:activeCount() end,
-    capacity = function() return pool:capacity() end,
+    activeCount = function()
+      return pool:activeCount()
+    end,
+    capacity = function()
+      return pool:capacity()
+    end,
   }
 end
 return { new = new }

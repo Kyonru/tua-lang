@@ -4,7 +4,7 @@ local function new()
   local heading = love.graphics.newFont("assets/fonts/lora.ttf", 24)
   local body = love.graphics.newFont("assets/fonts/manrope.ttf", 18)
   local label = love.graphics.newFont("assets/fonts/manrope.ttf", 13)
-  local function draw(entries: Entry[], scroll: number):(number, number)
+  local function draw(entries: Entry[], scroll: number): (number, number)
     local width, height = love.graphics.getDimensions()
     local x = 32
     local y = 118
@@ -38,8 +38,12 @@ local function new()
     local cursor = top - scroll
     if #rows == 0 then
       love.graphics.setFont(body)
-      love.graphics.printf("Nothing here yet. Continue the conversation to begin your record.",
-        x + 40, top + 16, textWidth)
+      love.graphics.printf(
+        "Nothing here yet. Continue the conversation to begin your record.",
+        x + 40,
+        top + 16,
+        textWidth
+      )
     end
     for _, row in ipairs(rows) do
       love.graphics.setColor(0.76, 0.68, 0.44)
@@ -90,9 +94,15 @@ local function new()
   end
   local function click(x: number, y: number): number
     local width, height = love.graphics.getDimensions()
-    if y < height - 100 or y > height - 68 then return 0 end
-    if x >= 56 and x <= 168 then return -1 end
-    if x >= width - 168 and x <= width - 56 then return 1 end
+    if y < height - 100 or y > height - 68 then
+      return 0
+    end
+    if x >= 56 and x <= 168 then
+      return -1
+    end
+    if x >= width - 168 and x <= width - 56 then
+      return 1
+    end
     return 0
   end
   local function dispose()
