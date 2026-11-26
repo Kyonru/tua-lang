@@ -127,7 +127,7 @@ impl AnalysisSnapshot {
                         if asset::inline_shader_call(call).is_some() {
                             continue;
                         }
-                        if call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) if arguments.iter().count() != 1)) {
+                        if call.suffixes().any(|suffix| matches!(crate::ast_utils::anonymous_suffix_arguments(suffix), Some(FunctionArgs::Parentheses { arguments, .. }) if arguments.iter().count() != 1)) {
                     continue;
                 }
                         if !asset::loader_binding_is_builtin(scope, call) {
@@ -188,10 +188,10 @@ impl AnalysisSnapshot {
                 if field_chain_before_first_call(call)
                     .is_some_and(|parts| parts == ["love", "graphics", "setShader"])
                 {
-                    if let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                        arguments,
-                        ..
-                    }))) = call.suffixes().last()
+                    if let Some(FunctionArgs::Parentheses { arguments, .. }) = call
+                        .suffixes()
+                        .last()
+                        .and_then(crate::ast_utils::anonymous_suffix_arguments)
                     {
                         if arguments.iter().count() == 1 {
                             if let Some(Expression::Var(Var::Name(name))) = arguments.iter().next()

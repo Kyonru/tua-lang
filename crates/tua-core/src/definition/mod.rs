@@ -643,7 +643,10 @@ fn module_specifier_from_expression(
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    let ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) = first_call else {
+    let ast::Call::AnonymousCall(boxed_arguments) = first_call else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     let Expression::String(module) = arguments.iter().next()? else {
@@ -779,7 +782,7 @@ fn exported_table_field_definition(
             continue;
         }
 
-        if let Expression::Var(Var::Name(name)) = value {
+        if let Expression::Var(Var::Name(name)) = &**value {
             if let Some(definition) = index.value(&token_text(name)) {
                 return Some(definition);
             }
@@ -1130,9 +1133,11 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
         return None;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 

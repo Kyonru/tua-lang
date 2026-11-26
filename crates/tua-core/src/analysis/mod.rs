@@ -1877,13 +1877,13 @@ fn expression_path_to_table(
             for field in table.fields() {
                 let (value, step) = match field {
                     Field::NameKey { key, value, .. } => {
-                        (value, ExpectedTableStep::Field(token_text(key)))
+                        (value.as_ref(), ExpectedTableStep::Field(token_text(key)))
                     }
                     Field::ExpressionKey { key, value, .. } => {
                         let step = string_literal_expression_value(key)
                             .map(ExpectedTableStep::Field)
                             .unwrap_or(ExpectedTableStep::Element);
-                        (value, step)
+                        (value.as_ref(), step)
                     }
                     Field::NoKey(value) => (value, ExpectedTableStep::Element),
                     _ => continue,
@@ -1953,7 +1953,7 @@ fn call_argument_table_path(
     target: SourceSpan,
 ) -> Option<(usize, Vec<ExpectedTableStep>)> {
     let arguments = call.suffixes().find_map(|suffix| match suffix {
-        ast::Suffix::Call(ast::Call::AnonymousCall(arguments)) => Some(arguments),
+        ast::Suffix::Call(ast::Call::AnonymousCall(arguments)) => Some(arguments.as_ref()),
         ast::Suffix::Call(ast::Call::MethodCall(method)) => Some(method.args()),
         _ => None,
     })?;
@@ -2032,13 +2032,13 @@ fn parameter_type_for_call(
 fn table_string_value_field(table: &TableConstructor, position: SourcePosition) -> Option<String> {
     table.fields().iter().find_map(|field| match field {
         Field::NameKey { key, value, .. }
-            if matches!(value, Expression::String(_))
+            if matches!(&**value, Expression::String(_))
                 && node_span(value).is_some_and(|span| span_contains_position(span, position)) =>
         {
             Some(token_text(key))
         }
         Field::ExpressionKey { key, value, .. }
-            if matches!(value, Expression::String(_))
+            if matches!(&**value, Expression::String(_))
                 && node_span(value).is_some_and(|span| span_contains_position(span, position)) =>
         {
             string_literal_expression_value(key)
@@ -2118,7 +2118,7 @@ fn table_callback_field_at_position(
             Field::NoKey(_) => return None,
             _ => return None,
         };
-        let Expression::Function(function) = value else {
+        let Expression::Function(function) = &**value else {
             return None;
         };
 
@@ -2216,17 +2216,16 @@ fn store_state_field_span(call: &FunctionCall, field_name: &str) -> Option<Sourc
 }
 
 fn call_arguments(call: &FunctionCall) -> Option<impl Iterator<Item = &Expression>> {
-    call.suffixes().find_map(|suffix| match suffix {
-        ast::Suffix::Call(ast::Call::AnonymousCall(ast::FunctionArgs::Parentheses {
-            arguments,
-            ..
-        })) => Some(arguments.iter()),
-        ast::Suffix::Call(ast::Call::MethodCall(method)) => match method.args() {
-            ast::FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter()),
-            ast::FunctionArgs::String(_) | ast::FunctionArgs::TableConstructor(_) => None,
-            _ => None,
-        },
-        _ => None,
+    call.suffixes().find_map(|suffix| {
+        match (suffix, crate::ast_utils::anonymous_suffix_arguments(suffix)) {
+            (_, Some(ast::FunctionArgs::Parentheses { arguments, .. })) => Some(arguments.iter()),
+            (ast::Suffix::Call(ast::Call::MethodCall(method)), _) => match method.args() {
+                ast::FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter()),
+                ast::FunctionArgs::String(_) | ast::FunctionArgs::TableConstructor(_) => None,
+                _ => None,
+            },
+            (_, _) => None,
+        }
     })
 }
 

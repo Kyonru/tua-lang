@@ -667,17 +667,17 @@ fn function_call_arguments(call: &FunctionCall) -> Option<Vec<Expression>> {
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    let arguments = match suffix {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+    let arguments = match (suffix, crate::ast_utils::anonymous_call_arguments(suffix)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => {
             arguments.iter().cloned().collect()
         }
-        Call::AnonymousCall(FunctionArgs::String(value)) => {
+        (_, Some(FunctionArgs::String(value))) => {
             vec![Expression::String(value.clone())]
         }
-        Call::AnonymousCall(FunctionArgs::TableConstructor(value)) => {
+        (_, Some(FunctionArgs::TableConstructor(value))) => {
             vec![Expression::TableConstructor(value.clone())]
         }
-        Call::MethodCall(method) => match method.args() {
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => arguments.iter().cloned().collect(),
             FunctionArgs::String(value) => vec![Expression::String(value.clone())],
             FunctionArgs::TableConstructor(value) => {
@@ -685,7 +685,7 @@ fn function_call_arguments(call: &FunctionCall) -> Option<Vec<Expression>> {
             }
             _ => return None,
         },
-        _ => return None,
+        (_, _) => return None,
     };
     Some(arguments)
 }

@@ -512,16 +512,14 @@ fn module_specifier_from_expression(
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    let module = match first_call {
-        ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+    let module = match crate::ast_utils::anonymous_call_arguments(first_call) {
+        Some(FunctionArgs::Parentheses { arguments, .. }) => {
             let Expression::String(module) = arguments.iter().next()? else {
                 return None;
             };
             unquote_string(&module.to_string())
         }
-        ast::Call::AnonymousCall(FunctionArgs::String(module))
-            if kind == ModuleSpecifierKind::Require =>
-        {
+        Some(FunctionArgs::String(module)) if kind == ModuleSpecifierKind::Require => {
             unquote_string(&module.to_string())
         }
         _ => return None,
@@ -961,7 +959,7 @@ impl<'a> ExportInferer<'a> {
                 let name = token_text(key);
                 let lua_doc_export = self.lua_doc_function_export_for_field(field);
                 let documentation = self.field_documentation(field).or_else(|| {
-                    let Expression::Var(Var::Name(name)) = value else {
+                    let Expression::Var(Var::Name(name)) = &**value else {
                         return None;
                     };
 
@@ -971,7 +969,7 @@ impl<'a> ExportInferer<'a> {
                     .as_ref()
                     .map(|export| export.parameter_documentation.clone())
                     .or_else(|| {
-                        let Expression::Var(Var::Name(name)) = value else {
+                        let Expression::Var(Var::Name(name)) = &**value else {
                             return None;
                         };
 
@@ -982,14 +980,14 @@ impl<'a> ExportInferer<'a> {
                     .as_ref()
                     .map(|export| export.parameter_names.clone())
                     .or_else(|| {
-                        let Expression::Function(function) = value else {
+                        let Expression::Function(function) = &**value else {
                             return None;
                         };
 
                         Some(parameter_names_from_body(function.body()))
                     })
                     .or_else(|| {
-                        let Expression::Var(Var::Name(name)) = value else {
+                        let Expression::Var(Var::Name(name)) = &**value else {
                             return None;
                         };
 
@@ -1002,14 +1000,14 @@ impl<'a> ExportInferer<'a> {
                     .map(|export| export.ty)
                     .unwrap_or_else(|| self.infer_expression(value));
                 let deprecation = self.field_deprecation(field).or_else(|| {
-                    let Expression::Var(Var::Name(name)) = value else {
+                    let Expression::Var(Var::Name(name)) = &**value else {
                         return None;
                     };
 
                     self.deprecations.get(&token_text(name)).cloned()
                 });
                 let must_use = self.field_must_use(field)
-                    || matches!(value, Expression::Var(Var::Name(name)) if self.must_use_paths.contains(&vec![token_text(name)]));
+                    || matches!(&**value, Expression::Var(Var::Name(name)) if self.must_use_paths.contains(&vec![token_text(name)]));
 
                 Some((
                     name,
@@ -1072,11 +1070,13 @@ impl<'a> ExportInferer<'a> {
                     {
                         let argument = call
                             .suffixes()
-                            .find_map(|suffix| match suffix {
-                                Suffix::Call(ast::Call::AnonymousCall(
-                                    FunctionArgs::Parentheses { arguments, .. },
-                                )) => arguments.iter().next(),
-                                _ => None,
+                            .find_map(|suffix| {
+                                match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+                                    Some(FunctionArgs::Parentheses { arguments, .. }) => {
+                                        arguments.iter().next()
+                                    }
+                                    _ => None,
+                                }
                             })
                             .map(|argument| self.infer_expression(argument));
                         if let Some(ty) =

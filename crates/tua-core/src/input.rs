@@ -1009,15 +1009,15 @@ fn config_from_call(call: &FunctionCall) -> Option<&TableConstructor> {
 }
 
 fn first_parenthesized_argument(call: &FunctionCall) -> Option<&Expression> {
-    call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-            arguments.iter().next()
+    call.suffixes().find_map(|suffix| {
+        match (suffix, crate::ast_utils::anonymous_suffix_arguments(suffix)) {
+            (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().next(),
+            (Suffix::Call(Call::MethodCall(method)), _) => match method.args() {
+                FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next(),
+                _ => None,
+            },
+            (_, _) => None,
         }
-        Suffix::Call(Call::MethodCall(method)) => match method.args() {
-            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next(),
-            _ => None,
-        },
-        _ => None,
     })
 }
 
@@ -1027,8 +1027,10 @@ fn named_field<'a>(table: &'a TableConstructor, name: &str) -> Option<&'a Expres
 
 fn named_table_fields(table: &TableConstructor) -> impl Iterator<Item = (String, &Expression)> {
     table.fields().iter().filter_map(|field| match field {
-        Field::NameKey { key, value, .. } => Some((token_text(key), value)),
-        Field::ExpressionKey { key, value, .. } => string_expression(key).map(|key| (key, value)),
+        Field::NameKey { key, value, .. } => Some((token_text(key), value.as_ref())),
+        Field::ExpressionKey { key, value, .. } => {
+            string_expression(key).map(|key| (key, value.as_ref()))
+        }
         _ => None,
     })
 }

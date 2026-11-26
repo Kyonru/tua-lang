@@ -14,9 +14,9 @@ pub(super) fn inline_shader_token(call: &FunctionCall) -> Option<&TokenReference
     if !parts_match(&parts, &["love", "graphics", "newShader"]) {
         return None;
     }
-    let token = match args {
-        Call::AnonymousCall(FunctionArgs::String(token)) => token,
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+    let token = match crate::ast_utils::anonymous_call_arguments(args)? {
+        FunctionArgs::String(token) => token,
+        FunctionArgs::Parentheses { arguments, .. } => {
             let Expression::String(token) = arguments.iter().next()? else {
                 return None;
             };
@@ -42,7 +42,7 @@ pub(super) fn inline_shader_token(call: &FunctionCall) -> Option<&TokenReference
 
 pub(crate) fn inline_shader_call(call: &FunctionCall) -> Option<InlineShader> {
     let token = inline_shader_token(call)?;
-    if call.suffixes().any(|suffix| matches!(suffix, Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) if arguments.iter().count() != 1)) { return None; }
+    if call.suffixes().any(|suffix| matches!(crate::ast_utils::anonymous_suffix_arguments(suffix), Some(FunctionArgs::Parentheses { arguments, .. }) if arguments.iter().count() != 1)) { return None; }
     let raw = token.token().to_string();
     let open = raw[1..].find('[')? + 2;
     let body = raw.get(open..raw.len().checked_sub(open)?)?;

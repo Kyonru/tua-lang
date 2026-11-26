@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use full_moon::ast::{self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix};
+use full_moon::ast::{self, Expression, Field, FunctionArgs, LastStmt, Prefix};
 use full_moon::node::Node;
 
 use crate::{classes::ClassMethod, parser::parse_tua_type_text};
@@ -508,8 +508,8 @@ fn simple_expression_name(expression: &Expression) -> Option<String> {
             };
             if call.suffixes().any(|suffix| {
                 !matches!(
-                    suffix,
-                    Suffix::Call(ast::Call::AnonymousCall(FunctionArgs::Parentheses { .. }))
+                    crate::ast_utils::anonymous_suffix_arguments(suffix),
+                    Some(FunctionArgs::Parentheses { .. })
                 )
             }) {
                 return None;

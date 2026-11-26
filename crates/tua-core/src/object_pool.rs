@@ -697,15 +697,13 @@ fn argument_expression(call: &FunctionCall, index: usize) -> Option<&Expression>
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            arguments.iter().nth(index)
-        }
-        Call::MethodCall(method) => match method.args() {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().nth(index),
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 

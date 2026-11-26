@@ -43,6 +43,8 @@ unchanged when the source and output roots differ. Both are then loaded through
 the same runtime module paths under `build/`.
 
 The Luau-capable parser used internally does not make Luau syntax part of Tua.
+For example, Luau `if local value = lookup() then` condition bindings remain
+unsupported; declare the local before the `if` statement instead.
 A post-parse dialect check reports `TL0004` for non-Tua constructs before
 checking or emission. Generated `.lua` files then pass a final Lua 5.1 parse
 before Tua returns an emission artifact; `TL2010` is the blocking safety

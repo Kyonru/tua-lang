@@ -129,16 +129,16 @@ impl VisitorMut for Lowerer<'_> {
                 return call;
             }
         }
-        let string_sugar = matches!(args, FunctionArgs::String(_));
-        let args = match args {
+        let string_sugar = matches!(&**args, FunctionArgs::String(_));
+        let args = match &**args {
             FunctionArgs::Parentheses { .. } => args.clone(),
             FunctionArgs::String(text)
                 if asset_kind.is_some_and(|kind| kind.supports_string_sugar()) =>
             {
-                parentheses_with_trailing(
+                Box::new(parentheses_with_trailing(
                     [Expression::String(with_trailing(text, Vec::new()))],
                     text.trailing_trivia().cloned().collect(),
-                )
+                ))
             }
             _ => return call,
         };
@@ -146,7 +146,7 @@ impl VisitorMut for Lowerer<'_> {
             if let Some(kind @ (asset::AssetLoaderKind::Sound | asset::AssetLoaderKind::Music)) =
                 asset_kind
             {
-                let FunctionArgs::Parentheses { arguments, .. } = &args else {
+                let FunctionArgs::Parentheses { arguments, .. } = args.as_ref() else {
                     return call;
                 };
                 let Some(first) = arguments.iter().next() else {
@@ -170,7 +170,7 @@ impl VisitorMut for Lowerer<'_> {
                             Vec::new(),
                         )),
                     ],
-                    match &args {
+                    match args.as_ref() {
                         FunctionArgs::Parentheses { parentheses, .. } => {
                             parentheses.tokens().1.trailing_trivia().cloned().collect()
                         }
@@ -178,7 +178,7 @@ impl VisitorMut for Lowerer<'_> {
                     },
                 )
             } else {
-                args
+                *args
             };
         let source_span = self
             .parsed
@@ -227,7 +227,7 @@ impl VisitorMut for Lowerer<'_> {
         if let Some(Suffix::Index(ast::Index::Dot { name, .. })) = suffixes.last_mut() {
             *name = with_trailing(name, trailing);
         }
-        suffixes.push(Suffix::Call(Call::AnonymousCall(args)));
+        suffixes.push(Suffix::Call(Call::AnonymousCall(Box::new(args))));
         suffixes.extend(call.suffixes().skip(1).cloned());
         call.with_prefix(Prefix::Name(root)).with_suffixes(suffixes)
     }

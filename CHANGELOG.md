@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Upgrade full_moon from 2.2 to 3.0 and adapt shared AST consumers to its boxed
+  nodes, retaining Tua's existing syntax and Lua/LuaJIT output contract. Refresh
+  compatible Rust dependencies in the main and fuzz workspaces, and update the
+  VS Code packaging tools (`vsce` 4.1.1 and `ovsx` 1.4.0).
+
 - Reuse existing dialogue source tabs when navigating from previews, keeping
   preview and source in separate editor groups without duplicate source tabs.
 

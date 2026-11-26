@@ -1108,10 +1108,8 @@ fn anonymous_call(function_call: &FunctionCall) -> Option<&ast::Call> {
 }
 
 fn call_arguments(call: &ast::Call) -> Vec<&Expression> {
-    match call {
-        ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            arguments.iter().collect()
-        }
+    match crate::ast_utils::anonymous_call_arguments(call) {
+        Some(FunctionArgs::Parentheses { arguments, .. }) => arguments.iter().collect(),
         _ => Vec::new(),
     }
 }
@@ -2100,7 +2098,7 @@ fn require_module_from_call(call: &FunctionCall, position: SourcePosition) -> Op
         return None;
     };
 
-    match args {
+    match &**args {
         FunctionArgs::Parentheses { arguments, .. } => {
             let Some(Expression::String(token)) = arguments.iter().next() else {
                 return None;

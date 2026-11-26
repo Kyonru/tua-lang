@@ -2118,7 +2118,10 @@ impl<'a> SemanticModel<'a> {
                             self.collect_expression_type(key, position, candidates);
                             self.collect_expression_type(value, position, candidates);
                         }
-                        Field::NameKey { value, .. } | Field::NoKey(value) => {
+                        Field::NameKey { value, .. } => {
+                            self.collect_expression_type(value, position, candidates);
+                        }
+                        Field::NoKey(value) => {
                             self.collect_expression_type(value, position, candidates);
                         }
                         _ => {}
@@ -2154,11 +2157,11 @@ impl<'a> SemanticModel<'a> {
                 Suffix::Index(Index::Brackets { expression, .. }) => {
                     self.collect_expression_type(expression, position, candidates);
                 }
-                Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                    arguments, ..
-                })) => {
-                    for argument in arguments {
-                        self.collect_expression_type(argument, position, candidates);
+                Suffix::Call(Call::AnonymousCall(args)) => {
+                    if let FunctionArgs::Parentheses { arguments, .. } = args.as_ref() {
+                        for argument in arguments {
+                            self.collect_expression_type(argument, position, candidates);
+                        }
                     }
                 }
                 Suffix::Call(Call::MethodCall(method)) => {
@@ -2168,10 +2171,7 @@ impl<'a> SemanticModel<'a> {
                         }
                     }
                 }
-                Suffix::Index(Index::Dot { .. })
-                | Suffix::Call(Call::AnonymousCall(
-                    FunctionArgs::String(_) | FunctionArgs::TableConstructor(_),
-                )) => {}
+                Suffix::Index(Index::Dot { .. }) => {}
                 _ => {}
             }
         }
@@ -3320,19 +3320,21 @@ fn index_type_from_expression(expression: &Expression) -> Option<Type> {
 
 fn function_call_expression_arguments(call: &FunctionCall) -> impl Iterator<Item = &Expression> {
     call.suffixes()
-        .find_map(|suffix| match suffix {
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-                Some(arguments.iter().collect::<Vec<_>>())
-            }
-            Suffix::Call(Call::MethodCall(method)) => match method.args() {
-                FunctionArgs::Parentheses { arguments, .. } => {
+        .find_map(
+            |suffix| match (suffix, crate::ast_utils::anonymous_suffix_arguments(suffix)) {
+                (_, Some(FunctionArgs::Parentheses { arguments, .. })) => {
                     Some(arguments.iter().collect::<Vec<_>>())
                 }
-                FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
-                _ => Some(Vec::new()),
+                (Suffix::Call(Call::MethodCall(method)), _) => match method.args() {
+                    FunctionArgs::Parentheses { arguments, .. } => {
+                        Some(arguments.iter().collect::<Vec<_>>())
+                    }
+                    FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
+                    _ => Some(Vec::new()),
+                },
+                (_, _) => None,
             },
-            _ => None,
-        })
+        )
         .unwrap_or_default()
         .into_iter()
 }
@@ -3418,9 +3420,11 @@ fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> 
     let Prefix::Name(name) = function_call.prefix() else {
         return None;
     };
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 
@@ -3492,9 +3496,11 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
         return None;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 
@@ -3502,9 +3508,11 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
 }
 
 fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Expression> {
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 
@@ -3512,9 +3520,11 @@ fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Ex
 }
 
 fn rawget_collection_argument(function_call: &FunctionCall) -> Option<&Expression> {
-    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
-        function_call.suffixes().next()?
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = function_call.suffixes().next()?
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     let mut arguments = arguments.iter();

@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use full_moon::ast::{
-    Call, Expression, Field, FunctionArgs, FunctionCall, Suffix, TableConstructor,
-};
+use full_moon::ast::{Expression, Field, FunctionArgs, FunctionCall, TableConstructor};
 use full_moon::node::Node;
 use full_moon::visitors::Visitor;
 
@@ -1164,24 +1162,28 @@ fn spec_from_config(config: &TableConstructor) -> StateMachineSpec {
 }
 
 fn first_parenthesized_argument(call: &FunctionCall) -> Option<&Expression> {
-    call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-            arguments.iter().next()
-        }
-        _ => None,
-    })
+    call.suffixes().find_map(
+        |suffix| match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+            Some(FunctionArgs::Parentheses { arguments, .. }) => arguments.iter().next(),
+            _ => None,
+        },
+    )
 }
 
 fn named_field<'a>(table: &'a TableConstructor, name: &str) -> Option<&'a Expression> {
-    table.fields().iter().find_map(|field| match field {
-        Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
-        Field::ExpressionKey { key, value, .. }
-            if string_expression(key).as_deref() == Some(name) =>
-        {
-            Some(value)
-        }
-        _ => None,
-    })
+    table
+        .fields()
+        .iter()
+        .find_map(|field| match field {
+            Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
+            Field::ExpressionKey { key, value, .. }
+                if string_expression(key).as_deref() == Some(name) =>
+            {
+                Some(value)
+            }
+            _ => None,
+        })
+        .map(|v| &**v)
 }
 
 fn table_values(table: &TableConstructor) -> impl Iterator<Item = &Expression> {

@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use full_moon::ast::luau::{
-    GenericDeclaration, GenericParameterInfo, IndexedTypeInfo, LuauAttribute, TypeDeclaration,
-    TypeField, TypeInfo, TypeInstantiation,
+    GenericDeclaration, GenericParameterInfo, IfConditionBinding, IndexedTypeInfo, LuauAttribute,
+    TypeDeclaration, TypeField, TypeInfo, TypeInstantiation,
 };
 use full_moon::ast::{BinOp, Expression, LastStmt, Stmt};
 use full_moon::node::Node;
@@ -53,6 +53,13 @@ impl TuaDialectValidator<'_> {
 }
 
 impl Visitor for TuaDialectValidator<'_> {
+    fn visit_if_condition_binding(&mut self, binding: &IfConditionBinding) {
+        self.report(
+            binding.local_token(),
+            "Luau condition bindings are not part of Tua; declare the local before the `if` statement",
+        );
+    }
+
     fn visit_stmt(&mut self, statement: &Stmt) {
         match statement {
             Stmt::TypeDeclaration(declaration) => self.allow_generic_alias(declaration),

@@ -5785,7 +5785,7 @@ pub(crate) fn resolve_chained_call_returns(
                     .collect()
             }
             Suffix::Index(Index::Brackets { expression, .. }) => {
-                let key = match expression {
+                let key = match &**expression {
                     Expression::String(value) => {
                         Type::string_literal(unquote_string(&value.to_string()))
                     }
@@ -6111,7 +6111,7 @@ fn function_call_argument_types(
     call: &FunctionCall,
 ) -> Vec<Option<Type>> {
     let Some(arguments) = call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(args)) => Some(args),
+        Suffix::Call(Call::AnonymousCall(args)) => Some(args.as_ref()),
         Suffix::Call(Call::MethodCall(method)) => Some(method.args()),
         _ => None,
     }) else {
@@ -6171,9 +6171,11 @@ fn infer_builtin_constructor_return_type(
 }
 
 fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Expression> {
-    let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
-        function_call.suffixes().next()?
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = function_call.suffixes().next()?
     else {
+        return None;
+    };
+    let ast::FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 
@@ -6184,9 +6186,10 @@ fn first_parenthesized_call_argument_after_field(
     function_call: &FunctionCall,
 ) -> Option<&Expression> {
     function_call.suffixes().find_map(|suffix| {
-        let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
-            suffix
-        else {
+        let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = suffix else {
+            return None;
+        };
+        let ast::FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
             return None;
         };
         arguments.iter().next()
@@ -6194,9 +6197,11 @@ fn first_parenthesized_call_argument_after_field(
 }
 
 fn rawget_collection_argument(function_call: &FunctionCall) -> Option<&Expression> {
-    let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
-        function_call.suffixes().next()?
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = function_call.suffixes().next()?
     else {
+        return None;
+    };
+    let ast::FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     let mut arguments = arguments.iter();
@@ -6259,10 +6264,11 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
         return None;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses {
-        arguments, ..
-    }))) = function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let ast::FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 

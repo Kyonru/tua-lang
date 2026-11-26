@@ -382,7 +382,10 @@ fn collect_expression_symbols(
                         collect_expression_symbols(parsed, key, symbols);
                         collect_expression_symbols(parsed, value, symbols);
                     }
-                    Field::NameKey { value, .. } | Field::NoKey(value) => {
+                    Field::NameKey { value, .. } => {
+                        collect_expression_symbols(parsed, value, symbols);
+                    }
+                    Field::NoKey(value) => {
                         collect_expression_symbols(parsed, value, symbols);
                     }
                     _ => {}
@@ -466,7 +469,10 @@ fn collect_expression_calls(expression: &Expression, calls: &mut Vec<CallHierarc
                         collect_expression_calls(key, calls);
                         collect_expression_calls(value, calls);
                     }
-                    Field::NameKey { value, .. } | Field::NoKey(value) => {
+                    Field::NameKey { value, .. } => {
+                        collect_expression_calls(value, calls);
+                    }
+                    Field::NoKey(value) => {
                         collect_expression_calls(value, calls);
                     }
                     _ => {}
@@ -612,7 +618,7 @@ fn exports_from_expression(expression: &Expression) -> Vec<CallHierarchyExport> 
                 return None;
             };
             let span = node_span(key)?;
-            let target_name = match value {
+            let target_name = match &**value {
                 Expression::Var(Var::Name(name)) => Some(token_text(name)),
                 _ => None,
             };

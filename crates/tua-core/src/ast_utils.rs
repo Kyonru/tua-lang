@@ -7,6 +7,21 @@ pub(crate) fn token_text(token: &TokenReference) -> String {
     token.token().to_string().trim().to_owned()
 }
 
+/// Borrow ordinary call arguments without exposing the parser's boxed storage.
+pub(crate) fn anonymous_call_arguments(call: &Call) -> Option<&FunctionArgs> {
+    match call {
+        Call::AnonymousCall(arguments) => Some(arguments.as_ref()),
+        _ => None,
+    }
+}
+
+pub(crate) fn anonymous_suffix_arguments(suffix: &Suffix) -> Option<&FunctionArgs> {
+    match suffix {
+        Suffix::Call(call) => anonymous_call_arguments(call),
+        _ => None,
+    }
+}
+
 pub(crate) fn assignment_expression_for_local<'a>(
     expressions: &[&'a Expression],
     index: usize,
@@ -106,9 +121,7 @@ pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Opt
                 parts.push(bare_token_text(method.name()));
                 return Some(parts);
             }
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { .. }))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_)))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(_))) => {
+            Suffix::Call(Call::AnonymousCall(_)) => {
                 return Some(parts);
             }
             _ => return None,

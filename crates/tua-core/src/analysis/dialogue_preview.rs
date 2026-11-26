@@ -106,7 +106,7 @@ fn table_field<'a>(table: &'a TableConstructor, name: &str) -> Option<&'a Expres
             found = Some(value);
         }
     }
-    found
+    found.map(|v| &**v)
 }
 
 fn declaration_table(

@@ -612,9 +612,10 @@ pub(crate) fn assertion_condition(
     if token_text(name) != "assert" || call.suffixes().count() != 1 || !builtin() {
         return None;
     }
-    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
-        call.suffixes().next()?
-    else {
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = call.suffixes().next()? else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     // Argument evaluation can call user code that mutates the guarded value
@@ -1085,8 +1086,10 @@ fn type_call_argument_name(expression: &Expression) -> Option<String> {
 
 fn first_parenthesized_call_arguments(function_call: &FunctionCall) -> Option<Vec<Expression>> {
     function_call.suffixes().find_map(|suffix| {
-        let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = suffix
-        else {
+        let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = suffix else {
+            return None;
+        };
+        let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
             return None;
         };
 

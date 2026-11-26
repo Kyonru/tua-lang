@@ -1426,8 +1426,10 @@ fn directly_returned_module(
     if suffixes.next().is_some() {
         return None;
     }
-    let Suffix::Call(ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = call
-    else {
+    let Suffix::Call(ast::Call::AnonymousCall(boxed_arguments)) = call else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     let Expression::String(module) = arguments.iter().next()? else {

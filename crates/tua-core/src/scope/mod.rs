@@ -518,7 +518,7 @@ impl<'a> ScopeBuilder<'a> {
             }
             Suffix::Index(Index::Brackets { expression, .. }) => {
                 if let Some(span) = node_span(index) {
-                    let name = match expression {
+                    let name = match &**expression {
                         Expression::String(token) => crate::asset::string_literal_value(token),
                         _ => None,
                     };
@@ -936,7 +936,7 @@ fn module_specifier_from_expression(
         return None;
     };
 
-    match args {
+    match &**args {
         FunctionArgs::Parentheses { arguments, .. } => {
             let Some(Expression::String(token)) = arguments.iter().next() else {
                 return None;

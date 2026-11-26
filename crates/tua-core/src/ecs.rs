@@ -295,7 +295,7 @@ fn component_value_type_from_schema(schema: &TableConstructor) -> Option<Type> {
         let Field::NameKey { key, value, .. } = field else {
             return None;
         };
-        let Expression::String(type_name) = value else {
+        let Expression::String(type_name) = &**value else {
             return None;
         };
         let type_name = token_text(type_name).trim_matches(['\'', '"']).to_owned();
@@ -345,15 +345,15 @@ pub(crate) fn is_world_type_direct(candidate: &Type) -> bool {
 }
 
 fn call_argument(call: &FunctionCall, index: usize) -> Option<&Expression> {
-    call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-            arguments.iter().nth(index)
+    call.suffixes().find_map(|suffix| {
+        match (suffix, crate::ast_utils::anonymous_suffix_arguments(suffix)) {
+            (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().nth(index),
+            (Suffix::Call(Call::MethodCall(method)), _) => match method.args() {
+                FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
+                _ => None,
+            },
+            (_, _) => None,
         }
-        Suffix::Call(Call::MethodCall(method)) => match method.args() {
-            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
-            _ => None,
-        },
-        _ => None,
     })
 }
 
@@ -898,15 +898,13 @@ fn argument_expression(call: &FunctionCall, index: usize) -> Option<&Expression>
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            arguments.iter().nth(index)
-        }
-        Call::MethodCall(method) => match method.args() {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().nth(index),
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 

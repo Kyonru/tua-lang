@@ -153,10 +153,10 @@ impl HelperChains {
         for suffix in suffixes {
             let field = match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => crate::ast_utils::token_text(name),
-                Suffix::Index(Index::Brackets {
-                    expression: Expression::String(text),
-                    ..
-                }) => {
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let Expression::String(text) = expression.as_ref() else {
+                        break;
+                    };
                     let Some(bytes) = crate::ast_utils::string_literal_runtime_bytes(text) else {
                         break;
                     };

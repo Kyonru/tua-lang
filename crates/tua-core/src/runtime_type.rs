@@ -30,9 +30,11 @@ pub(crate) fn is_check_call_parts(function_call: &FunctionCall) -> Option<Runtim
         return None;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 

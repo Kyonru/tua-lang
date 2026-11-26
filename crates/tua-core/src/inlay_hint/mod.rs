@@ -250,7 +250,10 @@ impl<'a> InlayHintCollector<'a> {
                     self.collect_expression(key);
                     self.collect_expression(value);
                 }
-                Field::NameKey { value, .. } | Field::NoKey(value) => {
+                Field::NameKey { value, .. } => {
+                    self.collect_expression(value);
+                }
+                Field::NoKey(value) => {
                     self.collect_expression(value);
                 }
                 _ => {}
@@ -415,15 +418,13 @@ fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expressi
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            Some(arguments.iter().collect())
-        }
-        Call::MethodCall(method) => match method.args() {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => Some(arguments.iter().collect()),
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 

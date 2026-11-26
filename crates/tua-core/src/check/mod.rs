@@ -1378,7 +1378,7 @@ impl<'a> Checker<'a> {
             let Some(expected) = expected.field(&token_text(key)) else {
                 continue;
             };
-            match value {
+            match &**value {
                 Expression::Function(_) => {
                     self.check_contextual_function(value, &expected.ty, None, false);
                 }
@@ -2275,7 +2275,7 @@ impl<'a> Checker<'a> {
         current: Option<Type>,
     ) -> Option<Type> {
         let (receiver, method, args) = match call {
-            Call::AnonymousCall(args) => (None, None, args),
+            Call::AnonymousCall(args) => (None, None, args.as_ref()),
             Call::MethodCall(method) => (
                 current.clone(),
                 Some(token_text(method.name())),
@@ -3926,10 +3926,10 @@ impl<'a> Checker<'a> {
     ) -> Vec<CallArgument<'b>> {
         let mut arguments = call_arguments(function_call).unwrap_or_default();
 
-        if let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(table)))) =
-            function_call
-                .suffixes()
-                .find(|suffix| matches!(suffix, Suffix::Call(_)))
+        if let Some(FunctionArgs::TableConstructor(table)) = function_call
+            .suffixes()
+            .find(|suffix| matches!(suffix, Suffix::Call(_)))
+            .and_then(crate::ast_utils::anonymous_suffix_arguments)
         {
             let expression = Expression::TableConstructor(table.clone());
             if let Some(ty) = self.infer_expression(&expression) {
@@ -5389,14 +5389,14 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => {
             Some(arguments.iter().map(CallArgument::Expression).collect())
         }
-        Call::AnonymousCall(FunctionArgs::String(value)) => Some(vec![CallArgument::Inferred(
+        (_, Some(FunctionArgs::String(value))) => Some(vec![CallArgument::Inferred(
             Type::string_literal(unquote_string(&value.to_string())),
         )]),
-        Call::MethodCall(method) => match method.args() {
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => {
                 Some(arguments.iter().map(CallArgument::Expression).collect())
             }
@@ -5406,7 +5406,7 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
             }
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 
@@ -5429,9 +5429,11 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
         return None;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 
@@ -5920,9 +5922,11 @@ fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> 
     let Prefix::Name(name) = function_call.prefix() else {
         return None;
     };
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        function_call.suffixes().next()
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 

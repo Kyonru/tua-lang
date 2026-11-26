@@ -329,11 +329,12 @@ pub(crate) fn widen_inferred_expression_type(
                         Field::NameKey { key, value, .. } => {
                             Some((key.token().to_string().trim().to_owned(), value))
                         }
-                        Field::ExpressionKey {
-                            key: Expression::String(key),
-                            value,
-                            ..
-                        } => Some((environment::unquote_string(&key.token().to_string()), value)),
+                        Field::ExpressionKey { key, value, .. } => {
+                            let Expression::String(key) = key.as_ref() else {
+                                return None;
+                            };
+                            Some((environment::unquote_string(&key.token().to_string()), value))
+                        }
                         _ => None,
                     })
                     .collect::<BTreeMap<_, _>>();
@@ -358,9 +359,10 @@ pub(crate) fn widen_inferred_expression_type(
                     .fields()
                     .iter()
                     .filter_map(|field| match field {
-                        Field::NoKey(value) | Field::ExpressionKey { value, .. } => {
+                        Field::ExpressionKey { value, .. } => {
                             Some(widen_inferred_expression_type(item, value))
                         }
+                        Field::NoKey(value) => Some(widen_inferred_expression_type(item, value)),
                         _ => None,
                     })
                     .collect::<Vec<_>>();

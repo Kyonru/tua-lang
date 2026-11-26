@@ -1008,7 +1008,7 @@ fn returned_module_table_fields(parsed: &ParsedSource) -> Option<Vec<(String, Op
             continue;
         };
 
-        let value_name = match value {
+        let value_name = match &**value {
             Expression::Var(Var::Name(name)) => Some(token_text(name)),
             _ => None,
         };
@@ -1587,17 +1587,19 @@ fn erase_stmt(
         ast::Stmt::LocalFunction(function) => {
             let body = erase_function_body(path, function.body().clone(), diagnostics);
 
-            Some(ast::Stmt::LocalFunction(function.with_body(body)))
+            Some(ast::Stmt::LocalFunction(Box::new(function.with_body(body))))
         }
         ast::Stmt::FunctionDeclaration(function) => {
             let body = erase_function_body(path, function.body().clone(), diagnostics);
 
-            Some(ast::Stmt::FunctionDeclaration(function.with_body(body)))
+            Some(ast::Stmt::FunctionDeclaration(Box::new(
+                function.with_body(body),
+            )))
         }
         ast::Stmt::Do(block) => {
             let erased = erase_block(path, block.block().clone(), diagnostics);
 
-            Some(ast::Stmt::Do(block.with_block(erased)))
+            Some(ast::Stmt::Do(Box::new(block.with_block(erased))))
         }
         ast::Stmt::If(if_stmt) => {
             let block = erase_block(path, if_stmt.block().clone(), diagnostics);
@@ -1613,12 +1615,12 @@ fn erase_stmt(
                 .cloned()
                 .map(|block| erase_block(path, block, diagnostics));
 
-            Some(ast::Stmt::If(
+            Some(ast::Stmt::If(Box::new(
                 if_stmt
                     .with_block(block)
                     .with_else_if(else_if)
                     .with_else(else_block),
-            ))
+            )))
         }
         ast::Stmt::GenericFor(for_stmt) => {
             let block = erase_block(path, for_stmt.block().clone(), diagnostics);
@@ -1628,12 +1630,12 @@ fn erase_stmt(
             let for_stmt = if had_type_specifier {
                 for_stmt.with_in_token(spaced_symbol("in"))
             } else {
-                for_stmt
+                *for_stmt
             };
 
-            Some(ast::Stmt::GenericFor(
+            Some(ast::Stmt::GenericFor(Box::new(
                 for_stmt.with_type_specifiers(Vec::new()).with_block(block),
-            ))
+            )))
         }
         ast::Stmt::NumericFor(for_stmt) => {
             let block = erase_block(path, for_stmt.block().clone(), diagnostics);
@@ -1641,22 +1643,22 @@ fn erase_stmt(
             let for_stmt = if had_type_specifier {
                 for_stmt.with_equal_token(spaced_symbol("="))
             } else {
-                for_stmt
+                *for_stmt
             };
 
-            Some(ast::Stmt::NumericFor(
+            Some(ast::Stmt::NumericFor(Box::new(
                 for_stmt.with_type_specifier(None).with_block(block),
-            ))
+            )))
         }
         ast::Stmt::Repeat(repeat) => {
             let block = erase_block(path, repeat.block().clone(), diagnostics);
 
-            Some(ast::Stmt::Repeat(repeat.with_block(block)))
+            Some(ast::Stmt::Repeat(Box::new(repeat.with_block(block))))
         }
         ast::Stmt::While(while_stmt) => {
             let block = erase_block(path, while_stmt.block().clone(), diagnostics);
 
-            Some(ast::Stmt::While(while_stmt.with_block(block)))
+            Some(ast::Stmt::While(Box::new(while_stmt.with_block(block))))
         }
         _ => Some(stmt),
     }

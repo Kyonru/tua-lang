@@ -142,7 +142,7 @@ pub(crate) fn call_is_terminating_builtin(
 
     match name.to_string().trim() {
         "error" => true,
-        "assert" => match arguments {
+        "assert" => match &**arguments {
             FunctionArgs::Parentheses { arguments, .. } => {
                 arguments.iter().next().is_some_and(is_false_literal)
             }

@@ -628,11 +628,10 @@ fn field_key(field: &Field) -> Option<(String, SourceSpan, &Expression)> {
                 value,
             ))
         }
-        Field::ExpressionKey {
-            key: Expression::String(text),
-            value,
-            ..
-        } => {
+        Field::ExpressionKey { key, value, .. } => {
+            let Expression::String(text) = key.as_ref() else {
+                return None;
+            };
             let (start, end) = text.range()?;
             Some((
                 string_value(text)?,
@@ -813,11 +812,10 @@ pub(crate) fn imported_wrapper(
                 continue;
             }
             let mut suffixes = suffixes.into_iter();
-            let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                arguments,
-                ..
-            }))) = suffixes.next()
-            else {
+            let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = suffixes.next() else {
+                continue;
+            };
+            let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
                 continue;
             };
             let Some(Expression::String(module)) = arguments.iter().next() else {
@@ -910,11 +908,10 @@ pub(crate) fn locale_uses(parsed: &ParsedSource) -> Vec<LocaleUse> {
                 "t" => 2,
                 _ => return,
             };
-            let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                arguments,
-                ..
-            }))) = suffixes.next()
-            else {
+            let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = suffixes.next() else {
+                return;
+            };
+            let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
                 return;
             };
             let Some(Expression::String(token)) = arguments.iter().nth(argument_index) else {
@@ -968,11 +965,10 @@ pub(crate) fn key_uses(parsed: &ParsedSource) -> Vec<KeyUse> {
             if name.token().to_string().trim() != "t" {
                 return;
             }
-            let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                arguments,
-                ..
-            }))) = suffixes.next()
-            else {
+            let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = suffixes.next() else {
+                return;
+            };
+            let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
                 return;
             };
             let Some(Expression::String(token)) = arguments.iter().next() else {

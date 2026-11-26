@@ -233,15 +233,19 @@ fn table_field_value<'a>(expression: &'a Expression, name: &str) -> Option<&'a E
         return None;
     };
 
-    table.fields().iter().find_map(|field| match field {
-        Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
-        Field::ExpressionKey { key, value, .. }
-            if string_literal_expression(key).as_deref() == Some(name) =>
-        {
-            Some(value)
-        }
-        _ => None,
-    })
+    table
+        .fields()
+        .iter()
+        .find_map(|field| match field {
+            Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
+            Field::ExpressionKey { key, value, .. }
+                if string_literal_expression(key).as_deref() == Some(name) =>
+            {
+                Some(value)
+            }
+            _ => None,
+        })
+        .map(|v| &**v)
 }
 
 fn table_array_value(expression: &Expression, index: usize) -> Option<&Expression> {

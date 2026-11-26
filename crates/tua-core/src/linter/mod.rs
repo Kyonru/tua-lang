@@ -2824,11 +2824,11 @@ impl<'a> JitAnalyzer<'a> {
 }
 
 fn has_static_import_argument(suffix: &Suffix) -> bool {
-    match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
+    match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+        Some(FunctionArgs::Parentheses { arguments, .. }) => {
             matches!(arguments.iter().next(), Some(Expression::String(_)))
         }
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_))) => true,
+        Some(FunctionArgs::String(_)) => true,
         _ => false,
     }
 }
@@ -3009,7 +3009,7 @@ fn require_module_literal(function_call: &FunctionCall) -> Option<(String, Sourc
         return None;
     };
 
-    match args {
+    match &**args {
         FunctionArgs::Parentheses { arguments, .. } => {
             let Some(Expression::String(token)) = arguments.iter().next() else {
                 return None;

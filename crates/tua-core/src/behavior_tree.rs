@@ -179,8 +179,10 @@ fn argument_at(call: &FunctionCall, index: usize) -> Option<&Expression> {
     let suffix = call
         .suffixes()
         .find(|suffix| matches!(suffix, Suffix::Call(_)))?;
-    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = suffix
-    else {
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = suffix else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     arguments.iter().nth(index)

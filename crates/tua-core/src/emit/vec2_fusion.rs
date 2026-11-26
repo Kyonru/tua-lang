@@ -883,9 +883,10 @@ fn constructor_arguments(call: &ast::FunctionCall) -> Option<[&Expression; 2]> {
     }
 
     let mut suffixes = call.suffixes();
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        suffixes.next()
-    else {
+    let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = suffixes.next() else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     if suffixes.next().is_some() {
@@ -1128,10 +1129,10 @@ fn constructor_call(
     arguments.push(Pair::new(y, None));
 
     ast::FunctionCall::new(Prefix::Name(name)).with_suffixes(vec![Suffix::Call(
-        Call::AnonymousCall(FunctionArgs::Parentheses {
+        Call::AnonymousCall(Box::new(FunctionArgs::Parentheses {
             parentheses: ContainedSpan::new(open, close),
             arguments,
-        }),
+        })),
     )])
 }
 

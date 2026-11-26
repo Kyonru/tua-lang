@@ -147,8 +147,10 @@ pub(crate) fn first_call_argument(
     let first_call = call
         .suffixes()
         .find(|suffix| matches!(suffix, Suffix::Call(_)))?;
-    let Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = first_call
-    else {
+    let Suffix::Call(Call::AnonymousCall(boxed_arguments)) = first_call else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     arguments.iter().next()

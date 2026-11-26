@@ -370,7 +370,7 @@ pub(crate) fn required_module_from_call(call: &FunctionCall) -> Option<String> {
     let Suffix::Call(Call::AnonymousCall(arguments)) = call.suffixes().next()? else {
         return None;
     };
-    let token = match arguments {
+    let token = match &**arguments {
         FunctionArgs::Parentheses { arguments, .. } => {
             let Expression::String(token) = arguments.iter().next()? else {
                 return None;

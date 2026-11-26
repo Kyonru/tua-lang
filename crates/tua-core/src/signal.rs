@@ -1205,16 +1205,16 @@ fn call_argument_expressions(function_call: &FunctionCall) -> Option<Vec<&Expres
     })?;
 
     match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            Some(arguments.iter().collect())
-        }
+        Call::AnonymousCall(args) => match args.as_ref() {
+            FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
+            FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
+            _ => None,
+        },
         Call::MethodCall(method) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
             FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
             _ => None,
         },
-        Call::AnonymousCall(FunctionArgs::String(_))
-        | Call::AnonymousCall(FunctionArgs::TableConstructor(_)) => Some(Vec::new()),
         _ => None,
     }
 }
@@ -1289,15 +1289,13 @@ fn argument_expression(function_call: &FunctionCall, index: usize) -> Option<&Ex
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            arguments.iter().nth(index)
-        }
-        Call::MethodCall(method) => match method.args() {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().nth(index),
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 
@@ -1307,16 +1305,16 @@ fn first_string_argument(function_call: &FunctionCall) -> Option<(String, Source
         _ => None,
     })?;
 
-    match call {
-        Call::AnonymousCall(FunctionArgs::String(value)) => string_argument(value),
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::String(value))) => string_argument(value),
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => {
             let Expression::String(value) = arguments.iter().next()? else {
                 return None;
             };
 
             string_argument(value)
         }
-        Call::MethodCall(method) => match method.args() {
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::String(value) => string_argument(value),
             FunctionArgs::Parentheses { arguments, .. } => {
                 let Expression::String(value) = arguments.iter().next()? else {
@@ -1327,7 +1325,7 @@ fn first_string_argument(function_call: &FunctionCall) -> Option<(String, Source
             }
             _ => None,
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 

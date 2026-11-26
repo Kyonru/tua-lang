@@ -306,7 +306,7 @@ pub(crate) fn migration_functions(call: &FunctionCall) -> Vec<(&Expression, Opti
                     _ => None,
                 })
             });
-            Some((value, schema))
+            Some((value.as_ref(), schema.map(Box::as_ref)))
         })
         .collect()
 }
@@ -495,7 +495,7 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                             }
                         }
                     }
-                    if let Expression::FunctionCall(call) = value {
+                    if let Expression::FunctionCall(call) = &**value {
                         if let Some(parts) = field_chain_before_first_call(call) {
                             if parts.first().is_some_and(|root| root == MODULE_NAME)
                                 && parts.get(1).is_some_and(|builder| builder != "record")
@@ -586,12 +586,15 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                 "array" | "enum" => 1,
                 _ => return,
             };
-            let default = call.suffixes().find_map(|suffix| match suffix {
-                Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                    arguments, ..
-                })) => Some(arguments.iter().nth(required_index)),
-                _ => None,
-            });
+            let default =
+                call.suffixes().find_map(
+                    |suffix| match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+                        Some(FunctionArgs::Parentheses { arguments, .. }) => {
+                            Some(arguments.iter().nth(required_index))
+                        }
+                        _ => None,
+                    },
+                );
             if default.flatten().is_none() {
                 if let Some(span) = node_span(call) {
                     self.report(span, format!("save field `{path}` needs a default value"));
@@ -618,7 +621,7 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
                     }
                 }
                 if matches!(
-                    value,
+                    &**value,
                     Expression::Number(_)
                         | Expression::String(_)
                         | Expression::Symbol(_)
@@ -679,23 +682,27 @@ pub(crate) fn config_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
 }
 
 pub(crate) fn first_argument(call: &FunctionCall) -> Option<&Expression> {
-    call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-            arguments.iter().next()
+    call.suffixes().find_map(|suffix| {
+        match (suffix, crate::ast_utils::anonymous_suffix_arguments(suffix)) {
+            (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().next(),
+            (Suffix::Call(Call::MethodCall(method)), _) => match method.args() {
+                FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next(),
+                _ => None,
+            },
+            (_, _) => None,
         }
-        Suffix::Call(Call::MethodCall(method)) => match method.args() {
-            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().next(),
-            _ => None,
-        },
-        _ => None,
     })
 }
 
 fn named_field<'a>(table: &'a TableConstructor, name: &str) -> Option<&'a Expression> {
-    table.fields().iter().find_map(|field| match field {
-        Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
-        _ => None,
-    })
+    table
+        .fields()
+        .iter()
+        .find_map(|field| match field {
+            Field::NameKey { key, value, .. } if token_text(key) == name => Some(value),
+            _ => None,
+        })
+        .map(|v| &**v)
 }
 
 fn string_value(expression: &Expression) -> Option<String> {

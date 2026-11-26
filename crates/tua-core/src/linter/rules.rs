@@ -996,15 +996,13 @@ fn first_call_arguments(call: &FunctionCall) -> Option<Vec<&Expression>> {
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    let args = match suffix {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            arguments.iter().collect()
-        }
-        Call::MethodCall(method) => match method.args() {
+    let args = match (suffix, crate::ast_utils::anonymous_call_arguments(suffix)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => arguments.iter().collect(),
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => arguments.iter().collect(),
             _ => return None,
         },
-        _ => return None,
+        (_, _) => return None,
     };
     Some(args)
 }

@@ -2659,6 +2659,26 @@ fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
             "interpolated strings",
         ),
         ("floor division", "local value = 5 // 2\n", "floor division"),
+        (
+            "if local binding",
+            "if local value = lookup() then print(value) end\n",
+            "condition bindings",
+        ),
+        (
+            "if const binding",
+            "if const value = lookup() then print(value) end\n",
+            "condition bindings",
+        ),
+        (
+            "elseif local binding",
+            "if ready then print(1) elseif local value = lookup() then print(value) end\n",
+            "condition bindings",
+        ),
+        (
+            "typed condition binding",
+            "if local value: number = lookup() then print(value) end\n",
+            "condition bindings",
+        ),
         ("const declaration", "const value = 1\n", "`const`"),
         (
             "const function",

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::{self, Call, Expression, Field, FunctionArgs, FunctionCall, Suffix};
+use full_moon::ast::{self, Expression, Field, FunctionArgs, FunctionCall};
 use full_moon::node::Node;
 use full_moon::tokenizer::TokenReference;
 
@@ -1705,12 +1705,14 @@ fn is_sprite_sheet_call(function_call: &FunctionCall) -> bool {
 }
 
 fn first_table_argument(function_call: &FunctionCall) -> Option<&ast::TableConstructor> {
-    function_call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-            arguments.iter().next().and_then(table_expression)
+    function_call.suffixes().find_map(|suffix| {
+        match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+            Some(FunctionArgs::Parentheses { arguments, .. }) => {
+                arguments.iter().next().and_then(table_expression)
+            }
+            Some(FunctionArgs::TableConstructor(table)) => Some(table),
+            _ => None,
         }
-        Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(table))) => Some(table),
-        _ => None,
     })
 }
 
@@ -2079,9 +2081,10 @@ fn parse_animation_field(field: &Field) -> Option<SpriteAnimation> {
             invalid(expression)
                 || table_expression(expression).is_some_and(|table| {
                     table.fields().iter().any(|field| match field {
-                        Field::ExpressionKey { value, .. }
-                        | Field::NameKey { value, .. }
-                        | Field::NoKey(value) => invalid(value),
+                        Field::ExpressionKey { value, .. } | Field::NameKey { value, .. } => {
+                            invalid(value)
+                        }
+                        Field::NoKey(value) => invalid(value),
                         _ => false,
                     })
                 })
@@ -2190,13 +2193,17 @@ fn parse_frame_metadata_list(table: &ast::TableConstructor) -> Vec<SpriteFrameMe
 }
 
 fn named_field<'a>(table: &'a ast::TableConstructor, name: &str) -> Option<&'a Expression> {
-    table.fields().iter().find_map(|field| {
-        let Field::NameKey { key, value, .. } = field else {
-            return None;
-        };
+    table
+        .fields()
+        .iter()
+        .find_map(|field| {
+            let Field::NameKey { key, value, .. } = field else {
+                return None;
+            };
 
-        (token_text(key) == name).then_some(value)
-    })
+            (token_text(key) == name).then_some(value)
+        })
+        .map(|v| &**v)
 }
 
 fn table_expression(expression: &Expression) -> Option<&ast::TableConstructor> {

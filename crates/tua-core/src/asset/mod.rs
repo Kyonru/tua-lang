@@ -1107,11 +1107,11 @@ fn kind_for_call_arguments(kind: AssetLoaderKind, call: &Call) -> AssetLoaderKin
 }
 
 fn call_string_argument(call: &Call, index: usize) -> Option<(String, SourceSpan)> {
-    match call {
-        Call::AnonymousCall(FunctionArgs::String(path)) if index == 0 => {
+    match crate::ast_utils::anonymous_call_arguments(call) {
+        Some(FunctionArgs::String(path)) if index == 0 => {
             Some((string_literal_value(path)?, node_span(path)?))
         }
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+        Some(FunctionArgs::Parentheses { arguments, .. }) => {
             let Expression::String(path) = arguments.iter().nth(index)? else {
                 return None;
             };
@@ -1580,9 +1580,10 @@ fn flatten_concatenation<'a>(expression: &'a Expression, operands: &mut Vec<&'a 
 
 /// `string.format("prefix%dsuffix", value)` with a single conversion.
 fn formatted_uniform_name(call: &FunctionCall) -> Option<ShaderUniformReference> {
-    let (parts, Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
-        field_chain_before_first_call(call)?
-    else {
+    let (parts, Call::AnonymousCall(boxed_arguments)) = field_chain_before_first_call(call)? else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
     if parts != ["string", "format"] {
@@ -1618,9 +1619,12 @@ fn uniform_name_variable(expression: &Expression) -> Option<String> {
     match expression {
         Expression::Var(full_moon::ast::Var::Name(name)) => Some(token_text(name)),
         Expression::FunctionCall(call) => {
-            let (parts, Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) =
+            let (parts, Call::AnonymousCall(boxed_arguments)) =
                 field_chain_before_first_call(call)?
             else {
+                return None;
+            };
+            let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
                 return None;
             };
             if parts != ["tostring"] || arguments.len() != 1 {

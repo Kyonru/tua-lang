@@ -673,10 +673,12 @@ fn setmetatable_arguments(
         return None;
     }
 
-    let Some(Suffix::Call(ast::Call::AnonymousCall(FunctionArgs::Parentheses {
-        arguments, ..
-    }))) = function_call.suffixes().next()
+    let Some(Suffix::Call(ast::Call::AnonymousCall(boxed_arguments))) =
+        function_call.suffixes().next()
     else {
+        return None;
+    };
+    let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
         return None;
     };
 

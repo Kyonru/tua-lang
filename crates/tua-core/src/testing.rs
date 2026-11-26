@@ -68,11 +68,11 @@ pub fn discover_tests(parsed: &ParsedSource) -> TestDiscovery {
             if self.scope.has_non_builtin_binding_at(&kind, start) {
                 return;
             }
-            let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-                arguments,
-                ..
-            }))) = call.suffixes().next()
+            let Some(Suffix::Call(Call::AnonymousCall(boxed_arguments))) = call.suffixes().next()
             else {
+                return;
+            };
+            let FunctionArgs::Parentheses { arguments, .. } = boxed_arguments.as_ref() else {
                 return;
             };
             let name = arguments.iter().next().and_then(|expression| {

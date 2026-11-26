@@ -2,7 +2,7 @@
 //! call signatures; no runtime fields or source rewrites are introduced.
 use crate::ast_utils::field_chain_before_first_call;
 use crate::types::{FunctionParameter, FunctionType, TableField, TableShape, Type};
-use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Suffix};
+use full_moon::ast::{Expression, FunctionArgs, FunctionCall};
 
 const CONTEXT: &str = "$tua_behavior_context";
 
@@ -166,16 +166,16 @@ pub(crate) fn specialized_call(
         return None;
     }
     let mut argument = |index: usize| {
-        call.suffixes().find_map(|suffix| match suffix {
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
-                arguments.iter().nth(index).and_then(&mut resolve)
+        call.suffixes().find_map(|suffix| {
+            match crate::ast_utils::anonymous_suffix_arguments(suffix) {
+                Some(FunctionArgs::Parentheses { arguments, .. }) => {
+                    arguments.iter().nth(index).and_then(&mut resolve)
+                }
+                Some(FunctionArgs::TableConstructor(table)) if index == 0 => {
+                    resolve(&Expression::TableConstructor(table.clone()))
+                }
+                _ => None,
             }
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(table)))
-                if index == 0 =>
-            {
-                resolve(&Expression::TableConstructor(table.clone()))
-            }
-            _ => None,
         })
     };
     Some(match method {

@@ -3350,11 +3350,9 @@ fn project_call_argument_expressions(function_call: &FunctionCall) -> Option<Vec
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
-    match call {
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            Some(arguments.iter().collect())
-        }
-        Call::AnonymousCall(FunctionArgs::String(value)) => {
+    match (call, crate::ast_utils::anonymous_call_arguments(call)) {
+        (_, Some(FunctionArgs::Parentheses { arguments, .. })) => Some(arguments.iter().collect()),
+        (_, Some(FunctionArgs::String(value))) => {
             // String-call sugar supplies its string as the only argument.
             // The owned AST node cannot be borrowed from this helper, so the
             // caller will retain the unspecialized return in this uncommon
@@ -3362,16 +3360,16 @@ fn project_call_argument_expressions(function_call: &FunctionCall) -> Option<Vec
             let _ = value;
             None
         }
-        Call::AnonymousCall(FunctionArgs::TableConstructor(value)) => {
+        (_, Some(FunctionArgs::TableConstructor(value))) => {
             let _ = value;
             None
         }
-        Call::MethodCall(method) => match method.args() {
+        (Call::MethodCall(method), _) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
             FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => None,
             _ => Some(Vec::new()),
         },
-        _ => None,
+        (_, _) => None,
     }
 }
 
