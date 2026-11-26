@@ -9,6 +9,9 @@ language or editor behavior, and migration notes call out those changes.
 - Keep nested table widths stable after formatting by excluding leading
   indentation from width estimates.
 
+- Expand parent tables with nested callbacks in the first formatting pass,
+  avoiding a second-pass assignment layout change.
+
 - Allow up to 30 seconds for the editor server version probe so a fresh install
   is not rejected during a slow first launch; failed probes remain bounded.
 

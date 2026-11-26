@@ -450,17 +450,23 @@ where
     (braces, fields)
 }
 
-fn expression_is_multiline_function(ctx: &Context, expression: &Expression) -> bool {
-    if let Expression::Function(anonymous_function) = expression {
-        return !should_collapse_function_body(ctx, anonymous_function.body());
+fn expression_forces_table_expansion(ctx: &Context, expression: &Expression) -> bool {
+    match expression {
+        Expression::Function(anonymous_function) => {
+            !should_collapse_function_body(ctx, anonymous_function.body())
+        }
+        // A nested function or comment will expand its containing table. Expand
+        // the parent in the same pass instead of letting the newly inserted
+        // whitespace change its width estimate on the next format.
+        Expression::TableConstructor(table) => should_expand(ctx, table),
+        _ => false,
     }
-    false
 }
 
 /// Examines the fields of a table constructor to see if we should force the table constructor multiline.
 /// This will only happen if either:
 ///  1) There are comments within the table
-///  2) There are anonymous functions defined within the table [As these will expand multiline]
+///  2) There are anonymous functions or nested tables that must expand multiline
 fn should_expand(ctx: &Context, table_constructor: &TableConstructor) -> bool {
     let (start_brace, end_brace) = table_constructor.braces().tokens();
     let contains_comments = start_brace
@@ -477,13 +483,13 @@ fn should_expand(ctx: &Context, table_constructor: &TableConstructor) -> bool {
         for field in table_constructor.fields() {
             let should_expand = match field {
                 Field::ExpressionKey { key, value, .. } => {
-                    expression_is_multiline_function(ctx, key)
-                        || expression_is_multiline_function(ctx, value)
+                    expression_forces_table_expansion(ctx, key)
+                        || expression_forces_table_expansion(ctx, value)
                 }
-                Field::NameKey { value, .. } => expression_is_multiline_function(ctx, value),
+                Field::NameKey { value, .. } => expression_forces_table_expansion(ctx, value),
                 #[cfg(feature = "cfxlua")]
                 Field::SetConstructor { .. } => false,
-                Field::NoKey(expression) => expression_is_multiline_function(ctx, expression),
+                Field::NoKey(expression) => expression_forces_table_expansion(ctx, expression),
                 other => panic!("unknown node {:?}", other),
             };
 

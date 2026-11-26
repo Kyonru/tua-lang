@@ -1974,6 +1974,13 @@ fn assert_nested_table_stability(source: &str) {
 }
 
 #[test]
+fn nested_table_assignment_expands_with_its_callback_in_one_pass() {
+    assert_nested_table_stability(
+        r#"package.loaded['demo.state'] = { state = { update = function(_, callback) callback(value) end } }"#,
+    );
+}
+
+#[test]
 fn nested_table_width_excludes_leading_indentation() {
     assert_nested_table_stability(
         r#"return { entries = { entries = { { bpm = 60.000000000, score = 0.459995278, relativeScore = 1.000000000, relation = "primary" }, { bpm = 119.650659850, score = 0.447463229, relativeScore = 0.972755000, relation = "other" } } } }"#,
