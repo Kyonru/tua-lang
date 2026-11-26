@@ -523,13 +523,9 @@ pub fn format_table_constructor(
                 // exponential time complexity with respect to how deep the table is.
                 // TODO: find an improved heuristic whilst comparing against benchmarks
                 let braces_range = (
-                    // Use the position of the last trivia in case there is some present (e.g. whitespace)
-                    // So that we don't include an extra space
-                    if let Some(token) = start_brace.leading_trivia().last() {
-                        token.end_position().bytes()
-                    } else {
-                        start_brace.token().end_position().bytes()
-                    },
+                    // Leading trivia belongs outside this table. Including its
+                    // position counts indentation inserted by a previous pass.
+                    start_brace.token().end_position().bytes(),
                     end_brace.token().start_position().bytes(),
                 );
 

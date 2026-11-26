@@ -1953,3 +1953,29 @@ fn type_import_formatting_preserves_comments_and_stabilizes_without_final_newlin
         );
     }
 }
+
+fn assert_nested_table_stability(source: &str) {
+    for line_width in [80, 100, 120] {
+        for quote_style in [QuoteStyle::Preserve, QuoteStyle::AutoDouble] {
+            for line_ending in [LineEnding::Lf, LineEnding::Crlf] {
+                let options = FormatOptions {
+                    line_width,
+                    quote_style,
+                    line_ending,
+                    ..FormatOptions::default()
+                };
+                let first = format_tua_source("nested.tua", source, &options).unwrap();
+                let second = format_tua_source("nested.tua", &first, &options).unwrap();
+                assert_eq!(first, second, "{source} with {options:?}");
+                corpus::same_program(source, &first).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_table_width_excludes_leading_indentation() {
+    assert_nested_table_stability(
+        r#"return { entries = { entries = { { bpm = 60.000000000, score = 0.459995278, relativeScore = 1.000000000, relation = "primary" }, { bpm = 119.650659850, score = 0.447463229, relativeScore = 0.972755000, relation = "other" } } } }"#,
+    );
+}
