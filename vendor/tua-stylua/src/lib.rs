@@ -1,6 +1,6 @@
 use context::Context;
 use full_moon::ast::Ast;
-#[cfg(all(feature = "luau", any(feature = "lua52", feature = "lua53")))]
+#[cfg(all(feature = "luau", feature = "lua53"))]
 use full_moon::tokenizer::{Symbol, TokenType};
 use serde::Deserialize;
 use thiserror::Error;
@@ -71,7 +71,7 @@ impl From<LuaVersion> for full_moon::LuaVersion {
             #[cfg(feature = "luau")]
             LuaVersion::Tua => full_moon::LuaVersion::tua(),
             #[cfg(feature = "luajit")]
-            LuaVersion::LuaJIT => full_moon::LuaVersion::luajit(),
+            LuaVersion::LuaJIT => full_moon::LuaVersion::lua52().with_luajit(),
             #[cfg(feature = "cfxlua")]
             LuaVersion::CfxLua => full_moon::LuaVersion::cfxlua(),
         }
@@ -528,6 +528,24 @@ mod tests {
         assert_eq!(
             output,
             "local function add(value, amount)\n\treturn value + amount\nend\n"
+        );
+    }
+
+    #[cfg(feature = "luajit")]
+    #[test]
+    fn test_luajit_dialect_keeps_hex_floats_and_integer_suffixes() {
+        let source = "local x=0x1.fp3\nlocal y=9007199254740993LL\nlocal z=0xffffffffffffffffULL\n";
+        let config = Config {
+            syntax: LuaVersion::LuaJIT,
+            ..Config::default()
+        };
+        let output = format_code(source, config, None, OutputVerification::Full).unwrap();
+        assert!(output.contains("0x1.fp3"));
+        assert!(output.contains("9007199254740993LL"));
+        assert!(output.contains("0xffffffffffffffffULL"));
+        assert_eq!(
+            format_code(&output, config, None, OutputVerification::Full).unwrap(),
+            output
         );
     }
 

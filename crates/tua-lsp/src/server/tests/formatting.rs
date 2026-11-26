@@ -292,3 +292,39 @@ fn formatting_keeps_comments_between_table_keys_and_values() {
         assert!(output.find("-- key note").unwrap() < output.find("\"value\"").unwrap());
     }
 }
+
+#[test]
+fn formatting_lua_documents_preserves_luajit_literals_and_labels() {
+    let temp = TempProject::new("formatting-luajit");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let source = "local value=1ULL\ngoto done\n::done::\nreturn value\n";
+    let uri = temp.uri_for("src/legacy.lua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut opened = did_open(&uri, source);
+    opened["params"]["textDocument"]["languageId"] = json!("lua");
+    server.send(opened);
+    server.send(formatting_request(2, &uri));
+    let edits = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("LuaJIT document should format");
+    let output = edits[0]["newText"].as_str().unwrap();
+    assert!(output.contains("local value = 1ULL"));
+    assert!(output.contains("::done::"));
+    assert!(tua_core::parse_lua_source("legacy.lua", output).is_ok());
+}
+
+#[test]
+fn formatting_honors_project_language_for_a_lua_extension() {
+    let temp = TempProject::new("formatting-typed-lua");
+    temp.write("tua.toml", "source = \"src\"\nextension = \"lua\"\n");
+    let uri = temp.uri_for("src/main.lua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, "local value: number=1\n"));
+    server.send(formatting_request(2, &uri));
+    let edits = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("configured typed source should format");
+    assert_eq!(edits[0]["newText"], "local value: number = 1\n");
+}

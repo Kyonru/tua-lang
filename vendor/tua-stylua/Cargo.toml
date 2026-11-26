@@ -63,7 +63,7 @@ lua54 = [
     "lua53",
     "full_moon/lua54",
 ]
-luajit = ["full_moon/luajit"]
+luajit = ["full_moon/luajit", "lua52"]
 luau = ["full_moon/roblox"]
 serialize = []
 

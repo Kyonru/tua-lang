@@ -24,6 +24,8 @@ range/on-type edits without running a second formatting pass.
 
 Run `make formatter-fork-check` to check the parser without optional features
 and test the formatter with plain Lua and Tua's `luau,luajit` feature combination.
+LuaJIT mode also enables full_moon's Lua 5.2 numeric grammar for hexadecimal
+fractions and exponents. Tua parsing retains its separate dialect.
 The root workspace lockfile governs shipped builds; standalone fork checks
 create ignored local lockfiles.
 

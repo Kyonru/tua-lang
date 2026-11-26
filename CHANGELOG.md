@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Format explicit `.lua` files with the LuaJIT dialect, including number suffixes,
+  hexadecimal floats and labels. Full, range and on-type edits share the same
+  dialect validation; `.tua` syntax restrictions remain unchanged.
+
 - Keep table-key comments after their keys, allowing quoted keys to format
   without weakening string/comment preservation checks.
 

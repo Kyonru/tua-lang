@@ -46,7 +46,11 @@ tua fmt --stdin-filepath tests/collision.lua < tests/collision.lua
 
 Without paths, `tua fmt` rewrites project `.tua` and `.tdialogue` files, including
 the configured typed test root. Plain `.lua` assets are excluded from that scan;
-pass their paths explicitly to format them.
+pass their paths explicitly to format them. Plain Lua formatting accepts LuaJIT
+syntax, including integer suffixes, hexadecimal floats, `goto` and labels. These
+forms remain subject to the stricter language rules in `.tua` files. If the
+project configures `.lua` as its typed source extension, formatting respects
+that classification and uses Tua syntax.
 
 Explicit paths accept `.tua`, `.lua`, `.tdialogue` and configured-extension files,
 including files outside the source root but within the project. Directories,
@@ -136,7 +140,8 @@ same block to preserve a larger region. Ignored source must still parse.
 
 ## Validation And Other File Types
 
-Formatting checks the authored AST and validates the result with Tua's parser.
+Formatting checks the authored AST and validates the result with the matching
+Tua or LuaJIT parser.
 Range and on-type edits are checked after narrowing them to the requested area;
 if that partial edit would change the program, no edit is returned.
 It does not require type checking to succeed or imported modules to be loaded.

@@ -1,3 +1,5 @@
+mod support;
+
 use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -7864,4 +7866,93 @@ fn dialogue_entry_warnings_agree_with_check_and_preserve_emission() {
     assert!(emitted.contains("entry = \"start\""));
     assert!(emitted.contains("External"));
     assert!(!emitted.contains("external_entries"));
+}
+
+#[test]
+fn fmt_luajit_files_and_stdin_keep_runtime_values_and_dialect_boundaries() {
+    let temp = TempDir::new("fmt-luajit");
+    fs::write(temp.path().join(CONFIG_FILE), "source = \"src\"\n").unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let lua = support::lua_executable().filter(|candidate| {
+        Command::new(candidate)
+            .args(["-e", "assert(jit)"])
+            .output()
+            .is_ok_and(|output| output.status.success())
+    });
+    if std::env::var_os("TUA_LUAJIT_BIN").is_some_and(|value| !value.is_empty()) {
+        assert!(lua.is_some(), "the pinned interpreter must be LuaJIT");
+    }
+    if lua.is_none() {
+        eprintln!("SKIP formatter runtime comparison: LuaJIT interpreter unavailable");
+    }
+    for source in [
+        "local value=9007199254740993LL\nprint(tostring(value))\n",
+        "local value=0xffffffffffffffffULL\nprint(tostring(value))\n",
+        "local value=1i\nprint(tostring(value))\n",
+        "local value=0x1.fp3\nprint(value)\n",
+        "local value=0\ngoto done\nvalue=1\n::done::\nprint(value)\n",
+    ] {
+        let file = temp.path().join("src/legacy.lua");
+        fs::write(&file, source).unwrap();
+        let before = lua
+            .as_ref()
+            .map(|lua| Command::new(lua).arg(&file).output().unwrap());
+        let stdin = fmt_stdin(
+            &temp,
+            &["fmt", "--stdin-filepath", "src/legacy.lua"],
+            source.as_bytes(),
+        );
+        assert!(stdin.status.success(), "{stdin:?}");
+        let written = tua()
+            .args(["fmt", "src/legacy.lua"])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(written.status.success(), "{written:?}");
+        assert_eq!(fs::read(&file).unwrap(), stdin.stdout);
+        let checked = tua()
+            .args(["fmt", "--check", "src/legacy.lua"])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(checked.status.success(), "{checked:?}");
+        let typed = fmt_stdin(
+            &temp,
+            &["fmt", "--stdin-filepath", "src/legacy.tua"],
+            source.as_bytes(),
+        );
+        assert!(!typed.status.success());
+        if let (Some(lua), Some(before)) = (&lua, before) {
+            let after = Command::new(lua).arg(&file).output().unwrap();
+            assert!(before.status.success(), "{before:?}");
+            assert!(after.status.success(), "{after:?}");
+            assert_eq!(before.stdout, after.stdout);
+        }
+    }
+}
+
+#[test]
+fn fmt_respects_lua_as_a_configured_typed_extension() {
+    let temp = TempDir::new("fmt-typed-lua");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        "source = \"src\"\nextension = \"lua\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(temp.path().join("src")).unwrap();
+    let source = "local value: number=1\n";
+    fs::write(temp.path().join("src/main.lua"), source).unwrap();
+    let stdin = fmt_stdin(
+        &temp,
+        &["fmt", "--stdin-filepath", "src/main.lua"],
+        source.as_bytes(),
+    );
+    assert!(stdin.status.success(), "{stdin:?}");
+    let written = tua().arg("fmt").current_dir(temp.path()).output().unwrap();
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read(temp.path().join("src/main.lua")).unwrap(),
+        stdin.stdout
+    );
+    assert_eq!(stdin.stdout, b"local value: number = 1\n");
 }

@@ -8,7 +8,8 @@ use crate::source::{
     discover_project_files, io_diagnostic, read_source_file, SourceFile, SourceKind,
 };
 use tua_core::{
-    format_tua_source, path_security::reject_symlink_path, LoadedConfig, ProjectWorkspace,
+    format_source, path_security::reject_symlink_path, LoadedConfig, ParsedLanguage,
+    ProjectWorkspace, VfsSourceKind,
 };
 
 pub(crate) fn run_fmt(
@@ -21,6 +22,10 @@ pub(crate) fn run_fmt(
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let options = workspace.config().format.options();
+    let language = |path: &Path| match workspace.source_kind_for_path(path) {
+        Some(VfsSourceKind::Lua) => ParsedLanguage::Lua,
+        _ => ParsedLanguage::Tua,
+    };
     if let Some(path) = stdin_filepath {
         if !paths.is_empty() {
             return Err(CliError::usage(
@@ -37,9 +42,10 @@ pub(crate) fn run_fmt(
         if source.len() > limit {
             return Err(CliError::usage("formatter stdin exceeds source byte limit"));
         }
-        let formatted = format_tua_source(&path, &source, &options).map_err(|errors| {
-            CliError::from_diagnostics("format failed", sorted_diagnostics(errors))
-        })?;
+        let formatted =
+            format_source(&path, &source, &options, language(&path)).map_err(|errors| {
+                CliError::from_diagnostics("format failed", sorted_diagnostics(errors))
+            })?;
         if check {
             if formatted != source {
                 return Err(CliError::usage(format_check_message(cwd, &[path])));
@@ -89,7 +95,12 @@ pub(crate) fn run_fmt(
                 continue;
             }
         };
-        let formatted = match format_tua_source(&source_file.path, &source, &options) {
+        let formatted = match format_source(
+            &source_file.path,
+            &source,
+            &options,
+            language(&source_file.path),
+        ) {
             Ok(formatted) => formatted,
             Err(mut source_diagnostics) => {
                 diagnostics.append(&mut source_diagnostics);

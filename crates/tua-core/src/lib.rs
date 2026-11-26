@@ -168,8 +168,9 @@ pub use folding_range::{
     folding_ranges_parsed_source, folding_ranges_tua_source, FoldingRange, FoldingRangeKind,
 };
 pub use formatter::{
-    format_parsed_source, format_tua_source, format_tua_source_on_type, format_tua_source_range,
-    FormatOptions, IndentStyle, LineEnding, QuoteStyle,
+    format_parsed_source, format_source, format_source_on_type, format_source_range,
+    format_tua_source, format_tua_source_on_type, format_tua_source_range, FormatOptions,
+    IndentStyle, LineEnding, QuoteStyle,
 };
 pub use hir::{
     lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,

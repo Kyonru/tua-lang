@@ -3216,3 +3216,12 @@ print(factory.create(2))
     let emitted = crate::emit_tua_source("factory.tua", source).unwrap();
     crate::parse_lua_source("factory.lua", emitted).unwrap();
 }
+
+#[test]
+fn lua_source_dialect_accepts_luajit_hex_floats_without_expanding_tua() {
+    for literal in ["0x1.fp3", "0x1p-2", "1LL", "1ULL", "1i"] {
+        let source = format!("return {literal}\n");
+        assert!(parse_lua_source("legacy.lua", &source).is_ok(), "{literal}");
+        assert!(parse_tua_source("typed.tua", &source).is_err(), "{literal}");
+    }
+}

@@ -84,6 +84,12 @@ pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
     }
 }
 
+// LuaJIT supports hexadecimal fractions and exponents, which full_moon gates
+// behind its Lua 5.2 syntax flag. Keep this dialect separate from Tua parsing.
+pub(crate) fn lua_source_version() -> LuaVersion {
+    LuaVersion::lua52().with_luajit()
+}
+
 pub fn parse_raw_lua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
@@ -102,7 +108,7 @@ pub fn parse_raw_lua_source(
         parser_source,
         parser_provenance,
         Vec::new(),
-        LuaVersion::lua51().with_luajit(),
+        lua_source_version(),
         ParsedLanguage::Lua,
     )
 }

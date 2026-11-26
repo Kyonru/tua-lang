@@ -2082,3 +2082,90 @@ fn table_key_comments_keep_their_order_relative_to_strings() {
         }
     }
 }
+
+#[test]
+fn lua_formatting_accepts_luajit_syntax_without_expanding_tua() {
+    use full_moon::node::Node;
+    for source in [
+        "local value=1LL\nreturn value\n",
+        "local value=1ULL\nreturn value\n",
+        "local value=1i\nreturn value\n",
+        "local value=0x1.fp3\nreturn value\n",
+        "goto done\n::done::\nreturn 1\n",
+    ] {
+        let output = format_source(
+            "input.lua",
+            source,
+            &FormatOptions::default(),
+            ParsedLanguage::Lua,
+        )
+        .unwrap();
+        let original = parse_lua_source("input.lua", source).unwrap();
+        let formatted = parse_lua_source("input.lua", &output).unwrap();
+        assert!(original.ast.nodes().similar(formatted.ast.nodes()));
+        assert_eq!(
+            format_source(
+                "input.lua",
+                &output,
+                &FormatOptions::default(),
+                ParsedLanguage::Lua
+            )
+            .unwrap(),
+            output
+        );
+        assert!(format_tua_source("input.tua", source, &FormatOptions::default()).is_err());
+    }
+    let typed = "local value: number=1\n";
+    assert!(format_source(
+        "input.lua",
+        typed,
+        &FormatOptions::default(),
+        ParsedLanguage::Lua
+    )
+    .is_err());
+    assert!(format_tua_source("input.tua", typed, &FormatOptions::default()).is_ok());
+}
+
+#[test]
+fn partial_lua_formatting_validates_with_the_luajit_dialect() {
+    use full_moon::node::Node;
+    let source = "local value=tonumber(1LL)\nreturn value\n";
+    let options = FormatOptions::default();
+    let range = format_source_range(
+        "input.lua",
+        source,
+        &options,
+        SourceSpan {
+            start: SourcePosition { line: 1, column: 1 },
+            end: SourcePosition { line: 2, column: 1 },
+        },
+        ParsedLanguage::Lua,
+    )
+    .unwrap();
+    let on_type = format_source_on_type(
+        "input.lua",
+        source,
+        &options,
+        SourcePosition {
+            line: 1,
+            column: source.lines().next().unwrap().len() + 1,
+        },
+        ")",
+        ParsedLanguage::Lua,
+    )
+    .unwrap();
+    for edits in [range, on_type] {
+        assert!(!edits.is_empty());
+        let mut output = source.to_owned();
+        for edit in edits.iter().rev() {
+            let start = source_byte_offset(source, edit.span.start);
+            let end = source_byte_offset(source, edit.span.end);
+            output.replace_range(start..end, &edit.new_text);
+        }
+        assert!(parse_lua_source("input.lua", source)
+            .unwrap()
+            .ast
+            .nodes()
+            .similar(parse_lua_source("input.lua", output).unwrap().ast.nodes()));
+    }
+}

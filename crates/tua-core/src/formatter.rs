@@ -3,7 +3,10 @@ mod stylua;
 
 use std::path::Path;
 
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit};
+use crate::{
+    parse_lua_source, parse_tua_source, Diagnostic, ParsedLanguage, ParsedSource, SourcePosition,
+    SourceSpan, TextEdit,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QuoteStyle {
@@ -84,6 +87,16 @@ pub fn format_tua_source(
     source: impl Into<String>,
     options: &FormatOptions,
 ) -> Result<String, Vec<Diagnostic>> {
+    format_source(path, source, options, ParsedLanguage::Tua)
+}
+
+/// Format authored source using the language selected by the project model.
+pub fn format_source(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    options: &FormatOptions,
+    language: ParsedLanguage,
+) -> Result<String, Vec<Diagnostic>> {
     let source = source.into();
     if path
         .as_ref()
@@ -92,7 +105,8 @@ pub fn format_tua_source(
     {
         return dialogue::format(path.as_ref(), &source, options);
     }
-    let parsed = parse_tua_source(path, source)?;
+    let path = path.as_ref();
+    let parsed = parse_source(path, source, language)?;
 
     stylua::format(&parsed, options, None)
 }
@@ -103,6 +117,16 @@ pub fn format_tua_source_range(
     options: &FormatOptions,
     range: SourceSpan,
 ) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
+    format_source_range(path, source, options, range, ParsedLanguage::Tua)
+}
+
+pub fn format_source_range(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    options: &FormatOptions,
+    range: SourceSpan,
+    language: ParsedLanguage,
+) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
     let path = path.as_ref().to_owned();
     if path
         .extension()
@@ -111,7 +135,7 @@ pub fn format_tua_source_range(
         return Ok(Vec::new());
     }
     let source = source.into();
-    let parsed = parse_tua_source(&path, &source)?;
+    let parsed = parse_source(&path, &source, language)?;
     let formatted = stylua::format(
         &parsed,
         options,
@@ -122,7 +146,7 @@ pub fn format_tua_source_range(
     )?;
 
     Ok(validated_local_format_edits(
-        path, &source, &formatted, range, true,
+        path, &source, &formatted, range, true, language,
     ))
 }
 
@@ -132,6 +156,24 @@ pub fn format_tua_source_on_type(
     options: &FormatOptions,
     position: SourcePosition,
     trigger: &str,
+) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
+    format_source_on_type(
+        path,
+        source,
+        options,
+        position,
+        trigger,
+        ParsedLanguage::Tua,
+    )
+}
+
+pub fn format_source_on_type(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    options: &FormatOptions,
+    position: SourcePosition,
+    trigger: &str,
+    language: ParsedLanguage,
 ) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
     if path
         .as_ref()
@@ -146,7 +188,7 @@ pub fn format_tua_source_on_type(
     }
 
     let path = path.as_ref().to_owned();
-    let formatted = format_tua_source(&path, source.clone(), options)?;
+    let formatted = format_source(&path, source.clone(), options, language)?;
     let line = on_type_target_line(position, trigger);
     let range = SourceSpan {
         start: SourcePosition { line, column: 1 },
@@ -157,7 +199,7 @@ pub fn format_tua_source_on_type(
     };
 
     Ok(validated_local_format_edits(
-        path, &source, &formatted, range, false,
+        path, &source, &formatted, range, false, language,
     ))
 }
 
@@ -167,12 +209,24 @@ pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> S
     stylua::format(parsed, options, None).unwrap_or_else(|_| parsed.source.clone())
 }
 
+fn parse_source(
+    path: &Path,
+    source: impl Into<String>,
+    language: ParsedLanguage,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    match language {
+        ParsedLanguage::Lua => parse_lua_source(path, source),
+        ParsedLanguage::Tua => parse_tua_source(path, source),
+    }
+}
+
 fn validated_local_format_edits(
     path: std::path::PathBuf,
     source: &str,
     formatted: &str,
     range: SourceSpan,
     allow_line_count_change: bool,
+    language: ParsedLanguage,
 ) -> Vec<TextEdit> {
     let edits = local_format_edits(
         path.clone(),
@@ -190,7 +244,9 @@ fn validated_local_format_edits(
         let end = source_byte_offset(source, edit.span.end);
         edited.replace_range(start..end, &edit.new_text);
     }
-    if parse_tua_source(&path, &edited).is_ok() && stylua::equivalent_sources(source, &edited) {
+    if parse_source(&path, &edited, language).is_ok()
+        && stylua::equivalent_sources(source, &edited, language)
+    {
         edits
     } else {
         Vec::new()

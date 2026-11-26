@@ -949,6 +949,13 @@ impl AnalysisHost {
         self.project_model = Some(model);
     }
 
+    pub(super) fn format_language_for_path(&self, path: &Path) -> tua_core::ParsedLanguage {
+        match source_kind_for_path(path, self.project_model.as_ref()) {
+            Some(SourceKind::Lua) => tua_core::ParsedLanguage::Lua,
+            _ => tua_core::ParsedLanguage::Tua,
+        }
+    }
+
     pub(super) fn format_options_for_path(
         &self,
         path: &Path,

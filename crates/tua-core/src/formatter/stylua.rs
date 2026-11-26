@@ -1,7 +1,7 @@
 //! Authored-source formatting. The isolated parser fork never supplies compiler
-//! semantics: production Tua parsing validates both sides of every edit.
+//! semantics: the matching compiler parser validates both sides of every edit.
 use super::{FormatOptions, IndentStyle, LineEnding, QuoteStyle};
-use crate::{parse_tua_source, Diagnostic, DiagnosticCode, ParsedSource};
+use crate::{Diagnostic, DiagnosticCode, ParsedLanguage, ParsedSource};
 use stylua_lib::{CallParenType, Config, IndentType, OutputVerification};
 
 pub(super) fn format(
@@ -15,7 +15,7 @@ pub(super) fn format(
         _ => stylua_lib::LineEndings::Unix,
     };
     let config = Config {
-        syntax: stylua_lib::LuaVersion::Tua,
+        syntax: syntax(parsed.raw.language),
         indent_type: match options.indent_style {
             IndentStyle::Spaces => IndentType::Spaces,
             IndentStyle::Tabs => IndentType::Tabs,
@@ -47,16 +47,18 @@ pub(super) fn format(
     if !options.final_newline {
         output.truncate(output.trim_end_matches(['\r', '\n']).len());
     }
-    parse_tua_source(&parsed.path, &output).map_err(|_| {
+    super::parse_source(&parsed.path, &output, parsed.raw.language).map_err(|_| {
         vec![Diagnostic::error(
             &parsed.path,
             1,
             1,
-            "formatter output failed Tua syntax validation; source was left unchanged",
+            "formatter output failed source syntax validation; source was left unchanged",
         )
         .with_code(DiagnosticCode::SYNTAX_PARSE)]
     })?;
-    if preserved_payloads(&parsed.source) != preserved_payloads(&output) {
+    if preserved_payloads(&parsed.source, parsed.raw.language)
+        != preserved_payloads(&output, parsed.raw.language)
+    {
         return Err(vec![Diagnostic::error(
             &parsed.path,
             1,
@@ -70,17 +72,28 @@ pub(super) fn format(
 
 /// Partial editor edits must preserve the same program and payloads as a full
 /// format, even when line wrapping elsewhere happens to keep the line count.
-pub(super) fn equivalent_sources(source: &str, edited: &str) -> bool {
-    preserved_payloads(source) == preserved_payloads(edited)
-        && stylua_lib::verify_code(source, edited, stylua_lib::LuaVersion::Tua).is_ok()
+pub(super) fn equivalent_sources(source: &str, edited: &str, language: ParsedLanguage) -> bool {
+    preserved_payloads(source, language) == preserved_payloads(edited, language)
+        && stylua_lib::verify_code(source, edited, syntax(language)).is_ok()
 }
 
-fn preserved_payloads(source: &str) -> Vec<(bool, Vec<u8>)> {
+fn syntax(language: ParsedLanguage) -> stylua_lib::LuaVersion {
+    match language {
+        ParsedLanguage::Lua => stylua_lib::LuaVersion::LuaJIT,
+        ParsedLanguage::Tua => stylua_lib::LuaVersion::Tua,
+    }
+}
+
+fn preserved_payloads(source: &str, language: ParsedLanguage) -> Vec<(bool, Vec<u8>)> {
     use full_moon::{
         ast::LuaVersion,
         tokenizer::{Lexer, LexerResult, TokenReference, TokenType},
     };
-    let LexerResult::Ok(tokens) = Lexer::new(source, LuaVersion::luau()).collect() else {
+    let version = match language {
+        ParsedLanguage::Lua => crate::parser::lua_source_version(),
+        ParsedLanguage::Tua => LuaVersion::luau(),
+    };
+    let LexerResult::Ok(tokens) = Lexer::new(source, version).collect() else {
         return vec![(false, source.as_bytes().to_vec())];
     };
     tokens

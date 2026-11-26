@@ -2716,7 +2716,13 @@ impl LspServer {
         let request = self.document_request(message)?;
         let source = self.analysis.document_text(request.uri)?;
         let options = self.format_options_for_path(&request.path);
-        let formatted = tua_core::format_tua_source(&request.path, source, &options).ok()?;
+        let formatted = tua_core::format_source(
+            &request.path,
+            source,
+            &options,
+            self.analysis.format_language_for_path(&request.path),
+        )
+        .ok()?;
 
         if formatted == source {
             Some(json!([]))
@@ -2740,7 +2746,7 @@ impl LspServer {
             .and_then(|range| source_range_for_source(request.source, range))?;
         let source = self.analysis.document_text(request.uri)?;
         let options = self.format_options_for_path(&request.path);
-        let edits = tua_core::format_tua_source_range(
+        let edits = tua_core::format_source_range(
             &request.path,
             source,
             &options,
@@ -2748,6 +2754,7 @@ impl LspServer {
                 start: range.start,
                 end: range.end,
             },
+            self.analysis.format_language_for_path(&request.path),
         )
         .ok()?;
 
@@ -2772,9 +2779,15 @@ impl LspServer {
         let trigger = request.params.get("ch").and_then(Value::as_str)?;
         let source = self.analysis.document_text(request.uri)?;
         let options = self.format_options_for_path(&request.path);
-        let edits =
-            tua_core::format_tua_source_on_type(&request.path, source, &options, position, trigger)
-                .ok()?;
+        let edits = tua_core::format_source_on_type(
+            &request.path,
+            source,
+            &options,
+            position,
+            trigger,
+            self.analysis.format_language_for_path(&request.path),
+        )
+        .ok()?;
 
         Some(Value::Array(
             edits
