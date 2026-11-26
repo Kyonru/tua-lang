@@ -53,10 +53,10 @@ const SCENARIOS = Object.freeze([
     id: "tua-comma-menu-closed",
     datasetPath: "examples/love-full/src/obstacles.tua",
     copyRoot: "examples/love-full",
-    sourceSha256: "96f8a3bcea4fc12b6efd9909210b81c5915b268b720519063aa4fe1ea18b0eda",
-    editedSha256: "913a28a7afc1d33e254739507c1a721e71571fcbcbdf49928cbbd501567fe8ab",
+    sourceSha256: "32e7d01b4d18abfa37ba7632841e37298270263cf14b93a9f3144fbade429f5d",
+    editedSha256: "ad3fbae78e63381c6e6c5e10c328a0bd8995ee4e5bc7e6162916a186a0e31fed",
     // Collision branch, after sound.play_hurt().
-    line: 81,
+    line: 80,
     originalLine: "      table.remove(obstacles.list, i)",
     finalPrefix: "      table.remove(obstacles.list,",
     typedText: ",",
