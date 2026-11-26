@@ -507,77 +507,21 @@ pub fn format_table_constructor(
     table_constructor: &TableConstructor,
     shape: Shape,
 ) -> TableConstructor {
-    const BRACE_LEN: usize = "{".len();
-
     let (start_brace, end_brace) = table_constructor.braces().tokens();
-
-    let table_type = match table_constructor.fields().iter().next() {
-        Some(_) => {
-            // Determine if there was a new line at the end of the start brace
-            // If so, then we should always be multiline
-            if start_brace
-                .trailing_trivia()
-                .any(trivia_util::trivia_is_newline)
-            {
-                TableType::MultiLine
-            } else {
-                // Compare the difference between the position of the start brace and the end brace to
-                // guess how long the table is. This heuristic is very naive, since it relies on the input.
-                // If the input is badly formatted (e.g. lots of spaces in the table), then it would flag this over width.
-                // However, this is currently our best solution: attempting to format the input onto a single line to
-                // see if we are over width (both completely and in a fail-fast shape.over_budget() check) leads to
-                // exponential time complexity with respect to how deep the table is.
-                // TODO: find an improved heuristic whilst comparing against benchmarks
-                let braces_range = (
-                    // Leading trivia belongs outside this table. Including its
-                    // position counts indentation inserted by a previous pass.
-                    start_brace.token().end_position().bytes(),
-                    end_brace.token().start_position().bytes(),
-                );
-
-                let last_field = table_constructor
-                    .fields()
-                    .last()
-                    .expect("at least one field must be present");
-
-                // See if we need to +1 because we will be adding spaces
-                let additional_shape = match (
-                    start_brace
-                        .trailing_trivia()
-                        .any(trivia_util::trivia_is_whitespace),
-                    // A space will be present on the end of the last field, not the start of the end brace
-                    match (last_field.value(), last_field.punctuation()) {
-                        (_, Some(token)) => token
-                            .trailing_trivia()
-                            .any(trivia_util::trivia_is_whitespace),
-                        (field, None) => field
-                            .trailing_trivia()
-                            .iter()
-                            .any(trivia_util::trivia_is_whitespace),
-                    },
-                ) {
-                    (true, true) => 0,
-                    (true, false) | (false, true) => 1,
-                    (false, false) => 2,
-                };
-
-                let singleline_shape =
-                    shape + (braces_range.1 - braces_range.0) + additional_shape + BRACE_LEN; // End brace is not included in braces range
-
-                match singleline_shape.over_budget() {
-                    true => TableType::MultiLine,
-                    false => match should_expand(ctx, table_constructor) {
-                        true => TableType::MultiLine,
-                        false => TableType::SingleLine,
-                    },
-                }
-            }
+    let table_type = if table_constructor.fields().is_empty() {
+        if should_expand(ctx, table_constructor) {
+            TableType::MultiLine
+        } else {
+            TableType::Empty
         }
-
-        None => match should_expand(ctx, table_constructor) {
-            true => TableType::MultiLine,
-            false => TableType::Empty,
-        },
+    } else if start_brace
+        .trailing_trivia()
+        .any(trivia_util::trivia_is_newline)
+        || should_expand(ctx, table_constructor)
+    {
+        TableType::MultiLine
+    } else {
+        TableType::SingleLine
     };
 
     let (braces, fields) = match table_type {
@@ -585,13 +529,36 @@ pub fn format_table_constructor(
             let braces = create_table_braces(ctx, start_brace, end_brace, table_type, shape);
             (braces, Punctuated::new())
         }
-        TableType::SingleLine => format_singleline_table(
-            ctx,
-            table_constructor.braces(),
-            table_constructor.fields(),
-            format_field,
-            shape,
-        ),
+        TableType::SingleLine => {
+            let (braces, fields) = format_singleline_table(
+                ctx,
+                table_constructor.braces(),
+                table_constructor.fields(),
+                format_field,
+                shape.for_table_layout_trial(),
+            );
+            // Measure canonical spacing rather than source positions. Nested
+            // trials flatten without exploring alternate layouts; only the
+            // outer decision retries with the real width and indentation.
+            let needs_multiline = !shape.is_table_layout_trial() && {
+                let candidate = TableConstructor::new()
+                    .with_braces(braces.clone())
+                    .with_fields(fields.clone())
+                    .to_string();
+                candidate.contains('\n') || shape.take_first_line(&candidate).over_budget()
+            };
+            if needs_multiline {
+                format_multiline_table(
+                    ctx,
+                    table_constructor.braces(),
+                    table_constructor.fields(),
+                    format_field,
+                    shape,
+                )
+            } else {
+                (braces, fields)
+            }
+        }
         TableType::MultiLine => format_multiline_table(
             ctx,
             table_constructor.braces(),

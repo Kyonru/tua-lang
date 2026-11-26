@@ -1986,3 +1986,41 @@ fn nested_table_width_excludes_leading_indentation() {
         r#"return { entries = { entries = { { bpm = 60.000000000, score = 0.459995278, relativeScore = 1.000000000, relation = "primary" }, { bpm = 119.650659850, score = 0.447463229, relativeScore = 0.972755000, relation = "other" } } } }"#,
     );
 }
+
+#[test]
+fn table_width_accounts_for_inserted_spacing_in_one_pass() {
+    assert_nested_table_stability(
+        "return {field_0 = {field_0 = 12.345678900,field_1 = true,field_2 = 1,field_3 = true},field_1 = {field_0 = true} ,}\n",
+    );
+}
+
+#[test]
+fn multiline_nested_table_candidate_expands_its_parent_in_one_pass() {
+    assert_nested_table_stability(
+        "return {field_0 = {field_0 = {field_0 = {field_0 = 12.345678900, field_1 = true}} ,},field_1 = {field_0 = {field_0 = {field_0 = true ,} ,} ,} ,}\n",
+    );
+}
+
+#[test]
+fn deeply_nested_multiline_values_do_not_repeatedly_explore_both_table_layouts() {
+    let source = format!(
+        "return {}[[hello\nworld]]{}\n",
+        "{ child = ".repeat(24),
+        " }".repeat(24)
+    );
+    let options = FormatOptions {
+        line_width: 1_000_000,
+        ..FormatOptions::default()
+    };
+    let first = format_tua_source("nested.tua", &source, &options).unwrap();
+    let second = format_tua_source("nested.tua", &first, &options).unwrap();
+    assert_eq!(first, second);
+    corpus::same_program(&source, &first).unwrap();
+}
+
+#[test]
+fn table_call_arguments_use_canonical_width_in_layout_trials() {
+    assert_nested_table_stability(
+        "draw(1, {field_0 = {field_0 = {field_0 = true ,},field_1 = {field_0 = true} ,}}, 2)\n",
+    );
+}

@@ -108,6 +108,8 @@ pub struct Shape {
     /// Whether we should use simple heuristic checking.
     /// This is enabled when we are calling within a heuristic itself, to reduce the exponential blowup
     simple_heuristics: bool,
+    /// A canonical table candidate must not recursively explore both layouts.
+    table_layout_trial: bool,
 }
 
 impl Shape {
@@ -119,6 +121,7 @@ impl Shape {
             offset: 0,
             column_width: ctx.config().column_width,
             simple_heuristics: false,
+            table_layout_trial: false,
         }
     }
 
@@ -199,6 +202,18 @@ impl Shape {
     pub fn with_simple_heuristics(&self) -> Shape {
         Self {
             simple_heuristics: true,
+            ..*self
+        }
+    }
+
+    pub fn is_table_layout_trial(&self) -> bool {
+        self.table_layout_trial
+    }
+
+    pub fn for_table_layout_trial(&self) -> Self {
+        Self {
+            table_layout_trial: true,
+            column_width: usize::MAX,
             ..*self
         }
     }

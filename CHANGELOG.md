@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Choose table layouts from formatted contents rather than input spacing,
+  keeping nested tables and call arguments stable after one pass.
+
 - Keep nested table widths stable after formatting by excluding leading
   indentation from width estimates.
 
