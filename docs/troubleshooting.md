@@ -20,6 +20,10 @@ not found in a terminal, install the [standalone CLI](installation.md#standalone
 or use the extension commands. `tua --version` reports the terminal binary's
 version; it does not identify a separately selected editor server.
 
+A freshly installed server can take longer on its first launch. The extension
+allows up to 30 seconds for its version probe before reporting a startup failure.
+If it fails, check **Tua: Focus Output** for the selected executable and error.
+
 ## Suggestions Or Hover Are Missing Or Slow
 
 - Try a known expression such as `love.graphics.`. If nothing works, check server

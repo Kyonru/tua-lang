@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Allow up to 30 seconds for the editor server version probe so a fresh install
+  is not rejected during a slow first launch; failed probes remain bounded.
+
 - Replace Tua source formatting with a shared StyLua-based formatter that retains
   authored Tua syntax. Defaults use two spaces, width 100 and `auto-double` quotes;
   existing `preserve`, `double` and `single` policies remain available. Avoid
