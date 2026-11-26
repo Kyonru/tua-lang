@@ -780,7 +780,9 @@ requests with kind `refactor.rewrite.dialogueText` (or its `refactor` parents).
 The compiler supplies source edits for emphasis and common named styles, only
 within one prose field and without splitting placeholders, escapes or markup.
 Plain scripts require explicit `@text rich` opt-in. The extension presents these
-edits through **Tua: Format Dialogue Text** and a selection hover toolbar.
+edits through **Tua: Format Dialogue Text** and persistent title-bar icon toggles.
+A `Remove …` action identifies a mark covering exactly the selected content,
+including nested styles with the same content boundaries.
 
 **Tua: Preview Dialogue** opens a source-linked conversation reader for the active `.tdialogue`
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing

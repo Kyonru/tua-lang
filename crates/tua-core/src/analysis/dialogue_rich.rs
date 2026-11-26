@@ -154,19 +154,46 @@ fn dialogue_selection_actions(
             .into_iter()
             .filter_map(|(title, mark)| {
                 let close = mark.split('=').next()?;
-                let replacement = format!("[{mark}]{selected}[/{close}]");
-                let candidate = format!("{}{replacement}{}", &text[..start], &text[end..]);
+                let removal = removable_mark(text, &template, start..end, mark);
+                let (edit_range, replacement, title) = if let Some((open, close)) = removal {
+                    let from = start.min(open.start);
+                    let to = end.max(close.end);
+                    let replacement = format!(
+                        "{}{}{}",
+                        &text[from..open.start],
+                        &text[open.end..close.start],
+                        &text[close.end..to]
+                    );
+                    (from..to, replacement, format!("Remove {title}"))
+                } else {
+                    (
+                        start..end,
+                        format!("[{mark}]{selected}[/{close}]"),
+                        title.to_owned(),
+                    )
+                };
+                let candidate = format!(
+                    "{}{replacement}{}",
+                    &text[..edit_range.start],
+                    &text[edit_range.end..]
+                );
                 rich_text::parse(&candidate, kind).ok()?;
                 let edit = crate::TextEdit {
                     path: path.to_path_buf(),
                     span: SourceSpan {
-                        start: range.start,
-                        end: range.end,
+                        start: SourcePosition {
+                            line: range.start.line,
+                            column: column + text[..edit_range.start].chars().count(),
+                        },
+                        end: SourcePosition {
+                            line: range.start.line,
+                            column: column + text[..edit_range.end].chars().count(),
+                        },
                     },
                     new_text: replacement,
                 };
                 Some(Assist {
-                    title: title.into(),
+                    title,
                     kind: AssistKind::RefactorDialogueText,
                     edit: crate::AssistEdit {
                         changes: [(path.to_path_buf(), vec![edit])].into_iter().collect(),
@@ -176,6 +203,56 @@ fn dialogue_selection_actions(
             })
             .collect(),
     )
+}
+
+/// A pressed toggle represents a mark covering exactly the selected content.
+/// Ignore boundary marks so nested styles over the same text remain independent.
+/// Partial or mixed styled text is left intact when adding another mark.
+fn removable_mark(
+    text: &str,
+    template: &rich_text::Template,
+    selected: std::ops::Range<usize>,
+    mark: &str,
+) -> Option<(std::ops::Range<usize>, std::ops::Range<usize>)> {
+    let content_bounds = |range: std::ops::Range<usize>| {
+        let mut bounds = None;
+        for token in &template.tokens {
+            if matches!(
+                token.kind,
+                rich_text::TokenKind::Open(_) | rich_text::TokenKind::Close(_)
+            ) {
+                continue;
+            }
+            let start = token.range.start.max(range.start);
+            let end = token.range.end.min(range.end);
+            if start < end {
+                let first = bounds
+                    .as_ref()
+                    .map_or(start, |range: &std::ops::Range<usize>| range.start);
+                bounds = Some(first..end);
+            }
+        }
+        bounds
+    };
+    let bounds = content_bounds(selected)?;
+    let mut stack = Vec::new();
+    for token in &template.tokens {
+        match &token.kind {
+            rich_text::TokenKind::Open(_) => stack.push(token),
+            rich_text::TokenKind::Close(_) => {
+                let open = stack.pop()?;
+                if open.range.end <= bounds.start
+                    && token.range.start >= bounds.end
+                    && text[open.range.clone()] == format!("[{mark}]")
+                    && content_bounds(open.range.end..token.range.start).as_ref() == Some(&bounds)
+                {
+                    return Some((open.range.clone(), token.range.clone()));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -207,7 +284,7 @@ mod formatting_tests {
     fn dialogue_formatting_preserves_unicode_crlf_and_balanced_marks() {
         let source =
             "@dialogue 1\r\n@text rich\r\n[start]\r\n: 🐸 café %{name} [em]hello[/em] (end)\r\n";
-        for selected in ["café", "%{name}", "[em]hello[/em]", "hello"] {
+        for selected in ["café", "%{name}"] {
             let edits = actions(source, selected);
             assert!(!edits.is_empty(), "{selected}");
             let edit = &edits[0].edit.changes[Path::new("scene.tdialogue")][0];
@@ -233,5 +310,30 @@ mod formatting_tests {
         assert_eq!(actions(source, "Choose").len(), 6);
         assert_eq!(actions(source, "Unavailable").len(), 6);
         assert!(actions(&source.replace("@text rich\n", ""), "Hello").is_empty());
+    }
+    #[test]
+    fn dialogue_formatting_toggles_nested_styles_independently() {
+        let source =
+            "@dialogue 1\n@text rich\n[start]\n: [em][style=thought]café[/style][/em] (end)\n";
+        for selected in [
+            "café",
+            "[em][style=thought]café[/style][/em]",
+            "[style=thought]café[/style]",
+        ] {
+            let actions = actions(source, selected);
+            let emphasis = actions
+                .iter()
+                .find(|action| action.title == "Remove Emphasis")
+                .unwrap();
+            let edit = &emphasis.edit.changes[Path::new("scene.tdialogue")][0];
+            assert_eq!(edit.new_text, "[style=thought]café[/style]");
+            assert!(actions
+                .iter()
+                .any(|action| action.title == "Remove Thought / italic"));
+            assert!(actions.iter().any(|action| action.title == "Underline"));
+        }
+        assert!(actions(source, "caf")
+            .iter()
+            .all(|action| !action.title.starts_with("Remove")));
     }
 }
