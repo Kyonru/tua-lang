@@ -1903,6 +1903,7 @@ pub(super) fn lsp_dialogue_preview_from_core(
 ) -> Value {
     use tua_core::dialogue_asset::preview::DialogueRouteKind;
     let sections = &preview.document.sections;
+    let mut rich_budget = 1024 * 1024usize;
     let routes = preview
         .routes
         .iter()
@@ -1922,19 +1923,23 @@ pub(super) fn lsp_dialogue_preview_from_core(
         .collect::<Vec<_>>();
     json!({
         "documentId": preview.document.document_id.as_ref().map(|id| &id.value),
-        "sections": sections.iter().map(|section| json!({
+        "sections": sections.iter().enumerate().map(|(section_index, section)| json!({
             "label": section.label.value,
             "range": lsp_range_for_source(source, section.label.span),
             "wait": section.wait.as_ref().map(|wait| &wait.duration),
             "action": section.action.as_ref().map(|action| &action.name.value),
-            "lines": section.lines.iter().map(|line| json!({
+            "lines": section.lines.iter().enumerate().map(|(line_index, line)| json!({
+                "character": preview.characters.get(&(section_index, line_index)),
                 "id": line.text.id.value,
                 "text": line.text.value,
+                "rich": lsp_dialogue_rich_runs(&line.text, &mut rich_budget),
                 "range": lsp_range_for_source(source, line.text.span),
                 "speaker": line.speaker.as_ref().map(|speaker| &speaker.value),
                 "end": line.end,
                 "choices": line.choices.iter().map(|choice| json!({
                     "text": choice.text.value,
+                    "rich": lsp_dialogue_rich_runs(&choice.text, &mut rich_budget),
+                    "richReason": choice.reason.as_ref().and_then(|reason| lsp_dialogue_rich_runs(reason, &mut rich_budget)),
                     "visibleCondition": choice.visible.is_some(),
                     "enabledCondition": choice.enabled.is_some(),
                     "reason": choice.reason.as_ref().map(|reason| &reason.value),
@@ -1988,7 +1993,24 @@ pub(super) fn lsp_dialogue_mock_text_from_core(
                 Err(error) => (None, Some(error.message), error.span),
             };
             json!({"section": text.section, "line": text.line, "choice": text.choice,
-                "kind": kind, "value": value, "error": error, "range": lsp_range_for_source(source, span)})
+                "kind": kind, "value": value, "rich": text.rich, "error": error, "range": lsp_range_for_source(source, span)})
         }).collect::<Vec<_>>()
     })
+}
+
+fn lsp_dialogue_rich_runs(
+    text: &tua_core::dialogue_asset::DialogueText,
+    budget: &mut usize,
+) -> Option<Vec<tua_core::dialogue_asset::preview::DialoguePreviewRun>> {
+    if *budget == 0 {
+        return None;
+    }
+    let runs = tua_core::dialogue_asset::preview::rich_runs(text, None)?;
+    let size = tua_core::dialogue_asset::preview::rich_run_bytes(&runs);
+    if size > *budget {
+        *budget = 0;
+        return None;
+    }
+    *budget -= size;
+    Some(runs)
 }

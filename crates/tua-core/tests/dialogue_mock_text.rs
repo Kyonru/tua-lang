@@ -220,6 +220,7 @@ fn mock_text_preview_caps_combined_bytes_and_field_count() {
     let mut document = parse_dialogue_source("scene.tdialogue", &plain_source("x")).unwrap();
     document.sections = vec![document.sections[0].clone(); 4097];
     let preview = DialoguePreview {
+        characters: Default::default(),
         document: Arc::new(document.clone()),
         routes: Vec::new(),
     };
@@ -232,6 +233,7 @@ fn mock_text_preview_caps_combined_bytes_and_field_count() {
         section.lines[0].text.value = "x".repeat(65_536);
     }
     let preview = DialoguePreview {
+        characters: Default::default(),
         document: Arc::new(document),
         routes: Vec::new(),
     };

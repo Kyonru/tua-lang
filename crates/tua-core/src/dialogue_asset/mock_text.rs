@@ -76,6 +76,10 @@ impl DialogueMockTextArguments {
         Ok(Self { values })
     }
 
+    pub(crate) fn value(&self, name: &str) -> Option<&str> {
+        self.values.get(name).map(String::as_str)
+    }
+
     /// Expand named placeholders and %% once. Substituted strings are literal:
     /// `%{other}` and rich marks inside argument values are never reinterpreted.
     /// Rich templates use DialogueText.value, already stripped by the core parser.

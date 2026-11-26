@@ -271,6 +271,7 @@ fn dialogue_mock_preview_limits_evaluation_count() {
     let mut document = parse_dialogue_source("scene.tdialogue", &source("true")).unwrap();
     document.sections = vec![document.sections[0].clone(); 4097];
     let preview = DialoguePreview {
+        characters: Default::default(),
         document: Arc::new(document),
         routes: Vec::new(),
     };

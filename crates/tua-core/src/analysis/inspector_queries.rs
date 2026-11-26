@@ -1,7 +1,7 @@
 use super::*;
 
 impl AnalysisSnapshot {
-    /// Authored dialogue structure only: no imports, handlers, assets, conditions,
+    /// Authored dialogue structure and literal character declarations: no handlers, assets, conditions,
     /// localization, or placeholders are evaluated. Missing or malformed source
     /// returns `None`; callers should display current diagnostics, not stale data.
     pub fn dialogue_preview(
@@ -10,9 +10,9 @@ impl AnalysisSnapshot {
     ) -> Option<crate::dialogue_asset::preview::DialoguePreview> {
         let file = self.file(path.as_ref())?;
         let document = file.dialogue_model.get()?.as_ref()?;
-        Some(crate::dialogue_asset::preview::DialoguePreview::new(
-            document.clone(),
-        ))
+        let mut preview = crate::dialogue_asset::preview::DialoguePreview::new(document.clone());
+        self.add_dialogue_preview_characters(path.as_ref(), &mut preview);
+        Some(preview)
     }
 
     pub fn inspect(

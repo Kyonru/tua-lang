@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub struct DialoguePreview {
     pub document: Arc<DialogueSource>,
     pub routes: Vec<DialogueRoute>,
+    pub characters: std::collections::BTreeMap<(usize, usize), DialoguePreviewCharacter>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,7 +61,11 @@ impl DialoguePreview {
                 }
             }
         }
-        Self { document, routes }
+        Self {
+            document,
+            routes,
+            characters: Default::default(),
+        }
     }
 }
 
@@ -154,6 +159,7 @@ pub struct DialogueMockTextPreview {
 
 #[derive(Clone, Debug)]
 pub struct DialogueMockText {
+    pub rich: Option<Vec<DialoguePreviewRun>>,
     pub section: usize,
     pub line: usize,
     pub choice: Option<usize>,
@@ -190,6 +196,7 @@ impl DialoguePreview {
             }
         };
         let mut bytes = 0;
+        let mut rich_bytes = 0usize;
         let mut push = |section, line, choice, kind, text: &super::DialogueText| {
             if preview.texts.len() == 4096 {
                 preview.truncated = true;
@@ -202,12 +209,25 @@ impl DialoguePreview {
                 return false;
             }
             bytes += length;
+            let rich = if result.is_ok() && rich_bytes < 1024 * 1024 {
+                rich_runs(text, Some(&args)).filter(|runs| {
+                    let size = rich_run_bytes(runs);
+                    if size > (1024 * 1024usize).saturating_sub(rich_bytes) {
+                        return false;
+                    }
+                    rich_bytes += size;
+                    true
+                })
+            } else {
+                None
+            };
             preview.texts.push(DialogueMockText {
                 section,
                 line,
                 choice,
                 kind,
                 span: text.span,
+                rich,
                 result,
             });
             true
@@ -249,4 +269,84 @@ impl DialoguePreview {
         }
         preview
     }
+}
+
+/// Presentation facts from the shared rich-text parser. These are not HTML or
+/// runtime grapheme ranges; host renderers choose how semantic styles look.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct DialoguePreviewRun {
+    pub text: String,
+    pub marks: Vec<String>,
+    pub annotation: Option<String>,
+}
+
+pub fn rich_runs(
+    text: &super::DialogueText,
+    args: Option<&super::mock_text::DialogueMockTextArguments>,
+) -> Option<Vec<DialoguePreviewRun>> {
+    use super::rich_text::{Mark, TokenKind};
+    let rich = text.rich.as_ref()?;
+    let template = super::rich_text::parse(&rich.source, rich.kind).ok()?;
+    let mut marks = Vec::new();
+    let mut runs = Vec::new();
+    let mut bytes = 0usize;
+    for token in template.tokens {
+        let (value, annotation) = match token.kind {
+            TokenKind::Open(mark) => {
+                marks.push(match mark {
+                    Mark::Emphasis => "em".into(),
+                    Mark::Style(name) => format!("style:{name}"),
+                    Mark::Speed(speed) => format!("speed:{speed}"),
+                    Mark::Pronunciation(hint) => format!("pronounce:{hint}"),
+                });
+                continue;
+            }
+            TokenKind::Close(_) => {
+                marks.pop();
+                continue;
+            }
+            TokenKind::Pause(seconds) => (String::new(), Some(format!("Pause {seconds}s"))),
+            TokenKind::Text(value) => (value, None),
+            TokenKind::Placeholder(name) => {
+                let value = format!("%{{{name}}}");
+                let value = if let Some(args) = args {
+                    args.value(&name)?.to_owned()
+                } else {
+                    value
+                };
+                (value, None)
+            }
+        };
+        bytes = bytes
+            .saturating_add(value.len())
+            .saturating_add(marks.iter().map(String::len).sum::<usize>())
+            .saturating_add(annotation.as_ref().map_or(0, String::len));
+        if bytes > 65_536 {
+            return None;
+        }
+        runs.push(DialoguePreviewRun {
+            text: value,
+            marks: marks.clone(),
+            annotation,
+        });
+    }
+    Some(runs)
+}
+
+/// Authored literal character fields, not values obtained by executing a module.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct DialoguePreviewCharacter {
+    pub name: Option<String>,
+    pub portrait: Option<String>,
+    pub expression: Option<String>,
+}
+
+pub fn rich_run_bytes(runs: &[DialoguePreviewRun]) -> usize {
+    runs.iter()
+        .map(|run| {
+            run.text.len()
+                + run.marks.iter().map(String::len).sum::<usize>()
+                + run.annotation.as_ref().map_or(0, String::len)
+        })
+        .sum()
 }

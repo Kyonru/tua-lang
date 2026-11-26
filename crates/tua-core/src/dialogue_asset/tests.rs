@@ -347,3 +347,27 @@ Cast.Guide: Hi. (end)
 "#;
     assert!(crate::emit::emit_dialogue_source("local.tdialogue", local).is_err());
 }
+
+#[test]
+fn rich_preview_preserves_nested_marks_unicode_and_literal_placeholder_values() {
+    let source = r#"@dialogue 1
+@text rich
+[start]
+// @id rich
+: [em]é[style=underline]%{name}[/style][/em][speed=20]![/speed][pause=0.1] (end)
+"#;
+    let document = parse_dialogue_source("scene.tdialogue", source).unwrap();
+    let text = &document.sections[0].lines[0].text;
+    let facts = mock::DialogueMockContext::parse(r#"{"args":{"name":"[em]🦆[/em]"}}"#).unwrap();
+    let args = mock_text::DialogueMockTextArguments::resolve(&document, &facts).unwrap();
+    let runs = preview::rich_runs(text, Some(&args)).unwrap();
+    assert_eq!(runs[0].text, "é");
+    assert_eq!(runs[1].text, "[em]🦆[/em]");
+    assert_eq!(runs[1].marks, vec!["em", "style:underline"]);
+    assert_eq!(runs[2].marks, vec!["speed:20"]);
+    assert_eq!(runs[3].annotation.as_deref(), Some("Pause 0.1s"));
+    let empty = mock::DialogueMockContext::parse("{}").unwrap();
+    let args = mock_text::DialogueMockTextArguments::resolve(&document, &empty).unwrap();
+    assert!(preview::rich_runs(text, Some(&args)).is_none());
+    assert_eq!(preview::rich_runs(text, None).unwrap()[1].text, "%{name}");
+}

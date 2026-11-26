@@ -427,3 +427,78 @@ fn dialogue_preview_keeps_overlay_versions_after_disk_deletion_and_recreation() 
         "Recreated"
     );
 }
+
+#[test]
+fn dialogue_preview_character_literals_expressions_and_rich_mock_use_overlays() {
+    let temp = TempProject::new("dialogue-preview-media");
+    temp.write("nested/tua.toml", "source = 'src'\n");
+    let cast = "local Guide = { name = 'Mara', portrait = 'assets/mara.png', expressions = { happy = { portrait = 'assets/happy.png' } } }\nreturn { Guide = Guide, Courier = { name = 'Ivo', portrait = 'ivo' } }\n";
+    temp.write("nested/src/characters.tua", cast);
+    let source = "@dialogue 1\n@text rich\n@characters Cast \"characters\"\n[start]\n// @id welcome\nCast.Guide: [em]Hello %{name}[/em][pause=0.2] (end)\n@expression happy\n";
+    temp.write("nested/src/scene.tdialogue", source);
+    let uri = temp.uri_for("nested/src/scene.tdialogue");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    let mut open = did_open(&uri, source);
+    open["params"]["textDocument"]["languageId"] = json!("tdialogue");
+    server.send(open);
+    let request = |id| json!({"jsonrpc":"2.0", "id":id, "method":"tua/dialoguePreview", "params":{"textDocument":{"uri":uri},"mockContext":r#"{"args":{"name":"[style=warning]<img>[/style]"}}"#}});
+    server.send(request(2));
+    let result = &response_with_id(server.output(), 2)["result"]["preview"];
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["name"], "Mara",
+        "{result}"
+    );
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["portrait"],
+        "assets/happy.png"
+    );
+    assert_eq!(
+        result["mock"]["text"]["texts"][0]["rich"][1]["text"],
+        "[style=warning]<img>[/style]"
+    );
+    assert_eq!(
+        result["mock"]["text"]["texts"][0]["rich"][1]["marks"],
+        json!(["em"])
+    );
+    assert_eq!(
+        result["sections"][0]["lines"][0]["rich"][2]["annotation"],
+        "Pause 0.2s"
+    );
+    let cast_uri = temp.uri_for("nested/src/characters.tua");
+    server.send(did_open(&cast_uri, cast));
+    server.send(did_change(
+        &cast_uri,
+        &cast
+            .replace("Mara", "Marina")
+            .replace("assets/happy.png", "new.png"),
+        2,
+    ));
+    server.send(request(3));
+    let result = &response_with_id(server.output(), 3)["result"]["preview"];
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["name"],
+        "Marina"
+    );
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["portrait"],
+        "new.png"
+    );
+    server.send(did_change(
+        &uri,
+        &source
+            .replace("Cast.Guide", "Cast.Courier")
+            .replace("@expression happy\n", ""),
+        2,
+    ));
+    server.send(request(4));
+    let result = &response_with_id(server.output(), 4)["result"]["preview"];
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["name"],
+        "Ivo"
+    );
+    assert_eq!(
+        result["sections"][0]["lines"][0]["character"]["portrait"],
+        "ivo"
+    );
+}
