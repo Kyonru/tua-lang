@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Reuse existing dialogue source tabs when navigating from previews, keeping
+  preview and source in separate editor groups without duplicate source tabs.
+
 - Add compiler-backed rich dialogue selection formatting, with persistent native
   title-bar icon toggles and a right-click menu in VS Code/VSCodium. Disabled and
   active states follow the selection; full-span styles toggle independently,

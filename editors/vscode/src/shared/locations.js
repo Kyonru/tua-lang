@@ -43,17 +43,31 @@ function protocolCoordinate(value, fallback) {
   return Number.isInteger(number) && number >= 0 ? number : fallback;
 }
 
-async function openLocationMessage(message) {
+async function openLocationMessage(message, { besidePanel } = {}) {
   if (message?.command !== "openLocation" || typeof message.uri !== "string") {
     return false;
   }
 
   const selection = lspRangeToVscode(message.range) || new vscode.Range(0, 0, 0, 0);
 
-  await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(message.uri), {
-    preview: true,
-    selection,
-  });
+  const options = { preview: true, selection };
+  if (besidePanel) {
+    const groups = vscode.window.tabGroups.all;
+    const sourceGroups = groups.filter(group => group.tabs.some(tab =>
+      tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === message.uri));
+    // Reuse hidden tabs as well as visible editors, preferring a separate group.
+    const sourceGroup = sourceGroups.find(group => group.viewColumn !== besidePanel.viewColumn)
+      || sourceGroups[0];
+    if (sourceGroup && sourceGroup.viewColumn === besidePanel.viewColumn) {
+      const neighbor = groups.find(group => group.viewColumn !== sourceGroup.viewColumn);
+      besidePanel.reveal(neighbor?.viewColumn ?? vscode.ViewColumn.Beside, true);
+    }
+    options.viewColumn = sourceGroup?.viewColumn
+      ?? groups.find(group => group.viewColumn !== besidePanel.viewColumn)?.viewColumn
+      ?? vscode.ViewColumn.Beside;
+    options.preview = false;
+  }
+  await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(message.uri), options);
 
   return true;
 }

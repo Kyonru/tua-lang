@@ -1159,7 +1159,9 @@ in narrow panels) also reaches disconnected sections. History retains up to 100
 visits and displays the latest eight; selection survives same-file refresh while
 the section labels and order remain unchanged. Structural edits reset the trail.
 Missing, ambiguous and out-of-limit destinations stay visible with an explanation.
-**Source** and line-number links open authored source locations.
+**Source** and line-number links reuse the source file’s existing tab, including
+a hidden tab. If source and preview share a group, the preview moves aside so
+both remain visible. If the source is closed, it opens in a separate group.
 
 Switch to **Flow** for the conversation map alongside the selected section (stacked
 in narrow panels). Selecting a node opens its text; the selected section highlights

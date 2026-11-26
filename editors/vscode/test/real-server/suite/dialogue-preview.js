@@ -42,11 +42,34 @@ async function verifyDialoguePreview(mainPath) {
     await browser.evaluate("document.querySelector('.dialogue-map').open = true", context);
     assert.equal(await browser.evaluate("document.querySelectorAll('.dialogue-node').length", context), 2);
     editor.selection = new vscode.Selection(0, 0, 0, 0);
-    await browser.evaluate("document.querySelector('main .speech .source').click()", context);
+    await browser.evaluate("document.querySelector('main .line-source .source').click()", context);
     await waitFor(() => {
       const active = vscode.window.activeTextEditor;
       return active?.document.uri.toString() === document.uri.toString() && active.selection.active.line === 3;
     }, "real dialogue source navigation");
+    const sourceTabs = () => vscode.window.tabGroups.all.flatMap(group => group.tabs)
+      .filter(tab => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === document.uri.toString());
+    assert.equal(sourceTabs().length, 1, "navigation must reuse the existing source tab");
+    const previewGroupNow = () => vscode.window.tabGroups.all.find(group => group.tabs.some(tab =>
+      tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("tuaDialoguePreview")));
+    assert.notEqual(vscode.window.activeTextEditor.viewColumn, previewGroupNow().viewColumn);
+    // Hide the existing source behind another file; it must still be reused.
+    const otherSource = await vscode.workspace.openTextDocument(mainPath);
+    await vscode.window.showTextDocument(otherSource, { viewColumn: editor.viewColumn, preview: false });
+    await browser.evaluate("document.querySelector('main .line-source .source').click()", context);
+    await waitFor(() => vscode.window.activeTextEditor?.document.uri.toString() === document.uri.toString(), "reuse hidden source tab");
+    assert.equal(sourceTabs().length, 1);
+    await vscode.commands.executeCommand("tua.previewDialogue");
+    await rendered("Initial native dialogue");
+    // Put preview and source in the same group. Navigation should move the
+    // preview aside instead of duplicating the source into a fresh group.
+    await vscode.commands.executeCommand("workbench.action.moveEditorToPreviousGroup");
+    await waitFor(() => previewGroupNow()?.viewColumn === editor.viewColumn, "preview moved into source group");
+    context = await browser.documentContext("Dialogue Preview");
+    await browser.evaluate("document.querySelector('main .line-source .source').click()", context);
+    await waitFor(() => vscode.window.activeTextEditor?.document.uri.toString() === document.uri.toString()
+      && vscode.window.activeTextEditor.viewColumn !== previewGroupNow()?.viewColumn, "restore side-by-side source navigation");
+    assert.equal(sourceTabs().length, 1);
     await vscode.commands.executeCommand("tua.previewDialogue");
     await rendered("Initial native dialogue");
 

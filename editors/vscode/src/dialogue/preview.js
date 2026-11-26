@@ -130,7 +130,7 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
           appliedMock = undefined;
           return render();
         }
-        if (renderedVersion === document?.version && message?.uri === document?.uri.toString()) return openLocationMessage(message);
+        if (renderedVersion === document?.version && message?.uri === document?.uri.toString()) return openLocationMessage(message, { besidePanel: panel });
       });
       panel.onDidDispose(() => {
         sequence += 1;
@@ -146,7 +146,7 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
       });
       panel.onDidChangeViewState(() => refresh.onVisible());
     } else {
-      panel.reveal(vscode.ViewColumn.Beside, false);
+      panel.reveal(panel.viewColumn, false);
     }
     await render();
   });

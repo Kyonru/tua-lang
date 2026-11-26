@@ -25,7 +25,8 @@ function fixture(sendRequest) {
     Uri: { parse: value => ({ fsPath: new URL(value).pathname }) },
     Position: class { constructor(line, character) { this.line = line; this.character = character; } },
     Range: class {},
-    ViewColumn: { Beside: 2 },
+    ViewColumn: { Beside: -2 },
+    TabInputText: class { constructor(uri) { this.uri = uri; } },
     Disposable: { from: () => ({ dispose() {} }) },
     commands: {
       registerCommand(_name, handler) { command = handler; return { dispose() {} }; },
@@ -45,6 +46,7 @@ function fixture(sendRequest) {
       onDidChangeTextDocument(handler) { onChange = handler; return { dispose() {} }; },
     },
     window: {
+      tabGroups: { all: [] },
       activeTextEditor: { document },
       createWebviewPanel() {
         panel = { visible: true, webview: { cspSource: "test", onDidReceiveMessage(handler) { panel.receive = handler; } }, onDidDispose(handler) { panel.dispose = handler; }, onDidChangeViewState(handler) { panel.reveal = handler; } };
@@ -57,7 +59,7 @@ function fixture(sendRequest) {
   const api = context.module.exports;
   const client = { sendRequest: (...args) => sendRequest(document, ...args) };
   api.registerDialoguePreview({ configurationTarget: () => undefined, getClient: () => client });
-  return { ...api, document, opened,
+  return { ...api, document, opened, vscode,
     disk: (kind, uri = document.uri) => ({ change: diskChange, create: diskCreate, delete: diskDelete })[kind](uri),
     setReopen: handler => { reopen = handler; },
     watcherDisposed: () => watcherDisposed,
@@ -362,4 +364,29 @@ test("portrait loading uses the compiler project layout and imported-file edits 
     f?.panel()?.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+
+test("source navigation reuses hidden tabs and keeps the preview beside the source", async () => {
+  const f = fixture(async document => ({ documentVersion: document.version, preview }));
+  await f.show();
+  const panel = f.panel();
+  const reveals = [];
+  panel.viewColumn = 2;
+  panel.reveal = (column, preserveFocus) => { reveals.push({ column, preserveFocus }); panel.viewColumn = column; };
+  const sourceGroup = { viewColumn: 1, tabs: [{ input: new f.vscode.TabInputText(f.document.uri) }] };
+  f.vscode.window.tabGroups.all = [sourceGroup, { viewColumn: 2, tabs: [] }];
+  const message = { command: "openLocation", uri: f.document.uri.toString(), range };
+  await panel.receive(message);
+  assert.equal(f.opened.at(-1)[2].viewColumn, 1);
+  assert.equal(f.opened.at(-1)[2].preview, false);
+  assert.equal(reveals.length, 0);
+  panel.viewColumn = 1;
+  await panel.receive(message);
+  assert.deepEqual(reveals, [{ column: 2, preserveFocus: true }]);
+  assert.equal(f.opened.at(-1)[2].viewColumn, 1);
+  f.vscode.window.tabGroups.all = [{ viewColumn: 2, tabs: [] }];
+  await panel.receive(message);
+  assert.equal(f.opened.at(-1)[2].viewColumn, f.vscode.ViewColumn.Beside);
+  panel.dispose();
 });

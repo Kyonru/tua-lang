@@ -788,7 +788,8 @@ including nested styles with the same content boundaries.
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
 choice, fallback, wait, branch and action routes come from the compiler. Follow
 destination buttons to navigate sections; source and line-number links open
-the authored location. Speaker bubbles keep consistent sides and accents. Back,
+the authored location, reusing existing source tabs and keeping the preview in
+a separate editor group. Speaker bubbles keep consistent sides and accents. Back,
 the visited-section trail and Restart from section support inspecting branches. Conditions
 can be tested with explicit mock JSON; named placeholders produce preview text with
 compiler-owned rich runs. Authored
