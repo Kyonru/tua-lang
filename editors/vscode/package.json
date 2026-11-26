@@ -853,7 +853,7 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Show native formatting hover actions after selecting rich dialogue text with the mouse. Right-click **Format Dialogue Text** remains available when disabled. Requires `@text rich`."
+          "markdownDescription": "Show persistent formatting icons at the top right of `.tdialogue` editors. Buttons are enabled for a valid rich-text selection; pressed buttons remove the matching full-span style. Requires `@text rich`. The context menu remains available when hidden."
         }
       }
     },
@@ -1532,6 +1532,129 @@
         "command": "tua.dialogue.formatText",
         "title": "Format Dialogue Text",
         "category": "Tua"
+      },
+      {
+        "command": "tua.dialogue.format.emphasis",
+        "title": "Toggle Dialogue Emphasis",
+        "shortTitle": "Emphasis",
+        "category": "Tua",
+        "icon": "$(bold)",
+        "enablement": "tua.dialogue.format.emphasis.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.thought",
+        "title": "Toggle Dialogue Thought / Italic",
+        "shortTitle": "Thought / Italic",
+        "category": "Tua",
+        "icon": "$(italic)",
+        "enablement": "tua.dialogue.format.thought.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.underline",
+        "title": "Toggle Dialogue Underline",
+        "shortTitle": "Underline",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/underline-light.svg",
+          "dark": "assets/dialogue-format/underline-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.underline.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.strike",
+        "title": "Toggle Dialogue Strikethrough",
+        "shortTitle": "Strikethrough",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/strike-light.svg",
+          "dark": "assets/dialogue-format/strike-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.strike.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.highlight",
+        "title": "Toggle Dialogue Highlight",
+        "shortTitle": "Highlight",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/highlight-light.svg",
+          "dark": "assets/dialogue-format/highlight-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.highlight.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.whisper",
+        "title": "Toggle Dialogue Whisper",
+        "shortTitle": "Whisper",
+        "category": "Tua",
+        "icon": "$(unmute)",
+        "enablement": "tua.dialogue.format.whisper.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.emphasis.active",
+        "title": "Remove Dialogue Emphasis (active)",
+        "shortTitle": "Emphasis (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/emphasis-active-light.svg",
+          "dark": "assets/dialogue-format/emphasis-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.emphasis.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.thought.active",
+        "title": "Remove Dialogue Thought / Italic (active)",
+        "shortTitle": "Thought / Italic (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/thought-active-light.svg",
+          "dark": "assets/dialogue-format/thought-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.thought.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.underline.active",
+        "title": "Remove Dialogue Underline (active)",
+        "shortTitle": "Underline (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/underline-active-light.svg",
+          "dark": "assets/dialogue-format/underline-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.underline.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.strike.active",
+        "title": "Remove Dialogue Strikethrough (active)",
+        "shortTitle": "Strikethrough (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/strike-active-light.svg",
+          "dark": "assets/dialogue-format/strike-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.strike.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.highlight.active",
+        "title": "Remove Dialogue Highlight (active)",
+        "shortTitle": "Highlight (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/highlight-active-light.svg",
+          "dark": "assets/dialogue-format/highlight-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.highlight.enabled && editorHasSelection && editorLangId == tdialogue"
+      },
+      {
+        "command": "tua.dialogue.format.whisper.active",
+        "title": "Remove Dialogue Whisper (active)",
+        "shortTitle": "Whisper (active)",
+        "category": "Tua",
+        "icon": {
+          "light": "assets/dialogue-format/whisper-active-light.svg",
+          "dark": "assets/dialogue-format/whisper-active-dark.svg"
+        },
+        "enablement": "tua.dialogue.format.whisper.enabled && editorHasSelection && editorLangId == tdialogue"
       }
     ],
     "views": {
@@ -1664,6 +1787,66 @@
           "command": "tua.run.stopSelected",
           "when": "editorLangId == tua && config.tua.editor.toolbarMode == compact && tua.selectedRunActive",
           "group": "navigation@48"
+        },
+        {
+          "command": "tua.dialogue.format.emphasis",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.emphasis.active",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tua.dialogue.format.thought",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.thought.active",
+          "group": "navigation@11"
+        },
+        {
+          "command": "tua.dialogue.format.underline",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.underline.active",
+          "group": "navigation@12"
+        },
+        {
+          "command": "tua.dialogue.format.strike",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.strike.active",
+          "group": "navigation@13"
+        },
+        {
+          "command": "tua.dialogue.format.highlight",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.highlight.active",
+          "group": "navigation@14"
+        },
+        {
+          "command": "tua.dialogue.format.whisper",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && !tua.dialogue.format.whisper.active",
+          "group": "navigation@15"
+        },
+        {
+          "command": "tua.dialogue.format.emphasis.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.emphasis.active",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tua.dialogue.format.thought.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.thought.active",
+          "group": "navigation@11"
+        },
+        {
+          "command": "tua.dialogue.format.underline.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.underline.active",
+          "group": "navigation@12"
+        },
+        {
+          "command": "tua.dialogue.format.strike.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.strike.active",
+          "group": "navigation@13"
+        },
+        {
+          "command": "tua.dialogue.format.highlight.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.highlight.active",
+          "group": "navigation@14"
+        },
+        {
+          "command": "tua.dialogue.format.whisper.active",
+          "when": "resourceLangId == tdialogue && config.tua.dialogue.formattingToolbar && tua.dialogue.format.whisper.active",
+          "group": "navigation@15"
         }
       ],
       "commandPalette": [
@@ -1840,6 +2023,54 @@
         {
           "command": "tua.dialogue.formatText",
           "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.emphasis",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.thought",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.underline",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.strike",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.highlight",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.whisper",
+          "when": "editorLangId == tdialogue"
+        },
+        {
+          "command": "tua.dialogue.format.emphasis.active",
+          "when": "false"
+        },
+        {
+          "command": "tua.dialogue.format.thought.active",
+          "when": "false"
+        },
+        {
+          "command": "tua.dialogue.format.underline.active",
+          "when": "false"
+        },
+        {
+          "command": "tua.dialogue.format.strike.active",
+          "when": "false"
+        },
+        {
+          "command": "tua.dialogue.format.highlight.active",
+          "when": "false"
+        },
+        {
+          "command": "tua.dialogue.format.whisper.active",
+          "when": "false"
         }
       ],
       "editor/context": [

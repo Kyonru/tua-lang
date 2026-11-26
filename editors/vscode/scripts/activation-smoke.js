@@ -245,8 +245,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      9,
-      "activation should observe edits for inline-model cancellation, live previews including dialogue, shader and Lua dependency overlays, workspace graphs, the audio workbench, and localization catalogs",
+      10,
+      "activation should observe edits for inline-model cancellation, live previews and dialogue formatting, shader and Lua dependency overlays, workspace graphs, the audio workbench, and localization catalogs",
     );
 
     assert.strictEqual(
@@ -1542,8 +1542,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      9,
-      "debug logging should retain inline-model, preview, shader/Lua overlays, workspace graph, audio workbench, and localization listeners",
+      10,
+      "debug logging should retain inline-model, preview, dialogue formatting, shader/Lua overlays, workspace graph, audio workbench, and localization listeners",
     );
 
     await extension.deactivate();
@@ -2303,6 +2303,9 @@ function createMockState(workspace, options = {}) {
       },
     },
     languages: {
+      onDidChangeDiagnostics() {
+        return { dispose() {} };
+      },
       createDiagnosticCollection(name) {
         const collection = {
           name,
@@ -2345,7 +2348,10 @@ function createMockState(workspace, options = {}) {
     },
     window: {
       get activeTextEditor() {
-        return activeTextEditor;
+        return activeTextEditor?.document ? activeTextEditor : undefined;
+      },
+      onDidChangeActiveTextEditor() {
+        return { dispose() {} };
       },
       onDidChangeTextEditorSelection() {
         return { dispose() {} };
