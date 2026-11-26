@@ -79,7 +79,8 @@ pub(super) fn initialize_result(
                     "source.sortImports",
                     "source.removeUnusedImports",
                     "source.tua.createMissingLoveCallbacks",
-                    "source.fixAll"
+                    "source.fixAll",
+                    "refactor.rewrite.dialogueText"
                 ]
             },
             "codeLensProvider": {

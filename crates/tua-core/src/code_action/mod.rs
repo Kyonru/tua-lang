@@ -30,6 +30,7 @@ pub struct Assist {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AssistKind {
+    RefactorDialogueText,
     QuickFix,
     SourceOrganizeImports,
     SourceSortImports,
@@ -144,7 +145,7 @@ pub(crate) fn code_actions_parsed_source_with_kinds_and_diagnostics_config(
 
     for kind in requested_kinds {
         match kind {
-            AssistKind::QuickFix => {}
+            AssistKind::QuickFix | AssistKind::RefactorDialogueText => {}
             AssistKind::SourceOrganizeImports => {
                 if let Some(action) = organize_imports_action(parsed) {
                     actions.push(action);

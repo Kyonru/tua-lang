@@ -113,7 +113,8 @@ fn initialize_returns_server_capabilities() {
             "source.sortImports",
             "source.removeUnusedImports",
             "source.tua.createMissingLoveCallbacks",
-            "source.fixAll"
+            "source.fixAll",
+            "refactor.rewrite.dialogueText"
         ])
     );
     assert_eq!(

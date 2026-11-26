@@ -1325,6 +1325,7 @@ pub(super) fn lsp_code_action_from_core(action: CodeAction, sources: &AnalysisSn
 
 fn lsp_code_action_kind(kind: CodeActionKind) -> &'static str {
     match kind {
+        CodeActionKind::RefactorDialogueText => "refactor.rewrite.dialogueText",
         CodeActionKind::QuickFix => "quickfix",
         CodeActionKind::SourceOrganizeImports => "source.organizeImports",
         CodeActionKind::SourceSortImports => "source.sortImports",

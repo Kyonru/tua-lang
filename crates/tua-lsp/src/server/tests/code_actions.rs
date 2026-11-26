@@ -1042,3 +1042,33 @@ local dialogue: Dialog = nil
         "import type { DialogueInstance } from \"./dialogue\"\n"
     );
 }
+
+#[test]
+fn dialogue_formatting_actions_use_utf16_ranges_and_kind_filtering() {
+    let uri = "file:///tmp/format-text.tdialogue";
+    let source = "@dialogue 1\r\n@text rich\r\n[start]\r\n: 🐸 café (end)\r\n";
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    let mut request = code_action_request(2, uri, 3, 5, 3, 9, vec![]);
+    request["params"]["context"]["only"] = json!(["refactor.rewrite.dialogueText"]);
+    server.send(request.clone());
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .unwrap();
+    assert_eq!(actions.len(), 6);
+    let action = actions
+        .iter()
+        .find(|action| action["title"] == "Emphasis")
+        .unwrap();
+    assert_eq!(action["kind"], "refactor.rewrite.dialogueText");
+    let edit = &action["edit"]["changes"][uri][0];
+    assert_eq!(edit["newText"], "[em]café[/em]");
+    assert_eq!(
+        edit["range"],
+        json!({"start": {"line": 3, "character": 5}, "end": {"line": 3, "character": 9}})
+    );
+    request["id"] = json!(3);
+    request["params"]["context"]["only"] = json!(["source.fixAll"]);
+    server.send(request);
+    assert_eq!(response_with_id(server.output(), 3)["result"], json!([]));
+}

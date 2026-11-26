@@ -775,6 +775,13 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
 | `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
 
+Rich `.tdialogue` selections also support standard `textDocument/codeAction`
+requests with kind `refactor.rewrite.dialogueText` (or its `refactor` parents).
+The compiler supplies source edits for emphasis and common named styles, only
+within one prose field and without splitting placeholders, escapes or markup.
+Plain scripts require explicit `@text rich` opt-in. The extension presents these
+edits through **Tua: Format Dialogue Text** and a selection hover toolbar.
+
 **Tua: Preview Dialogue** opens a source-linked conversation reader for the active `.tdialogue`
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
 choice, fallback, wait, branch and action routes come from the compiler. Follow

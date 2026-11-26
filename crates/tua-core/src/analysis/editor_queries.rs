@@ -896,7 +896,7 @@ impl AnalysisSnapshot {
     ) -> Vec<Assist> {
         let path = path.as_ref();
         if self.is_dialogue(path) {
-            return Vec::new();
+            return self.dialogue_text_actions(path, range, requested_kinds);
         }
         let Some(parsed) = self.file(path).and_then(|file| file.parsed.as_ref().ok()) else {
             return Vec::new();

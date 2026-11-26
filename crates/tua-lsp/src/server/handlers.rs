@@ -3395,6 +3395,9 @@ fn code_action_kinds_from_request(message: &Value) -> Vec<AssistKind> {
 
     for kind in only.iter().filter_map(Value::as_str) {
         match kind {
+            "refactor" | "refactor.rewrite" | "refactor.rewrite.dialogueText" => {
+                kinds.insert(AssistKind::RefactorDialogueText);
+            }
             "quickfix" => {
                 kinds.insert(AssistKind::QuickFix);
             }
