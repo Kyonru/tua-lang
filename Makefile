@@ -515,7 +515,8 @@ extension-real-server-test: extension-deps extension-server ## Run VS Code integ
 	TUA_REAL_SERVER_PATH="$(CURDIR)/$(VSCODE_TUA)" $(NPM) --prefix $(VSCODE_DIR) run test:vscode-real
 
 .PHONY: json-check
-json-check: ## Validate every tracked JSON file.
+json-check: ## Validate tracked strict JSON metadata (excluding upstream editor JSONC).
+	node --test scripts/check-json.test.js
 	node scripts/check-json.js
 
 .PHONY: extension-screenshots extension-screenshots-check

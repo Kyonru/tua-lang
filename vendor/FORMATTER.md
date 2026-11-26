@@ -29,3 +29,8 @@ The shared adapter is `crates/tua-core/src/formatter/stylua.rs`. Add regression
 cases in the core formatter corpus, including second-pass stability and emitted
 program checks. Range and on-type tests belong in core and LSP. The dialogue DSL
 retains its own formatter.
+
+Upstream `.vscode/{extensions,launch,settings,tasks}.json` files use JSONC.
+The repository's strict JSON gate reports and excludes these editor settings;
+it still validates vendored package manifests and data files. These upstream
+settings are not validated as strict JSON or used as Tua's editor configuration.
