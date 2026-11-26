@@ -35,6 +35,8 @@ jobs:
           python-version: "3.12"
       - name: Check formatting
         run: make fmt-check
+      - name: Check formatter fork feature matrix
+        run: make formatter-fork-check
       - name: Run strict Clippy
         run: make clippy
       - name: Install Rust dependency auditor
