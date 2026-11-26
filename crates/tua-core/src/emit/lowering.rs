@@ -65,7 +65,7 @@ impl LoweringDocument {
                 text: text.to_owned(),
                 parser_start_column: 1,
                 source_fragment: None,
-                source_span: line_span(source, index + 1),
+                source_span: text_line_span(text, index + 1),
                 lowering: LoweringKind::Source,
             })
             .collect();
@@ -390,7 +390,16 @@ fn split_lines(text: &str) -> Vec<&str> {
 }
 
 fn line_span(source: &str, line: usize) -> SourceSpan {
-    let text = source.lines().nth(line.saturating_sub(1)).unwrap_or("");
+    text_line_span(
+        source.lines().nth(line.saturating_sub(1)).unwrap_or(""),
+        line,
+    )
+}
+
+fn text_line_span(text: &str, line: usize) -> SourceSpan {
+    // Work from the current line instead of rescanning the source prefix for
+    // every line. `lines` preserves the existing LF/CRLF and scalar-column rules.
+    let text = text.lines().next().unwrap_or("");
     SourceSpan {
         start: SourcePosition { line, column: 1 },
         end: SourcePosition {
@@ -404,6 +413,37 @@ fn line_span(source: &str, line: usize) -> SourceSpan {
 mod tests {
     use super::*;
     use crate::parse_tua_source;
+
+    #[test]
+    fn source_line_provenance_preserves_unicode_and_line_endings() {
+        for source in [
+            "",
+            "\n",
+            "\r\n",
+            "🐸 café\r\n\nlast\r",
+            "first\nlast",
+            "first\nlast\n",
+        ] {
+            let document = LoweringDocument::from_source(source);
+            assert_eq!(document.code(), source);
+            for (index, line) in document.lines.iter().enumerate() {
+                let expected_text = source.lines().nth(index).unwrap_or("");
+                assert_eq!(
+                    line.source_span,
+                    SourceSpan {
+                        start: SourcePosition {
+                            line: index + 1,
+                            column: 1
+                        },
+                        end: SourcePosition {
+                            line: index + 1,
+                            column: expected_text.chars().count() + 1
+                        },
+                    }
+                );
+            }
+        }
+    }
 
     #[test]
     fn operation_preserves_unchanged_lines_and_marks_generated_lines() {

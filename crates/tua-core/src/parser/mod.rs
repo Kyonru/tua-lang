@@ -367,8 +367,8 @@ fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
         .collect()
 }
 
-#[derive(Default)]
 struct TuaSyntax {
+    source_positions: SourcePositionIndex,
     default_analysis_depth: usize,
     type_aliases: Vec<TypeAlias>,
     type_imports: Vec<TypeImport>,
@@ -390,8 +390,15 @@ fn collect_tua_syntax_at_depth(
     default_analysis_depth: usize,
 ) -> TuaSyntax {
     let mut syntax = TuaSyntax {
+        source_positions: SourcePositionIndex::new(source),
         default_analysis_depth,
-        ..TuaSyntax::default()
+        type_aliases: Vec::new(),
+        type_imports: Vec::new(),
+        local_annotations: Vec::new(),
+        function_annotations: Vec::new(),
+        compound_assignments: Vec::new(),
+        parameter_default_references: Vec::new(),
+        diagnostics: Vec::new(),
     };
 
     collect_block_tua_syntax(path, source, ast.nodes(), &mut syntax);
@@ -405,6 +412,7 @@ fn collect_tua_syntax_at_depth(
             let annotation = function_annotation(
                 self.path,
                 self.source,
+                &self.syntax.source_positions,
                 None,
                 None,
                 function.body(),
@@ -944,6 +952,7 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
             let annotation = function_annotation(
                 path,
                 source,
+                &syntax.source_positions,
                 Some(token_text(function.name())),
                 node_span(function.name()),
                 function.body(),
@@ -957,6 +966,7 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
             let annotation = function_annotation(
                 path,
                 source,
+                &syntax.source_positions,
                 Some(function.name().to_string()),
                 node_span(function.name()),
                 function.body(),
@@ -1405,6 +1415,7 @@ fn enum_diagnostic(
 fn function_annotation(
     path: &Path,
     source: &str,
+    positions: &SourcePositionIndex,
     name: Option<String>,
     name_span: Option<SourceSpan>,
     body: &ast::FunctionBody,
@@ -1463,8 +1474,8 @@ fn function_annotation(
         .parameters()
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
-    let default_parameters = parameter_defaults_from_body(source, body);
-    let optional_parameters = parameter_optionals_from_body(source, body);
+    let default_parameters = parameter_defaults_from_body(source, positions, body);
+    let optional_parameters = parameter_optionals_from_body(source, positions, body);
     let required_parameter_count = required_parameter_count_for_optional_parameters(
         path,
         &parameter_names,
@@ -1691,8 +1702,13 @@ pub(crate) fn is_qualified_protocol_name(value: &str) -> bool {
         })
 }
 
-fn parameter_optionals_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterOptional> {
-    let Some((inner, inner_start)) = parameter_list_inner(source, body.parameters_parentheses())
+fn parameter_optionals_from_body(
+    source: &str,
+    positions: &SourcePositionIndex,
+    body: &ast::FunctionBody,
+) -> Vec<ParameterOptional> {
+    let Some((inner, inner_start)) =
+        parameter_list_inner(source, positions, body.parameters_parentheses())
     else {
         return Vec::new();
     };
@@ -1703,8 +1719,13 @@ fn parameter_optionals_from_body(source: &str, body: &ast::FunctionBody) -> Vec<
         .collect()
 }
 
-fn parameter_defaults_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterDefault> {
-    let Some((inner, inner_start)) = parameter_list_inner(source, body.parameters_parentheses())
+fn parameter_defaults_from_body(
+    source: &str,
+    positions: &SourcePositionIndex,
+    body: &ast::FunctionBody,
+) -> Vec<ParameterDefault> {
+    let Some((inner, inner_start)) =
+        parameter_list_inner(source, positions, body.parameters_parentheses())
     else {
         return Vec::new();
     };
@@ -1873,11 +1894,12 @@ fn required_parameter_count_for_optional_parameters(
 
 fn parameter_list_inner<'a>(
     source: &'a str,
+    positions: &SourcePositionIndex,
     parentheses: &ast::span::ContainedSpan,
 ) -> Option<(&'a str, usize)> {
     let span = node_span(parentheses)?;
-    let start = byte_for_source_position(source, span.start)?;
-    let end = byte_for_source_position(source, span.end).unwrap_or(source.len());
+    let start = positions.byte(source, span.start)?;
+    let end = positions.byte(source, span.end).unwrap_or(source.len());
     let range = source.get(start..end)?;
     let open = range.find('(')?;
     let close = range.rfind(')')?;

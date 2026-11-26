@@ -72,9 +72,9 @@ pub(crate) struct SourceIdentifier {
     pub span: SourceSpan,
 }
 
-/// Immutable byte-to-source-position index. Building it is linear in the
-/// source size; every later lookup is logarithmic even for a single enormous
-/// line containing many candidate declarations.
+/// Immutable source-position index. Construction is linear in source size;
+/// byte-to-position lookup is logarithmic, and position-to-byte lookup indexes
+/// the requested line directly without rescanning preceding lines.
 pub(crate) struct SourcePositionIndex {
     char_bytes: Vec<usize>,
     line_start_chars: Vec<usize>,
@@ -97,6 +97,28 @@ impl SourcePositionIndex {
             char_bytes,
             line_start_chars,
         }
+    }
+
+    /// Resolve a scalar source position using this index's original source.
+    /// Match `byte_for_position` clamping and end-of-file behavior.
+    pub(crate) fn byte(&self, source: &str, position: SourcePosition) -> Option<usize> {
+        let line = position.line.checked_sub(1)?;
+        let Some(&start_char) = self.line_start_chars.get(line) else {
+            return (position.line == source.lines().count() + 1).then_some(source.len());
+        };
+        let start = self.char_bytes[start_char];
+        let end = self
+            .line_start_chars
+            .get(line + 1)
+            .map_or(source.len(), |next| self.char_bytes[*next]);
+        let line_end = start + source.get(start..end)?.trim_end_matches(['\n', '\r']).len();
+        Some(
+            self.char_bytes
+                .get(start_char.saturating_add(position.column.saturating_sub(1)))
+                .copied()
+                .filter(|byte| *byte <= line_end)
+                .unwrap_or(line_end),
+        )
     }
 
     pub(crate) fn position(&self, byte: usize) -> SourcePosition {
@@ -340,6 +362,30 @@ fn identifier_end(line: &str, start: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indexed_positions_match_scalar_lookup_and_eof_clamping() {
+        for source in [
+            "",
+            "\n",
+            "\r\n",
+            "🐸 café\r\n\nlast\r",
+            "first\nlast",
+            "first\nlast\n",
+        ] {
+            let index = SourcePositionIndex::new(source);
+            for line in 0..=source.lines().count() + 2 {
+                for column in [0, 1, 2, 3, 8, usize::MAX] {
+                    let position = SourcePosition { line, column };
+                    assert_eq!(
+                        index.byte(source, position),
+                        byte_for_position(source, position),
+                        "{source:?}: {position:?}"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn source_position_index_handles_unicode_and_line_boundaries() {
