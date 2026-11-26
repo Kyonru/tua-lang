@@ -775,10 +775,11 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/resetCompletionStats` | Clear local adaptive completion statistics |
 | `tua/localInlineCompletion` | Return a version-bound deterministic inline-completion candidate from enabled local sources |
 
-**Tua: Preview Dialogue** opens a source-linked outline for the active `.tdialogue`
+**Tua: Preview Dialogue** opens a source-linked conversation reader for the active `.tdialogue`
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
-choice, fallback, wait, branch and action routes come from the compiler. Select a
-section, text link or route target to open its authored source location. Conditions
+choice, fallback, wait, branch and action routes come from the compiler. Follow destination buttons to navigate sections; source and line-number links open
+the authored location. Speaker bubbles keep consistent sides and accents. Back,
+the visited-section trail and Restart from section support inspecting branches. Conditions
 can be tested with explicit mock JSON; named placeholders produce plain preview
 text, while rich styles remain unrendered. No game handler or asset loads.
 Edits and workspace `.tdialogue` file changes refresh the visible view, while hidden
@@ -793,12 +794,15 @@ syntax clears the previous outline and points to Problems. Large views show at m
 200 sections, 100 lines per section and 200 routes per section with an explicit notice.
 Use **Apply mock context** to test each condition independently with explicit
 `context` and `locals` JSON records. **Use authored view** clears evaluation. These
-probes do not simulate conversation traversal. The collapsible conversation map
-lays out these same facts in source order, with source-linked nodes, numbered routes,
+probes do not simulate conversation traversal. **Test conditions** is collapsed by
+default and distinguishes unapplied drafts from applied JSON. **Read** and **Flow**
+share section selection; the map highlights incoming/outgoing routes and retains
 keyboard zoom and pan controls. It draws up to 40 sections and 80 routes; missing,
-ambiguous and undisplayed destinations are omitted with a notice. Expansion and
-zoom survive same-file refresh. No additional parsing or reachability analysis runs
-in the extension.
+ambiguous and undisplayed destinations are omitted with a notice. View choice and
+zoom survive same-file refresh. Reader history retains 100 visits, shows the latest
+eight, and resets when section labels/order change. No additional parsing or
+reachability analysis runs in the extension. Following a route changes only preview
+navigation; it does not mutate context or execute the game.
 
 `tua/dialoguePreview` accepts `{ "textDocument": { "uri": "file:///..." } }` and
 returns `analysisRevision`, `documentVersion`, and `preview` (null when unavailable

@@ -74,7 +74,7 @@ test("dialogue outline escapes content, preserves authored text and limits large
   assert.match(html, /Content-Security-Policy/);
   assert.match(html, /focus-visible/);
   const large = f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), { sections: Array(201).fill(preview.sections[0]), routes: [] });
-  assert.equal((large.match(/<section>/g) || []).length, 200);
+  assert.equal((large.match(/<section class="conversation-section"/g) || []).length, 200);
   assert.match(large, /Showing the first 200 sections/);
 });
 
@@ -302,4 +302,32 @@ test("a closed buffer is reopened and disposal rejects its pending load", async 
   reopen({ ...f.document, isClosed: false });
   await loading;
   assert.equal(panel.webview.html, html);
+});
+
+
+test("reader keeps speaker placement consistent and rejects ambiguous or missing destinations", () => {
+  const f = fixture();
+  const model = {
+    sections: [
+      { label: "start", range, lines: [
+        { speaker: "Guide", text: "First", range },
+        { speaker: "Visitor", text: "Second", range },
+        { speaker: "Guide", text: "Third", range },
+      ] },
+      { label: "duplicate", range, lines: [] },
+      { label: "duplicate", range, lines: [] },
+    ],
+    routes: [
+      { section: 0, line: 0, target: "duplicate", kind: "branchTrue", range },
+      { section: 0, line: 1, target: "absent", kind: "branchFalse", range },
+      { section: 0, line: 2, target: "start", kind: "wait", range },
+    ],
+  };
+  const html = f.dialoguePreviewHtml({ cspSource: "test" }, f.document.uri.toString(), model);
+  assert.equal((html.match(/class="bubble side-0 speaker-0"/g) || []).length, 2);
+  assert.equal((html.match(/class="bubble side-1 speaker-1"/g) || []).length, 1);
+  assert.match(html, /Ambiguous destination/);
+  assert.match(html, /Missing destination/);
+  assert.equal((html.match(/data-follow="0"/g) || []).length, 1);
+  assert.doesNotMatch(html, /data-follow="[12]"/);
 });

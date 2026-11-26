@@ -54,7 +54,7 @@ function dialogueGraph(preview, link, uri = "") {
   const graph = dialogueGraphLayout(preview);
   const positions = graph.nodes.map(node => `.dialogue-node-${node.index}{top:${node.y}px}`).join("")
     + graph.edges.map(edge => `.dialogue-edge-${edge.number}{left:${edge.x - 12}px;top:${edge.y - 12}px}`).join("");
-  const nodes = graph.nodes.map(node => `<div class="dialogue-node dialogue-node-${node.index}" title="${escapeHtml(node.label)}">${link(node.label, node.range)}<small>${node.index === 0 ? "Default entry" : node.action ? "Action" : node.wait != null ? "Wait" : "Section"}</small></div>`).join("");
+  const nodes = graph.nodes.map(node => `<div class="dialogue-node dialogue-node-${node.index}" title="${escapeHtml(node.label)}"><button type="button" data-select-section="${node.index}">${escapeHtml(node.label)}</button><small>${node.index === 0 ? "Default entry" : node.action ? "Action" : node.wait != null ? "Wait" : "Section"} · ${link("Source", node.range)}</small></div>`).join("");
   const paths = graph.edges.map(edge => `<path id="dialogue-path-${edge.number}" d="${edge.path}" marker-end="url(#dialogue-arrow)"/>`).join("");
   const badges = graph.edges.map(edge => `<button class="dialogue-edge dialogue-edge-${edge.number}" data-route="${edge.number}" aria-label="${escapeHtml(edge.label)}" title="${escapeHtml(edge.label)}">${edge.number}</button>`).join("");
   const routes = graph.edges.map(edge => `<li id="dialogue-route-${edge.number}" data-route="${edge.number}">${link(edge.label, edge.range)}</li>`).join("");
@@ -106,6 +106,11 @@ function dialogueGraph(preview, link, uri = "") {
       document.getElementById("dialogue-zoom-out").onclick = () => viewport.zoom(viewport.scale() / 1.2);
       document.getElementById("dialogue-zoom-reset").onclick = () => viewport.zoom(1);
       document.getElementById("dialogue-zoom-fit").onclick = () => viewport.fit();
+      document.addEventListener("dialogue-section-selected", event => {
+        const edges = ${jsonForHtml(graph.edges.map(edge => ({ number: edge.number, source: edge.section, target: graph.nodes.find(node => node.label === edge.target)?.index })))};
+        const related = new Set(edges.filter(edge => edge.source === event.detail || edge.target === event.detail).map(edge => "dialogue-path-" + edge.number));
+        graph.querySelectorAll("svg>path").forEach(path => path.classList.toggle("selected", related.has(path.id)));
+      });
       function highlight(number) {
         graph.querySelectorAll("svg>path").forEach(path => path.classList.toggle("selected", path.id === "dialogue-path-" + number));
       }

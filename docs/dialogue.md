@@ -1123,22 +1123,36 @@ the resolver again. See [sampling limits](debugging.md#live-runtime-inspector).
 ## Preview the authored conversation
 
 Open a `.tdialogue` file and run **Tua: Preview Dialogue**. Enable experimental
-previews when prompted. The outline shows sections, dialogue text and outgoing
-routes. Click a section, **Open text**, or a route target to navigate to its source.
-A route target opens the authored target token so you can edit that connection.
+previews when prompted. **Read** opens a conversation reader: speakers keep the same
+side and accent across sections, narration sits between their speech bubbles, and
+choices appear beneath the line that owns them. Speaker sides are preview conventions;
+your game's renderer still controls its own layout.
 
-Expand **Conversation map** to see sections in source order and arrows between
-sections, including loops and disconnected sections. Select a numbered connection
-to focus its source link below the map; that link opens the authored route token.
-Section names open their declarations. Use the zoom buttons, **Fit**, or drag empty
-space to pan. With the map focused, `+`/`-` zoom and `0` resets zoom; Control/Command
-plus wheel also zooms. Map expansion and zoom survive refresh for the same file.
-The map draws up to 40 sections and 80 routes. Missing, ambiguous or undisplayed
-destinations are omitted with a notice; consult the outline and Problems for those
-routes. The map does not infer reachability or select routes from mock conditions.
+Choose a destination button to follow a branch. **Back** and the visited-section
+trail return to earlier sections, including loops. **Restart from section** clears
+the trail and starts from the section you are reading. The section list (a dropdown
+in narrow panels) also reaches disconnected sections. History retains up to 100
+visits and displays the latest eight; selection survives same-file refresh while
+the section labels and order remain unchanged. Structural edits reset the trail.
+Missing, ambiguous and out-of-limit destinations stay visible with an explanation.
+**Source** and line-number links open authored source locations.
 
-By default this is an authored view. To test conditions, enter explicit JSON in
-**Mock context**, then choose **Apply mock context**:
+Switch to **Flow** for the conversation map alongside the selected section (stacked
+in narrow panels). Selecting a node opens its text; the selected section highlights
+its incoming and outgoing routes. Select a numbered connection to focus its source
+link below the map. Use the zoom buttons, **Fit**, or drag empty space to pan.
+With the map focused, `+`/`-` zoom and `0` resets zoom; Control/Command plus wheel also
+zooms. View choice and zoom survive same-file refresh. The map draws up to 40
+sections and 80 routes. Missing, ambiguous or undisplayed destinations are omitted
+with a notice; consult the reader and Problems for those routes.
+
+This is an authoring walkthrough, not runtime simulation. Following a branch never
+updates variables, executes actions, waits in real time, or plays audio. All authored
+routes remain inspectable regardless of mock results. Text is plain; the preview
+does not reproduce your game's rich-text styling or localization.
+
+Expand **Test conditions**, enter explicit JSON in **Mock context**, then choose
+**Apply mock context**. The panel distinguishes applied data from unapplied drafts:
 
 ```json
 {

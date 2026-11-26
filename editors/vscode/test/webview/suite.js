@@ -254,7 +254,18 @@ async function run() {
       ],
     };
     await load(dialoguePreviewHtml(panel.webview, "file:///map.tdialogue", mapDialogue), "Dialogue Preview");
-    await evaluate("document.querySelector('.dialogue-map').open = true; document.querySelector('.dialogue-map').scrollIntoView()");
+    assert.equal(await evaluate("document.querySelector('[data-section=\"0\"]').hidden"), false);
+    await evaluate("document.querySelector('main [data-follow=\"1\"]').click()");
+    assert.equal(await evaluate("document.querySelector('[data-section=\"1\"]').hidden"), false);
+    assert.equal(await evaluate("document.activeElement.textContent"), "decision");
+    await evaluate("document.getElementById('reader-back').click()");
+    assert.equal(await evaluate("document.querySelector('[data-section=\"0\"]').hidden"), false);
+    await evaluate("document.querySelector('main [data-follow=\"1\"]').click(); document.querySelector('[data-section=\"1\"] [data-follow=\"0\"]').click()");
+    assert.equal(await evaluate("document.querySelectorAll('#reader-history button').length"), 3, "cycles remain navigable");
+    await evaluate("document.getElementById('reader-restart').click()");
+    assert.equal(await evaluate("document.getElementById('reader-back').disabled"), true);
+
+    await evaluate("document.getElementById('view-flow').click(); document.querySelector('.dialogue-map').scrollIntoView()");
     assert.equal(await evaluate("document.querySelectorAll('.dialogue-node').length"), 4);
     assert.equal(await evaluate("document.querySelectorAll('#dialogue-graph svg>path').length"), 4);
     await evaluate("document.getElementById('dialogue-zoom-in').click()");
@@ -272,6 +283,9 @@ async function run() {
     assert.equal(await evaluate("document.querySelector('.dialogue-map').open"), true, "map stays expanded after refresh");
     assert.equal(await evaluate("document.getElementById('dialogue-zoom-level').textContent"), "120%", "map zoom survives refresh");
     await evaluate("document.getElementById('dialogue-zoom-reset').click(); document.querySelector('.dialogue-map').scrollIntoView()");
+    await evaluate("document.querySelector('.dialogue-node [data-select-section=\"1\"]').click()");
+    assert.equal(await evaluate("document.querySelector('[data-section=\"1\"]').hidden"), false);
+    assert.equal(await evaluate("document.getElementById('dialogue-path-3').classList.contains('selected')"), true);
     await screenshot("dialogue-conversation-map");
     await workbench.send("Emulation.setDeviceMetricsOverride", { width: 900, height: 740, deviceScaleFactor: 1, mobile: false });
     assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "map stays within narrow pane");
@@ -291,7 +305,7 @@ async function run() {
       conditions: [{ section: 0, line: 0, choice: 0, kind: "visibility", value: true, range: dialogueRange }],
       text: { texts: [{ section: 0, line: 0, choice: null, kind: "line", value: "Welcome, Ada.", range: dialogueRange }] },
     } };
-    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", mockDialogue, undefined, { draft: '{"context":{"ready":true},"args":{"name":"Ada"}}' }), "Dialogue Preview");
+    await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", mockDialogue, undefined, { draft: '{"context":{"ready":true},"args":{"name":"Ada"}}', applied: '{"context":{"ready":true},"args":{"name":"Ada"}}' }), "Dialogue Preview");
     assert.equal(await evaluate("document.body.textContent.includes('Mock visibility: true')"), true);
     assert.equal(await evaluate("document.querySelector('.mock-value').textContent"), "Welcome, Ada.");
     await evaluate("document.querySelector('.speech summary').focus(); document.activeElement.click()");
@@ -318,6 +332,54 @@ async function run() {
     const limitedText = { ...dialogue, mock: { conditions: [], text: { texts: [], truncated: true } } };
     await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", limitedText), "Dialogue Preview");
     assert.equal(await evaluate("document.querySelector('main').textContent.includes('Authored text (preview limit)')"), true);
+    const readingDialogue = {
+      sections: [
+        { label: "harbor", range: dialogueRange, lines: [
+          { speaker: "Mara", text: "The ferry leaves at dawn. Have you decided where you are going?", range: dialogueRange },
+          { speaker: "You", text: "North, if the weather holds.", range: dialogueRange },
+          { speaker: "Mara", text: "Then take the lantern. The coast can be difficult to recognize in the fog.", range: dialogueRange,
+            choices: [{ text: "Tell me about the northern route." }, { text: "I am ready to leave." }] },
+        ] },
+        { label: "north_route", range: dialogueRange, lines: [{ speaker: "Mara", text: "Follow the lights along the shore.", range: dialogueRange }] },
+        { label: "depart", range: dialogueRange, lines: [{ text: "The ferry pulls away from the harbor.", range: dialogueRange, end: true }] },
+      ],
+      routes: [
+        { section: 0, line: 2, choice: 0, target: "north_route", kind: "choice", range: dialogueRange },
+        { section: 0, line: 2, choice: 1, target: "depart", kind: "choice", range: dialogueRange },
+        { section: 1, target: "harbor", kind: "wait", range: dialogueRange },
+      ],
+    };
+    await load(dialoguePreviewHtml(panel.webview, "file:///harbor.tdialogue", readingDialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('.mock-controls').open"), false);
+    assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.bubble')).map(el => el.className)"), [
+      "bubble side-0 speaker-0", "bubble side-1 speaker-1", "bubble side-0 speaker-0", "bubble side-0 speaker-0",
+    ]);
+    await vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar");
+    await vscode.commands.executeCommand("notifications.clearAll");
+    await screenshot("dialogue-reader-dark");
+    await evaluate("document.querySelector('.conversation-section:not([hidden]) .replies').scrollIntoView({block:'end'})");
+    await screenshot("dialogue-reader-branches");
+    await evaluate("window.scrollTo(0, 0)");
+    await evaluate("document.querySelector('main [data-follow=\"1\"]').click()");
+    await load(dialoguePreviewHtml(panel.webview, "file:///harbor.tdialogue", readingDialogue), "Dialogue Preview");
+    assert.equal(await evaluate("document.querySelector('[data-section=\"1\"]').hidden"), false, "reader selection survives refresh");
+    await evaluate("document.getElementById('reader-back').click()");
+    for (const [theme, className] of [["Light Modern", "vscode-light"], ["Default High Contrast", "vscode-high-contrast"], ["Default High Contrast Light", "vscode-high-contrast-light"]]) {
+      await vscode.workspace.getConfiguration("workbench").update("colorTheme", theme, vscode.ConfigurationTarget.Global);
+      await waitFor(() => evaluate(`document.body.classList.contains(${JSON.stringify(className)})`), "dialogue theme update");
+      await screenshot("dialogue-reader-" + className);
+    }
+    await vscode.workspace.getConfiguration("workbench").update("colorTheme", "Default Dark Modern", vscode.ConfigurationTarget.Global);
+    await workbench.send("Emulation.setDeviceMetricsOverride", { width: 360, height: 740, deviceScaleFactor: 1, mobile: false });
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, "speech bubbles fit narrow pane");
+    await evaluate("document.querySelector('.conversation-section:not([hidden])').scrollIntoView()");
+    await screenshot("dialogue-reader-narrow");
+    await workbench.send("Emulation.clearDeviceMetricsOverride");
+    await evaluate("for (let i = 0; i < 110; i++) { document.querySelector('main [data-follow=\"1\"]').click(); document.querySelector('main [data-follow=\"0\"]').click(); }");
+    assert.equal(await evaluate("vscode.getState().dialogueReader.history.length"), 100, "walkthrough history is bounded");
+    await load(dialoguePreviewHtml(panel.webview, "file:///harbor.tdialogue", { sections: readingDialogue.sections.slice(0, 1), routes: [] }), "Dialogue Preview");
+    assert.equal(await evaluate("document.getElementById('reader-back').disabled"), true, "structural edits reset obsolete history");
+
     const largeDialogue = { sections: Array(201).fill(dialogue.sections[0]), routes: [] };
     await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", largeDialogue), "Dialogue Preview");
     assert.equal(await evaluate("document.querySelectorAll('section').length"), 200);
