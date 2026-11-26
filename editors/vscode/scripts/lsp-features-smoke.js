@@ -6,7 +6,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { resolveCommand } = require("./lsp-profile-common");
 
-const command = resolveCommand(process.argv[2] || "target/debug/tua");
+const command = resolveCommand(process.argv[2] || "target/release/tua");
 const root = path.resolve(process.argv[3] || "examples/features");
 const src = path.join(root, "src");
 const child = childProcess.spawn(command, ["lsp"], {

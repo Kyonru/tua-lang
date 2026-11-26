@@ -181,9 +181,9 @@ lsp-smoke: ## Initialize and shutdown the LSP server to prove it responds.
 	node editors/vscode/scripts/lsp-smoke.js $(DEBUG_TUA)
 
 .PHONY: lsp-features-smoke
-lsp-features-smoke: ## Exercise LSP requests against examples/features with the debug server.
-	$(CARGO) build --package tua-cli
-	node editors/vscode/scripts/lsp-features-smoke.js $(DEBUG_TUA) examples/features
+lsp-features-smoke: ## Exercise LSP correctness and latency against examples/features with the optimized server.
+	$(CARGO) build --release --package tua-cli
+	node editors/vscode/scripts/lsp-features-smoke.js $(RELEASE_TUA) examples/features
 
 .PHONY: editor-regression-smoke
 editor-regression-smoke: ## Gate typing freshness and closed/unopened module navigation through the real LSP server.

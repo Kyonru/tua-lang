@@ -603,6 +603,10 @@ affects:
 | Documentation structure and examples | `make docs-build` |
 | Main repository checks | `make verify` |
 
+The feature-project LSP smoke check uses an optimized server for its completion
+latency budget. Debug-build timings are not comparable to the shipped binary;
+the workspace and editor-regression unit tests still run in the debug profile.
+
 Use the smallest focused test while iterating. Before merging a cross-layer
 change, include the relevant integration test and run `make diff-check`.
 
