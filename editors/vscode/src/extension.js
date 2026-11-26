@@ -36,6 +36,7 @@ const { registerRunActivity } = require("./workspace/activity");
 const { registerWorkspaceSidebar } = require("./workspace/sidebar");
 const { registerSignalDevex } = require("./signals");
 const { registerStateMachineDevex } = require("./state-machines");
+const { registerDialogueFormatting } = require("./dialogue/formatting");
 const { registerDialoguePreview } = require("./dialogue/preview");
 const { registerBehaviorTreePreview } = require("./behavior-trees/preview");
 const { registerProceduralPreview } = require("./procedural/preview");
@@ -106,6 +107,7 @@ async function activate(context) {
       isTuaDocument,
     }),
   );
+  context.subscriptions.push(registerDialogueFormatting());
   context.subscriptions.push(registerDialoguePreview({ configurationTarget, getClient: () => client }));
   context.subscriptions.push(registerBehaviorTreePreview({
     configurationTarget,

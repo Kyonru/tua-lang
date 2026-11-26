@@ -541,6 +541,23 @@ and substituted text is not reinterpreted as markup by this controller.
 
 ## Rich presentations and timing
 
+Select prose inside a rich `.tdialogue` line, choice, or `@reason` to format it in
+VS Code/VSCodium. A native hover toolbar appears after mouse selection; you can
+also right-click **Format Dialogue Text** or run **Tua: Format Dialogue Text**
+from the command palette. Choose Emphasis, Thought / italic, Underline,
+Strikethrough, Highlight, or Whisper. For example, selecting `hello` and choosing
+Emphasis inserts `[em]hello[/em]` as one undoable edit.
+
+The toolbar edits source markup, not a WYSIWYG document. Named styles such as
+`[style=thought]` need support from your game's renderer; the editor preview
+provides its own presentation of these styles. It does not insert Markdown.
+Selections must stay within one text field, with placeholders, escapes, and
+existing markup intact. Multi-cursor selections and malformed rich text are not
+formatted. Plain files are left alone: opt in explicitly with `@text rich` first.
+Disable automatic popups with `tua.dialogue.formattingToolbar`; the context menu
+and hovering over selected text still work. Keyboard users can select text and
+run the formatting command without needing the mouse.
+
 Enable rich text with `@text rich` immediately after `@dialogue 1`, before
 imports, labels or text IDs. Blank lines and ordinary comments may separate them.
 The compiler emits schema 8 (schema 9 with waits, or schema 10 with audio metadata),

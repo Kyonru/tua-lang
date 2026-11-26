@@ -848,6 +848,12 @@
           "type": "boolean",
           "default": false,
           "description": "In new inspected runs, retain the latest 20 sampled dialogue changes. Omits text and payloads; may miss states between samples. Off by default."
+        },
+        "tua.dialogue.formattingToolbar": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Show native formatting hover actions after selecting rich dialogue text with the mouse. Right-click **Format Dialogue Text** remains available when disabled. Requires `@text rich`."
         }
       }
     },
@@ -1521,6 +1527,11 @@
         "title": "Configure Runtime Inspection…",
         "category": "Tua",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "tua.dialogue.formatText",
+        "title": "Format Dialogue Text",
+        "category": "Tua"
       }
     ],
     "views": {
@@ -1825,6 +1836,10 @@
         {
           "command": "tua.inspector.forDeclaration",
           "when": "false"
+        },
+        {
+          "command": "tua.dialogue.formatText",
+          "when": "editorLangId == tdialogue"
         }
       ],
       "editor/context": [
@@ -1857,6 +1872,11 @@
           "command": "tua.declaration.tools",
           "when": "editorLangId == tua",
           "group": "tua@1"
+        },
+        {
+          "command": "tua.dialogue.formatText",
+          "when": "editorLangId == tdialogue && editorHasSelection",
+          "group": "1_modification@1"
         }
       ],
       "view/title": [

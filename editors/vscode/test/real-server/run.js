@@ -53,6 +53,7 @@ async function main() {
         TUA_REAL_SERVER_FIXTURES: JSON.stringify(fixtures),
         TUA_REAL_SERVER_PATH: serverPath,
         TUA_REAL_SERVER_CDP_PORT: String(cdpPort),
+        TUA_FORMATTING_SCREENSHOT: process.env.TUA_FORMATTING_SCREENSHOT || "",
         ...(vsix ? {} : { TUA_SERVER_PATH: serverPath }),
       },
       launchArgs: [

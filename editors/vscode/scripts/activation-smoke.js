@@ -994,7 +994,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     state.setActiveDocument(spriteDocument);
     const spriteHover = await state.hoverProviders
-      .at(-1)
+      .find(item => Array.isArray(item.selector) && item.selector.some(filter => filter.language === "tua"))
       ?.provider.provideHover(spriteDocument, { line: 0, character: 8 });
 
     assert(
@@ -1014,7 +1014,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "sprite hover should trust only its preview and standard navigation actions",
     );
     const assetHover = await state.hoverProviders
-      .at(-1)
+      .find(item => Array.isArray(item.selector) && item.selector.some(filter => filter.language === "tua"))
       ?.provider.provideHover(spriteDocument, { line: 1, character: 14 });
     assert(
       assetHover?.contents?.[0]?.value.includes("command:tua.assets.preview") &&
@@ -1046,7 +1046,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       position: { line: 0, character: 8 },
     };
     const stateMachineHover = await state.hoverProviders
-      .at(-1)
+      .find(item => Array.isArray(item.selector) && item.selector.some(filter => filter.language === "tua"))
       ?.provider.provideHover(stateMachineDocument, stateMachineHoverTarget.position);
     assert(
       stateMachineHover?.contents?.[0]?.value.includes("command:tua.previewStateMachine") &&

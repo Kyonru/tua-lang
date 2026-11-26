@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add compiler-backed rich dialogue selection formatting, with a native hover
+  toolbar and right-click menu in VS Code/VSCodium. Edits preserve dialogue
+  boundaries, placeholders and escapes, with a single undo step.
+
 - Add dialogue-reader portraits from authored character/expression declarations and
   compiler-owned rich-text runs, including safe mock substitution. Local raster
   loading is bounded; game portrait IDs can use an explicit editor-only mapping.
