@@ -19,6 +19,8 @@ Tua owns the dialect extensions and regression tests. Extensions retain authored
 arrays, optional/default parameters, generic bounds, enums, protocols, classes,
 type-only imports and runtime `is` tests. They must not lower or reconstruct
 source. The compiler remains responsible for language acceptance and semantics.
+The fork exposes its existing authored-AST verifier for validating narrowed
+range/on-type edits without running a second formatting pass.
 
 For upgrades, compare against the pinned upstream source, retain license notices,
 run upstream tests where available, and run Tua formatter, parser, emitter,

@@ -137,6 +137,8 @@ same block to preserve a larger region. Ignored source must still parse.
 ## Validation And Other File Types
 
 Formatting checks the authored AST and validates the result with Tua's parser.
+Range and on-type edits are checked after narrowing them to the requested area;
+if that partial edit would change the program, no edit is returned.
 It does not require type checking to succeed or imported modules to be loaded.
 An unsafe result is reported instead of being written. A leading UTF-8 byte-order
 mark is accepted and removed.

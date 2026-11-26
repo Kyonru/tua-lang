@@ -254,3 +254,21 @@ fn range_formatting_uses_utf16_columns_after_non_bmp_string() {
         assert!(!edit["newText"].as_str().unwrap().contains("after"));
     }
 }
+
+#[test]
+fn on_type_formatting_preserves_statements_when_line_counts_match() {
+    let temp = TempProject::new("on-type-formatting-statement-preservation");
+    let source = "local first=1; local second=2\n\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+    temp.write("tua.toml", "source = \"src\"\n");
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(on_type_formatting_request(
+        2,
+        &uri,
+        lsp_position_after(source, "local second=2\n"),
+        "\n",
+    ));
+    assert_eq!(response_with_id(server.output(), 2)["result"], json!([]));
+}

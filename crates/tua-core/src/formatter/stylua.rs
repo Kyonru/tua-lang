@@ -68,6 +68,13 @@ pub(super) fn format(
     Ok(output)
 }
 
+/// Partial editor edits must preserve the same program and payloads as a full
+/// format, even when line wrapping elsewhere happens to keep the line count.
+pub(super) fn equivalent_sources(source: &str, edited: &str) -> bool {
+    preserved_payloads(source) == preserved_payloads(edited)
+        && stylua_lib::verify_code(source, edited, stylua_lib::LuaVersion::Tua).is_ok()
+}
+
 fn preserved_payloads(source: &str) -> Vec<(bool, Vec<u8>)> {
     use full_moon::{
         ast::LuaVersion,

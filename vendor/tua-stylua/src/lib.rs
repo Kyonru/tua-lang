@@ -440,21 +440,32 @@ pub fn format_ast(
     // If we are verifying, reparse the output then check it matches the original input
     if let Some(input_ast) = input_ast_for_verification {
         let output = ast.to_string();
-        let reparsed_output =
-            match full_moon::parse_fallible(&output, config.syntax.into()).into_result() {
-                Ok(ast) => ast,
-                Err(error) => {
-                    return Err(Error::VerificationAstError(error));
-                }
-            };
-
-        let mut ast_verifier = verify_ast::AstVerifier::new();
-        if !ast_verifier.compare(input_ast, reparsed_output) {
-            return Err(Error::VerificationAstDifference);
-        }
+        verify_output_ast(input_ast, &output, config.syntax)?;
     }
 
     Ok(ast)
+}
+
+/// Verify an externally narrowed formatting edit with the same authored-AST
+/// comparison used for complete formatting. This does not format either input.
+#[allow(clippy::result_large_err)]
+pub fn verify_code(input: &str, output: &str, syntax: LuaVersion) -> Result<(), Error> {
+    let input_ast = full_moon::parse_fallible(input, syntax.into())
+        .into_result()
+        .map_err(Error::ParseError)?;
+    verify_output_ast(input_ast, output, syntax)
+}
+
+#[allow(clippy::result_large_err)]
+fn verify_output_ast(input_ast: Ast, output: &str, syntax: LuaVersion) -> Result<(), Error> {
+    let output_ast = full_moon::parse_fallible(output, syntax.into())
+        .into_result()
+        .map_err(Error::VerificationAstError)?;
+    if verify_ast::AstVerifier::new().compare(input_ast, output_ast) {
+        Ok(())
+    } else {
+        Err(Error::VerificationAstDifference)
+    }
 }
 
 /// Formats given Lua code

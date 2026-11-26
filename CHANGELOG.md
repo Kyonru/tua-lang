@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Validate partial formatter edits against the original program before returning
+  them, preventing on-type formatting from dropping statements moved between lines.
+
 - Choose table layouts from formatted contents rather than input spacing,
   keeping nested tables and call arguments stable after one pass.
 

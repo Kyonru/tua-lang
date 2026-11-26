@@ -1995,6 +1995,26 @@ fn table_width_accounts_for_inserted_spacing_in_one_pass() {
 }
 
 #[test]
+fn on_type_formatting_does_not_drop_a_statement_moved_to_another_line() {
+    let source = "local first=1; local second=2\n\n";
+    let edits = format_tua_source_on_type(
+        "input.tua",
+        source,
+        &FormatOptions::default(),
+        SourcePosition { line: 2, column: 1 },
+        "\n",
+    )
+    .unwrap();
+    let mut output = source.to_owned();
+    for edit in edits.iter().rev() {
+        let start = source_byte_offset(source, edit.span.start);
+        let end = source_byte_offset(source, edit.span.end);
+        output.replace_range(start..end, &edit.new_text);
+    }
+    corpus::same_program(source, &output).unwrap();
+}
+
+#[test]
 fn multiline_nested_table_candidate_expands_its_parent_in_one_pass() {
     assert_nested_table_stability(
         "return {field_0 = {field_0 = {field_0 = {field_0 = 12.345678900, field_1 = true}} ,},field_1 = {field_0 = {field_0 = {field_0 = true ,} ,} ,} ,}\n",

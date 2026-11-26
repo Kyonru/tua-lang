@@ -121,7 +121,9 @@ pub fn format_tua_source_range(
         )),
     )?;
 
-    Ok(local_format_edits(path, &source, &formatted, range, true))
+    Ok(validated_local_format_edits(
+        path, &source, &formatted, range, true,
+    ))
 }
 
 pub fn format_tua_source_on_type(
@@ -154,13 +156,45 @@ pub fn format_tua_source_on_type(
         },
     };
 
-    Ok(local_format_edits(path, &source, &formatted, range, false))
+    Ok(validated_local_format_edits(
+        path, &source, &formatted, range, false,
+    ))
 }
 
 /// Format an already parsed source; retain its source if output validation fails.
 /// Use `format_tua_source` when formatting diagnostics are needed.
 pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> String {
     stylua::format(parsed, options, None).unwrap_or_else(|_| parsed.source.clone())
+}
+
+fn validated_local_format_edits(
+    path: std::path::PathBuf,
+    source: &str,
+    formatted: &str,
+    range: SourceSpan,
+    allow_line_count_change: bool,
+) -> Vec<TextEdit> {
+    let edits = local_format_edits(
+        path.clone(),
+        source,
+        formatted,
+        range,
+        allow_line_count_change,
+    );
+    if edits.is_empty() {
+        return edits;
+    }
+    let mut edited = source.to_owned();
+    for edit in edits.iter().rev() {
+        let start = source_byte_offset(source, edit.span.start);
+        let end = source_byte_offset(source, edit.span.end);
+        edited.replace_range(start..end, &edit.new_text);
+    }
+    if parse_tua_source(&path, &edited).is_ok() && stylua::equivalent_sources(source, &edited) {
+        edits
+    } else {
+        Vec::new()
+    }
 }
 
 fn local_format_edits(
