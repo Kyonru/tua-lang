@@ -121,6 +121,12 @@ love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source 
 clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
+.PHONY: formatter-fork-check
+formatter-fork-check: ## Check plain Lua and Tua-enabled formatter fork builds.
+	$(CARGO) check --manifest-path vendor/tua-full-moon/Cargo.toml --no-default-features
+	$(CARGO) test --manifest-path vendor/tua-stylua/Cargo.toml --lib
+	$(CARGO) test --manifest-path vendor/tua-stylua/Cargo.toml --lib --features luau,luajit
+
 .PHONY: rust-audit
 rust-audit: ## Audit locked Rust dependencies against the RustSec advisory database.
 	$(CARGO) audit
@@ -129,7 +135,7 @@ rust-audit: ## Audit locked Rust dependencies against the RustSec advisory datab
 verify: native-replay-tool-test fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: native-replay-tool-test fmt-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check arena-tutorials-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: native-replay-tool-test fmt-check formatter-fork-check clippy rust-audit test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check ai-tooling-check llm-language-eval-test feature-examples-check arena-tutorials-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.

@@ -22,6 +22,11 @@ source. The compiler remains responsible for language acceptance and semantics.
 The fork exposes its existing authored-AST verifier for validating narrowed
 range/on-type edits without running a second formatting pass.
 
+Run `make formatter-fork-check` to check the parser without optional features
+and test the formatter with plain Lua and Tua's `luau,luajit` feature combination.
+The root workspace lockfile governs shipped builds; standalone fork checks
+create ignored local lockfiles.
+
 For upgrades, compare against the pinned upstream source, retain license notices,
 run upstream tests where available, and run Tua formatter, parser, emitter,
 CLI and LSP suites. Review all AST, traversal, trivia and output-verification

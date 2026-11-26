@@ -517,6 +517,21 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_function_parameters_without_dialect_extensions() {
+        let output = format_code(
+            "local function add(value,amount) return value+amount end",
+            Config::default(),
+            None,
+            OutputVerification::Full,
+        )
+        .unwrap();
+        assert_eq!(
+            output,
+            "local function add(value, amount)\n\treturn value + amount\nend\n"
+        );
+    }
+
+    #[test]
     fn test_invalid_input() {
         let output = format_code(
             "local   x   = ",

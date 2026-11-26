@@ -89,3 +89,9 @@ tmbootpicker.efi
 
 # Generated formatter source notices bundled with the extension.
 /editors/vscode/third-party/
+
+# Standalone library-fork checks create local locks and build output.
+/vendor/tua-full-moon/Cargo.lock
+/vendor/tua-full-moon/target/
+/vendor/tua-stylua/Cargo.lock
+/vendor/tua-stylua/target/
