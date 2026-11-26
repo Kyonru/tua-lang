@@ -1148,8 +1148,42 @@ with a notice; consult the reader and Problems for those routes.
 
 This is an authoring walkthrough, not runtime simulation. Following a branch never
 updates variables, executes actions, waits in real time, or plays audio. All authored
-routes remain inspectable regardless of mock results. Text is plain; the preview
-does not reproduce your game's rich-text styling or localization.
+routes remain inspectable regardless of mock results. Rich text uses a small editor presentation: emphasis, highlight, underline, strike,
+thought, whisper, warning, success and radio styles. Other named styles and
+speed/pronunciation marks retain hover annotations; pauses show timing labels.
+This does not reproduce game shaders, animation, reveal timing or localization.
+Plain scripts remain plain, and substituted argument values are never reparsed as
+rich markup. Older compilers or exhausted rich-preview limits fall back to plain text.
+Rich payloads are bounded to 64 KiB of text/mark data per field and 1 MiB in each
+of the authored and mock presentations.
+
+#### Portraits in the reader
+
+Shared characters supply their authored literal name and portrait. An `@expression`
+override selects the corresponding literal expression portrait. Table declarations
+and local table initializers are inspected through the compiler's export index;
+computed fields and game code are never executed. Later runtime mutations are not
+simulated. Unsaved character edits refresh the reader.
+
+Portrait strings that are local image paths resolve relative to the owning Tua
+project's source directory, including when a parent examples folder is open.
+For game-defined IDs, add an explicit editor mapping in workspace settings:
+
+```json
+{
+  "tua.dialogue.preview.portraits": {
+    "mara": "assets/portraits/mara.png",
+    "mara.happy": "assets/portraits/mara.happy.png"
+  }
+}
+```
+
+This mapping affects only the editor. It supports PNG, JPEG and WebP, up to 2 MiB
+per image, 8 MiB per preview and 32 distinct portrait IDs. Remote URLs, absolute
+paths and symlinks outside the source directory are rejected. Unknown IDs, missing
+files and decoding failures show a fallback instead of a broken image. Characters
+without portraits keep a text-only heading. Use **Reload** after changing an image
+if the editor has not yet received its filesystem event.
 
 Expand **Test conditions**, enter explicit JSON in **Mock context**, then choose
 **Apply mock context**. The panel distinguishes applied data from unapplied drafts:

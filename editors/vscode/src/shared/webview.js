@@ -25,7 +25,7 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function webviewDocument(webview, { title, body, styles = "", script = "" }) {
+function webviewDocument(webview, { title, body, styles = "", script = "", imageSources = "" }) {
   const nonce = webviewNonce();
 
   return `<!DOCTYPE html>
@@ -33,7 +33,7 @@ function webviewDocument(webview, { title, body, styles = "", script = "" }) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; ${imageSources ? `img-src ${imageSources};` : ''} style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <title>${escapeHtml(title)}</title>
   <style nonce="${nonce}">${styles}</style>
 </head>

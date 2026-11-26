@@ -690,6 +690,15 @@
           "default": false,
           "description": "Enable experimental sprite-animation, state-machine, behavior-tree, and dialogue previews in editor integrations."
         },
+        "tua.dialogue.preview.portraits": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "scope": "resource",
+          "description": "Map dialogue portrait IDs to PNG, JPEG or WebP files relative to the owning project's source directory. Preview only; game loaders are unchanged."
+        },
         "tua.editor.toolbarMode": {
           "type": "string",
           "enum": [

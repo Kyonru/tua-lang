@@ -15,6 +15,34 @@ New to the player? Start with the [two-file conversation](../first-conversation/
 and [guided learning path](../../../docs/tutorials/first-dialogue.md). This showcase demonstrates
 combinations; none of its adapters are required to start.
 
+## Preview the scripts in the editor
+
+Open a `.tdialogue` file and run **Tua: Preview Dialogue**. The reader shows authored
+branches, common rich styles, and character expressions without starting LÖVE.
+Its styling is independent of the seven in-game presentations below.
+
+The game uses portrait IDs rather than file paths. To see the bundled portraits in
+the reader, add this to the settings of the workspace you opened (including a parent
+`examples` workspace). Paths are relative to this Tua project's `src`, not the
+workspace folder:
+
+```json
+{
+  "tua.dialogue.preview.portraits": {
+    "mara": "assets/portraits/mara.png",
+    "mara.happy": "assets/portraits/mara.happy.png",
+    "mara.worried": "assets/portraits/mara.worried.png",
+    "mara.resolved": "assets/portraits/mara.resolved.png",
+    "ivo": "assets/portraits/ivo.png",
+    "ivo.happy": "assets/portraits/ivo.happy.png",
+    "ivo.worried": "assets/portraits/ivo.worried.png",
+    "beacon": "assets/portraits/beacon.png"
+  }
+}
+```
+
+See [preview behavior and limits](../../../docs/dialogue.md#preview-the-authored-conversation).
+
 ## Seven presentations, one conversation
 
 | Key | Presentation | What changes |

@@ -6,6 +6,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Add dialogue-reader portraits from authored character/expression declarations and
+  compiler-owned rich-text runs, including safe mock substitution. Local raster
+  loading is bounded; game portrait IDs can use an explicit editor-only mapping.
+
 - Rework dialogue previews into theme-aware speech-bubble readers with clickable
   branches, bounded back/history navigation, synchronized Read/Flow selection and
   collapsible mock-condition controls. Game handlers remain outside the preview.

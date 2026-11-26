@@ -777,11 +777,15 @@ The bundled VS Code extension also uses version-matched Tua requests:
 
 **Tua: Preview Dialogue** opens a source-linked conversation reader for the active `.tdialogue`
 file. It uses the experimental `tua.preview.enabled` setting. Text and outgoing
-choice, fallback, wait, branch and action routes come from the compiler. Follow destination buttons to navigate sections; source and line-number links open
+choice, fallback, wait, branch and action routes come from the compiler. Follow
+destination buttons to navigate sections; source and line-number links open
 the authored location. Speaker bubbles keep consistent sides and accents. Back,
 the visited-section trail and Restart from section support inspecting branches. Conditions
-can be tested with explicit mock JSON; named placeholders produce plain preview
-text, while rich styles remain unrendered. No game handler or asset loads.
+can be tested with explicit mock JSON; named placeholders produce preview text with
+compiler-owned rich runs. Authored
+literal character names and expression portraits are included. The host loads only
+bounded local raster portraits from the owning source directory, with optional
+`tua.dialogue.preview.portraits` mappings for game IDs. No game handler executes.
 Edits and workspace `.tdialogue` file changes refresh the visible view, while hidden
 views catch up on reveal. Deletion clears clean-source previews and invalidates
 navigation; recreation refreshes them. Dirty buffers remain authoritative until
@@ -807,7 +811,10 @@ navigation; it does not mutate context or execute the game.
 `tua/dialoguePreview` accepts `{ "textDocument": { "uri": "file:///..." } }` and
 returns `analysisRevision`, `documentVersion`, and `preview` (null when unavailable
 or syntactically invalid). `preview.sections` carries authored text, speaker IDs,
-action names and wait durations; `preview.routes` carries section/line/choice
+action names and wait durations, optional `character` literal metadata and `rich`
+presentation runs (`text`, semantic `marks`, optional timing `annotation`);
+choice fields also expose `rich` and `richReason`. Absent rich metadata means plain
+fallback. `preview.routes` carries section/line/choice
 indices, route kinds, targets and their ranges. These are authored possibilities,
 not reachability or observed execution. Semantic project diagnostics remain separate.
 An optional `mockContext` parameter contains **JSON text**, not a JSON object.
@@ -818,12 +825,16 @@ never prune routes. `preview.mock.truncated` indicates the 4,096-condition cap.
 Invalid mock input returns `mockError` and null mock results while preserving the
 static outline.
 `preview.mock.text` contains `texts` (section/line/choice indices, `kind` of `line`,
-`choice` or `reason`, substituted `value` or `error`, and source range), an optional
+`choice` or `reason`, substituted `value` or `error`, optional `rich` runs, and source
+range), an optional
 `bindingError` for argument/binding resolution, and `truncated`. Authored section
 text is never overwritten. The core formats up to 4,096 fields, 64 KiB per field,
-and 1 MiB combined output. Rich text uses its plain template without localization
-or presentation effects; numbers use deterministic preview spelling. Older
-compilers without this result show an update message rather than implied success.
+and 1 MiB combined output. Rich runs use the shared parser and literal argument
+substitution without localization
+or game presentation effects; numbers use deterministic preview spelling. Older
+compilers without mock text support show an update message rather than implied
+success. Older responses without rich runs or character metadata retain plain
+text and speaker identifiers.
 
 See [mock input limits](dialogue.md#preview-the-authored-conversation).
 

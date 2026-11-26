@@ -7,6 +7,7 @@ const vscode = require("vscode");
 const { BrowserSession, waitFor } = require("./cdp");
 const { spritePreviewHtml, spritePreviewErrorHtml } = require("../../src/love/sprite-preview/template");
 const { stateMachinePreviewHtml } = require("../../src/state-machines/template");
+const { loadPortraits } = require("../../src/dialogue/media");
 const { dialoguePreviewHtml } = require("../../src/dialogue/preview");
 const { behaviorTreePreviewHtml } = require("../../src/behavior-trees/preview");
 const { audioExplorerHtml, audioExplorerErrorHtml } = require("../../src/audio");
@@ -349,7 +350,25 @@ async function run() {
         { section: 1, target: "harbor", kind: "wait", range: dialogueRange },
       ],
     };
+    readingDialogue.sections[0].lines[0].character = { name: "Mara", portrait: "mara" };
+    readingDialogue.sections[0].lines[1].character = { name: "You", portrait: "assets/portraits/ivo.png" };
+    readingDialogue.sections[0].lines[2].character = { name: "Mara", portrait: "mara.happy", expression: "happy" };
+    readingDialogue.sections[0].lines[0].rich = [
+      { text: "The ferry leaves at ", marks: [] },
+      { text: "dawn", marks: ["em", "style:underline"] },
+      { text: ". Have you decided where you are going?", marks: [] },
+      { text: "", marks: [], annotation: "Pause 0.2s" },
+    ];
+    readingDialogue.sections[0].lines[2].choices[0].rich = [{ text: "Tell me about the northern route.", marks: ["style:thought"] }];
+    await loadPortraits(readingDialogue, path.resolve(__dirname, "../../../../examples/dialogue/showcase/src"), {
+      mara: "assets/portraits/mara.png", "mara.happy": "assets/portraits/mara.happy.png",
+    });
     await load(dialoguePreviewHtml(panel.webview, "file:///harbor.tdialogue", readingDialogue), "Dialogue Preview");
+    await waitFor(() => evaluate("Array.from(document.querySelectorAll('img.portrait')).every(image => image.complete && image.naturalWidth > 0)"), "decoded dialogue portraits");
+    assert.equal(await evaluate("document.querySelectorAll('img.portrait').length"), 3);
+    assert.equal(await evaluate("document.querySelector('.speech strong .rich-underline').textContent"), "dawn");
+    assert.equal(await evaluate("document.querySelector('.rich-annotation').textContent"), "Pause 0.2s");
+
     assert.equal(await evaluate("document.querySelector('.mock-controls').open"), false);
     assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.bubble')).map(el => el.className)"), [
       "bubble side-0 speaker-0", "bubble side-1 speaker-1", "bubble side-0 speaker-0", "bubble side-0 speaker-0",
@@ -362,6 +381,11 @@ async function run() {
     await evaluate("window.scrollTo(0, 0)");
     await evaluate("document.querySelector('main [data-follow=\"1\"]').click()");
     await load(dialoguePreviewHtml(panel.webview, "file:///harbor.tdialogue", readingDialogue), "Dialogue Preview");
+    await waitFor(() => evaluate("Array.from(document.querySelectorAll('img.portrait')).every(image => image.complete && image.naturalWidth > 0)"), "decoded dialogue portraits");
+    assert.equal(await evaluate("document.querySelectorAll('img.portrait').length"), 3);
+    assert.equal(await evaluate("document.querySelector('.speech strong .rich-underline').textContent"), "dawn");
+    assert.equal(await evaluate("document.querySelector('.rich-annotation').textContent"), "Pause 0.2s");
+
     assert.equal(await evaluate("document.querySelector('[data-section=\"1\"]').hidden"), false, "reader selection survives refresh");
     await evaluate("document.getElementById('reader-back').click()");
     for (const [theme, className] of [["Light Modern", "vscode-light"], ["Default High Contrast", "vscode-high-contrast"], ["Default High Contrast Light", "vscode-high-contrast-light"]]) {
@@ -383,6 +407,14 @@ async function run() {
     const largeDialogue = { sections: Array(201).fill(dialogue.sections[0]), routes: [] };
     await load(dialoguePreviewHtml(panel.webview, "file:///arrival.tdialogue", largeDialogue), "Dialogue Preview");
     assert.equal(await evaluate("document.querySelectorAll('section').length"), 200);
+
+    const badPortrait = { sections: [{ label: "broken-image", range: dialogueRange, lines: [{
+      speaker: "Guide", text: "Still readable", range: dialogueRange,
+      character: { name: "Guide", portrait: "broken.png", portraitUri: "data:image/png;base64,aW52YWxpZA==" },
+    }] }], routes: [] };
+    await load(dialoguePreviewHtml(panel.webview, "file:///broken-image.tdialogue", badPortrait), "Dialogue Preview");
+    await waitFor(() => evaluate("document.querySelector('img.portrait').hidden && !document.querySelector('.portrait-fallback').hidden"), "unreadable portrait fallback");
+    assert.equal(await evaluate("document.querySelector('.speech').textContent"), "Still readable");
 
     await load(localizationHtml(panel.webview, "localization-test-nonce"), "Tua Localization");
     await waitFor(() => messages.some(message => message.type === "ready"), "localization webview ready");

@@ -32,7 +32,8 @@ function fixture(sendRequest) {
       executeCommand(...args) { opened.push(args); },
     },
     workspace: {
-      getConfiguration: () => ({ get: () => true }),
+      getWorkspaceFolder: () => ({}),
+      getConfiguration: () => ({ get: key => key === "dialogue.preview.portraits" ? {} : true }),
       openTextDocument: () => reopen(),
       onDidCloseTextDocument(handler) { onClose = handler; return { dispose() {} }; },
       createFileSystemWatcher: () => ({
@@ -330,4 +331,35 @@ test("reader keeps speaker placement consistent and rejects ambiguous or missing
   assert.match(html, /Missing destination/);
   assert.equal((html.match(/data-follow="0"/g) || []).length, 1);
   assert.doesNotMatch(html, /data-follow="[12]"/);
+});
+
+
+test("portrait loading uses the compiler project layout and imported-file edits refresh", async () => {
+  const fs = require("node:fs/promises");
+  const os = require("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "dialogue-host-portrait-"));
+  const { pathToFileURL } = require("node:url");
+  const uri = pathToFileURL(root).toString();
+  let f;
+  let calls = 0;
+  try {
+    await fs.copyFile(path.join(__dirname, "../fixtures/player.png"), path.join(root, "mara.png"));
+    f = fixture(async (document, method) => {
+      if (method === "tua/projectLayout") return { projectUri: uri, sourceUri: uri, outputUri: uri, workspaceUri: uri };
+      calls++;
+      return { documentVersion: document.version, preview: {
+        sections: [{ label: "hello", range, lines: [{ text: "Hello", speaker: "Cast.Mara", range,
+          character: { name: "Mara", portrait: "mara.png" } }] }], routes: [],
+      } };
+    });
+    await f.show();
+    assert.match(f.panel().webview.html, /data:image\/png;base64,/);
+    assert.match(f.panel().webview.html, /data-portrait="0"/);
+    f.disk("change", { toString: () => "file:///characters.tua" });
+    await new Promise(resolve => setTimeout(resolve, 240));
+    assert.equal(calls, 2);
+  } finally {
+    f?.panel()?.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

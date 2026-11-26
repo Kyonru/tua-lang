@@ -53,6 +53,20 @@ const STYLES = `
   .speaker-1 { --speaker-accent: var(--vscode-charts-purple, var(--vscode-focusBorder)); }
   .speaker-2 { --speaker-accent: var(--vscode-charts-orange, var(--vscode-focusBorder)); }
   .speaker-3 { --speaker-accent: var(--vscode-charts-blue, var(--vscode-focusBorder)); }
+  .speaker-heading { display: flex; align-items: center; gap: 12px; }
+  .side-1 .speaker-heading { flex-direction: row-reverse; }
+  .portrait { object-fit: contain; flex: 0 0 56px; background: var(--vscode-editor-background); border: 1px solid var(--dialogue-rule); }
+  .portrait-fallback { font-size: .85em; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
+  .rich-highlight { background: var(--vscode-editor-findMatchHighlightBackground); }
+  .rich-underline { text-decoration: underline; }
+  .rich-strike { text-decoration: line-through; }
+  .rich-thought { font-style: italic; }
+  .rich-whisper { color: var(--vscode-descriptionForeground); }
+  .rich-warning { text-decoration: underline wavy var(--vscode-editorWarning-foreground); }
+  .rich-success { text-decoration: underline var(--vscode-charts-green); }
+  .rich-radio { font-family: var(--vscode-editor-font-family); }
+  .rich-metadata, .rich-style:not([class*="rich-style rich-"]) { text-decoration: underline dotted; text-underline-offset: 3px; }
+  .rich-annotation { display: inline-block; margin-inline: 4px; padding: 0 4px; font: .8em var(--vscode-font-family); color: var(--vscode-descriptionForeground); border: 1px solid var(--dialogue-rule); }
   .speaker { display: block; font-size: .9em; }
   .speech { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; margin: 6px 0 10px; }
   .line-source { font-size: .85em; justify-content: space-between; }

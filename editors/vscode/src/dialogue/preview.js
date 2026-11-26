@@ -1,6 +1,8 @@
 "use strict";
 
 const vscode = require("vscode");
+const { loadPortraits } = require("./media");
+const { projectLayoutForUri } = require("../editor/project-layout");
 const { COMMANDS } = require("../constants");
 const { isStaleDocumentResponse } = require("../shared/documents");
 const { openLocationMessage } = require("../shared/locations");
@@ -49,6 +51,12 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
         return showMessage("Source changed during analysis. Reload after synchronization.");
       }
       if (!response?.preview) return showMessage("No valid dialogue preview. Check Problems for syntax errors, then reload.");
+      if (response.preview.sections.some(section => section.lines.some(line => line.character?.portrait))) {
+        const layout = await projectLayoutForUri(document.uri, getClient);
+        const mapping = vscode.workspace.getConfiguration("tua", document.uri).get("dialogue.preview.portraits", {});
+        await loadPortraits(response.preview, layout?.sourceDirectory, mapping);
+        if (current !== sequence || client !== getClient() || isStaleDocumentResponse(response, requestedDocument)) return;
+      }
       renderedVersion = response.documentVersion;
       const unsupportedMock = params.mockContext !== undefined && !("mock" in response.preview);
       const unsupportedText = response.preview.mock && !("text" in response.preview.mock);
@@ -78,9 +86,15 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
     refresh.cancel();
     if (!panel) {
       panel = vscode.window.createWebviewPanel("tuaDialoguePreview", "Tua Dialogue Preview", vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
-      watcher = vscode.workspace.createFileSystemWatcher("**/*.tdialogue");
+      watcher = vscode.workspace.createFileSystemWatcher("**/*.{tdialogue,tua,lua,png,jpg,jpeg,webp}");
       const onDiskChange = (uri, deleted) => {
-        if (uri.toString() !== document?.uri.toString()) return;
+        if (uri.toString() !== document?.uri.toString()) {
+          if (!/\.(tua|lua|png|jpe?g|webp)$/i.test(uri.toString())) return;
+          sequence += 1;
+          renderedVersion = undefined;
+          refresh.schedule();
+          return;
+        }
         sourceDeleted = deleted;
         if (document.isDirty) return;
         sequence += 1;
@@ -137,20 +151,41 @@ function registerDialoguePreview({ configurationTarget, getClient }) {
     await render();
   });
   const changes = vscode.workspace.onDidChangeTextDocument(event => {
-    if (event.document.uri.toString() !== document?.uri.toString()) return;
+    if (event.document.uri.toString() !== document?.uri.toString()) {
+      if (["tua", "lua"].includes(event.document.languageId)) {
+        sequence += 1;
+        renderedVersion = undefined;
+        refresh.schedule();
+      }
+      return;
+    }
     sequence += 1;
     renderedVersion = undefined;
     if (panel?.visible) showMessage("Source changed. Updating preview…");
     refresh.schedule();
   });
   const closes = vscode.workspace.onDidCloseTextDocument(closed => {
-    if (closed.uri.toString() !== document?.uri.toString()) return;
+    if (closed.uri.toString() !== document?.uri.toString()) {
+      if (["tua", "lua"].includes(closed.languageId)) {
+        sequence += 1;
+        renderedVersion = undefined;
+        refresh.schedule();
+      }
+      return;
+    }
     sequence += 1;
     renderedVersion = undefined;
     if (panel?.visible) showMessage("Dialogue buffer closed. Updating preview…");
     refresh.schedule();
   });
-  return vscode.Disposable.from(command, changes, closes, { dispose() { sequence += 1; refresh.cancel(); panel?.dispose(); } });
+  const configuration = vscode.workspace.onDidChangeConfiguration?.(event => {
+    if (event.affectsConfiguration("tua.dialogue.preview.portraits", document?.uri)) {
+      sequence += 1;
+      renderedVersion = undefined;
+      refresh.schedule();
+    }
+  });
+  return vscode.Disposable.from(command, changes, closes, ...(configuration ? [configuration] : []), { dispose() { sequence += 1; refresh.cancel(); panel?.dispose(); } });
 }
 
 module.exports = { dialoguePreviewHtml, registerDialoguePreview };

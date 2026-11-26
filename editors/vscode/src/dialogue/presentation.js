@@ -2,6 +2,7 @@
 
 const { dialogueGraph } = require("./graph");
 const { installReader } = require("./reader");
+const { richTextHtml, portraitHtml } = require("./media");
 const { STYLES } = require("./styles");
 const { displayUriPath } = require("../shared/locations");
 const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
@@ -9,6 +10,15 @@ const DEFAULT_MOCK = '{\n  "context": {},\n  "locals": {},\n  "args": {}\n}';
 
 function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
   const ranges = [];
+  const portraitSources = [];
+  const portraitIndices = new Map();
+  const registerPortrait = uri => {
+    if (!portraitIndices.has(uri)) {
+      portraitIndices.set(uri, portraitSources.length);
+      portraitSources.push(uri);
+    }
+    return portraitIndices.get(uri);
+  };
   const link = (label, range) => {
     const index = ranges.push(range) - 1;
     return `<button type="button" class="source" data-source="${index}">${escapeHtml(label)}</button>`;
@@ -31,17 +41,21 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
     mockTexts.set(`${text.section}:${text.line}:${text.choice ?? ""}:${text.kind}`, text);
   }
   const textHtml = (authored, section, line, choice, kind) => {
+    const utterance = preview?.sections[section]?.lines[line];
+    const authoredRuns = kind === "line" ? utterance?.rich : kind === "choice"
+      ? utterance?.choices[choice]?.rich : utterance?.choices[choice]?.richReason;
+    const authoredHtml = authoredRuns ? richTextHtml(authoredRuns) : escapeHtml(authored);
     const text = mockTexts.get(`${section}:${line}:${choice ?? ""}:${kind}`);
     if (text?.error) {
-      return `${escapeHtml(authored)}<small class="error">Mock text: ${escapeHtml(text.error)} · ${link("Open source", text.range)}</small>`;
+      return `${authoredHtml}<small class="error">Mock text: ${escapeHtml(text.error)} · ${link("Open source", text.range)}</small>`;
     }
     if (typeof text?.value === "string") {
       const original = text.value !== authored
         ? `<details><summary>Authored text</summary><div class="authored">${escapeHtml(authored)}</div></details>`
         : "";
-      return `<span class="mock-value">${escapeHtml(text.value)}</span>${original}`;
+      return `<span class="mock-value">${text.rich ? richTextHtml(text.rich) : escapeHtml(text.value)}</span>${original}`;
     }
-    return escapeHtml(authored) + (preview?.mock?.text?.truncated
+    return authoredHtml + (preview?.mock?.text?.truncated
       ? '<small class="meta">Authored text (preview limit)</small>' : "");
   };
   const sections = preview?.sections || [];
@@ -87,7 +101,7 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
       const speaker = speakers.get(line.speaker);
       const classes = speaker === undefined ? "narration" : `bubble side-${speaker % 2} speaker-${speaker % 4}`;
       return `<div class="utterance"><div class="${classes}">
-        ${line.speaker ? `<strong class="speaker">${escapeHtml(line.speaker)}</strong>` : ""}
+        ${line.speaker ? `<div class="speaker-heading">${portraitHtml(line.character, registerPortrait)}<strong class="speaker">${escapeHtml(line.character?.name || line.speaker)}</strong></div>` : ""}
         <div class="speech">${textHtml(line.text, index, lineIndex, null, "line")}</div>
         <div class="line-source">${link("Line " + (line.range.start.line + 1), line.range)}${line.end ? '<span class="meta">Ends conversation</span>' : ""}</div>
         </div>${routeList(shownRoutes.filter(route => route.line === lineIndex))}</div>`;
@@ -105,9 +119,10 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
   const graph = message ? { html: "", styles: "", script: "" } : dialogueGraph(preview, link, uri);
   return webviewDocument(webview, {
     title: "Dialogue Preview",
+    imageSources: "data:",
     styles: graph.styles + STYLES,
     body: `<header><div><h1>Dialogue preview</h1><p class="file-path">${escapeHtml(displayUriPath(uri))}</p></div><button type="button" id="reload">Reload</button></header>
-      <div class="meta preview-note">Explore authored branches. No game actions or audio run. <details class="preview-help"><summary>Preview limits</summary><p>Text previews are plain, without localization or rich styling. Numeric spelling may differ from Lua. Conditions are tested independently against applied JSON; following a branch does not update context.</p></details></div>
+      <div class="meta preview-note">Explore authored branches. No game actions or audio run. <details class="preview-help"><summary>Preview limits</summary><p>Emphasis and common named styles use preview styling; other marks are annotated. Portraits show authored local images. Game shaders, animated effects and localization are not run. Numeric spelling may differ from Lua. Conditions are tested independently against applied JSON; following a branch does not update context.</p></details></div>
       <details class="mock-controls" ${mock.error ? "open" : ""}><summary>Test conditions <span id="mock-status" class="meta">${preview?.mock ? "Applied mock context" : "Authored view"}</span></summary>
       <label for="mock-context">Mock context (JSON)</label><textarea id="mock-context" maxlength="65536" spellcheck="false" aria-describedby="mock-help">${escapeHtml(mock.draft ?? DEFAULT_MOCK)}</textarea>
       <p id="mock-help" class="meta">Use context and locals objects, plus optional scalar args. Missing fields and null mean nil. Changes apply only when you choose Apply mock context. Input stays in memory and clears when this preview closes.</p>
@@ -121,6 +136,13 @@ function dialoguePreviewHtml(webview, uri, preview, message, mock = {}) {
       <main>${message ? `<p role="status">${escapeHtml(message)}</p>` : content || '<p>No dialogue sections found.</p>'}${preview?.mock?.text?.truncated ? '<p>Text preview limit reached (4,096 fields or 1 MiB combined output). Remaining text stays authored.</p>' : ""}${preview?.mock?.truncated ? '<p>Only the first 4,096 conditions were tested.</p>' : ""}${sections.length > 200 ? '<p>Showing the first 200 sections. Open source for the full conversation.</p>' : ""}</main></div>`,
     script: `${graph.script}
       (${installReader.toString()})(${jsonForHtml(uri)}, ${jsonForHtml(shown.map(section => section.label))}, ${jsonForHtml(mock.applied ?? null)}, ${jsonForHtml(Boolean(preview?.mock))});
+      const portraitSources = ${jsonForHtml(portraitSources)};
+      document.querySelectorAll("img.portrait").forEach(image => {
+        const fallback = () => { image.hidden = true; image.nextElementSibling.hidden = false; };
+        image.addEventListener("error", fallback);
+        image.src = portraitSources[Number(image.dataset.portrait)];
+        if (image.complete && !image.naturalWidth) fallback();
+      });
       const ranges = ${jsonForHtml(ranges)};
       const uri = ${jsonForHtml(uri)};
       const input = document.getElementById("mock-context");
