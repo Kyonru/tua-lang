@@ -34,7 +34,8 @@ pub trait Node: private::Sealed {
     fn surrounding_trivia(&self) -> (Vec<&Token>, Vec<&Token>) {
         let mut tokens = self.tokens();
         let leading = tokens.next();
-        let trailing = tokens.next_back();
+        // A single token owns both its leading and trailing trivia.
+        let trailing = tokens.next_back().or(leading);
 
         (
             match leading {

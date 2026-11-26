@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Preserve comments after named table keys when formatting, including one-token
+  nodes with both leading and trailing comments.
+
 - Keep the vendored formatter parser buildable without optional dialect features,
   and check plain Lua alongside the Tua-enabled formatter in CI.
 

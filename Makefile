@@ -124,6 +124,7 @@ clippy: ## Run clippy with warnings denied.
 .PHONY: formatter-fork-check
 formatter-fork-check: ## Check plain Lua and Tua-enabled formatter fork builds.
 	$(CARGO) check --manifest-path vendor/tua-full-moon/Cargo.toml --no-default-features
+	$(CARGO) test --manifest-path vendor/tua-full-moon/Cargo.toml --test node
 	$(CARGO) test --manifest-path vendor/tua-stylua/Cargo.toml --lib
 	$(CARGO) test --manifest-path vendor/tua-stylua/Cargo.toml --lib --features luau,luajit
 

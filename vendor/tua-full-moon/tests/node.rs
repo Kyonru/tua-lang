@@ -36,3 +36,23 @@ fn test_tokens_back() {
     let mut tokens = source.nodes().tokens();
     assert_eq!(tokens.next_back().unwrap().to_string(), "1");
 }
+
+#[test]
+fn surrounding_trivia_of_single_token_preserves_both_sides() {
+    use full_moon::tokenizer::{Token, TokenReference, TokenType};
+    let token = TokenReference::new(
+        vec![Token::new(TokenType::SingleLineComment {
+            comment: " before".into(),
+        })],
+        Token::new(TokenType::Identifier {
+            identifier: "field".into(),
+        }),
+        vec![Token::new(TokenType::MultiLineComment {
+            blocks: 0,
+            comment: " after ".into(),
+        })],
+    );
+    let (leading, trailing) = token.surrounding_trivia();
+    assert_eq!(leading, token.leading_trivia().collect::<Vec<_>>());
+    assert_eq!(trailing, token.trailing_trivia().collect::<Vec<_>>());
+}

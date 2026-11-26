@@ -2044,3 +2044,17 @@ fn table_call_arguments_use_canonical_width_in_layout_trials() {
         "draw(1, {field_0 = {field_0 = {field_0 = true ,},field_1 = {field_0 = true} ,}}, 2)\n",
     );
 }
+
+#[test]
+fn named_table_key_comments_survive_formatting() {
+    for comment in ["-- key note\n", "--[[ key note ]] "] {
+        let source = format!("local t={{ key {comment}= 1 }}\n");
+        let output = format_tua_source("input.tua", &source, &FormatOptions::default()).unwrap();
+        assert!(output.contains(comment.trim()));
+        assert_eq!(
+            format_tua_source("input.tua", &output, &FormatOptions::default()).unwrap(),
+            output
+        );
+        corpus::same_program(&source, &output).unwrap();
+    }
+}
