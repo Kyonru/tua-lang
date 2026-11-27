@@ -8,9 +8,8 @@ Write conversations in `.tdialogue` files and play them with the typed `Dialogue
 builtin. Share character definitions between scenes, attach portraits, and schedule
 custom events while keeping your own renderer and input controls.
 
-**Availability:** development builds for the release after 0.11.0. Use a compiler
-and extension containing the dialogue feature; the 0.11.0 version label alone is
-not enough to identify one of these development builds.
+**Availability:** Tua 0.12.0 and newer. Use matching compiler and extension
+versions so dialogue diagnostics, previews and emitted runtime support agree.
 
 | Tua handles | Your game handles |
 | --- | --- |

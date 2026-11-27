@@ -8,9 +8,8 @@ Start with a conversation you can read and answer. This guide uses two source fi
 and LÖVE's built-in font. You do not need portraits, a character registry, audio,
 translations or a custom UI framework.
 
-Use LÖVE 11.5 and a compiler/extension containing the dialogue feature, available
-in development builds for the release after 0.11.0. The version number alone is
-not sufficient to identify those builds. Prefer a terminal? The
+Use LÖVE 11.5 and matching Tua 0.12.0-or-newer compiler and extension versions.
+Prefer a terminal? The
 [headless walkthrough](../dialogue.md#your-first-conversation) uses the same player.
 
 For these systems in one evolving game, continue with [between-wave dialogue and language](arena-game/conversation-and-language.md).

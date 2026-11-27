@@ -6,6 +6,42 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Release summary
+
+Tua 0.12.0 adds an end-to-end typed dialogue workflow and replaces authored
+source formatting with a shared StyLua-based engine. Dialogue scripts now cover
+typed characters, conditions, localization, rich text, actions, events,
+checkpoints, history and source-linked editor previews while keeping rendering,
+input and game-specific handlers in the host. New cumulative arena tutorials
+show these systems alongside ECS combat, audio, shaders, saving and profiling.
+The formatter produces stable, readable output across CLI and editor actions,
+preserves comments and LuaJIT syntax, and validates partial edits before applying
+them. Parser and editor infrastructure also move to full_moon 3.0, improve
+overlay freshness and harden slow first-launch behavior.
+
+#### Highlights
+
+- Author, validate, navigate, preview and run typed `.tdialogue` conversations,
+  including localization, rich presentation, async actions and durable saves.
+- Format Tua and explicit Lua files with stable shared StyLua defaults, guarded
+  range/on-type edits and LuaJIT-aware validation.
+- Learn larger game workflows through eight cumulative arena checkpoints with
+  native replay, runtime checks and profiling guidance.
+- Use richer dialogue previews, conversation maps and bounded runtime-inspector
+  samples without exposing private text or payloads.
+- Build on full_moon 3.0 with stricter protocol validation and refreshed editor
+  packaging dependencies.
+
+#### Upgrade notes
+
+Update the CLI/server and extension together. The new formatter intentionally
+changes layout and quote choices; run `tua fmt --check`, then review formatting
+diffs before applying them. Protocol requirements containing method bodies or
+trailing executable statements now report errors instead of silently erasing
+those statements; move implementations into conforming classes. Dialogue is
+additive and requires no migration for projects that do not use `.tdialogue`.
+No `tua.toml` migration is required.
+
 - Format explicit `.lua` files with the LuaJIT dialect, including number suffixes,
   hexadecimal floats and labels. Full, range and on-type edits share the same
   dialect validation; `.tua` syntax restrictions remain unchanged.
