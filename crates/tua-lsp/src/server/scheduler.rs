@@ -327,7 +327,15 @@ impl RequestScheduler {
             }
         }
 
-        if !self.has_worker_capacity(non_interactive) {
+        // Inline completion has its own single-worker lane. Background inlay or
+        // diagnostic work may consume the ordinary non-interactive allowance,
+        // but must not reject an inline request while global capacity remains.
+        let has_capacity = if speculative {
+            self.jobs.len() < MAX_IN_FLIGHT_JOBS
+        } else {
+            self.has_worker_capacity(non_interactive)
+        };
+        if !has_capacity {
             outbound.push(error_response(
                 id,
                 -32000,

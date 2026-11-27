@@ -423,6 +423,7 @@ fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
     let source = "local profile_primary = { label = \"ready\" }\nprofile_primary.la\n";
     let uri = "file:///tmp/background-capacity-completion.tua";
     let _ = server.handle_message(did_open(uri, source));
+    enable_scheduled_local_inline_completion(&mut server);
 
     for id in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS * 3 / 4) {
         let output = scheduler.dispatch(
@@ -446,7 +447,26 @@ fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
 
     let output = scheduler.dispatch(
         &mut server,
-        invoked_completion_request(rejected_id + 1, uri, source, "profile_primary.la"),
+        json!({
+            "jsonrpc": "2.0",
+            "id": rejected_id + 1,
+            "method": "tua/localInlineCompletion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 1, "character": 18},
+                "documentVersion": 1
+            }
+        }),
+        Some(1),
+    );
+    assert!(
+        output.iter().all(|message| message.get("error").is_none()),
+        "background requests must not consume the dedicated inline lane"
+    );
+
+    let output = scheduler.dispatch(
+        &mut server,
+        invoked_completion_request(rejected_id + 2, uri, source, "profile_primary.la"),
         None,
     );
     assert!(output.iter().all(|message| message.get("error").is_none()));
@@ -728,7 +748,7 @@ fn newest_inline_bursts_remain_bounded_until_cancelled_workers_finish() {
 }
 
 #[test]
-fn local_inline_requests_respect_non_interactive_capacity() {
+fn local_inline_requests_respect_global_capacity() {
     let mut server = LspServer::default();
     enable_scheduled_local_inline_completion(&mut server);
     let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
@@ -746,7 +766,7 @@ fn local_inline_requests_respect_non_interactive_capacity() {
         })
     };
 
-    for id in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS * 3 / 4) {
+    for id in 0..crate::server::scheduler::MAX_IN_FLIGHT_JOBS {
         assert!(scheduler
             .dispatch(&mut server, request(id), Some(1))
             .iter()

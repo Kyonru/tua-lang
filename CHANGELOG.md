@@ -76,6 +76,10 @@ No `tua.toml` migration is required.
   internal analysis jobs during shutdown, so editor requests and restarts stay
   responsive while project diagnostics are running.
 
+- Preserve the dedicated inline-completion lane when background inlay and
+  diagnostic requests are saturated, avoiding intermittent capacity errors
+  while typing in large projects.
+
 - Reuse bounded module-export results across deep dependency chains without
   treating the recursion safety limit as a cycle, avoiding repeated project
   inference during cold navigation and diagnostics.
