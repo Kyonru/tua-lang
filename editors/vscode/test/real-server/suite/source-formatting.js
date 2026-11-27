@@ -74,7 +74,7 @@ async function verifySourceFormatting(mainPath) {
     document.uri.toString(),
     "format-on-save probe must save the active source editor",
   );
-  await vscode.commands.executeCommand("workbench.action.files.save");
+  assert.equal(await document.save(), true, "format-on-save probe must save the source document");
   await waitFor(() => document.getText() === savedFormatted, "format-on-save edits", 30000);
   await waitFor(
     () => fs.readFileSync(file, "utf8") === savedFormatted,
