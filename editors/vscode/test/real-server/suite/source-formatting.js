@@ -64,10 +64,16 @@ async function verifySourceFormatting(mainPath) {
   assert.equal(document.getText(), partialSource, "on-type safety probe leaves both statements intact");
 
   const saveSource = "local label='saved'\n";
+  const savedFormatted = 'local label = "saved"\n';
   await editor.edit(edit => edit.replace(new vscode.Range(0, 0, document.lineCount, 0), saveSource));
-  assert(await document.save());
-  assert.equal(document.getText(), 'local label = "saved"\n', "format on save");
-  assert.equal(fs.readFileSync(file, "utf8"), document.getText(), "formatted text reaches disk");
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  await vscode.commands.executeCommand("workbench.action.files.save");
+  await waitFor(() => document.getText() === savedFormatted, "format-on-save edits", 10000);
+  await waitFor(
+    () => fs.readFileSync(file, "utf8") === savedFormatted,
+    "formatted text to reach disk",
+    10000,
+  );
 
   const rangeSource = 'local prefix="🐸"\nlocal selected={a=1,b=2}\nlocal untouched={x=3}\n';
   await editor.edit(edit => edit.replace(new vscode.Range(0, 0, document.lineCount, 0), rangeSource));
