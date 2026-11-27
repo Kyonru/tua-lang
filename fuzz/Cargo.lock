@@ -456,7 +456,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "tua-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "full_moon",
  "serde",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "tua-lsp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde",
  "serde_json",

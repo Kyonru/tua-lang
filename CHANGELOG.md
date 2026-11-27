@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-27
+
 ### Release summary
 
 Tua 0.12.0 adds an end-to-end typed dialogue workflow and replaces authored
@@ -3178,7 +3180,8 @@ from 0.3.0:
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Kyonru/tua-lang/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Kyonru/tua-lang/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Kyonru/tua-lang/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Kyonru/tua-lang/compare/v0.8.0...v0.9.0

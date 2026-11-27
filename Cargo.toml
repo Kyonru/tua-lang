@@ -15,4 +15,4 @@ repository = "https://github.com/Kyonru/tua-lang"
 homepage = "https://kyonru.github.io/tua-lang"
 keywords = ["lua", "love2d", "luajit", "language-server"]
 categories = ["compilers", "development-tools"]
-version = "0.11.0"
+version = "0.12.0"
