@@ -72,6 +72,14 @@ No `tua.toml` migration is required.
 - Allow up to 30 seconds for the editor server version probe so a fresh install
   is not rejected during a slow first launch; failed probes remain bounded.
 
+- Keep fast diagnostics off the LSP coordinator in large projects and abandon
+  internal analysis jobs during shutdown, so editor requests and restarts stay
+  responsive while project diagnostics are running.
+
+- Reuse bounded module-export results across deep dependency chains without
+  treating the recursion safety limit as a cycle, avoiding repeated project
+  inference during cold navigation and diagnostics.
+
 - Replace Tua source formatting with a shared StyLua-based formatter that retains
   authored Tua syntax. Defaults use two spaces, width 100 and `auto-double` quotes;
   existing `preserve`, `double` and `single` policies remain available. Avoid

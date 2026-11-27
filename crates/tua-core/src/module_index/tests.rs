@@ -957,6 +957,73 @@ fn dependency_walk_reuses_exports_without_retaining_transitive_results() {
 }
 
 #[test]
+fn dependency_depth_limit_keeps_surrounding_export_inference_cacheable() {
+    let project = TempProject::new("deep_import_walk");
+    project.write("tua.toml", "source = \"src\"\n");
+    const DEPTH: usize = 40;
+    for index in 0..DEPTH {
+        project.write(
+            &format!("src/m{index}.tua"),
+            &format!(
+                "local child = require('m{}')\nreturn {{ value = child.value }}\n",
+                index + 1
+            ),
+        );
+    }
+    project.write("src/m40.tua", "return { value = 123 }\n");
+    MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.set(0));
+    let root = project.path.join("src/m0.tua");
+
+    assert_eq!(
+        required_module_exports_for_path(&root)
+            .unwrap()
+            .field("value"),
+        Some(&Type::Any)
+    );
+    let count = MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get());
+    assert!(
+        count <= 32,
+        "depth-limited walk repeated inference {count} times"
+    );
+
+    required_module_exports_for_path(&root).unwrap();
+    assert_eq!(
+        MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get()),
+        count,
+        "an unchanged depth-limited graph must reuse its stable truncated result"
+    );
+}
+
+#[test]
+fn large_dependency_chain_reuses_bounded_export_cache_between_roots() {
+    let project = TempProject::new("large_import_walk");
+    project.write("tua.toml", "source = \"src\"\n");
+    const DEPTH: usize = 160;
+    for index in 0..DEPTH {
+        project.write(
+            &format!("src/m{index:03}.tua"),
+            &format!(
+                "local child = require('m{:03}')\nreturn {{ value = child.value }}\n",
+                index + 1
+            ),
+        );
+    }
+    project.write("src/m160.tua", "return { value = 123 }\n");
+    MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.set(0));
+
+    for index in 0..=DEPTH {
+        required_module_exports_for_path(&project.path.join(format!("src/m{index:03}.tua")))
+            .unwrap();
+    }
+
+    let count = MODULE_EXPORT_INFERENCE_COUNT.with(|count| count.get());
+    assert!(
+        count <= DEPTH + 32,
+        "bounded cache repeated large-chain inference {count} times"
+    );
+}
+
+#[test]
 fn dependency_cache_tracks_new_deleted_and_preferred_modules() {
     let project = TempProject::new("dependency_resolution_changes");
     project.write("tua.toml", "source = \"src\"\n");

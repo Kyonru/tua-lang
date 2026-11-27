@@ -750,16 +750,20 @@ impl RequestScheduler {
         outbound
     }
 
-    pub(super) fn abandon_workspace_warm(&mut self) {
-        let warm_jobs = self
+    pub(super) fn abandon_internal_background(&mut self) {
+        let internal_jobs = self
             .jobs
             .iter()
             .filter_map(|(job_id, job)| {
-                (job.warm_work.is_some() || job.corpus_work.is_some()).then_some(*job_id)
+                (job.warm_work.is_some()
+                    || job.corpus_work.is_some()
+                    || job.slow_diagnostics.is_some()
+                    || job.fast_diagnostics.is_some())
+                .then_some(*job_id)
             })
             .collect::<Vec<_>>();
 
-        for job_id in warm_jobs {
+        for job_id in internal_jobs {
             if let Some(job) = self.jobs.get(&job_id) {
                 job.cancelled.store(true, Ordering::Release);
             }

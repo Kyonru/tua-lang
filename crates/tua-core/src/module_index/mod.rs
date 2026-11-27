@@ -26,6 +26,9 @@ use crate::types::{
 };
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
+const MAX_CACHED_REQUIRED_MODULE_EXPORTS: usize = 128;
+const MAX_TRACKED_MODULE_DEPENDENCIES: usize = 512;
+
 thread_local! {
     static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
         const { RefCell::new(BTreeMap::new()) };
@@ -99,7 +102,7 @@ fn module_dependency_inputs(path: &Path, source: &str) -> Option<Vec<ModuleDepen
         if inputs.contains_key(&current) {
             continue;
         }
-        if inputs.len() >= 128 {
+        if inputs.len() >= MAX_TRACKED_MODULE_DEPENDENCIES {
             return None;
         }
         let text: Arc<str> = if current == path {
@@ -386,12 +389,27 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
         }
     }
 
-    let entered = RESOLVING_MODULE_EXPORTS.with(|paths| {
+    let (entered, cycle) = RESOLVING_MODULE_EXPORTS.with(|paths| {
         let mut paths = paths.borrow_mut();
-        paths.len() < 32 && paths.insert(path.clone())
+        if paths.contains(&path) {
+            (false, true)
+        } else if paths.len() >= 32 {
+            (false, false)
+        } else {
+            paths.insert(path.clone());
+            (true, false)
+        }
     });
     if !entered {
-        MODULE_EXPORT_CYCLE_REVISION.with(|revision| revision.set(revision.get().wrapping_add(1)));
+        // A real cycle makes every export inferred through that cycle
+        // context-dependent, so none of the surrounding results are safe to
+        // retain. Reaching the defensive depth bound is different: the
+        // truncated `any` result is stable for the same dependency inputs and
+        // may be memoized by the surrounding walk.
+        if cycle {
+            MODULE_EXPORT_CYCLE_REVISION
+                .with(|revision| revision.set(revision.get().wrapping_add(1)));
+        }
         return None;
     }
     let _guard = ModuleExportResolutionGuard(path.clone());
@@ -417,8 +435,8 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
             }
             REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
                 let mut cache = cache.borrow_mut();
-                if cache.len() >= 128 {
-                    cache.clear();
+                if cache.len() >= MAX_CACHED_REQUIRED_MODULE_EXPORTS {
+                    cache.pop_first();
                 }
                 cache.insert(
                     path,
@@ -434,7 +452,7 @@ pub(crate) fn required_module_exports_for_path(path: &Path) -> Option<ModuleExpo
             // unvalidated dependencies across independent requests.
             MODULE_EXPORT_WALK_CACHE.with(|cache| {
                 let mut cache = cache.borrow_mut();
-                if cache.len() < 128 {
+                if cache.len() < MAX_CACHED_REQUIRED_MODULE_EXPORTS {
                     cache.insert(
                         path,
                         CachedRequiredModuleExports {

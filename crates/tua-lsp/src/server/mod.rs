@@ -36,10 +36,12 @@ const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
 const PATTERN_CORPUS_REBUILD_DEBOUNCE: Duration = Duration::from_millis(300);
 const PATTERN_CORPUS_BATCH_SIZE: usize = 16;
 const RECENT_REQUEST_LATENCY_LIMIT: usize = 4096;
-// Full fast diagnostics in a large source file can monopolize the input
-// coordinator before it can dispatch completion. Keep the same diagnostics,
-// but compute them on a separate worker for large documents.
+// Full fast diagnostics in a large source file or project can monopolize the
+// input coordinator before it can dispatch completion or shutdown. Keep the
+// same diagnostics, but compute them on a separate worker when either input
+// dimension is large.
 const ASYNC_FAST_DIAGNOSTICS_SOURCE_BYTES: usize = 64 * 1024;
+const ASYNC_FAST_DIAGNOSTICS_PROJECT_FILES: usize = 128;
 const EVENT_QUEUE_CAPACITY: usize = 16;
 
 #[derive(Default)]
@@ -354,7 +356,7 @@ fn run_with_shader_validator(
                 outbound.extend(scheduler.cancel(&id));
             }
             if matches!(method.as_str(), "shutdown" | "exit") {
-                scheduler.abandon_workspace_warm();
+                scheduler.abandon_internal_background();
             }
             if let Some(uri) = changed_uri {
                 let generation = server.document_generations.get(&uri).copied();

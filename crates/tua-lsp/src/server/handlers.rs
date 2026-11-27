@@ -754,7 +754,7 @@ impl LspServer {
             return None;
         }
 
-        if self.queue_large_file_fast_diagnostics(&uri, generation, version) {
+        if self.queue_expensive_fast_diagnostics(&uri, generation, version) {
             return None;
         }
 
@@ -789,7 +789,7 @@ impl LspServer {
             return None;
         }
 
-        if self.queue_large_file_fast_diagnostics(&uri, generation, version) {
+        if self.queue_expensive_fast_diagnostics(&uri, generation, version) {
             return None;
         }
 
@@ -1098,7 +1098,7 @@ impl LspServer {
         );
     }
 
-    fn queue_large_file_fast_diagnostics(
+    fn queue_expensive_fast_diagnostics(
         &mut self,
         uri: &str,
         generation: u64,
@@ -1106,6 +1106,7 @@ impl LspServer {
     ) -> bool {
         if self.analysis.document_text(uri).unwrap_or("").len()
             < super::ASYNC_FAST_DIAGNOSTICS_SOURCE_BYTES
+            && self.analysis.file_paths().len() < super::ASYNC_FAST_DIAGNOSTICS_PROJECT_FILES
         {
             self.pending_fast_diagnostics.remove(uri);
             return false;

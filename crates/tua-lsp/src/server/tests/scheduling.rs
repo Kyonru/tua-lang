@@ -39,6 +39,32 @@ fn large_file_fast_diagnostics_publish_only_for_the_latest_document() {
 }
 
 #[test]
+fn large_project_fast_diagnostics_do_not_block_the_coordinator() {
+    let temp = TempProject::new("large-project-fast-diagnostics");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    for index in 0..ASYNC_FAST_DIAGNOSTICS_PROJECT_FILES {
+        temp.write(
+            &format!("src/module_{index:03}.tua"),
+            &format!("return {{ value = {index} }}\n"),
+        );
+    }
+    let uri = temp.uri_for("src/main.tua");
+    temp.write("src/main.tua", "local value: number = 1\n");
+    let mut server = LspServer::default();
+
+    server.handle_message(initialize_with_root(1, temp.uri()));
+    assert!(server
+        .handle_message(did_open(&uri, "local value: number = 1\n"))
+        .is_none());
+    let (pending_uri, _) = server
+        .take_next_due_fast_diagnostic(Instant::now())
+        .expect("large projects should queue fast diagnostics off the coordinator");
+
+    assert_eq!(pending_uri, uri);
+}
+
+#[test]
 fn large_file_fast_diagnostics_worker_publishes_without_coordinator_checking() {
     let uri = "file:///tmp/large-fast-worker.tua";
     let source = format!(
@@ -2281,7 +2307,7 @@ fn project_pattern_generation_change_cancels_background_work_between_files() {
     scheduler.cancel_stale_pattern_corpus(server.pattern_corpus.generation);
 
     assert!(scheduler.pattern_corpus_job_is_cancelled(generation));
-    scheduler.abandon_workspace_warm();
+    scheduler.abandon_internal_background();
 }
 
 #[test]
@@ -2458,8 +2484,9 @@ fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
 }
 
 #[test]
-fn shutdown_abandons_internal_workspace_warm_jobs() {
+fn shutdown_abandons_internal_background_jobs() {
     let uri = "file:///tmp/shutdown-workspace-warm.tua";
+    let large_uri = "file:///tmp/shutdown-fast-diagnostics.tua";
     let mut server = LspServer::default();
     let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
@@ -2469,7 +2496,16 @@ fn shutdown_abandons_internal_workspace_warm_jobs() {
     assert!(scheduler.dispatch_next_workspace_warm(&mut server));
     assert!(scheduler.has_in_flight());
 
-    scheduler.abandon_workspace_warm();
+    scheduler.abandon_internal_background();
+
+    assert!(!scheduler.has_in_flight());
+
+    let large = "-- representative source line\n".repeat(3_000);
+    server.handle_message(did_open(large_uri, &large));
+    assert!(scheduler.dispatch_due_fast_diagnostic(&mut server, Instant::now()));
+    assert!(scheduler.has_in_flight());
+
+    scheduler.abandon_internal_background();
 
     assert!(!scheduler.has_in_flight());
 }
