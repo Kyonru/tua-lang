@@ -63,25 +63,6 @@ async function verifySourceFormatting(mainPath) {
   assert.deepEqual(partialEdits ?? [], [], "on-type formatting declines edits that would drop a moved statement");
   assert.equal(document.getText(), partialSource, "on-type safety probe leaves both statements intact");
 
-  const saveSource = "local label='saved'\n";
-  const savedFormatted = 'local label = "saved"\n';
-  await editor.edit(edit => edit.replace(new vscode.Range(0, 0, document.lineCount, 0), saveSource));
-  assert(document.isDirty, "format-on-save probe must start with an unsaved edit");
-  await vscode.window.showTextDocument(document, { preview: false });
-  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
-  assert.equal(
-    vscode.window.activeTextEditor?.document.uri.toString(),
-    document.uri.toString(),
-    "format-on-save probe must save the active source editor",
-  );
-  assert.equal(await document.save(), true, "format-on-save probe must save the source document");
-  await waitFor(() => document.getText() === savedFormatted, "format-on-save edits", 30000);
-  await waitFor(
-    () => fs.readFileSync(file, "utf8") === savedFormatted,
-    "formatted text to reach disk",
-    30000,
-  );
-
   const rangeSource = 'local prefix="🐸"\nlocal selected={a=1,b=2}\nlocal untouched={x=3}\n';
   await editor.edit(edit => edit.replace(new vscode.Range(0, 0, document.lineCount, 0), rangeSource));
   editor.selection = new vscode.Selection(1, 0, 2, 0);
@@ -89,6 +70,30 @@ async function verifySourceFormatting(mainPath) {
   await vscode.commands.executeCommand("editor.action.formatSelection");
   await waitFor(() => document.getText() !== rangeSource, "range format edits", 10000);
   assert.equal(document.getText(), 'local prefix="🐸"\nlocal selected = { a = 1, b = 2 }\nlocal untouched={x=3}\n', "range formatting leaves surrounding source unchanged");
+
+  const saveFile = path.join(path.dirname(mainPath), "source-formatting-save.tua");
+  const saveSource = "local label='saved'\n";
+  const savedFormatted = 'local label = "saved"\n';
+  fs.writeFileSync(saveFile, "local label = \"initial\"\n");
+  const saveDocument = await vscode.workspace.openTextDocument(saveFile);
+  const saveEditor = await vscode.window.showTextDocument(saveDocument, { preview: false });
+  await saveEditor.edit(edit =>
+    edit.replace(new vscode.Range(0, 0, saveDocument.lineCount, 0), saveSource),
+  );
+  assert(saveDocument.isDirty, "format-on-save probe must start with an unsaved edit");
+  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  assert.equal(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    saveDocument.uri.toString(),
+    "format-on-save probe must save the active source editor",
+  );
+  assert.equal(await saveDocument.save(), true, "format-on-save probe must save the source document");
+  await waitFor(() => saveDocument.getText() === savedFormatted, "format-on-save edits", 30000);
+  await waitFor(
+    () => fs.readFileSync(saveFile, "utf8") === savedFormatted,
+    "formatted text to reach disk",
+    30000,
+  );
   await settings.update("defaultFormatter", previousFormatter, vscode.ConfigurationTarget.Workspace);
   await settings.update("formatOnSave", previousFormatOnSave, vscode.ConfigurationTarget.Workspace);
   console.log(JSON.stringify({ sourceFormatting: { document: true, stable: true, nestedTables: true, onTypeSafety: true, save: true, range: true, host: vscode.version } }));
