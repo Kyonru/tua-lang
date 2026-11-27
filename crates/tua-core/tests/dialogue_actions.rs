@@ -84,19 +84,39 @@ fn dialogue_actions_execute_emitted_sources() {
 
 #[test]
 fn dialogue_actions_reject_invalid_authored_contracts() {
-    let source = include_str!("../../../examples/dialogue/actions/src/scene.tdialogue");
-    for invalid in [
-        source.replace("@document shop\n", ""),
-        source.replace("@actions \"forward\"\n", ""),
-        source.replace("[id:shop.purchase] ", ""),
-        source.replace("[success:done]", "[success:missing]"),
-        source.replace("[failure:declined]", "[failure:missing]"),
-        source.replace("{\"item\":\"shell\"}", "{\"item\":null}"),
-        source.replace("[done]", ": Unexpected. (end)\n[done]"),
+    let source = include_str!("../../../examples/dialogue/actions/src/scene.tdialogue")
+        .replace("\r\n", "\n");
+    for (name, invalid) in [
+        ("missing document", source.replace("@document shop\n", "")),
+        (
+            "missing actions import",
+            source.replace("@actions \"forward\"\n", ""),
+        ),
+        (
+            "missing action id",
+            source.replace("[id:shop.purchase] ", ""),
+        ),
+        (
+            "missing success destination",
+            source.replace("[success:done]", "[success:missing]"),
+        ),
+        (
+            "missing failure destination",
+            source.replace("[failure:declined]", "[failure:missing]"),
+        ),
+        (
+            "invalid payload",
+            source.replace("{\"item\":\"shell\"}", "{\"item\":null}"),
+        ),
+        (
+            "unexpected line",
+            source.replace("[done]", ": Unexpected. (end)\n[done]"),
+        ),
     ] {
+        assert_ne!(invalid, source, "{name} mutation must change the fixture");
         assert!(
             tua_core::emit::emit_dialogue_source("bad.tdialogue", &invalid).is_err(),
-            "{invalid}"
+            "{name}:\n{invalid}"
         );
     }
     let duplicate = source.replace("[done]", "[another]\n@action purchase [id:shop.purchase] [success:done] [failure:declined] {\"item\":\"shell\"}\n[done]");
