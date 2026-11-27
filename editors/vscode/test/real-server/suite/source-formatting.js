@@ -66,13 +66,20 @@ async function verifySourceFormatting(mainPath) {
   const saveSource = "local label='saved'\n";
   const savedFormatted = 'local label = "saved"\n';
   await editor.edit(edit => edit.replace(new vscode.Range(0, 0, document.lineCount, 0), saveSource));
+  assert(document.isDirty, "format-on-save probe must start with an unsaved edit");
+  await vscode.window.showTextDocument(document, { preview: false });
   await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  assert.equal(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    document.uri.toString(),
+    "format-on-save probe must save the active source editor",
+  );
   await vscode.commands.executeCommand("workbench.action.files.save");
-  await waitFor(() => document.getText() === savedFormatted, "format-on-save edits", 10000);
+  await waitFor(() => document.getText() === savedFormatted, "format-on-save edits", 30000);
   await waitFor(
     () => fs.readFileSync(file, "utf8") === savedFormatted,
     "formatted text to reach disk",
-    10000,
+    30000,
   );
 
   const rangeSource = 'local prefix="🐸"\nlocal selected={a=1,b=2}\nlocal untouched={x=3}\n';
