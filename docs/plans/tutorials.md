@@ -298,7 +298,7 @@ context fields are rejected where current tooling promises that support.
 
 ## M9 — Translate a small game
 
-References: [localization](../localization.md), [dialogue](../dialogue.md).
+References: [localization](../localization.md), [dialogue](../dialogue/index.md).
 
 - [x] Begin with a small menu and one short conversation in the source language.
 - [x] Add typed catalog keys, interpolation and a second locale.

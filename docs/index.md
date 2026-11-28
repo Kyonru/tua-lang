@@ -55,6 +55,7 @@ flowchart LR
 | Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Build a managed LÖVE audio graph | [Audio Systems](audio.md) |
 | Translate game text with checked keys | [Localization](localization.md) |
+| Write and style branching conversations | [Dialogue](dialogue/index.md) and [Dialect and Semantics](dialogue/dialect.md) |
 | Look up commands, build output, and diagnostics | [CLI](cli.md) and [Diagnostic Codes](luahelper-code-matrix.md) |
 
 ## From Tua To Lua

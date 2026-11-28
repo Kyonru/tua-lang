@@ -319,6 +319,7 @@ language reference:
 - [Object Pooling](object-pooling.md)
 - [Bounded Queues](bounded-queues.md)
 - [Audio Systems](audio.md)
+- [Dialogue](dialogue/index.md) and its [script dialect](dialogue/dialect.md)
 
 Helpers lower to ordinary LOVE calls or bundled Lua modules. The build includes
 a helper runtime only when the source uses that feature, and a compatible

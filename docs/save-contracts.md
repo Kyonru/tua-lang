@@ -224,5 +224,5 @@ older receipt. External side effects require an idempotent authority of their ow
 For dialogue position persistence, the [checkpoint recipe](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/checkpoint)
 uses an explicit typed envelope and fresh contracts. Save validates its shape;
 dialogue restore validates content compatibility and rebinds current game facts.
-See [persist checkpoints](dialogue.md#persist-checkpoints-with-save) for ownership
+See [persist checkpoints](dialogue/checkpoints-and-history.md#persist-checkpoints-with-save) for ownership
 and error handling.

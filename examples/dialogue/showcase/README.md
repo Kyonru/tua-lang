@@ -41,7 +41,7 @@ workspace folder:
 }
 ```
 
-See [preview behavior and limits](../../../docs/dialogue.md#preview-the-authored-conversation).
+See [preview behavior and limits](../../../docs/dialogue/editor.md#preview-the-authored-conversation).
 
 ## Seven presentations, one conversation
 

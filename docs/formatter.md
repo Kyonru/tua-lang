@@ -148,5 +148,5 @@ It does not require type checking to succeed or imported modules to be loaded.
 An unsafe result is reported instead of being written. A leading UTF-8 byte-order
 mark is accepted and removed.
 
-Dialogue scripts use their own [prose-preserving formatter](dialogue.md#format-a-script),
+Dialogue scripts use their own [prose-preserving formatter](dialogue/editor.md#format-a-script),
 not Lua layout. Dialogue range and on-type formatting remain disabled.

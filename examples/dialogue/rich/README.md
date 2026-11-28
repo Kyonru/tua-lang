@@ -11,4 +11,5 @@ colors, animation, font and audio choices remain with the host.
 The authored script emits the same rich runtime representation as typed documents.
 The normal localization
 adapter `I18n.dialogueTemplate` can supply `resolveTemplate` in configured projects.
-See [the dialogue guide](../../../docs/dialogue.md#rich-presentations-and-timing).
+See the [dialect and style reference](../../../docs/dialogue/dialect.md#rich-text-tags)
+and [runtime presentation guide](../../../docs/dialogue/presentation.md#rich-presentations-and-timing).

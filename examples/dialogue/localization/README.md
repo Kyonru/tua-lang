@@ -19,7 +19,7 @@ source prose, translations and missing coverage. Hover/definition on text IDs
 connect scripts to catalog entries. Copy the snapshot into any custom renderer;
 on `presentationRevision` changes honor `revealComplete` to show refreshed text fully.
 
-See [the dialogue guide](../../../docs/dialogue.md) for options, ownership, fallback,
+See [the dialogue guide](../../../docs/dialogue/index.md) for options, ownership, fallback,
 argument validation, extraction/merge policy and runtime replacement requirements.
 
 To deliberately change a text identity, use Rename Symbol on an ID in

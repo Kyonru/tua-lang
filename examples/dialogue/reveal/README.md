@@ -6,6 +6,6 @@ and CJK text, independent controllers, reduced motion, and literal placeholder t
 
 The host presents snapshots, updates reveal, then reports actual completion to the
 dialogue player. Optional cues are bounded presentation data; no audio is played.
-See [reveal documentation](../../../docs/dialogue.md#reveal-text-by-grapheme-cluster)
+See [reveal documentation](../../../docs/dialogue/presentation.md#reveal-text-by-grapheme-cluster)
 for lifecycle tokens, shaping responsibilities and the remaining styled-text work.
 Generated output is not committed.

@@ -360,8 +360,8 @@ Context-free compiled documents have schemaVersion 1 and line textId; optional `
 before labels supplies documentId. Legacy structured documents remain playable.
 Use `assert(Dialogue.schemaVersion >= 1)` when relying on this API with runtime replacements.
 `tua dialogue-extract` prints a read-only source-text JSON manifest, never overwrites catalogs.
-Localization Explorer includes dialogue coverage/source navigation. Script formatting and
-cross-language rename remain pending.
+Localization Explorer includes dialogue coverage/source navigation. `tua fmt` formats dialogue
+scripts without rewriting prose; with i18n enabled, rename updates supported text IDs and catalog uses.
 Typed dialogue context: declare `Dialogue.context({facts = Save.shape(Save.record({...})),
 locals = Save.shape(Save.record({...}))})` in a definitions-only Tua module. Save.shape
 is a headless schema validator/copier with typed defaults; no save slot or LÖVE required.
@@ -424,7 +424,8 @@ After an utterance, `@event shown 0.2 event.name "payload"` or
 `player:update(dt, fullyRevealed)` returns due events with name/payload/generation/visit/nodeId.
 The first true reveal sample starts that clock at zero; advancing/cancelling discards pending events.
 `@timing hold 3 fade 0.35` supplies optional host presentation hints, never automatic advancement.
-See docs/dialogue.md for the supported authoring grammar; do not invent commands.
+See docs/dialogue/dialect.md for the supported authoring grammar and rich-text marks;
+named style keys are host-defined, not new commands.
 
 Dialogue.actions({name={payload=Save.shape(...), effect="presentation"|"consequential"}})
 registers host actions. Import with @actions "module"; author an action-only

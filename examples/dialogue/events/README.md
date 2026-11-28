@@ -13,5 +13,5 @@ lua main.lua
 ```
 
 Use the paired schema-5 compiler/runtime. No LÖVE, signal bus, filesystem save slot
-or renderer is needed. See [the dialogue guide](../../../docs/dialogue.md#declare-typed-notification-payloads)
+or renderer is needed. See [the dialogue guide](../../../docs/dialogue/events-and-actions.md#declare-typed-notification-payloads)
 for ownership, payload bounds, lifecycle and compatibility rules.

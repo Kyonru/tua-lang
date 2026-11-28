@@ -193,5 +193,5 @@ layout or unlimited text fitting. Font selection and layout remain host responsi
 - Extend a French reply and inspect the smallest supported window; adjust layout rather
   than assuming catalog lookup measures or wraps text for you.
 
-See [Dialogue](../../dialogue.md) and [Localization](../../localization.md) for full
+See [Dialogue](../../dialogue/index.md) and [Localization](../../localization.md) for full
 contracts. Next: [save progress at a between-wave boundary and restore preferences](save-progress.md).

@@ -18,7 +18,7 @@ system in context.
 
 [Write a conversation with replies and custom drawing](first-dialogue.md). This short
 standalone introduction needs no shooter or arena setup. Continue to the
-[dialogue reference](../dialogue.md) when you need richer presentation or advanced flow.
+[dialogue reference](../dialogue/index.md) when you need richer presentation or advanced flow.
 
 Use [Installation](../installation.md) and [Quickstart](../quickstart.md) to set up
 Tua and LÖVE. Feature reference pages cover the full APIs.

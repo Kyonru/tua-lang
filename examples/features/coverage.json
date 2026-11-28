@@ -15,5 +15,5 @@
   "bounded-queues.md": ["src/bounded_queue.tua"],
   "audio.md": ["src/audio.tua", "src/audio_design.tua"],
   "localization.md": ["src/localization.tua"],
-  "dialogue.md": ["src/dialogue.tua"]
+  "dialogue/index.md": ["src/dialogue.tua"]
 }

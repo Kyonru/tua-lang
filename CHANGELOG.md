@@ -6,6 +6,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+- Split the dialogue guide into focused chapters and add a complete dialect,
+  rich-text tag and named-style reference, including formatting toolbar guidance.
+
 ## [0.12.0] - 2026-11-27
 
 ### Release summary

@@ -83,7 +83,7 @@ Formatting does not produce lint diagnostics; see [Formatter](formatter.md).
 
 Scripts ending in `.tdialogue` under the source root also participate in project
 `check`, `build` and `watch`. They emit typed Lua data modules; see
-[Dialogue](dialogue.md#build-and-import-a-script) for imports and invalid-edit behavior.
+[Dialogue](dialogue/index.md#build-and-import-a-script) for imports and invalid-edit behavior.
 
 ## `dialogue-extract`
 
@@ -95,7 +95,7 @@ Parses production dialogue scripts and prints a sorted JSON manifest of text IDs
 source prose, logical document IDs and source locations. It does not run Lua or
 asset pipelines and never writes translation catalogs. Review manifest changes
 and merge additions deliberately, preserving translator edits. See
-[dialogue localization](dialogue.md#localize-lines-choices-and-character-names).
+[dialogue localization](dialogue/localization.md#localize-lines-choices-and-character-names).
 
 ## `lint`
 

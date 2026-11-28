@@ -41,7 +41,7 @@ background refreshes do not fill worker slots in one uninterrupted batch.
     Model-based inline completion is opt-in and uses a model running on your
     own machine through [Ollama](#local-ollama-inline-completion).
 
-Dialogue scripts also support [flow-target navigation](dialogue.md#navigate-conversation-flow):
+Dialogue scripts also support [flow-target navigation](dialogue/editor.md#navigate-conversation-flow):
 complete local labels, follow targets, find references and rename file-local flow
 without executing project code. Rename validates the whole script and preserves prose.
 Header `@entry label` declarations participate in these queries and suppress false
@@ -50,7 +50,7 @@ context-dependent routes stay possible. Cross-file text-ID refactors include
 configured catalogs and recognized typed localization calls, with unsaved conflict
 checks. Workspace `.lua` buffers are synchronized as dependency overlays, including
 catalogs and imported modules, without registering Tua completion/formatting providers
-for Lua. This keeps dirty dependencies authoritative until close; see [dialogue refactoring](dialogue.md#rename-a-text-identity).
+for Lua. This keeps dirty dependencies authoritative until close; see [dialogue refactoring](dialogue/editor.md#rename-a-text-identity).
 
 ## Find A Feature
 
@@ -779,8 +779,9 @@ Rich `.tdialogue` selections also support standard `textDocument/codeAction`
 requests with kind `refactor.rewrite.dialogueText` (or its `refactor` parents).
 The compiler supplies source edits for emphasis and common named styles, only
 within one prose field and without splitting placeholders, escapes or markup.
-Plain scripts require explicit `@text rich` opt-in. The extension presents these
-edits through **Tua: Format Dialogue Text** and persistent title-bar icon toggles.
+Plain scripts require explicit `@text rich` opt-in immediately after `@dialogue 1`.
+The extension presents these edits through **Tua: Format Dialogue Text** and
+persistent [title-bar icon toggles](dialogue/editor.md#format-rich-text-with-the-toolbar).
 A `Remove …` action identifies a mark covering exactly the selected content,
 including nested styles with the same content boundaries.
 
@@ -846,7 +847,7 @@ compilers without mock text support show an update message rather than implied
 success. Older responses without rich runs or character metadata retain plain
 text and speaker identifiers.
 
-See [mock input limits](dialogue.md#preview-the-authored-conversation).
+See [mock input limits](dialogue/editor.md#preview-the-authored-conversation).
 
 
 `tua/inspect` accepts an optional `kind` (`spriteSheet`, `stateMachine`, or
@@ -961,5 +962,5 @@ selection when it has not been changed manually. Changing this path or
 The updated extension registers `.tdialogue` with its own syntax highlighting.
 Shared character references support completion, hover, definition navigation and
 unsaved overlays through the same project analysis as Tua modules. See
-[Dialogue](dialogue.md#share-characters-between-scripts) for the import syntax.
+[Dialogue](dialogue/characters-and-audio.md#share-characters-between-scripts) for the import syntax.
 Script formatting and cross-language rename are not implemented.

@@ -9,7 +9,10 @@ const navigation = fs.readFileSync(path.join(root, "zensical.toml"), "utf8");
 const section = navigation.match(/\{ "Features" = \[([\s\S]*?)\n  \] \},/);
 if (!section) throw new Error("Could not find the Features documentation navigation");
 
-const pages = [...section[1].matchAll(/\{ "[^"]+" = "([^"]+\.md)" \}/g)].map((match) => match[1]);
+// Coverage is per feature, not per documentation chapter. For a grouped
+// feature, the first child is the overview associated with its runnable tour.
+const pages = [...section[1].matchAll(/^    \{ "[^"]+" = (?:"([^"]+\.md)"|\[\s*\{ "[^"]+" = "([^"]+\.md)" \})/gm)]
+  .map((match) => match[1] || match[2]);
 const coverage = JSON.parse(fs.readFileSync(path.join(featureRoot, "coverage.json"), "utf8"));
 const missing = pages.filter((page) => !Object.hasOwn(coverage, page));
 const stale = Object.keys(coverage).filter((page) => !pages.includes(page));

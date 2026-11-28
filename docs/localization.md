@@ -109,7 +109,7 @@ their Lua code. It suggests keys in `I18n.t("...")`, locales in
 `I18n.setLocale("...")` and the third `t` argument, and named fields in an
 unfinished argument table. Hover shows a translation and the catalog it came
 from; definition opens that entry. References and rename operate on literal
-uses and catalog entries. They also include [authored dialogue text IDs](dialogue.md#rename-a-text-identity),
+uses and catalog entries. They also include [authored dialogue text IDs](dialogue/editor.md#rename-a-text-identity),
 with duplicate/conflict checks and project-local edits. Rename accepts a new final
 key segment, retaining the existing namespace.
 
@@ -174,7 +174,7 @@ measurement.
 
 ## Authored dialogue graphs
 
-[Dialogue localization](dialogue.md#localize-lines-choices-and-character-names) maps
+[Dialogue localization](dialogue/localization.md#localize-lines-choices-and-character-names) maps
 `.tdialogue` line/reply IDs to this same catalog index. Pass `I18n.dialogue` as the
 player resolver with an explicit locale. It returns scalar text, selects existing
 plural/fallback rules and safely inserts `%{name}` arguments as literal text;

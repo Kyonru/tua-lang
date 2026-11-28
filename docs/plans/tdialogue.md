@@ -5,7 +5,7 @@ for runnable examples, verification, videos, consuming-game integration and meas
 limits. The original design baseline was `46a70a89` / `2e179341`; those historical
 versions do not identify the current development compiler or an assigned release.
 
-The [dialogue guide](../dialogue.md) documents current behavior. Historical
+The [dialogue guide](../dialogue/index.md) documents current behavior. Historical
 implementation and verification checkpoints are preserved at the end of this
 file; their old “pending” and branch-status statements are not the current backlog.
 
@@ -190,7 +190,7 @@ clearly incomplete translation to demonstrate coverage diagnostics.
 ### M1 completion record
 
 Implemented in `e773bec4`, with measured allocation cleanup in `370d0725`.
-The [dialogue guide](../dialogue.md#localize-lines-choices-and-character-names)
+The [dialogue guide](../dialogue/localization.md#localize-lines-choices-and-character-names)
 and [English/French example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/localization)
 cover source fallback, scalar/plural placeholders, shared character names,
 independent locales, no-replay presentation refresh and schema compatibility.
@@ -236,7 +236,7 @@ retains inspection state, and disposal clears retained data and validators.
 
 Context-bound assets emit schema two; existing documents remain compatible.
 Shared editor analysis supplies diagnostics, completion, hover and declaration
-navigation. See the [context guide](../dialogue.md#typed-context-and-conversation-locals),
+navigation. See the [context guide](../dialogue/conditions.md#typed-context-and-conversation-locals),
 [runnable example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/context),
 and [M2 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M2.md).
 The record preserves a narrower nested-shape generic inference/formatter follow-up;
@@ -274,7 +274,7 @@ stop with an inspectable fault and require explicit recovery.
 
 Conditional assets use schema three; legacy/schema-one/schema-two playback remains
 supported. Limits and optional-value semantics are documented in the
-[condition guide](../dialogue.md#conditions-branches-and-available-choices). The
+[condition guide](../dialogue/conditions.md#conditions-branches-and-available-choices). The
 [example](https://github.com/Kyonru/tua-lang/tree/main/examples/dialogue/conditions)
 and [M3 validation record](https://github.com/Kyonru/tua-lang/blob/main/benchmarks/dialogue/M3.md)
 cover emitted Lua, imported typing, stale UI, failure atomicity and native LÖVE with

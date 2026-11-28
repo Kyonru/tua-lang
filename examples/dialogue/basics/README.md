@@ -60,13 +60,13 @@ The portrait path `portraits/guide.png` is illustrative and is not loaded here.
 output, and text IDs must be unique across project dialogue files. Restart this
 host after a rebuild to use the new document.
 
-See the [dialogue guide](../../../docs/dialogue.md) for complete authoring examples,
+See the [dialogue guide](../../../docs/dialogue/index.md) for complete authoring examples,
 event dispatch, timing rules, pause policies, translations and the API reference.
 With configured localization, text-ID rename also updates catalog keys and typed
 localization calls in the same project. Computed host strings and action identity
 migrations remain manual. Declare `@entry label` in a script header for sections
 started directly by the host; this suppresses unreachable-section warnings without
-changing the default entry. See [reachability diagnostics](../../../docs/dialogue.md#diagnose-unreachable-sections).
+changing the default entry. See [reachability diagnostics](../../../docs/dialogue/editor.md#diagnose-unreachable-sections).
 
 ## Compiler frontend harness
 
